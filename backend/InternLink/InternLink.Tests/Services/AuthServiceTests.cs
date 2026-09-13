@@ -196,4 +196,84 @@ public class AuthServiceTests
 
         attributes.Should().ContainSingle(attr => attr.Policy == "RequireAdmin");
     }
+
+    [Fact]
+    public void LecturerProfileController_ShouldUseLecturerOrAdminPolicyForReadAccessAndAdminPolicyForMutations()
+    {
+        var controllerAttributes = typeof(LecturerProfileController)
+            .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>()
+            .ToList();
+
+        controllerAttributes.Should().Contain(attr => attr.Policy == "RequireLecturerOrAdmin");
+
+        var createAttr = typeof(LecturerProfileController)
+            .GetMethod(nameof(LecturerProfileController.Create))!
+            .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>()
+            .Single();
+
+        createAttr.Policy.Should().Be("RequireAdmin");
+    }
+
+    [Fact]
+    public void AdminDepartmentsController_ShouldRequireSuperAdminForMutatingEndpoints()
+    {
+        var createAttr = typeof(AdminDepartmentsController)
+            .GetMethod(nameof(AdminDepartmentsController.Create))!
+            .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>()
+            .Single();
+
+        createAttr.Policy.Should().Be("RequireSuperAdmin");
+
+        var updateAttr = typeof(AdminDepartmentsController)
+            .GetMethod(nameof(AdminDepartmentsController.Update))!
+            .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>()
+            .Single();
+
+        updateAttr.Policy.Should().Be("RequireSuperAdmin");
+
+        var deleteAttr = typeof(AdminDepartmentsController)
+            .GetMethod(nameof(AdminDepartmentsController.Delete))!
+            .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>()
+            .Single();
+
+        deleteAttr.Policy.Should().Be("RequireSuperAdmin");
+    }
+
+    [Fact]
+    public void AdminUsersController_ShouldRequireAdminPolicyAtControllerLevel()
+    {
+        var attributes = typeof(AdminUsersController)
+            .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>()
+            .ToList();
+
+        attributes.Should().ContainSingle(attr => attr.Policy == "RequireAdmin");
+    }
+
+    [Fact]
+    public void AdminSettingsController_ShouldRequireSuperAdminPolicyAtControllerLevel()
+    {
+        var attributes = typeof(AdminSettingsController)
+            .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>()
+            .ToList();
+
+        attributes.Should().ContainSingle(attr => attr.Policy == "RequireSuperAdmin");
+    }
+
+    [Fact]
+    public void AdminAccountRequestsController_ShouldRequireSuperAdminPolicyAtControllerLevel()
+    {
+        var attributes = typeof(AdminAccountRequestsController)
+            .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>()
+            .ToList();
+
+        attributes.Should().ContainSingle(attr => attr.Policy == "RequireSuperAdmin");
+    }
 }

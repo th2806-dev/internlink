@@ -1,6 +1,7 @@
 import type {
   CompanyDto,
   LecturerAssignmentItemDto,
+  LecturerCompanySummaryDto,
   LecturerDto,
   StudentDto,
   UserDto,
@@ -67,10 +68,18 @@ export function mapStudentDtoToRow(
     dateOfBirth: "—",
     classCode: s.class ?? "—",
     major: s.major ?? "—",
-    faculty: "—",
+    faculty: s.department ?? "—",
     cohort: "—",
     email: s.email ?? "—",
     phone: s.phone ?? "—",
+    department: s.department ?? "—",
+    desiredPosition: s.desiredPosition ?? "",
+    alternativePosition: s.alternativePosition ?? "",
+    desiredLocation: s.desiredLocation ?? "",
+    workPreference: s.workPreference ?? "",
+    preferredIndustry: s.preferredIndustry ?? "",
+    skills: s.skills ?? "",
+    resumeUrl: s.resumeUrl ?? "",
     assignedLecturer,
     companyName,
     accountStatus,
@@ -139,11 +148,46 @@ export function mapCompanyDtoToEnterprise(c: CompanyDto): Enterprise {
     contactPhone: c.contactPhone ?? "—",
     website: c.website ?? "—",
     capacity: c.capacity ?? 0,
+    openPositionCount: c.openPositionCount ?? 0,
     rating: 0,
     hasStipend: false,
     isHiring: c.isActive,
     isPriority: false,
     updatedAt: c.updatedAt ?? c.createdAt,
+  };
+}
+
+export function mapLecturerCompanySummaryToEnterprise(c: LecturerCompanySummaryDto): Enterprise {
+  const short =
+    c.companyCode ||
+    c.companyName
+      .split(/\s+/)
+      .map((w) => w[0])
+      .join("")
+      .slice(0, 3)
+      .toUpperCase() ||
+    "DN";
+  return {
+    id: c.id,
+    name: c.companyName,
+    shortCode: short,
+    badge: "Đang hướng dẫn",
+    badgeType: "teal",
+    studentCount: c.assignedStudentsCount ?? 0,
+    activeThisWeek: true,
+    contactEmail: c.contactEmail ?? "—",
+    location: c.address ?? "—",
+    status: "Đang hướng dẫn",
+    field: c.industry ?? "—",
+    contactPerson: c.contactPerson ?? "—",
+    contactPhone: c.contactPhone ?? "—",
+    website: "—",
+    capacity: c.assignedStudentsCount ?? 0,
+    rating: 0,
+    hasStipend: false,
+    isHiring: true,
+    isPriority: false,
+    updatedAt: new Date().toISOString(),
   };
 }
 

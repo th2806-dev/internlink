@@ -32,6 +32,7 @@ export const adminUsersService = {
     fullName: string;
     email?: string;
     role: string;
+    departmentId?: string;
     studentCode?: string;
     staffCode?: string;
   }): Promise<UserDto> {

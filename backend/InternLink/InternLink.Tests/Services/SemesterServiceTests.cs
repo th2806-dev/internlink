@@ -163,4 +163,70 @@ public class SemesterServiceTests
         (await db.Users.FindAsync(lecturerUser.Id))!.IsActive.Should().BeTrue();
         (await db.Users.FindAsync(studentUser.Id))!.IsActive.Should().BeTrue();
     }
+
+    [Fact]
+    public async Task CreateSemesterAsync_ShouldGenerateDefaultSchedulesMatchingTotalWeeks()
+    {
+        var db = GetDb();
+        var service = new SemesterService(db);
+
+        var dto = new CreateSemesterDto
+        {
+            Name = "Kỳ thực tập linh hoạt 8 tuần",
+            Term = "Học kỳ I",
+            AcademicYear = "2026 - 2027",
+            StartDate = new DateTime(2026, 9, 1),
+            EndDate = new DateTime(2026, 11, 1),
+            Status = SemesterStatus.Upcoming,
+            TotalWeeks = 8,
+            MaxStudentsPerLecturer = 15
+        };
+
+        var created = await service.CreateSemesterAsync(dto);
+
+        var schedules = (await service.GetReportSchedulesAsync(created.Id)).ToList();
+        schedules.Should().HaveCount(8);
+        schedules[0].WeekNumber.Should().Be(1);
+        schedules[0].Title.Should().Be("Báo cáo tuần 1");
+        schedules[0].AllowLateSubmission.Should().BeTrue();
+        schedules[7].WeekNumber.Should().Be(8);
+        schedules[7].Title.Should().Be("Báo cáo tuần 8");
+    }
+
+    [Fact]
+    public async Task UpdateReportScheduleAsync_ShouldUpdateDeadlineAndLateSubmissionPolicy()
+    {
+        var db = GetDb();
+        var service = new SemesterService(db);
+
+        var semester = new Semester
+        {
+            Id = Guid.NewGuid(),
+            Name = "Kỳ 6 tuần",
+            Term = "Học kỳ II",
+            AcademicYear = "2026 - 2027",
+            StartDate = new DateTime(2026, 10, 1),
+            TotalWeeks = 6,
+            CreatedAt = DateTime.UtcNow
+        };
+        db.Semesters.Add(semester);
+        await db.SaveChangesAsync();
+
+        await service.GenerateDefaultSchedulesAsync(semester.Id);
+
+        var newDeadline = new DateTime(2026, 10, 10, 23, 59, 59, DateTimeKind.Utc);
+        var updated = await service.UpdateReportScheduleAsync(semester.Id, 1, new UpdateReportScheduleRequest
+        {
+            Title = "Báo cáo tuần 1 (Đã dời hạn)",
+            DueDate = newDeadline,
+            AllowLateSubmission = false,
+            Description = "Nghiêm cấm nộp trễ hạn tuần này"
+        });
+
+        updated.Title.Should().Be("Báo cáo tuần 1 (Đã dời hạn)");
+        updated.DueDate.Should().Be(newDeadline);
+        updated.AllowLateSubmission.Should().BeFalse();
+        updated.Description.Should().Be("Nghiêm cấm nộp trễ hạn tuần này");
+    }
 }
+

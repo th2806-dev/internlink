@@ -65,8 +65,20 @@ public class CompanyService : ICompanyService
             .GroupBy(i => i.CompanyId)
             .Select(g => new { CompanyId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(k => k.CompanyId, v => v.Count);
+        var positionQuery = _db.CompanyPositions
+            .Where(p => !p.IsDeleted && p.IsOpen && companyIds.Contains(p.CompanyId));
+        if (semesterId.HasValue && semesterId != Guid.Empty)
+            positionQuery = positionQuery.Where(p => p.SemesterId == null || p.SemesterId == semesterId.Value);
+        var positionCounts = await positionQuery
+            .GroupBy(p => p.CompanyId)
+            .Select(g => new { CompanyId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(k => k.CompanyId, v => v.Count);
+
         foreach (var dto in dtos)
+        {
             dto.StudentCount = studentCounts.GetValueOrDefault(dto.Id);
+            dto.OpenPositionCount = positionCounts.GetValueOrDefault(dto.Id);
+        }
 
         // Per-semester link status: companies are linked by default; a row with
         // IsActive = false means the admin marked the company as "ngưng liên kết".
@@ -111,9 +123,22 @@ public class CompanyService : ICompanyService
             .Take(filter.Take)
             .ToListAsync();
 
+        var dtos = _mapper.Map<List<CompanyDto>>(companies);
+        if (dtos.Count > 0)
+        {
+            var companyIds = companies.Select(c => c.Id).ToList();
+            var positionCounts = await _db.CompanyPositions
+                .Where(p => !p.IsDeleted && p.IsOpen && companyIds.Contains(p.CompanyId))
+                .GroupBy(p => p.CompanyId)
+                .Select(g => new { CompanyId = g.Key, Count = g.Count() })
+                .ToDictionaryAsync(k => k.CompanyId, v => v.Count);
+            foreach (var dto in dtos)
+                dto.OpenPositionCount = positionCounts.GetValueOrDefault(dto.Id);
+        }
+
         return new PaginatedResponse<CompanyDto>
         {
-            Items = _mapper.Map<List<CompanyDto>>(companies),
+            Items = dtos,
             Total = total,
             Skip = filter.Skip,
             Take = filter.Take
@@ -159,10 +184,13 @@ public class CompanyService : ICompanyService
             CreatedAt = i.CreatedAt
         }).ToList();
 
+        var positions = (await GetPositionsAsync(id)).ToList();
+
         return new AdminCompanyDetailDto
         {
             Company = _mapper.Map<CompanyDto>(company),
-            Internships = items
+            Internships = items,
+            Positions = positions
         };
     }
 
@@ -764,4 +792,389 @@ public class CompanyService : ICompanyService
     private static bool IsValidUrl(string url) =>
         Uri.TryCreate(url.Trim(), UriKind.Absolute, out var uriResult) &&
         (uriResult.Scheme == Uri.UriSchemeHttp || uriResult.Scheme == Uri.UriSchemeHttps);
+
+    public async Task<IEnumerable<CompanyPositionDto>> GetPositionsAsync(Guid companyId, Guid? semesterId = null)
+    {
+        var query = _db.CompanyPositions
+            .Include(p => p.Company)
+            .Where(p => p.CompanyId == companyId && !p.IsDeleted);
+
+        if (semesterId.HasValue && semesterId != Guid.Empty)
+        {
+            query = query.Where(p => p.SemesterId == null || p.SemesterId == semesterId.Value);
+        }
+
+        var positions = await query
+            .OrderByDescending(p => p.IsOpen)
+            .ThenByDescending(p => p.CreatedAt)
+            .ToListAsync();
+
+        if (positions.Count == 0)
+            return Enumerable.Empty<CompanyPositionDto>();
+
+        var internshipQuery = _db.Internships
+            .Where(i => !i.IsDeleted && i.CompanyId == companyId && i.Position != null);
+
+        if (semesterId.HasValue && semesterId != Guid.Empty)
+        {
+            internshipQuery = internshipQuery.Where(i => i.SemesterId == semesterId.Value);
+        }
+
+        var filledInternships = await internshipQuery
+            .Select(i => new { i.Position, i.SemesterId })
+            .ToListAsync();
+
+        return positions.Select(p =>
+        {
+            var filled = filledInternships.Count(i =>
+                string.Equals(i.Position?.Trim(), p.Title.Trim(), StringComparison.OrdinalIgnoreCase) &&
+                (!p.SemesterId.HasValue || p.SemesterId == i.SemesterId));
+
+            return new CompanyPositionDto
+            {
+                Id = p.Id,
+                CompanyId = p.CompanyId,
+                CompanyName = p.Company?.CompanyName,
+                SemesterId = p.SemesterId,
+                Title = p.Title,
+                Description = p.Description,
+                RequiredMajor = p.RequiredMajor,
+                RequiredSkills = p.RequiredSkills,
+                Location = p.Location,
+                Slots = p.Slots,
+                FilledSlots = filled,
+                Stipend = p.Stipend,
+                IsOpen = p.IsOpen,
+                CreatedAt = p.CreatedAt
+            };
+        }).ToList();
+    }
+
+    public async Task<CompanyPositionDto?> GetPositionByIdAsync(Guid positionId)
+    {
+        var p = await _db.CompanyPositions
+            .Include(x => x.Company)
+            .FirstOrDefaultAsync(x => x.Id == positionId && !x.IsDeleted);
+
+        if (p == null) return null;
+
+        var filled = await _db.Internships
+            .CountAsync(i => !i.IsDeleted && i.CompanyId == p.CompanyId && i.Position != null &&
+                             i.Position.ToLower() == p.Title.ToLower() &&
+                             (!p.SemesterId.HasValue || i.SemesterId == p.SemesterId.Value));
+
+        return new CompanyPositionDto
+        {
+            Id = p.Id,
+            CompanyId = p.CompanyId,
+            CompanyName = p.Company?.CompanyName,
+            SemesterId = p.SemesterId,
+            Title = p.Title,
+            Description = p.Description,
+            RequiredMajor = p.RequiredMajor,
+            RequiredSkills = p.RequiredSkills,
+            Location = p.Location,
+            Slots = p.Slots,
+            FilledSlots = filled,
+            Stipend = p.Stipend,
+            IsOpen = p.IsOpen,
+            CreatedAt = p.CreatedAt
+        };
+    }
+
+    public async Task<CompanyPositionDto> CreatePositionAsync(Guid companyId, CreateCompanyPositionRequest request)
+    {
+        var company = await _db.Companies.FirstOrDefaultAsync(c => c.Id == companyId && !c.IsDeleted)
+            ?? throw new KeyNotFoundException($"Doanh nghiệp với ID {companyId} không tồn tại.");
+
+        var position = new CompanyPosition
+        {
+            CompanyId = companyId,
+            SemesterId = request.SemesterId,
+            Title = request.Title.Trim(),
+            Description = NullIfWhiteSpace(request.Description),
+            RequiredMajor = NullIfWhiteSpace(request.RequiredMajor),
+            RequiredSkills = NullIfWhiteSpace(request.RequiredSkills),
+            Location = NullIfWhiteSpace(request.Location),
+            Slots = request.Slots > 0 ? request.Slots : 1,
+            Stipend = request.Stipend,
+            IsOpen = request.IsOpen
+        };
+
+        _db.CompanyPositions.Add(position);
+        await _db.SaveChangesAsync();
+
+        return new CompanyPositionDto
+        {
+            Id = position.Id,
+            CompanyId = position.CompanyId,
+            CompanyName = company.CompanyName,
+            SemesterId = position.SemesterId,
+            Title = position.Title,
+            Description = position.Description,
+            RequiredMajor = position.RequiredMajor,
+            RequiredSkills = position.RequiredSkills,
+            Location = position.Location,
+            Slots = position.Slots,
+            FilledSlots = 0,
+            Stipend = position.Stipend,
+            IsOpen = position.IsOpen,
+            CreatedAt = position.CreatedAt
+        };
+    }
+
+    public async Task<CompanyPositionDto?> UpdatePositionAsync(Guid positionId, UpdateCompanyPositionRequest request)
+    {
+        var position = await _db.CompanyPositions
+            .Include(p => p.Company)
+            .FirstOrDefaultAsync(p => p.Id == positionId && !p.IsDeleted);
+
+        if (position == null) return null;
+
+        position.Title = request.Title.Trim();
+        position.SemesterId = request.SemesterId;
+        position.Description = NullIfWhiteSpace(request.Description);
+        position.RequiredMajor = NullIfWhiteSpace(request.RequiredMajor);
+        position.RequiredSkills = NullIfWhiteSpace(request.RequiredSkills);
+        position.Location = NullIfWhiteSpace(request.Location);
+        position.Slots = request.Slots > 0 ? request.Slots : 1;
+        position.Stipend = request.Stipend;
+        position.IsOpen = request.IsOpen;
+        position.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+
+        var filled = await _db.Internships
+            .CountAsync(i => !i.IsDeleted && i.CompanyId == position.CompanyId && i.Position != null &&
+                             i.Position.ToLower() == position.Title.ToLower() &&
+                             (!position.SemesterId.HasValue || i.SemesterId == position.SemesterId.Value));
+
+        return new CompanyPositionDto
+        {
+            Id = position.Id,
+            CompanyId = position.CompanyId,
+            CompanyName = position.Company?.CompanyName,
+            SemesterId = position.SemesterId,
+            Title = position.Title,
+            Description = position.Description,
+            RequiredMajor = position.RequiredMajor,
+            RequiredSkills = position.RequiredSkills,
+            Location = position.Location,
+            Slots = position.Slots,
+            FilledSlots = filled,
+            Stipend = position.Stipend,
+            IsOpen = position.IsOpen,
+            CreatedAt = position.CreatedAt
+        };
+    }
+
+    public async Task<bool> DeletePositionAsync(Guid positionId)
+    {
+        var position = await _db.CompanyPositions
+            .FirstOrDefaultAsync(p => p.Id == positionId && !p.IsDeleted);
+
+        if (position == null) return false;
+
+        position.IsDeleted = true;
+        position.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<IEnumerable<CompanySuggestionDto>> SuggestCompaniesAsync(CompanySuggestionRequest request)
+    {
+        Student? student = null;
+        if (request.StudentId.HasValue && request.StudentId != Guid.Empty)
+        {
+            student = await _db.Students.FirstOrDefaultAsync(s => s.Id == request.StudentId.Value && !s.IsDeleted);
+        }
+
+        var targetMajor = student?.Major?.Trim() ?? string.Empty;
+        var preferredIndustry = (!string.IsNullOrWhiteSpace(request.PreferredIndustry)
+            ? request.PreferredIndustry
+            : student?.PreferredIndustry)?.Trim() ?? string.Empty;
+        var preferredLocation = (!string.IsNullOrWhiteSpace(request.PreferredLocation)
+            ? request.PreferredLocation
+            : student?.DesiredLocation)?.Trim() ?? string.Empty;
+        var desiredPos = student?.DesiredPosition?.Trim() ?? string.Empty;
+        var altPos = student?.AlternativePosition?.Trim() ?? string.Empty;
+        var studentSkills = (student?.Skills ?? string.Empty)
+            .Split(new[] { ',', ';', '/' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(s => s.Trim().ToLower())
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .ToList();
+
+        var unlinkedCompanyIds = await _db.SemesterCompanies
+            .Where(sc => sc.SemesterId == request.SemesterId && !sc.IsActive)
+            .Select(sc => sc.CompanyId)
+            .ToListAsync();
+
+        var companies = await _db.Companies
+            .Where(c => c.IsActive && !c.IsDeleted && !unlinkedCompanyIds.Contains(c.Id))
+            .ToListAsync();
+
+        if (companies.Count == 0)
+            return Enumerable.Empty<CompanySuggestionDto>();
+
+        var companyIds = companies.Select(c => c.Id).ToList();
+
+        var currentCounts = await _db.Internships
+            .Where(i => !i.IsDeleted && i.SemesterId == request.SemesterId && i.CompanyId != null && companyIds.Contains(i.CompanyId.Value))
+            .GroupBy(i => i.CompanyId!.Value)
+            .Select(g => new { CompanyId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(k => k.CompanyId, v => v.Count);
+
+        var openPositions = await _db.CompanyPositions
+            .Where(p => !p.IsDeleted && p.IsOpen && companyIds.Contains(p.CompanyId) &&
+                        (p.SemesterId == null || p.SemesterId == request.SemesterId))
+            .ToListAsync();
+
+        var positionsByCompany = openPositions
+            .GroupBy(p => p.CompanyId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        var results = new List<CompanySuggestionDto>();
+
+        foreach (var c in companies)
+        {
+            var capacity = c.Capacity ?? 5;
+            var currentCount = currentCounts.GetValueOrDefault(c.Id, 0);
+            var availableSlots = Math.Max(0, capacity - currentCount);
+
+            if (availableSlots <= 0)
+                continue;
+
+            var cPositions = positionsByCompany.GetValueOrDefault(c.Id, new List<CompanyPosition>());
+
+            double score = 10; // Base score
+            var reasons = new List<string>();
+
+            // Criteria 1: Industry match with Student Major or PreferredIndustry
+            if (!string.IsNullOrEmpty(preferredIndustry) &&
+                !string.IsNullOrEmpty(c.Industry) &&
+                c.Industry.Contains(preferredIndustry, StringComparison.OrdinalIgnoreCase))
+            {
+                score += 30;
+                reasons.Add($"Ngành nghề '{c.Industry}' khớp nguyện vọng");
+            }
+            else if (!string.IsNullOrEmpty(targetMajor) &&
+                     !string.IsNullOrEmpty(c.Industry) &&
+                     (c.Industry.Contains(targetMajor, StringComparison.OrdinalIgnoreCase) ||
+                      targetMajor.Contains(c.Industry, StringComparison.OrdinalIgnoreCase) ||
+                      (targetMajor.Contains("CNTT", StringComparison.OrdinalIgnoreCase) &&
+                       (c.Industry.Contains("Công nghệ", StringComparison.OrdinalIgnoreCase) ||
+                        c.Industry.Contains("Phần mềm", StringComparison.OrdinalIgnoreCase) ||
+                        c.Industry.Contains("IT", StringComparison.OrdinalIgnoreCase)))))
+            {
+                score += 25;
+                reasons.Add($"Ngành '{c.Industry}' phù hợp chuyên ngành {targetMajor}");
+            }
+
+            // Criteria 2: Desired Position match
+            CompanyPosition? matchedDesiredPos = null;
+            if (!string.IsNullOrEmpty(desiredPos) || !string.IsNullOrEmpty(altPos))
+            {
+                matchedDesiredPos = cPositions.FirstOrDefault(p =>
+                    (!string.IsNullOrEmpty(desiredPos) && (p.Title.Contains(desiredPos, StringComparison.OrdinalIgnoreCase) || desiredPos.Contains(p.Title, StringComparison.OrdinalIgnoreCase))) ||
+                    (!string.IsNullOrEmpty(altPos) && (p.Title.Contains(altPos, StringComparison.OrdinalIgnoreCase) || altPos.Contains(p.Title, StringComparison.OrdinalIgnoreCase)))
+                );
+
+                if (matchedDesiredPos != null)
+                {
+                    score += 25;
+                    reasons.Add($"Có vị trí '{matchedDesiredPos.Title}' khớp nguyện vọng");
+                }
+            }
+
+            // Criteria 3: Skills match
+            if (studentSkills.Count > 0 && cPositions.Count > 0)
+            {
+                var matchedSkills = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var pos in cPositions)
+                {
+                    var posSkillsText = $"{pos.RequiredSkills} {pos.Description}".ToLower();
+                    foreach (var sk in studentSkills)
+                    {
+                        if (posSkillsText.Contains(sk))
+                            matchedSkills.Add(sk);
+                    }
+                }
+
+                if (matchedSkills.Count > 0)
+                {
+                    score += 15;
+                    reasons.Add($"Khớp kỹ năng: {string.Join(", ", matchedSkills.Take(3))}");
+                }
+            }
+
+            // Criteria 4: Major match on positions
+            var matchingMajorPositions = cPositions.Where(p =>
+                (!string.IsNullOrEmpty(targetMajor) && !string.IsNullOrEmpty(p.RequiredMajor) &&
+                 p.RequiredMajor.Contains(targetMajor, StringComparison.OrdinalIgnoreCase)) ||
+                (!string.IsNullOrEmpty(targetMajor) && p.Title.Contains(targetMajor, StringComparison.OrdinalIgnoreCase))
+            ).ToList();
+
+            if (matchingMajorPositions.Count > 0 && matchedDesiredPos == null)
+            {
+                score += 20;
+                reasons.Add($"Có {matchingMajorPositions.Count} vị trí đúng chuyên ngành");
+            }
+            else if (cPositions.Count > 0 && matchedDesiredPos == null)
+            {
+                score += 10;
+                reasons.Add($"Có {cPositions.Count} vị trí đang mở");
+            }
+
+            // Criteria 5: Available capacity ratio
+            var capacityRatio = (double)availableSlots / Math.Max(1, capacity);
+            score += Math.Min(15, capacityRatio * 15);
+            reasons.Add($"Còn {availableSlots}/{capacity} chỗ trống");
+
+            // Criteria 6: Location match
+            if (!string.IsNullOrEmpty(preferredLocation) &&
+                (!string.IsNullOrEmpty(c.Address) && c.Address.Contains(preferredLocation, StringComparison.OrdinalIgnoreCase) ||
+                 cPositions.Any(p => !string.IsNullOrEmpty(p.Location) && p.Location.Contains(preferredLocation, StringComparison.OrdinalIgnoreCase))))
+            {
+                score += 10;
+                reasons.Add("Địa điểm phù hợp");
+            }
+
+            score = Math.Min(100, Math.Round(score, 0));
+
+            results.Add(new CompanySuggestionDto
+            {
+                CompanyId = c.Id,
+                CompanyName = c.CompanyName,
+                Industry = c.Industry,
+                Address = c.Address,
+                Capacity = capacity,
+                CurrentStudentCount = currentCount,
+                AvailableSlots = availableSlots,
+                MatchScore = score,
+                MatchReason = string.Join(" • ", reasons),
+                OpenPositions = cPositions.Select(p => new CompanyPositionDto
+                {
+                    Id = p.Id,
+                    CompanyId = p.CompanyId,
+                    CompanyName = c.CompanyName,
+                    SemesterId = p.SemesterId,
+                    Title = p.Title,
+                    Description = p.Description,
+                    RequiredMajor = p.RequiredMajor,
+                    RequiredSkills = p.RequiredSkills,
+                    Location = p.Location,
+                    Slots = p.Slots,
+                    Stipend = p.Stipend,
+                    IsOpen = p.IsOpen,
+                    CreatedAt = p.CreatedAt
+                }).ToList()
+            });
+        }
+
+        return results
+            .OrderByDescending(r => r.MatchScore)
+            .ThenByDescending(r => r.AvailableSlots)
+            .Take(request.MaxResults > 0 ? request.MaxResults : 10)
+            .ToList();
+    }
 }

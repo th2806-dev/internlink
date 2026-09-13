@@ -36,12 +36,16 @@ public class ExportController : ControllerBase
     /// (Sheets: DANH SÁCH THỰC TẬP, DANH SÁCH DOANH NGHIỆP, DANH SÁCH GIẢNG VIÊN PHÂN CÔNG).
     /// </summary>
     [HttpGet("internship-excel")]
-    public async Task<IActionResult> ExportInternshipExcel([FromQuery] Guid? semesterId = null, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> ExportInternshipExcel(
+        [FromQuery] Guid? semesterId = null,
+        [FromQuery] Guid? lecturerId = null,
+        [FromQuery] string? department = null,
+        CancellationToken cancellationToken = default)
     {
         try
         {
-            _logger.LogInformation("Admin/Lecturer initiated Excel export for semester: {SemesterId}", semesterId);
-            var fileBytes = await _excelExportService.GenerateInternshipExportExcelAsync(semesterId, cancellationToken: cancellationToken);
+            _logger.LogInformation("Admin/Lecturer initiated Excel export for semester: {SemesterId}, Lecturer: {LecturerId}, Department: {Department}", semesterId, lecturerId, department);
+            var fileBytes = await _excelExportService.GenerateInternshipExportExcelAsync(semesterId, lecturerId, department, cancellationToken);
             var fileName = $"DanhSachThucTap_{DateTime.Now:yyyy-MM-dd}.xlsx";
 
             return File(
@@ -71,7 +75,7 @@ public class ExportController : ControllerBase
         if (lecturerId == null)
             return Forbid();
 
-        var fileBytes = await _excelExportService.GenerateInternshipExportExcelAsync(semesterId, lecturerId.Value, cancellationToken);
+        var fileBytes = await _excelExportService.GenerateInternshipExportExcelAsync(semesterId, lecturerId.Value, null, cancellationToken);
         return File(fileBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"DanhSachThucTap_{DateTime.Now:yyyy-MM-dd}.xlsx");
     }
 
@@ -79,12 +83,14 @@ public class ExportController : ControllerBase
     /// Exports the official academic summary report (C22A template) for the faculty.
     /// </summary>
     [HttpGet("summary-report")]
-    public async Task<IActionResult> ExportSummaryReport([FromQuery] Guid? semesterId = null)
+    public async Task<IActionResult> ExportSummaryReport(
+        [FromQuery] Guid? semesterId = null,
+        [FromQuery] string? department = null)
     {
         try
         {
-            _logger.LogInformation("Admin initiated summary report export for semester: {SemesterId}", semesterId);
-            var fileBytes = await _reportService.ExportC22ASummaryReportAsync(semesterId);
+            _logger.LogInformation("Admin initiated summary report export for semester: {SemesterId}, Department: {Department}", semesterId, department);
+            var fileBytes = await _reportService.ExportC22ASummaryReportAsync(semesterId, department);
             var fileName = $"Bao-cao-tong-ket-thuc-tap-{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
 
             return File(
@@ -108,12 +114,14 @@ public class ExportController : ControllerBase
     /// based on the C22A template with dynamic data from the database.
     /// </summary>
     [HttpGet("summary-report/word")]
-    public async Task<IActionResult> ExportSummaryReportWord([FromQuery] Guid? semesterId = null)
+    public async Task<IActionResult> ExportSummaryReportWord(
+        [FromQuery] Guid? semesterId = null,
+        [FromQuery] string? department = null)
     {
         try
         {
-            _logger.LogInformation("Admin initiated Word summary report export for semester: {SemesterId}", semesterId);
-            var fileBytes = await _reportService.ExportC22AWordReportAsync(semesterId);
+            _logger.LogInformation("Admin initiated Word summary report export for semester: {SemesterId}, Department: {Department}", semesterId, department);
+            var fileBytes = await _reportService.ExportC22AWordReportAsync(semesterId, department);
             var fileName = $"Bao-cao-tong-ket-thuc-tap-{DateTime.Now:yyyyMMdd_HHmmss}.docx";
 
             return File(
@@ -136,6 +144,69 @@ public class ExportController : ControllerBase
             return StatusCode(500, ApiResponse<object>.Fail(new ApiError
             {
                 Title = "Lỗi khi xuất báo cáo tổng kết Word",
+                Detail = ex.Message
+            }));
+        }
+    }
+
+    /// <summary>
+    /// Exports the institutional Guidance Schedule Excel (.xlsx) based on Lich huong dan TTTN-C23-Cuong.xlsx
+    /// for the specified lecturer and semester.
+    /// </summary>
+    [HttpGet("guidance-schedule")]
+    public async Task<IActionResult> ExportGuidanceSchedule(
+        [FromQuery] Guid semesterId,
+        [FromQuery] Guid? lecturerId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var userId = User.GetUserId();
+        if (userId == null)
+            return Unauthorized();
+
+        Guid targetLecturerId;
+        var isLecturer = User.IsInRole("Lecturer");
+        var isAdmin = User.IsInRole("SuperAdmin");
+
+        if (isLecturer && !isAdmin)
+        {
+            var resolvedLecturerId = await _lecturerAccessService.ResolveLecturerIdAsync(userId.Value);
+            if (resolvedLecturerId == null)
+                return Forbid();
+            targetLecturerId = resolvedLecturerId.Value;
+        }
+        else if (lecturerId.HasValue)
+        {
+            targetLecturerId = lecturerId.Value;
+        }
+        else
+        {
+            var resolvedLecturerId = await _lecturerAccessService.ResolveLecturerIdAsync(userId.Value);
+            if (resolvedLecturerId != null)
+                targetLecturerId = resolvedLecturerId.Value;
+            else
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Cần chỉ định mã giảng viên (lecturerId)" }));
+        }
+
+        try
+        {
+            var fileBytes = await _excelExportService.GenerateGuidanceScheduleExcelAsync(semesterId, targetLecturerId, cancellationToken);
+            var fileName = $"LichHuongDanTTTN_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+
+            return File(
+                fileBytes,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                fileName);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = ex.Message }));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to generate guidance schedule Excel");
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError
+            {
+                Title = "Lỗi khi xuất lịch hướng dẫn thực tập",
                 Detail = ex.Message
             }));
         }

@@ -6,13 +6,34 @@ namespace InternLink.Domain.Entities;
 public class Document : BaseEntity
 {
     /// <summary>
-    /// The internship this document belongs to
+    /// The internship this document belongs to (null for general / official templates)
     /// </summary>
-    public Guid InternshipId { get; set; }
-    public Internship Internship { get; set; } = null!;
+    public Guid? InternshipId { get; set; }
+    public Internship? Internship { get; set; }
 
     /// <summary>
-    /// The lecturer who uploaded this document
+    /// The semester this template/document is designated for (null for all semesters)
+    /// </summary>
+    public Guid? SemesterId { get; set; }
+    public Semester? Semester { get; set; }
+
+    /// <summary>
+    /// Department scope (e.g. CNTT, QTKD) (null for entire school)
+    /// </summary>
+    public string? Department { get; set; }
+
+    /// <summary>
+    /// Template version (e.g. "1.0", "2.1")
+    /// </summary>
+    public string Version { get; set; } = "1.0";
+
+    /// <summary>
+    /// Date when the document/template was published
+    /// </summary>
+    public DateTime? PublishedAt { get; set; }
+
+    /// <summary>
+    /// The lecturer or admin who uploaded this document
     /// </summary>
     public Guid? UploadedById { get; set; }
     public Lecturer? UploadedBy { get; set; }
@@ -68,4 +89,9 @@ public class Document : BaseEntity
     /// Document category/type (e.g., "WeeklyReport", "MidtermReport", "FinalReport", "Other")
     /// </summary>
     public string? Category { get; set; }
+
+    /// <summary>
+    /// Full version history — each upload/reupload creates a new DocumentVersion entry
+    /// </summary>
+    public ICollection<DocumentVersion> Versions { get; set; } = new List<DocumentVersion>();
 }

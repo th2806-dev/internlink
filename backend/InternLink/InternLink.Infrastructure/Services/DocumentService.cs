@@ -293,6 +293,23 @@ public class DocumentService : IDocumentService
         };
 
         _db.Documents.Add(document);
+
+        var version = new DocumentVersion
+        {
+            Id = Guid.NewGuid(),
+            DocumentId = document.Id,
+            VersionNumber = 1,
+            FileName = fileName,
+            FilePath = filePath,
+            FileSize = fileSize,
+            MimeType = mimeType,
+            UploadedById = lecturerId,
+            UploadedAt = DateTime.UtcNow,
+            ChangeNote = "Tải lên lần đầu",
+            CreatedAt = DateTime.UtcNow
+        };
+        _db.DocumentVersions.Add(version);
+
         await _db.SaveChangesAsync();
 
         var created = await _db.Documents
@@ -364,6 +381,27 @@ public class DocumentService : IDocumentService
         document.UpdatedAt = DateTime.UtcNow;
 
         _db.Documents.Update(document);
+
+        var lastVersionNumber = await _db.DocumentVersions
+            .Where(v => v.DocumentId == id)
+            .MaxAsync(v => (int?)v.VersionNumber) ?? 0;
+
+        var newVersion = new DocumentVersion
+        {
+            Id = Guid.NewGuid(),
+            DocumentId = document.Id,
+            VersionNumber = lastVersionNumber + 1,
+            FileName = fileName,
+            FilePath = filePath,
+            FileSize = fileSize,
+            MimeType = mimeType,
+            UploadedById = document.UploadedById,
+            UploadedAt = DateTime.UtcNow,
+            ChangeNote = $"Cập nhật tệp phiên bản {lastVersionNumber + 1}",
+            CreatedAt = DateTime.UtcNow
+        };
+        _db.DocumentVersions.Add(newVersion);
+
         await _db.SaveChangesAsync();
 
         var updated = await _db.Documents
@@ -393,28 +431,54 @@ public class DocumentService : IDocumentService
 
         if (userId != Guid.Empty)
         {
-            var ownsInternship = document.Internship?.Student?.UserId == userId;
-            var isAssignedLecturer = document.Internship?.Lecturer?.UserId == userId;
-            var isUploader = document.UploadedBy?.UserId == userId;
-
-            if (!isLecturerOrAdmin && !ownsInternship)
-                throw new UnauthorizedAccessException("You do not have access to this document");
-
-            if (isLecturerOrAdmin && !isAssignedLecturer && !isUploader && !ownsInternship)
+            if (document.InternshipId == null)
             {
-                var isSuperAdmin = await _db.Users
-                    .AnyAsync(u => u.Id == userId && u.Role == Domain.Enums.Role.SuperAdmin && !u.IsDeleted);
-                if (!isSuperAdmin)
+                if (!isLecturerOrAdmin && !document.IsPublished)
+                    throw new UnauthorizedAccessException("Biểu mẫu này chưa được ban hành hoặc đã bị thu hồi.");
+            }
+            else
+            {
+                var ownsInternship = document.Internship?.Student?.UserId == userId;
+                var isAssignedLecturer = document.Internship?.Lecturer?.UserId == userId;
+                var isUploader = document.UploadedBy?.UserId == userId;
+
+                if (!isLecturerOrAdmin && !ownsInternship)
                     throw new UnauthorizedAccessException("You do not have access to this document");
+
+                if (isLecturerOrAdmin && !isAssignedLecturer && !isUploader && !ownsInternship)
+                {
+                    var isSuperAdmin = await _db.Users
+                        .AnyAsync(u => u.Id == userId && u.Role == Domain.Enums.Role.SuperAdmin && !u.IsDeleted);
+                    if (!isSuperAdmin)
+                        throw new UnauthorizedAccessException("You do not have access to this document");
+                }
             }
         }
 
-        var fullPath = Path.Combine(GetUploadRoot(), document.FilePath);
+        var normalizedPath = document.FilePath
+            .Replace('/', Path.DirectorySeparatorChar)
+            .Replace('\\', Path.DirectorySeparatorChar)
+            .TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
-        if (!File.Exists(fullPath))
+        string? existingFullPath = null;
+        var roots = new[] { GetUploadRoot(), _env.ContentRootPath }
+            .Where(r => !string.IsNullOrWhiteSpace(r))
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var root in roots)
+        {
+            var p = Path.Combine(root, normalizedPath);
+            if (File.Exists(p))
+            {
+                existingFullPath = p;
+                break;
+            }
+        }
+
+        if (existingFullPath == null)
             return null;
 
-        var fileContent = await File.ReadAllBytesAsync(fullPath);
+        var fileContent = await File.ReadAllBytesAsync(existingFullPath);
         document.DownloadCount++;
         document.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
@@ -610,6 +674,407 @@ public class DocumentService : IDocumentService
             ".png" => "image/png",
             ".gif" => "image/gif",
             _ => "application/octet-stream"
+        };
+    }
+
+    public async Task<IEnumerable<DocumentListItemDto>> GetTemplatesAsync(Guid? semesterId = null, string? department = null, string? category = null, bool? isPublishedOnly = null)
+    {
+        var query = _db.Documents
+            .Where(d => !d.IsDeleted && d.InternshipId == null)
+            .Include(d => d.Semester)
+            .Include(d => d.UploadedBy)
+            .AsQueryable();
+
+        if (semesterId.HasValue)
+            query = query.Where(d => d.SemesterId == semesterId.Value);
+
+        if (!string.IsNullOrWhiteSpace(department))
+            query = query.Where(d => d.Department == null || d.Department == department.Trim());
+
+        if (!string.IsNullOrWhiteSpace(category))
+            query = query.Where(d => d.Category == category.Trim());
+
+        if (isPublishedOnly == true)
+            query = query.Where(d => d.IsPublished);
+
+        var docs = await query
+            .OrderByDescending(d => d.UploadedAt)
+            .ToListAsync();
+
+        return _mapper.Map<IEnumerable<DocumentListItemDto>>(docs);
+    }
+
+    public async Task<TemplateStatsDto> GetTemplateStatsAsync()
+    {
+        var templates = await _db.Documents
+            .Where(d => !d.IsDeleted && d.InternshipId == null)
+            .ToListAsync();
+
+        return new TemplateStatsDto
+        {
+            TotalTemplates = templates.Count,
+            PublishedCount = templates.Count(t => t.IsPublished),
+            ArchivedCount = templates.Count(t => !t.IsPublished),
+            TotalDownloads = templates.Sum(t => t.DownloadCount)
+        };
+    }
+
+    public async Task<DocumentDetailDto> CreateTemplateAsync(CreateTemplateRequest request, Guid uploadedByUserId)
+    {
+        if (request.File == null || request.File.Length == 0)
+            throw new ArgumentException("File is required");
+
+        var lecturer = await _db.Lecturers.FirstOrDefaultAsync(l => l.UserId == uploadedByUserId && !l.IsDeleted);
+        Guid? lecturerId = lecturer?.Id;
+
+        using var stream = request.File.OpenReadStream();
+        var (filePath, fileSize, mimeType) = await SaveTemplateFileAsync(stream, request.File.FileName, request.Department);
+
+        var template = new Document
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = null,
+            SemesterId = request.SemesterId,
+            Department = string.IsNullOrWhiteSpace(request.Department) ? null : request.Department.Trim(),
+            Title = string.IsNullOrWhiteSpace(request.Title) ? Path.GetFileNameWithoutExtension(request.File.FileName) : request.Title.Trim(),
+            Description = request.Description,
+            Category = request.Category,
+            Version = string.IsNullOrWhiteSpace(request.Version) ? "1.0" : request.Version.Trim(),
+            FileName = request.File.FileName,
+            FilePath = filePath,
+            FileSize = fileSize,
+            MimeType = mimeType,
+            IsPublished = request.IsPublished,
+            PublishedAt = request.IsPublished ? DateTime.UtcNow : null,
+            IsRequired = request.IsRequired,
+            UploadedById = lecturerId,
+            UploadedAt = DateTime.UtcNow,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _db.Documents.Add(template);
+
+        var version = new DocumentVersion
+        {
+            Id = Guid.NewGuid(),
+            DocumentId = template.Id,
+            VersionNumber = 1,
+            FileName = request.File.FileName,
+            FilePath = filePath,
+            FileSize = fileSize,
+            MimeType = mimeType,
+            UploadedById = lecturerId,
+            UploadedAt = DateTime.UtcNow,
+            ChangeNote = "Phiên bản biểu mẫu ban đầu",
+            CreatedAt = DateTime.UtcNow
+        };
+        _db.DocumentVersions.Add(version);
+
+        await _db.SaveChangesAsync();
+
+        if (template.SemesterId.HasValue)
+        {
+            await _db.Entry(template).Reference(t => t.Semester).LoadAsync();
+        }
+        if (template.UploadedById.HasValue)
+        {
+            await _db.Entry(template).Reference(t => t.UploadedBy).LoadAsync();
+        }
+
+        return _mapper.Map<DocumentDetailDto>(template);
+    }
+
+    public async Task<DocumentDetailDto?> UpdateTemplateAsync(Guid id, UpdateTemplateRequest request, Guid adminUserId)
+    {
+        var template = await _db.Documents
+            .Include(d => d.Semester)
+            .Include(d => d.UploadedBy)
+            .FirstOrDefaultAsync(d => d.Id == id && !d.IsDeleted && d.InternshipId == null);
+
+        if (template == null)
+            return null;
+
+        if (request.SemesterId.HasValue)
+            template.SemesterId = request.SemesterId;
+
+        if (request.Department != null)
+            template.Department = string.IsNullOrWhiteSpace(request.Department) ? null : request.Department.Trim();
+
+        if (!string.IsNullOrWhiteSpace(request.Title))
+            template.Title = request.Title.Trim();
+
+        if (request.Description != null)
+            template.Description = request.Description;
+
+        if (request.Category != null)
+            template.Category = request.Category;
+
+        if (!string.IsNullOrWhiteSpace(request.Version))
+            template.Version = request.Version.Trim();
+
+        if (request.IsRequired.HasValue)
+            template.IsRequired = request.IsRequired.Value;
+
+        if (request.IsPublished.HasValue)
+        {
+            var wasPublished = template.IsPublished;
+            template.IsPublished = request.IsPublished.Value;
+            if (!wasPublished && template.IsPublished)
+            {
+                template.PublishedAt = DateTime.UtcNow;
+                template.ArchiveReason = null;
+                template.ArchivedAt = null;
+                template.ArchivedBy = null;
+            }
+            else if (wasPublished && !template.IsPublished)
+            {
+                template.ArchiveReason = request.ArchiveReason ?? "Thu hồi / Lưu trữ biểu mẫu";
+                template.ArchivedAt = DateTime.UtcNow;
+                template.ArchivedBy = adminUserId.ToString();
+            }
+        }
+
+        if (request.File != null && request.File.Length > 0)
+        {
+            using var stream = request.File.OpenReadStream();
+            var (filePath, fileSize, mimeType) = await SaveTemplateFileAsync(stream, request.File.FileName, template.Department);
+            template.FilePath = filePath;
+            template.FileName = request.File.FileName;
+            template.FileSize = fileSize;
+            template.MimeType = mimeType;
+
+            var lastVersionNumber = await _db.DocumentVersions
+                .Where(v => v.DocumentId == id)
+                .MaxAsync(v => (int?)v.VersionNumber) ?? 0;
+
+            var newVersion = new DocumentVersion
+            {
+                Id = Guid.NewGuid(),
+                DocumentId = template.Id,
+                VersionNumber = lastVersionNumber + 1,
+                FileName = request.File.FileName,
+                FilePath = filePath,
+                FileSize = fileSize,
+                MimeType = mimeType,
+                UploadedById = template.UploadedById,
+                UploadedAt = DateTime.UtcNow,
+                ChangeNote = string.IsNullOrWhiteSpace(request.Version) ? $"Cập nhật biểu mẫu phiên bản {lastVersionNumber + 1}" : $"Cập nhật phiên bản {request.Version}",
+                CreatedAt = DateTime.UtcNow
+            };
+            _db.DocumentVersions.Add(newVersion);
+        }
+
+        template.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        return _mapper.Map<DocumentDetailDto>(template);
+    }
+
+    public async Task IncrementDownloadCountAsync(Guid id)
+    {
+        var doc = await _db.Documents.FirstOrDefaultAsync(d => d.Id == id && !d.IsDeleted);
+        if (doc != null)
+        {
+            doc.DownloadCount++;
+            await _db.SaveChangesAsync();
+        }
+    }
+
+    public async Task SeedDefaultTemplatesAsync()
+    {
+        var existingCount = await _db.Documents.CountAsync(d => !d.IsDeleted && d.InternshipId == null);
+        if (existingCount > 0)
+            return;
+
+        var sampleDefinitions = new[]
+        {
+            new {
+                FileName = "Bao cao tong ket cong tac thuc tap tot nghiep.docx",
+                Title = "Báo cáo tổng kết công tác thực tập tốt nghiệp",
+                Description = "Mẫu báo cáo tổng hợp kết thúc kỳ thực tập tốt nghiệp theo quy định của Khoa.",
+                Category = "FinalReport",
+                Version = "1.0",
+                IsRequired = true,
+                Department = "CNTT"
+            },
+            new {
+                FileName = "Lich huong dan TTTN-C23-Cuong.xlsx",
+                Title = "Lịch hướng dẫn thực tập tốt nghiệp",
+                Description = "Kế hoạch và lịch trình các buổi hướng dẫn, sinh hoạt chuyên môn định kỳ.",
+                Category = "GuidanceSchedule",
+                Version = "1.0",
+                IsRequired = false,
+                Department = "CNTT"
+            },
+            new {
+                FileName = "Phieu danh gia thuc tap cua doanh nghiep.docx",
+                Title = "Phiếu đánh giá thực tập của doanh nghiệp",
+                Description = "Mẫu phiếu lấy ý kiến đánh giá và chấm điểm của người hướng dẫn tại doanh nghiệp.",
+                Category = "CompanyEvaluation",
+                Version = "1.0",
+                IsRequired = true,
+                Department = (string?)null
+            },
+            new {
+                FileName = "Phieu cham diem cua giang vien huong dan.docx",
+                Title = "Phiếu chấm điểm của giảng viên hướng dẫn",
+                Description = "Biểu mẫu chấm điểm quá trình và bảo vệ khóa luận/thực tập tốt nghiệp.",
+                Category = "LecturerEvaluation",
+                Version = "1.0",
+                IsRequired = true,
+                Department = (string?)null
+            },
+            new {
+                FileName = "Mau de cuong chi tiet va bao cao tuan thuc tap.docx",
+                Title = "Mẫu đề cương chi tiết và báo cáo tuần thực tập",
+                Description = "Đề cương thực tập chi tiết và mẫu ghi nhật ký tiến độ hàng tuần.",
+                Category = "WeeklyReport",
+                Version = "1.0",
+                IsRequired = true,
+                Department = (string?)null
+            }
+        };
+
+        var templatesDir = Path.Combine(_env.ContentRootPath, "Templates");
+        var destDir = Path.Combine(GetUploadRoot(), UploadFolder, "templates", "general");
+        Directory.CreateDirectory(destDir);
+
+        foreach (var def in sampleDefinitions)
+        {
+            var ext = Path.GetExtension(def.FileName).ToLowerInvariant();
+            var mime = GetMimeType(ext);
+            var destFileName = $"{Guid.NewGuid()}_{def.FileName}";
+            var destPath = Path.Combine(destDir, destFileName);
+            var relativePath = Path.Combine(UploadFolder, "templates", "general", destFileName).Replace("\\", "/");
+            long fileSize = 1024;
+
+            var sourcePath = Path.Combine(templatesDir, def.FileName);
+            if (File.Exists(sourcePath))
+            {
+                File.Copy(sourcePath, destPath, overwrite: true);
+                fileSize = new FileInfo(destPath).Length;
+            }
+            else
+            {
+                await File.WriteAllTextAsync(destPath, $"InternLink Official Template: {def.Title}");
+                fileSize = new FileInfo(destPath).Length;
+            }
+
+            var doc = new Document
+            {
+                Id = Guid.NewGuid(),
+                InternshipId = null,
+                SemesterId = null,
+                Department = def.Department,
+                Title = def.Title,
+                Description = def.Description,
+                Category = def.Category,
+                Version = def.Version,
+                FileName = def.FileName,
+                FilePath = relativePath,
+                FileSize = fileSize,
+                MimeType = mime,
+                IsPublished = true,
+                PublishedAt = DateTime.UtcNow,
+                IsRequired = def.IsRequired,
+                DownloadCount = 0,
+                UploadedAt = DateTime.UtcNow,
+                CreatedAt = DateTime.UtcNow
+            };
+            _db.Documents.Add(doc);
+            _db.DocumentVersions.Add(new DocumentVersion
+            {
+                Id = Guid.NewGuid(),
+                DocumentId = doc.Id,
+                VersionNumber = 1,
+                FileName = def.FileName,
+                FilePath = relativePath,
+                FileSize = fileSize,
+                MimeType = mime,
+                UploadedAt = DateTime.UtcNow,
+                ChangeNote = "Phiên bản khởi tạo hệ thống",
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+
+        await _db.SaveChangesAsync();
+    }
+
+    private async Task<(string FilePath, long FileSize, string MimeType)> SaveTemplateFileAsync(Stream fileStream, string originalFileName, string? department = null)
+    {
+        if (fileStream == null || fileStream.Length == 0)
+            throw new ArgumentException("File is required and must not be empty");
+
+        var extension = Path.GetExtension(originalFileName).ToLowerInvariant();
+        if (!AllowedExtensions.Contains(extension))
+            throw new InvalidOperationException($"File type '{extension}' is not allowed");
+
+        var deptFolder = string.IsNullOrWhiteSpace(department) ? "general" : department.Trim().ToLowerInvariant();
+        var uploadPath = Path.Combine(GetUploadRoot(), UploadFolder, "templates", deptFolder);
+        Directory.CreateDirectory(uploadPath);
+
+        var uniqueFileName = $"{Guid.NewGuid()}_{Path.GetFileNameWithoutExtension(originalFileName)}{extension}";
+        var fullPath = Path.Combine(uploadPath, uniqueFileName);
+        var relativePath = Path.Combine(UploadFolder, "templates", deptFolder, uniqueFileName).Replace("\\", "/");
+
+        long fileSize;
+        using (var stream = new FileStream(fullPath, FileMode.Create))
+        {
+            await fileStream.CopyToAsync(stream);
+            fileSize = stream.Length;
+        }
+
+        var mimeType = GetMimeType(extension);
+        return (relativePath, fileSize, mimeType);
+    }
+
+    public async Task<IReadOnlyList<DocumentVersionDto>> GetDocumentVersionsAsync(Guid documentId)
+    {
+        var versions = await _db.DocumentVersions
+            .Where(v => v.DocumentId == documentId && !v.IsDeleted)
+            .OrderByDescending(v => v.VersionNumber)
+            .ToListAsync();
+
+        return _mapper.Map<IReadOnlyList<DocumentVersionDto>>(versions);
+    }
+
+    public async Task<DocumentDownloadDto?> DownloadDocumentVersionAsync(Guid versionId)
+    {
+        var version = await _db.DocumentVersions
+            .FirstOrDefaultAsync(v => v.Id == versionId && !v.IsDeleted);
+
+        if (version == null)
+            return null;
+
+        var normalizedPath = version.FilePath
+            .Replace('/', Path.DirectorySeparatorChar)
+            .Replace('\\', Path.DirectorySeparatorChar)
+            .TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+        string? existingFullPath = null;
+        var roots = new[] { GetUploadRoot(), _env.ContentRootPath }
+            .Where(r => !string.IsNullOrWhiteSpace(r))
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var root in roots)
+        {
+            var p = Path.Combine(root, normalizedPath);
+            if (File.Exists(p))
+            {
+                existingFullPath = p;
+                break;
+            }
+        }
+
+        if (existingFullPath == null)
+            return null;
+
+        var fileContent = await File.ReadAllBytesAsync(existingFullPath);
+        return new DocumentDownloadDto
+        {
+            FileContent = fileContent,
+            FileName = version.FileName,
+            MimeType = version.MimeType
         };
     }
 }

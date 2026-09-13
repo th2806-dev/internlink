@@ -17,6 +17,11 @@ import { Panel } from "../../../components/common/Panel";
 import { lecturerAnalyticsService } from "../../../services/lecturerAnalytics.service";
 import { useSemester, toApiSemesterId } from "../../../contexts/SemesterContext";
 import { getApiErrorMessage } from "../../../lib/apiClient";
+import type {
+  LecturerWeeklyTrendDto,
+  LecturerGradeDistributionDto,
+  LecturerCompanyStatDto,
+} from "../../../types/api";
 
 interface DashboardStatsDto {
   totalStudents: number;

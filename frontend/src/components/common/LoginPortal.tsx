@@ -18,6 +18,7 @@ import type { UserRole } from "../../contexts/AuthContext";
 interface LoginUser {
   username: string;
   role: UserRole;
+  backendRole?: string | null;
   name: string;
   email?: string | null;
   mustChangePassword?: boolean;
@@ -118,6 +119,7 @@ export function LoginPortal({ onLoginSuccess }: LoginPortalProps) {
         username: me.username,
         id: me.id,
         role,
+        backendRole: me.role,
         name: me.fullName?.trim() || me.username,
         email: me.email,
         mustChangePassword: loginRes.mustChangePassword,
@@ -131,15 +133,15 @@ export function LoginPortal({ onLoginSuccess }: LoginPortalProps) {
   };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center p-4 sm:p-6 lg:p-10 bg-[var(--il-surface-bg)] text-[#0b1c30] font-sans antialiased selection:bg-blue-100 selection:text-blue-900 relative overflow-x-hidden">
+    <div className="min-h-screen w-full flex items-center justify-center p-4 sm:p-6 lg:p-10 bg-[#f4f7fb] text-[#0b1c30] font-sans antialiased selection:bg-blue-100 selection:text-blue-900 relative overflow-x-hidden">
       {/* Subtle Soft Ambient Background Lighting */}
       <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-[#1d4ed8]/8 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-10 right-10 w-[320px] h-[320px] bg-slate-400/10 rounded-full blur-[100px] pointer-events-none" />
 
       {/* FLOATING CENTERED WINDOW CARD (Splits 65/35 inside floating card) */}
-      <div className="w-full max-w-5xl bg-white rounded-lg shadow-md border border-slate-200 overflow-hidden flex flex-col lg:flex-row min-h-[580px] z-10 my-auto il-animate-up">
+      <div className="w-full max-w-6xl bg-white rounded-xl shadow-[0_24px_70px_rgba(11,19,43,0.14)] border border-slate-200/80 overflow-hidden flex flex-col lg:flex-row min-h-[620px] z-10 my-auto il-animate-up">
         {/* LEFT HERO PANEL INSIDE FLOATING CARD (LF - 62% Width Desktop) */}
-        <div className="relative w-full lg:w-[62%] min-h-[300px] lg:min-h-full flex flex-col justify-end p-8 lg:p-12 bg-[#040d2a] overflow-hidden select-none">
+        <div className="relative w-full lg:w-[58%] min-h-[340px] lg:min-h-full flex flex-col justify-between p-8 lg:p-12 bg-[#07152f] overflow-hidden select-none">
           {/* Architectural Background Image with Subtle Gradient Overlay */}
           <div
             className="absolute inset-0 w-full h-full bg-cover bg-center bg-no-repeat transition-all duration-500"
@@ -153,21 +155,21 @@ export function LoginPortal({ onLoginSuccess }: LoginPortalProps) {
           <div className="absolute bottom-1/4 right-1/4 w-[25vw] h-[25vw] rounded-full bg-blue-500 opacity-15 blur-[90px] mix-blend-screen pointer-events-none" />
 
           {/* Hero Slogan Content Overlay (Compact Small Size with Smooth Gradient) */}
-          <div className="relative z-10 w-full max-w-xs bg-gradient-to-r from-[#040d2a]/70 via-[#040d2a]/35 to-transparent p-3.5 lg:p-4 rounded-lg border border-white/10 shadow-sm text-left">
-            <div className="inline-flex items-center gap-1.5 mb-2 px-2.5 py-1 rounded-full bg-white/10 text-white border border-white/15 shadow-xs">
+          <div className="relative z-10 max-w-2xl mt-auto text-left">
+            <div className="inline-flex items-center gap-2 mb-5 px-3 py-1.5 rounded-full bg-white/10 text-white border border-white/15">
               <span className="w-1.5 h-1.5 rounded-full bg-[#d8e2ff]" />
               <span className="text-[10px] font-bold tracking-wider uppercase text-white font-display">
-                HỆ THỐNG THỰC TẬP SINH
+                INTERNLINK · CỔNG THỰC TẬP
               </span>
             </div>
 
-            <h2 className="text-xs lg:text-sm text-white font-bold tracking-tight mb-1.5 leading-snug font-display">
-              Kết nối tài năng,
+            <h2 className="text-3xl lg:text-5xl text-white font-bold tracking-tight mb-3 leading-[1.05] font-display">
+              Kết nối tài năng.
               <br />
-              <span className="text-[#bdc5ea]">bứt phá sự nghiệp.</span>
+              <span className="text-[#8eb8ff] lg:whitespace-nowrap">Bứt phá sự nghiệp.</span>
             </h2>
 
-            <p className="text-[11px] text-white/85 font-medium leading-relaxed">
+            <p className="text-sm text-white/75 font-medium leading-relaxed max-w-sm">
               Nền tảng kết nối sinh viên và doanh nghiệp, tối ưu hóa quy trình
               quản lý thực tập với công nghệ hiện đại.
             </p>
@@ -178,7 +180,7 @@ export function LoginPortal({ onLoginSuccess }: LoginPortalProps) {
         </div>
 
         {/* RIGHT LOGIN PANEL INSIDE FLOATING CARD (RF - 38% Width Desktop) */}
-        <div className="w-full lg:w-[38%] p-6 lg:p-8 flex flex-col justify-between items-center bg-white">
+        <div className="w-full lg:w-[42%] p-7 lg:p-12 flex flex-col justify-between items-center bg-white">
           <div className="w-full flex flex-col items-center my-auto">
             {/* Logo Header */}
             <div className="mb-6 flex justify-center">
@@ -191,8 +193,8 @@ export function LoginPortal({ onLoginSuccess }: LoginPortalProps) {
 
             {/* Form Container */}
             <div className="w-full">
-              <div className="flex flex-col gap-1 mb-5 text-left">
-                <h2 className="text-xl lg:text-2xl font-bold text-[#0b1c30] tracking-tight font-display">
+              <div className="flex flex-col gap-1 mb-7 text-left">
+                <h2 className="text-2xl lg:text-3xl font-bold text-[#0b1c30] tracking-tight font-display">
                   Đăng nhập
                 </h2>
                 <p className="text-xs text-slate-500 font-medium">

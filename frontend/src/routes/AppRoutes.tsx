@@ -36,6 +36,8 @@ import { AccountRequestsView as AdminAccountRequestsView } from "../features/adm
 import { NotificationsView as AdminNotificationsView } from "../features/admin/pages/NotificationsView";
 import { SettingsView as AdminSettingsView } from "../features/admin/pages/SettingsView";
 import { AccountView as AdminAccountView } from "../features/admin/pages/AccountView";
+import { TemplatesView as AdminTemplatesView } from "../features/admin/pages/TemplatesView";
+import { DepartmentsView as AdminDepartmentsView } from "../features/admin/pages/DepartmentsView";
 
 // Lecturer Pages
 import { DashboardView as LecturerDashboardView } from "../features/lecturer/pages/DashboardView";
@@ -48,6 +50,7 @@ import { AnalyticsView as LecturerAnalyticsView } from "../features/lecturer/pag
 import { EvaluationsView as LecturerEvaluationsView } from "../features/lecturer/pages/EvaluationsView";
 import { NotificationsView as LecturerNotificationsView } from "../features/lecturer/pages/NotificationsView";
 import { AccountView as LecturerAccountView } from "../features/lecturer/pages/AccountView";
+import { AttendanceManagementView as LecturerAttendanceView } from "../features/lecturer/pages/AttendanceManagementView";
 import { StudentWorkspace as LecturerStudentWorkspace } from "../features/lecturer/components/StudentWorkspace";
 
 // Student Pages
@@ -60,12 +63,14 @@ import { TemplatesView as StudentTemplatesView } from "../features/student/pages
 import { NotificationsView as StudentNotificationsView } from "../features/student/pages/NotificationsView";
 import { AccountView as StudentAccountView } from "../features/student/pages/AccountView";
 import { EvaluationView as StudentEvaluationView } from "../features/student/pages/EvaluationView";
+import { StudentAttendanceView } from "../features/student/pages/StudentAttendanceView";
 
 // App State hooks
 import { useRealAppState } from "./useRealAppState";
 
 export function AppRoutes() {
   const { isLoggedIn, isBootstrapping, role, user, login, logout, switchRole } = useAuth();
+  const isSuperAdmin = user?.backendRole === "SuperAdmin";
   const { showToast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -115,6 +120,7 @@ export function AppRoutes() {
                     username: user.username,
                     name: user.name,
                     role: user.role,
+                    backendRole: user.backendRole,
                     email: user.email,
                   },
                   mustChangePassword: user.mustChangePassword,
@@ -182,6 +188,16 @@ export function AppRoutes() {
                   element={<AdminUsersView onShowToast={showToast} />}
                 />
                 <Route
+                  path="departments"
+                  element={
+                    isSuperAdmin ? (
+                      <AdminDepartmentsView onShowToast={showToast} />
+                    ) : (
+                      <Navigate to="/admin/dashboard" replace />
+                    )
+                  }
+                />
+                <Route
                   path="semesters"
                   element={
                     FEATURES.adminSemesters ? (
@@ -209,9 +225,13 @@ export function AppRoutes() {
                   element={<AdminStudentsView onShowToast={showToast} />}
                 />
                 <Route
+                  path="templates"
+                  element={<AdminTemplatesView onShowToast={showToast} />}
+                />
+                <Route
                   path="account-requests"
                   element={
-                    FEATURES.adminAccountRequests ? (
+                    isSuperAdmin && FEATURES.adminAccountRequests ? (
                       <AdminAccountRequestsView
                         onShowToast={showToast}
                         onNavigateTab={(t) =>
@@ -219,7 +239,7 @@ export function AppRoutes() {
                         }
                       />
                     ) : (
-                      <Navigate to="/admin/users" replace />
+                      <Navigate to="/admin/dashboard" replace />
                     )
                   }
                 />
@@ -237,12 +257,16 @@ export function AppRoutes() {
                 <Route
                   path="settings"
                   element={
-                    <AdminSettingsView
-                      onShowToast={showToast}
-                      onNavigateTab={(t) =>
-                        navigate(`/admin/${t.replace("admin-", "")}`)
-                      }
-                    />
+                    isSuperAdmin ? (
+                      <AdminSettingsView
+                        onShowToast={showToast}
+                        onNavigateTab={(t) =>
+                          navigate(`/admin/${t.replace("admin-", "")}`)
+                        }
+                      />
+                    ) : (
+                      <Navigate to="/admin/dashboard" replace />
+                    )
                   }
                 />
                 <Route
@@ -362,6 +386,10 @@ export function AppRoutes() {
                   }
                 />
                 <Route
+                  path="attendance"
+                  element={<LecturerAttendanceView onShowToast={showToast} />}
+                />
+                <Route
                   path="notifications"
                   element={<LecturerNotificationsView />}
                 />
@@ -444,6 +472,10 @@ export function AppRoutes() {
                 <Route
                   path="evaluation"
                   element={<StudentEvaluationView onShowToast={showToast} />}
+                />
+                <Route
+                  path="attendance"
+                  element={<StudentAttendanceView onShowToast={showToast} />}
                 />
                 <Route
                   path="notifications"

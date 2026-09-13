@@ -1,5 +1,11 @@
 import { apiRequest, downloadAuthenticatedFile } from "../lib/apiClient";
-import type { CompanyDto, CompanyImportResultDto } from "../types/api";
+import type {
+  CompanyDto,
+  CompanyImportResultDto,
+  CompanyPositionDto,
+  CreateCompanyPositionRequest,
+  UpdateCompanyPositionRequest,
+} from "../types/api";
 
 export const adminCompaniesService = {
   getAll(skip = 0, take = 500, semesterId?: string): Promise<CompanyDto[]> {
@@ -89,9 +95,35 @@ export const adminCompaniesService = {
     );
   },
 
-  /** Admin company detail: master data + hosted internships. */
+  /** Admin company detail: master data + hosted internships + recruitment positions. */
   getDetail(id: string): Promise<AdminCompanyDetailDto> {
     return apiRequest<AdminCompanyDetailDto>(`/api/Admin/companies/${id}/detail`);
+  },
+
+  /** Recruitment positions for a company, optionally filtered by semester */
+  getPositions(companyId: string, semesterId?: string): Promise<CompanyPositionDto[]> {
+    const qs = semesterId && semesterId !== "all" ? `?semesterId=${semesterId}` : "";
+    return apiRequest<CompanyPositionDto[]>(`/api/Admin/companies/${companyId}/positions${qs}`);
+  },
+
+  createPosition(companyId: string, body: CreateCompanyPositionRequest): Promise<CompanyPositionDto> {
+    return apiRequest<CompanyPositionDto>(`/api/Admin/companies/${companyId}/positions`, {
+      method: "POST",
+      body,
+    });
+  },
+
+  updatePosition(positionId: string, body: UpdateCompanyPositionRequest): Promise<CompanyPositionDto> {
+    return apiRequest<CompanyPositionDto>(`/api/Admin/companies/positions/${positionId}`, {
+      method: "PUT",
+      body,
+    });
+  },
+
+  deletePosition(positionId: string): Promise<void> {
+    return apiRequest<void>(`/api/Admin/companies/positions/${positionId}`, {
+      method: "DELETE",
+    });
   },
 };
 
@@ -99,6 +131,7 @@ export const adminCompaniesService = {
 export interface AdminCompanyDetailDto {
   company: CompanyDto;
   internships: InternshipListItemDto[];
+  positions?: CompanyPositionDto[];
 }
 
 export interface InternshipListItemDto {

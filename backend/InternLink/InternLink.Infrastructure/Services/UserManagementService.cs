@@ -30,9 +30,13 @@ public class UserManagementService : IUserManagementService
         _logger = logger;
     }
 
-    public async Task<PaginatedResponse<UserDto>> GetUsersAsync(UserFilterRequest filter)
+    public async Task<PaginatedResponse<UserDto>> GetUsersAsync(UserFilterRequest filter, Guid? departmentId = null)
     {
         var query = _db.Users.Where(u => !u.IsDeleted);
+
+        // DepartmentAdmin: only see users in their department
+        if (departmentId.HasValue)
+            query = query.Where(u => u.DepartmentId == departmentId.Value);
 
         if (!string.IsNullOrWhiteSpace(filter.Role) && Enum.TryParse<Role>(filter.Role, true, out var role))
             query = query.Where(u => u.Role == role);
@@ -75,10 +79,23 @@ public class UserManagementService : IUserManagementService
         return user == null ? null : await MapUserAsync(user);
     }
 
-    public async Task<UserDto> CreateUserAsync(CreateUserRequest request)
+    public async Task<UserDto> CreateUserAsync(CreateUserRequest request, Guid? creatorDepartmentId = null)
     {
         if (!Enum.TryParse<Role>(request.Role, true, out var role) || role is Role.SuperAdmin)
-            throw new InvalidOperationException("Role must be Student or Lecturer");
+            throw new InvalidOperationException("Role must be Student, Lecturer, or DepartmentAdmin");
+
+        if (role == Role.DepartmentAdmin)
+        {
+            if (creatorDepartmentId.HasValue)
+                throw new InvalidOperationException("DepartmentAdmin accounts can only be created by SuperAdmin.");
+
+            if (!request.DepartmentId.HasValue)
+                throw new InvalidOperationException("DepartmentId is required when creating a DepartmentAdmin account.");
+
+            var departmentExists = await _db.Departments.AnyAsync(d => d.Id == request.DepartmentId.Value && !d.IsDeleted && d.IsActive);
+            if (!departmentExists)
+                throw new InvalidOperationException("Selected department does not exist or is inactive.");
+        }
 
         if (await _db.Users.AnyAsync(u => u.Username == request.Username && !u.IsDeleted))
             throw new InvalidOperationException($"Username '{request.Username}' already exists");
@@ -98,6 +115,7 @@ public class UserManagementService : IUserManagementService
             FullName = request.FullName.Trim(),
             Email = NullIfWhiteSpace(request.Email),
             Role = role,
+            DepartmentId = role == Role.DepartmentAdmin ? request.DepartmentId : creatorDepartmentId,
             IsActive = true,
             MustChangePassword = true,
             CreatedAt = DateTime.UtcNow
@@ -124,7 +142,13 @@ public class UserManagementService : IUserManagementService
 
         if (!string.IsNullOrWhiteSpace(user.Email))
         {
-            var invitationRole = role == Role.Lecturer ? InvitationRole.Lecturer : InvitationRole.Student;
+            var invitationRole = role switch
+            {
+                Role.Lecturer => InvitationRole.Lecturer,
+                Role.DepartmentAdmin => InvitationRole.DepartmentAdmin,
+                _ => InvitationRole.Student
+            };
+
             var emailResult = await _emailService.SendInvitationAsync(new InvitationEmailRequest
             {
                 ToEmail = user.Email,
@@ -304,7 +328,8 @@ public class UserManagementService : IUserManagementService
             CreatedAt = user.CreatedAt,
             UpdatedAt = user.UpdatedAt,
             LinkedStudentCode = studentCode,
-            LinkedStaffCode = staffCode
+            LinkedStaffCode = staffCode,
+            DepartmentId = user.DepartmentId
         };
     }
 

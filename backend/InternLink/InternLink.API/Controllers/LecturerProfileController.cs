@@ -8,14 +8,16 @@ namespace InternLink.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "SuperAdmin,Lecturer")]
+[Authorize(Policy = "RequireLecturerOrAdmin")]
 public class LecturerProfileController : ControllerBase
 {
     private readonly ILecturerProfileService _service;
+    private readonly IDepartmentScopeService _deptScope;
 
-    public LecturerProfileController(ILecturerProfileService service)
+    public LecturerProfileController(ILecturerProfileService service, IDepartmentScopeService deptScope)
     {
         _service = service;
+        _deptScope = deptScope;
     }
 
     [HttpGet]
@@ -39,7 +41,7 @@ public class LecturerProfileController : ControllerBase
     }
 
     [HttpGet("{id:guid}/overview")]
-    [Authorize(Policy = "RequireSuperAdmin")]
+    [Authorize(Policy = "RequireAdmin")]
     public async Task<IActionResult> GetOverview(Guid id)
     {
         var overview = await _service.GetOverviewAsync(id);
@@ -50,12 +52,12 @@ public class LecturerProfileController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Policy = "RequireSuperAdmin")]
+    [Authorize(Policy = "RequireAdmin")]
     public async Task<IActionResult> Create([FromBody] CreateLecturerRequest request)
     {
         try
         {
-            var created = await _service.CreateAsync(request);
+            var created = await _service.CreateAsync(request, _deptScope.GetCurrentDepartmentId(User));
             return CreatedAtAction(nameof(GetById), new { id = created.Id }, ApiResponse<LecturerDto>.Ok(created));
         }
         catch (InvalidOperationException ex)
@@ -65,7 +67,7 @@ public class LecturerProfileController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
-    [Authorize(Policy = "RequireSuperAdmin")]
+    [Authorize(Policy = "RequireAdmin")]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateLecturerRequest request)
     {
         try
@@ -83,7 +85,7 @@ public class LecturerProfileController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
-    [Authorize(Policy = "RequireSuperAdmin")]
+    [Authorize(Policy = "RequireAdmin")]
     public async Task<IActionResult> Delete(Guid id)
     {
         try
@@ -108,7 +110,7 @@ public class LecturerProfileController : ControllerBase
     }
 
     [HttpPost("import")]
-    [Authorize(Policy = "RequireSuperAdmin")]
+    [Authorize(Policy = "RequireAdmin")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(10 * 1024 * 1024)]
     public async Task<IActionResult> Import(IFormFile file, [FromQuery] Guid? semesterId = null)

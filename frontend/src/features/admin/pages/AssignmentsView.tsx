@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
+import type { ToastType } from "../../../contexts/ToastContext";
 import {
   UserPlus,
   Search,
@@ -35,6 +36,7 @@ import { formatRelativeTimeVi } from "../../../lib/formatRelativeTimeVi";
 import { adminAssignmentsService } from "../../../services/adminAssignments.service";
 import { useAdminAssignmentMatrix } from "../../../hooks/useAdminAssignmentMatrix";
 import { useSemester } from "../../../contexts/SemesterContext";
+import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
 import { CompanyAllocationsTab } from "../components/CompanyAllocationsTab";
 import { ImportLecturerAssignmentsModal } from "../components/modals/ImportLecturerAssignmentsModal";
 
@@ -42,10 +44,11 @@ export const AssignmentsView = ({
   onShowToast,
   onNavigateTab,
 }: {
-  onShowToast: (msg: string) => void;
+  onShowToast: (msg: string, type?: ToastType) => void;
   onNavigateTab?: (tab: string) => void;
 }) => {
   const { semesters, selectedSemesterId, selectedSemester: currentSemesterObj, selectSemester } = useSemester();
+  const { canMutateOps, isSuperAdmin } = useAdminCapabilities();
   const selectedSemester = selectedSemesterId;
   const setSelectedSemester = selectSemester;
   const effectiveSemesterId = selectedSemester === "all" ? undefined : selectedSemester;
@@ -70,7 +73,7 @@ export const AssignmentsView = ({
   const [lecturerDeptFilter, setLecturerDeptFilter] = useState("all");
   const [assignedStudentSearch, setAssignedStudentSearch] = useState("");
   const [assignedClassFilter, setAssignedClassFilter] = useState("all");
-  const groupViewMode = "single";
+  const groupViewMode: string = "single";
   const [selectedAssignedStudentIds, setSelectedAssignedStudentIds] = useState(
     [],
   );
@@ -379,12 +382,16 @@ export const AssignmentsView = ({
             : `${apiMatrix.lecturers.length} GV · ${apiMatrix.students.length} SV`
         }
         actions={[
-          {
-            label: "Import PC Giảng viên",
-            icon: FileUp,
-            onClick: () => setShowImportLecturerModal(true),
-            variant: "secondary",
-          },
+          ...(canMutateOps
+            ? [
+                {
+                  label: "Import PC Giảng viên",
+                  icon: FileUp,
+                  onClick: () => setShowImportLecturerModal(true),
+                  variant: "secondary" as const,
+                },
+              ]
+            : []),
           {
             label: "Lịch sử phân công",
             icon: History,
@@ -393,6 +400,15 @@ export const AssignmentsView = ({
           },
         ]}
       />
+
+      {isSuperAdmin && (
+        <div className="px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900 flex items-center gap-2.5">
+          <Clock className="w-4 h-4 text-blue-600 shrink-0" />
+          <span>
+            Chế độ chỉ xem nghiệp vụ khoa — Super Admin không thể phân công / hủy phân công / import.
+          </span>
+        </div>
+      )}
 
       <Toolbar
         left={
@@ -674,7 +690,7 @@ export const AssignmentsView = ({
                         </div>
 
                         <div className="flex items-center gap-2">
-                          {selectedAssignedStudentIds.length > 0 && (
+                          {canMutateOps && selectedAssignedStudentIds.length > 0 && (
                             <>
                               <button
                                 onClick={() => setShowReassignModal(true)}
@@ -837,15 +853,19 @@ export const AssignmentsView = ({
                                     </td>
 
                                     <td className="py-3 px-3 text-right space-x-1">
-                                      <button
-                                        onClick={() =>
-                                          handleUnassignStudent(st.id, st.fullName)
-                                        }
-                                        className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-[11px] rounded-lg border border-rose-200 transition-colors"
-                                        title="Hủy phân công sinh viên khỏi giảng viên này"
-                                      >
-                                        Hủy phân công
-                                      </button>
+                                      {canMutateOps ? (
+                                        <button
+                                          onClick={() =>
+                                            handleUnassignStudent(st.id, st.fullName)
+                                          }
+                                          className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-[11px] rounded-lg border border-rose-200 transition-colors"
+                                          title="Hủy phân công sinh viên khỏi giảng viên này"
+                                        >
+                                          Hủy phân công
+                                        </button>
+                                      ) : (
+                                        <span className="text-[11px] text-slate-400 font-medium">—</span>
+                                      )}
                                     </td>
                                   </tr>
                                 );
@@ -1008,34 +1028,38 @@ export const AssignmentsView = ({
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={() =>
-                          setSelectedUnassignedIds(
-                            filteredUnassignedStudents.map((s) => s.id),
-                          )
-                        }
-                        className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg transition-colors"
-                      >
-                        Chọn tất cả ({filteredUnassignedStudents.length})
-                      </button>
+                      {canMutateOps && (
+                        <>
+                          <button
+                            onClick={() =>
+                              setSelectedUnassignedIds(
+                                filteredUnassignedStudents.map((s) => s.id),
+                              )
+                            }
+                            className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg transition-colors"
+                          >
+                            Chọn tất cả ({filteredUnassignedStudents.length})
+                          </button>
 
-                      {selectedUnassignedIds.length > 0 && (
-                        <button
-                          onClick={() => setSelectedUnassignedIds([])}
-                          className="text-xs font-bold text-rose-600 hover:underline px-2"
-                        >
-                          Bỏ chọn ({selectedUnassignedIds.length})
-                        </button>
+                          {selectedUnassignedIds.length > 0 && (
+                            <button
+                              onClick={() => setSelectedUnassignedIds([])}
+                              className="text-xs font-bold text-rose-600 hover:underline px-2"
+                            >
+                              Bỏ chọn ({selectedUnassignedIds.length})
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={handleConfirmMatrixAssignment}
+                            disabled={selectedUnassignedIds.length === 0}
+                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold text-xs rounded-md transition-colors flex items-center gap-1.5"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            Phân công {selectedUnassignedIds.length > 0 ? `(${selectedUnassignedIds.length})` : ""}
+                          </button>
+                        </>
                       )}
-                      <button
-                        type="button"
-                        onClick={handleConfirmMatrixAssignment}
-                        disabled={selectedUnassignedIds.length === 0}
-                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold text-xs rounded-md transition-colors flex items-center gap-1.5"
-                      >
-                        <Check className="w-3.5 h-3.5" />
-                        Phân công {selectedUnassignedIds.length > 0 ? `(${selectedUnassignedIds.length})` : ""}
-                      </button>
                     </div>
                   </div>
 

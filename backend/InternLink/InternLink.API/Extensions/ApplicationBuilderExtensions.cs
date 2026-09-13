@@ -1,3 +1,4 @@
+using InternLink.Application.Interfaces;
 using InternLink.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,11 +14,15 @@ public static class ApplicationBuilderExtensions
 
         try
         {
-            logger.LogInformation("Applying database migrations and seeding initial data...");
+            logger.LogInformation("Applying database migrations...");
             var context = services.GetRequiredService<AppDbContext>();
             await context.Database.MigrateAsync();
-            await SeedData.InitializeAsync(context);
-            logger.LogInformation("Database migration and initialization completed successfully.");
+
+            // Keep the database clean so the environment can be initialized manually.
+            // SeedData.InitializeAsync(context) is intentionally skipped.
+            var documentService = services.GetRequiredService<IDocumentService>();
+            await documentService.SeedDefaultTemplatesAsync();
+            logger.LogInformation("Database migration completed successfully.");
         }
         catch (Exception ex)
         {

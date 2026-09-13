@@ -8,6 +8,7 @@ import {
   Bell,
   User,
   Award,
+  CalendarCheck,
 } from "lucide-react";
 import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
 import { useStudentPortal } from "../../../contexts/StudentPortalContext";
@@ -44,6 +45,11 @@ export const Sidebar = ({
           label: "Kỳ thực tập của tôi",
           icon: Briefcase,
           badge: "Active",
+        },
+        {
+          id: "student-attendance",
+          label: "Lịch gặp & Điểm danh",
+          icon: CalendarCheck,
         },
       ],
     },

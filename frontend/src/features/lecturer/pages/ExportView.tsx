@@ -10,6 +10,7 @@ import {
   FileText,
   Printer,
   Sparkles,
+  CalendarDays,
 } from "lucide-react";
 import { PageHeader } from "../../../components/common/PageHeader";
 import { Panel } from "../../../components/common/Panel";
@@ -28,13 +29,14 @@ export const ExportView = ({
   onShowToast: (msg: string) => void;
   studentCount?: number;
 }) => {
-  const { selectedSemester } = useSemester();
+  const { selectedSemester, activeSemesterId } = useSemester();
   const [includeGrades, setIncludeGrades] = useState(true);
   const [includeEnterpriseFeedback, setIncludeEnterpriseFeedback] =
     useState(true);
   const [includeWeeklySummary, setIncludeWeeklySummary] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [isExportingGuidance, setIsExportingGuidance] = useState(false);
   const [showPdfModal, setShowPdfModal] = useState(false);
 
   const handleExport = async () => {
@@ -55,6 +57,35 @@ export const ExportView = ({
       onShowToast(getApiErrorMessage(err));
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const handleExportGuidanceSchedule = async () => {
+    const semesterId =
+      selectedSemester?.id && selectedSemester.id !== "all"
+        ? selectedSemester.id
+        : activeSemesterId;
+    if (!semesterId) {
+      onShowToast("Vui lòng chọn học kỳ để xuất lịch hướng dẫn.");
+      return;
+    }
+    setIsExportingGuidance(true);
+    try {
+      const { blob, filename } =
+        await lecturerExportService.downloadGuidanceSchedule(semesterId);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      onShowToast(`Đã tải xuống ${filename}`);
+    } catch (err) {
+      onShowToast(getApiErrorMessage(err));
+    } finally {
+      setIsExportingGuidance(false);
     }
   };
 
@@ -91,6 +122,16 @@ export const ExportView = ({
             icon: Printer,
             onClick: () => setShowPdfModal(true),
             variant: "secondary",
+          },
+          {
+            label: isExportingGuidance ? "Đang xuất…" : "Xuất Lịch hướng dẫn (Excel)",
+            icon: isExportingGuidance ? Loader2 : CalendarDays,
+            onClick: () => {
+              if (!isExportingGuidance) void handleExportGuidanceSchedule();
+            },
+            variant: "secondary",
+            disabled: isExportingGuidance,
+            loading: isExportingGuidance,
           },
           {
             label: isExportingPdf ? "Đang xuất PDF…" : "Xuất Báo Cáo PDF",

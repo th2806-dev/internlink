@@ -162,7 +162,7 @@ export function KpiCard({
 
       <div className="flex items-baseline gap-1.5">
 
-        <span className={`text-2xl font-bold il-kpi-val ${KPI_VALUE[tone]}`}>
+        <span className={`text-3xl font-bold il-kpi-val ${KPI_VALUE[tone]}`}>
 
           {value}
 

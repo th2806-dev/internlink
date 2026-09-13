@@ -8,6 +8,7 @@ import {
   BarChart3,
   Bell,
   User,
+  CalendarCheck,
 } from "lucide-react";
 import { FEATURES } from "../../../config/featureFlags";
 import { useAuth } from "../../../hooks/useAuth";
@@ -65,6 +66,11 @@ export const Sidebar = ({
     {
       title: "BÁO CÁO & ĐÁNH GIÁ",
       items: [
+        {
+          id: "attendance",
+          label: "Điểm danh & Buổi gặp",
+          icon: CalendarCheck,
+        },
         {
           id: "reports",
           label: "Báo cáo & Bài nộp",

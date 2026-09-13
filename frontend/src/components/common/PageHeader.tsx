@@ -46,8 +46,10 @@ export function PageHeader({
     <div className="il-toolbar il-animate-in !mb-4 !px-0">
       <div className="min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <Icon className="w-5 h-5 text-[#1d4ed8] shrink-0" />
-          <h1 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight">
+          <span className="flex h-9 w-9 items-center justify-center rounded-md bg-blue-50 border border-blue-100 shrink-0">
+            <Icon className="w-4 h-4 text-[#1d4ed8]" />
+          </span>
+            <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">
             {title}
           </h1>
           {badge && (

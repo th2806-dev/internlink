@@ -58,6 +58,16 @@ public class StudentPortalController : ControllerBase
                 FullName = request.FullName,
                 Email = request.Email,
                 Phone = request.Phone,
+                Department = request.Department ?? current.Department,
+                Class = current.Class,
+                Major = current.Major,
+                DesiredPosition = request.DesiredPosition,
+                AlternativePosition = request.AlternativePosition,
+                DesiredLocation = request.DesiredLocation,
+                WorkPreference = request.WorkPreference,
+                PreferredIndustry = request.PreferredIndustry,
+                Skills = request.Skills,
+                ResumeUrl = request.ResumeUrl,
             });
             return Ok(ApiResponse<StudentDto>.Ok(updated!));
         }

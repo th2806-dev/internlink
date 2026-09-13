@@ -697,4 +697,182 @@ public class CompanyServiceTests
         stream.Position = 0;
         return stream;
     }
+
+    [Fact]
+    public async Task CreatePositionAsync_WithValidData_ShouldCreatePosition()
+    {
+        // Arrange
+        var db = GetInMemoryDbContext();
+        var service = CreateService(db);
+        var company = new Company { CompanyName = "FPT Software", IsActive = true };
+        db.Companies.Add(company);
+        await db.SaveChangesAsync();
+
+        var request = new CreateCompanyPositionRequest
+        {
+            Title = "Backend .NET Intern",
+            Slots = 3,
+            RequiredMajor = "CNTT",
+            RequiredSkills = "C#, .NET, SQL",
+            Stipend = 5000000,
+            Location = "Hà Nội"
+        };
+
+        // Act
+        var result = await service.CreatePositionAsync(company.Id, request);
+
+        // Assert
+        result.Should().NotBeNull();
+        result.Title.Should().Be("Backend .NET Intern");
+        result.Slots.Should().Be(3);
+        result.FilledSlots.Should().Be(0);
+        result.Stipend.Should().Be(5000000);
+        result.RequiredMajor.Should().Be("CNTT");
+
+        var posInDb = await db.CompanyPositions.FirstOrDefaultAsync(p => p.Id == result.Id);
+        posInDb.Should().NotBeNull();
+        posInDb!.CompanyId.Should().Be(company.Id);
+    }
+
+    [Fact]
+    public async Task GetPositionsAsync_ShouldReturnPositionsAndFilledSlots()
+    {
+        // Arrange
+        var db = GetInMemoryDbContext();
+        var service = CreateService(db);
+        var company = new Company { CompanyName = "VNG", IsActive = true };
+        db.Companies.Add(company);
+        var student = new Student { StudentCode = "SV001", FullName = "Nguyen Van A" };
+        db.Students.Add(student);
+        await db.SaveChangesAsync();
+
+        var position = new CompanyPosition
+        {
+            CompanyId = company.Id,
+            Title = "Frontend React Intern",
+            Slots = 2,
+            IsOpen = true
+        };
+        db.CompanyPositions.Add(position);
+
+        var internship = new Internship
+        {
+            CompanyId = company.Id,
+            StudentId = student.Id,
+            Position = "Frontend React Intern"
+        };
+        db.Internships.Add(internship);
+        await db.SaveChangesAsync();
+
+        // Act
+        var positions = (await service.GetPositionsAsync(company.Id)).ToList();
+
+        // Assert
+        positions.Should().HaveCount(1);
+        positions[0].Title.Should().Be("Frontend React Intern");
+        positions[0].Slots.Should().Be(2);
+        positions[0].FilledSlots.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task UpdatePositionAsync_ShouldUpdateFields()
+    {
+        // Arrange
+        var db = GetInMemoryDbContext();
+        var service = CreateService(db);
+        var company = new Company { CompanyName = "Viettel", IsActive = true };
+        db.Companies.Add(company);
+        await db.SaveChangesAsync();
+
+        var position = new CompanyPosition
+        {
+            CompanyId = company.Id,
+            Title = "Tester",
+            Slots = 1,
+            IsOpen = true
+        };
+        db.CompanyPositions.Add(position);
+        await db.SaveChangesAsync();
+
+        var updateReq = new UpdateCompanyPositionRequest
+        {
+            Title = "QA/QC Intern",
+            Slots = 4,
+            IsOpen = false
+        };
+
+        // Act
+        var updated = await service.UpdatePositionAsync(position.Id, updateReq);
+
+        // Assert
+        updated.Should().NotBeNull();
+        updated!.Title.Should().Be("QA/QC Intern");
+        updated.Slots.Should().Be(4);
+        updated.IsOpen.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task DeletePositionAsync_ShouldSoftDelete()
+    {
+        // Arrange
+        var db = GetInMemoryDbContext();
+        var service = CreateService(db);
+        var company = new Company { CompanyName = "KMS", IsActive = true };
+        db.Companies.Add(company);
+        var position = new CompanyPosition { CompanyId = company.Id, Title = "DevOps" };
+        db.CompanyPositions.Add(position);
+        await db.SaveChangesAsync();
+
+        // Act
+        var result = await service.DeletePositionAsync(position.Id);
+
+        // Assert
+        result.Should().BeTrue();
+        var pos = await db.CompanyPositions.FirstOrDefaultAsync(p => p.Id == position.Id);
+        pos!.IsDeleted.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task SuggestCompaniesAsync_ShouldPrioritizeMatchingMajorAndCapacity()
+    {
+        // Arrange
+        var db = GetInMemoryDbContext();
+        var service = CreateService(db);
+        var semester = new Semester { Name = "HK1 2026-2027", AcademicYear = "2026-2027", Term = "Học kỳ I" };
+        db.Semesters.Add(semester);
+
+        var compA = new Company { CompanyName = "FPT Software", Industry = "Công nghệ thông tin", Capacity = 10, IsActive = true };
+        var compB = new Company { CompanyName = "Techcombank", Industry = "Ngân hàng", Capacity = 5, IsActive = true };
+        db.Companies.AddRange(compA, compB);
+
+        var student = new Student { StudentCode = "SV01", FullName = "Le Van C", Major = "CNTT" };
+        db.Students.Add(student);
+
+        var pos = new CompanyPosition
+        {
+            CompanyId = compA.Id,
+            SemesterId = semester.Id,
+            Title = "CNTT Intern",
+            RequiredMajor = "CNTT",
+            Slots = 5,
+            IsOpen = true
+        };
+        db.CompanyPositions.Add(pos);
+        await db.SaveChangesAsync();
+
+        var request = new CompanySuggestionRequest
+        {
+            SemesterId = semester.Id,
+            StudentId = student.Id
+        };
+
+        // Act
+        var suggestions = (await service.SuggestCompaniesAsync(request)).ToList();
+
+        // Assert
+        suggestions.Should().NotBeEmpty();
+        suggestions[0].CompanyName.Should().Be("FPT Software");
+        suggestions[0].MatchScore.Should().BeGreaterThan(suggestions.Count > 1 ? suggestions[1].MatchScore : 0);
+        suggestions[0].OpenPositions.Should().HaveCount(1);
+    }
 }

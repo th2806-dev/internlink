@@ -1,34 +1,43 @@
-import { useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { UserPlus, X, Save } from "lucide-react";
+import { adminDepartmentsService } from "../../../../services/adminDepartments.service";
+import { useAdminCapabilities } from "../../../../hooks/useAdminCapabilities";
+
+export type CreateUserRole = "Student" | "Lecturer" | "DepartmentAdmin";
 
 export interface CreateUserFormPayload {
   username: string;
   fullName: string;
   email?: string;
-  role: "Student" | "Lecturer";
+  role: CreateUserRole;
+  departmentId?: string;
   studentCode?: string;
   staffCode?: string;
 }
 
-const emptyForm: {
-  username: string;
-  fullName: string;
-  email: string;
-  role: "Student" | "Lecturer";
-  linkCode: string;
-} = {
+const ALL_ROLES: CreateUserRole[] = ["Student", "Lecturer", "DepartmentAdmin"];
+
+const ROLE_LABEL: Record<CreateUserRole, string> = {
+  Student: "Sinh viên",
+  Lecturer: "Giảng viên",
+  DepartmentAdmin: "Admin khoa",
+};
+
+const emptyFormForRole = (role: CreateUserRole) => ({
   username: "",
   fullName: "",
   email: "",
-  role: "Student",
+  role,
+  departmentId: "",
   linkCode: "",
-};
+});
 
 interface CreateUserModalProps {
   isOpen: boolean;
   onClose: () => void;
   onShowToast: (msg: string) => void;
   onCreateUser?: (payload: CreateUserFormPayload) => void | Promise<void>;
+  allowedRoles?: CreateUserRole[];
 }
 
 export const CreateUserModal = ({
@@ -36,9 +45,39 @@ export const CreateUserModal = ({
   onClose,
   onShowToast,
   onCreateUser,
+  allowedRoles = ALL_ROLES,
 }: CreateUserModalProps) => {
-  const [form, setForm] = useState(emptyForm);
+  const { isSuperAdmin } = useAdminCapabilities();
+  const roles = useMemo(() => {
+    const raw = allowedRoles.length > 0 ? allowedRoles : ALL_ROLES;
+    if (!isSuperAdmin) {
+      return raw.filter((r) => r !== "DepartmentAdmin");
+    }
+    return raw;
+  }, [allowedRoles, isSuperAdmin]);
+  const defaultRole = roles[0] || "Student";
+  const [form, setForm] = useState(() => emptyFormForRole(defaultRole));
   const [isSaving, setIsSaving] = useState(false);
+  const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setForm(emptyFormForRole(defaultRole));
+  }, [isOpen, defaultRole]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    if (form.role !== "DepartmentAdmin") {
+      setForm((prev) => ({ ...prev, departmentId: "" }));
+      return;
+    }
+
+    adminDepartmentsService
+      .getAll()
+      .then((data) => setDepartments(data.map((d) => ({ id: d.id, name: d.name }))))
+      .catch(() => setDepartments([]));
+  }, [isOpen, form.role]);
 
   if (!isOpen) return null;
 
@@ -58,11 +97,17 @@ export const CreateUserModal = ({
       return;
     }
 
+    if (form.role === "DepartmentAdmin" && !form.departmentId) {
+      onShowToast("Vui lòng chọn khoa cho Admin khoa.");
+      return;
+    }
+
     const payload: CreateUserFormPayload = {
       username,
       fullName,
       role: form.role,
       email: email || undefined,
+      departmentId: form.role === "DepartmentAdmin" ? form.departmentId : undefined,
       studentCode: form.role === "Student" && linkCode ? linkCode : undefined,
       staffCode: form.role === "Lecturer" && linkCode ? linkCode : undefined,
     };
@@ -70,7 +115,7 @@ export const CreateUserModal = ({
     setIsSaving(true);
     try {
       if (onCreateUser) await onCreateUser(payload);
-      setForm(emptyForm);
+      setForm(emptyFormForRole(roles[0]));
       onClose();
     } catch {
       /* parent shows API error */
@@ -115,16 +160,42 @@ export const CreateUserModal = ({
               onChange={(e) =>
                 setForm((prev) => ({
                   ...prev,
-                  role: e.target.value as "Student" | "Lecturer",
+                  role: e.target.value as CreateUserRole,
+                  departmentId: e.target.value === "DepartmentAdmin" ? prev.departmentId : "",
                   linkCode: "",
                 }))
               }
               className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-900 outline-none focus:bg-white focus:border-blue-500"
             >
-              <option value="Student">Sinh viên</option>
-              <option value="Lecturer">Giảng viên</option>
+              {roles.map((role) => (
+                <option key={role} value={role}>
+                  {ROLE_LABEL[role]}
+                </option>
+              ))}
             </select>
           </div>
+
+          {form.role === "DepartmentAdmin" && (
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Khoa *
+              </label>
+              <select
+                value={form.departmentId}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, departmentId: e.target.value }))
+                }
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-900 outline-none focus:bg-white focus:border-blue-500"
+              >
+                <option value="">-- Chọn khoa --</option>
+                {departments.map((department) => (
+                  <option key={department.id} value={department.id}>
+                    {department.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div>
             <label className="block font-bold text-slate-700 mb-1">
@@ -172,22 +243,24 @@ export const CreateUserModal = ({
             />
           </div>
 
-          <div>
-            <label className="block font-bold text-slate-700 mb-1">
-              {form.role === "Student"
-                ? "Liên kết MSSV hồ sơ (tùy chọn)"
-                : "Liên kết Mã GV hồ sơ (tùy chọn)"}
-            </label>
-            <input
-              type="text"
-              value={form.linkCode}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, linkCode: e.target.value }))
-              }
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-medium text-slate-900 outline-none focus:bg-white focus:border-blue-500"
-              placeholder={form.role === "Student" ? "20110201" : "GV001"}
-            />
-          </div>
+          {form.role !== "DepartmentAdmin" && (
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                {form.role === "Student"
+                  ? "Liên kết MSSV hồ sơ (tùy chọn)"
+                  : "Liên kết Mã GV hồ sơ (tùy chọn)"}
+              </label>
+              <input
+                type="text"
+                value={form.linkCode}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, linkCode: e.target.value }))
+                }
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-medium text-slate-900 outline-none focus:bg-white focus:border-blue-500"
+                placeholder={form.role === "Student" ? "20110201" : "GV001"}
+              />
+            </div>
+          )}
 
           <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
             <button

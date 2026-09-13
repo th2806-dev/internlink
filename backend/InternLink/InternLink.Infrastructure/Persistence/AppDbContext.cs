@@ -10,6 +10,7 @@ public class AppDbContext : DbContext
     {
     }
 
+    public DbSet<Department> Departments { get; set; } = null!;
     public DbSet<User> Users { get; set; } = null!;
     public DbSet<Student> Students { get; set; } = null!;
     public DbSet<Lecturer> Lecturers { get; set; } = null!;
@@ -32,11 +33,31 @@ public class AppDbContext : DbContext
     public DbSet<AccountRequest> AccountRequests { get; set; } = null!;
     public DbSet<SemesterLecturer> SemesterLecturers { get; set; } = null!;
     public DbSet<SemesterCompany> SemesterCompanies { get; set; } = null!;
+    public DbSet<CompanyPosition> CompanyPositions { get; set; } = null!;
+    public DbSet<SemesterReportSchedule> SemesterReportSchedules { get; set; } = null!;
+    public DbSet<AttendanceSession> AttendanceSessions { get; set; } = null!;
+    public DbSet<AttendanceRecord> AttendanceRecords { get; set; } = null!;
+    public DbSet<DocumentVersion> DocumentVersions { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
 
+        // ── Department ──────────────────────────────────────────────
+        modelBuilder.Entity<Department>(b =>
+        {
+            b.ToTable("Departments");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).HasColumnName("DepartmentId");
+            b.Property(x => x.Code).IsRequired().HasMaxLength(20);
+            b.Property(x => x.Name).IsRequired().HasMaxLength(200);
+            b.Property(x => x.Description).HasMaxLength(500);
+            b.Property(x => x.IsActive).HasDefaultValue(true);
+            b.Property(x => x.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
+            b.HasIndex(x => x.Code).IsUnique();
+        });
+
+        // ── User ────────────────────────────────────────────────────
         modelBuilder.Entity<User>(b =>
         {
             b.ToTable("Users");
@@ -49,6 +70,7 @@ public class AppDbContext : DbContext
             b.Property(x => x.IsActive).HasDefaultValue(true);
             b.Property(x => x.MustChangePassword).HasDefaultValue(false);
             b.Property(x => x.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
+            b.HasOne(x => x.Department).WithMany(d => d.Users).HasForeignKey(x => x.DepartmentId).OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<Student>(b =>
@@ -62,12 +84,21 @@ public class AppDbContext : DbContext
             b.Property(x => x.Major).HasMaxLength(150);
             b.Property(x => x.Email).HasMaxLength(200);
             b.Property(x => x.Phone).HasMaxLength(50);
+            b.Property(x => x.Department).HasMaxLength(150);
+            b.Property(x => x.DesiredPosition).HasMaxLength(200);
+            b.Property(x => x.AlternativePosition).HasMaxLength(200);
+            b.Property(x => x.DesiredLocation).HasMaxLength(250);
+            b.Property(x => x.WorkPreference).HasMaxLength(50);
+            b.Property(x => x.PreferredIndustry).HasMaxLength(150);
+            b.Property(x => x.Skills).HasMaxLength(1000);
+            b.Property(x => x.ResumeUrl).HasMaxLength(500);
             b.Property(x => x.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
             // Changed: 1:N relationship to support multi-semester internships
             b.HasMany(x => x.Internships).WithOne(x => x.Student).HasForeignKey(x => x.StudentId);
             b.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.SetNull);
             b.HasIndex(x => x.UserId).IsUnique().HasFilter("[UserId] IS NOT NULL");
             b.HasIndex(x => x.StudentCode).IsUnique().HasFilter("[IsDeleted] = 0");
+            b.HasOne(x => x.DepartmentRef).WithMany(d => d.Students).HasForeignKey(x => x.DepartmentId).OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<Lecturer>(b =>
@@ -85,6 +116,7 @@ public class AppDbContext : DbContext
             b.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.SetNull);
             b.HasIndex(x => x.UserId).IsUnique().HasFilter("[UserId] IS NOT NULL");
             b.HasMany(x => x.SemesterLecturers).WithOne(x => x.Lecturer).HasForeignKey(x => x.LecturerId);
+            b.HasOne(x => x.DepartmentRef).WithMany(d => d.Lecturers).HasForeignKey(x => x.DepartmentId).OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<Company>(b =>
@@ -116,7 +148,9 @@ public class AppDbContext : DbContext
             b.Property(x => x.Status).HasDefaultValue(SemesterStatus.Upcoming);
             b.Property(x => x.Description).HasMaxLength(1000);
             b.Property(x => x.MaxStudentsPerLecturer).HasDefaultValue(30);
+            b.Property(x => x.TotalWeeks).HasDefaultValue(6);
             b.Property(x => x.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
+            b.HasOne(x => x.Department).WithMany().HasForeignKey(x => x.DepartmentId).OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<Internship>(b =>
@@ -135,8 +169,8 @@ public class AppDbContext : DbContext
             b.HasOne(x => x.Semester).WithMany(x => x.Internships).HasForeignKey(x => x.SemesterId).OnDelete(DeleteBehavior.SetNull);
             // Added: unique constraint to ensure one internship per student per semester
             b.HasIndex(x => new { x.StudentId, x.SemesterId }).IsUnique();
-            // Added: document collection for CV and other files
-            b.HasMany(x => x.Documents).WithOne(x => x.Internship).HasForeignKey(x => x.InternshipId).OnDelete(DeleteBehavior.Cascade);
+            // Added: document collection for CV and other files (InternshipId optional for templates)
+            b.HasMany(x => x.Documents).WithOne(x => x.Internship).HasForeignKey(x => x.InternshipId).IsRequired(false).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<Submission>(b =>
@@ -204,9 +238,14 @@ public class AppDbContext : DbContext
             b.Property(x => x.ArchivedBy).HasMaxLength(200);
             // Category used to filter documents (e.g., "CV", "Form", "Report")
             b.Property(x => x.Category).HasMaxLength(100);
+            b.Property(x => x.Department).HasMaxLength(150);
+            b.Property(x => x.Version).HasMaxLength(50).HasDefaultValue("1.0");
+            b.Property(x => x.PublishedAt);
             b.Property(x => x.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
-            b.HasOne(x => x.Internship).WithMany(x => x.Documents).HasForeignKey(x => x.InternshipId).OnDelete(DeleteBehavior.Cascade);
+            b.HasOne(x => x.Internship).WithMany(x => x.Documents).HasForeignKey(x => x.InternshipId).IsRequired(false).OnDelete(DeleteBehavior.Cascade);
+            b.HasOne(x => x.Semester).WithMany().HasForeignKey(x => x.SemesterId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
             b.HasOne(x => x.UploadedBy).WithMany().HasForeignKey(x => x.UploadedById).OnDelete(DeleteBehavior.SetNull);
+            b.HasIndex(x => new { x.SemesterId, x.Department, x.IsPublished });
         });
 
         modelBuilder.Entity<Evaluation>(b =>
@@ -263,6 +302,21 @@ public class AppDbContext : DbContext
             b.HasOne(x => x.WeeklyReport).WithMany(x => x.Versions)
                 .HasForeignKey(x => x.WeeklyReportId).OnDelete(DeleteBehavior.Cascade);
             b.HasIndex(x => new { x.WeeklyReportId, x.Version }).IsUnique();
+        });
+
+        modelBuilder.Entity<DocumentVersion>(b =>
+        {
+            b.ToTable("DocumentVersions");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).HasColumnName("DocumentVersionId");
+            b.Property(x => x.FileName).IsRequired().HasMaxLength(250);
+            b.Property(x => x.FilePath).IsRequired().HasMaxLength(1000);
+            b.Property(x => x.MimeType).IsRequired().HasMaxLength(100);
+            b.Property(x => x.ChangeNote).HasMaxLength(500);
+            b.Property(x => x.UploadedAt).HasDefaultValueSql("GETUTCDATE()");
+            b.HasOne(x => x.Document).WithMany(x => x.Versions)
+                .HasForeignKey(x => x.DocumentId).OnDelete(DeleteBehavior.Cascade);
+            b.HasIndex(x => new { x.DocumentId, x.VersionNumber }).IsUnique();
         });
 
         modelBuilder.Entity<Notification>(b =>
@@ -394,6 +448,41 @@ public class AppDbContext : DbContext
             b.HasOne(x => x.Company).WithMany(x => x.SemesterCompanies).HasForeignKey(x => x.CompanyId);
         });
 
+        modelBuilder.Entity<CompanyPosition>(b =>
+        {
+            b.ToTable("CompanyPositions");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).HasColumnName("CompanyPositionId");
+            b.Property(x => x.Title).IsRequired().HasMaxLength(200);
+            b.Property(x => x.Description).HasMaxLength(2000);
+            b.Property(x => x.RequiredMajor).HasMaxLength(200);
+            b.Property(x => x.RequiredSkills).HasMaxLength(1000);
+            b.Property(x => x.Location).HasMaxLength(500);
+            b.Property(x => x.Slots).HasDefaultValue(1);
+            b.Property(x => x.Stipend).HasPrecision(18, 2);
+            b.Property(x => x.IsOpen).HasDefaultValue(true);
+            b.Property(x => x.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
+            b.HasOne(x => x.Company).WithMany(c => c.Positions).HasForeignKey(x => x.CompanyId).OnDelete(DeleteBehavior.Cascade);
+            b.HasOne(x => x.Semester).WithMany().HasForeignKey(x => x.SemesterId).OnDelete(DeleteBehavior.SetNull);
+            b.HasIndex(x => new { x.CompanyId, x.SemesterId });
+        });
+
+        modelBuilder.Entity<SemesterReportSchedule>(b =>
+        {
+            b.ToTable("SemesterReportSchedules");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).HasColumnName("SemesterReportScheduleId");
+            b.Property(x => x.Title).IsRequired().HasMaxLength(250);
+            b.Property(x => x.Description).HasMaxLength(1000);
+            b.Property(x => x.AllowLateSubmission).HasDefaultValue(true);
+            b.Property(x => x.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
+            b.HasIndex(x => new { x.SemesterId, x.WeekNumber }).IsUnique();
+            b.HasOne(x => x.Semester)
+                .WithMany(s => s.ReportSchedules)
+                .HasForeignKey(x => x.SemesterId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
         modelBuilder.Entity<SystemSetting>(b =>
         {
             b.ToTable("SystemSettings");
@@ -405,6 +494,59 @@ public class AppDbContext : DbContext
             b.Property(x => x.Description).HasMaxLength(500);
             b.Property(x => x.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
             b.HasIndex(x => x.Key).IsUnique();
+        });
+
+        modelBuilder.Entity<AttendanceSession>(b =>
+        {
+            b.ToTable("AttendanceSessions");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).HasColumnName("AttendanceSessionId");
+            b.Property(x => x.Title).IsRequired().HasMaxLength(250);
+            b.Property(x => x.Description).HasMaxLength(1000);
+            b.Property(x => x.Location).HasMaxLength(500);
+            b.Property(x => x.Status).HasConversion<string>().HasMaxLength(50).HasDefaultValue(AttendanceSessionStatus.Scheduled);
+            b.Property(x => x.DurationMinutes).HasDefaultValue(60);
+            b.Property(x => x.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
+
+            b.HasOne(x => x.Semester)
+                .WithMany(s => s.AttendanceSessions)
+                .HasForeignKey(x => x.SemesterId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasOne(x => x.Lecturer)
+                .WithMany(l => l.AttendanceSessions)
+                .HasForeignKey(x => x.LecturerId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasIndex(x => new { x.SemesterId, x.LecturerId, x.WeekNumber });
+        });
+
+        modelBuilder.Entity<AttendanceRecord>(b =>
+        {
+            b.ToTable("AttendanceRecords");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).HasColumnName("AttendanceRecordId");
+            b.Property(x => x.Status).HasConversion<string>().HasMaxLength(50).HasDefaultValue(AttendanceStatus.Present);
+            b.Property(x => x.Notes).HasMaxLength(1000);
+            b.Property(x => x.MarkedBy).HasMaxLength(100);
+            b.Property(x => x.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
+
+            b.HasOne(x => x.AttendanceSession)
+                .WithMany(s => s.Records)
+                .HasForeignKey(x => x.AttendanceSessionId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasOne(x => x.Student)
+                .WithMany(st => st.AttendanceRecords)
+                .HasForeignKey(x => x.StudentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(x => x.Internship)
+                .WithMany()
+                .HasForeignKey(x => x.InternshipId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            b.HasIndex(x => new { x.AttendanceSessionId, x.StudentId }).IsUnique();
         });
     }
 }

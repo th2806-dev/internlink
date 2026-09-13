@@ -73,4 +73,44 @@ public interface IDocumentService
     /// Get document count for an internship
     /// </summary>
     Task<int> GetDocumentCountByInternshipAsync(Guid internshipId, Guid? userId = null, bool isLecturerOrAdmin = false);
+
+    /// <summary>
+    /// Get official templates with filtering for Admin, Lecturer, or Student
+    /// </summary>
+    Task<IEnumerable<DocumentListItemDto>> GetTemplatesAsync(Guid? semesterId = null, string? department = null, string? category = null, bool? isPublishedOnly = null);
+
+    /// <summary>
+    /// Get template statistics for Admin dashboard
+    /// </summary>
+    Task<TemplateStatsDto> GetTemplateStatsAsync();
+
+    /// <summary>
+    /// Create an official template (Admin upload)
+    /// </summary>
+    Task<DocumentDetailDto> CreateTemplateAsync(CreateTemplateRequest request, Guid uploadedByUserId);
+
+    /// <summary>
+    /// Update an official template (Admin edit / publish / archive / update file)
+    /// </summary>
+    Task<DocumentDetailDto?> UpdateTemplateAsync(Guid id, UpdateTemplateRequest request, Guid adminUserId);
+
+    /// <summary>
+    /// Increment download count when a template is downloaded
+    /// </summary>
+    Task IncrementDownloadCountAsync(Guid id);
+
+    /// <summary>
+    /// Seed default system templates if not already present
+    /// </summary>
+    Task SeedDefaultTemplatesAsync();
+
+    /// <summary>
+    /// Get version history for a document
+    /// </summary>
+    Task<IReadOnlyList<DocumentVersionDto>> GetDocumentVersionsAsync(Guid documentId);
+
+    /// <summary>
+    /// Download a specific historical version of a document
+    /// </summary>
+    Task<DocumentDownloadDto?> DownloadDocumentVersionAsync(Guid versionId);
 }

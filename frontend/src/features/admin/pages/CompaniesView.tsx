@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
+import type { ToastType } from "../../../contexts/ToastContext";
 import { useNavigate } from "react-router-dom";
 import {
   Building2,
@@ -14,6 +15,7 @@ import {
   Globe,
   Download,
   Eye,
+  Briefcase,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -27,6 +29,7 @@ import { getApiErrorMessage } from "../../../lib/apiClient";
 import { mapCompanyDtoToEnterprise } from "../../../lib/adminMappers";
 import { adminCompaniesService } from "../../../services/adminCompanies.service";
 import { useSemester, toApiSemesterId } from "../../../contexts/SemesterContext";
+import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
 import { ImportCompaniesModal } from "../components/modals/ImportCompaniesModal";
 
 const emptyForm = {
@@ -44,10 +47,11 @@ const emptyForm = {
 export const CompaniesView = ({
   onShowToast,
 }: {
-  onShowToast: (msg: string) => void;
+  onShowToast: (msg: string, type?: ToastType) => void;
 }) => {
   const navigate = useNavigate();
   const { selectedSemester } = useSemester();
+  const { canMutateOps, isSuperAdmin } = useAdminCapabilities();
   const [companies, setCompanies] = useState<Enterprise[]>([]);
   const [isLoadingApi, setIsLoadingApi] = useState(true);
   const [search, setSearch] = useState("");
@@ -250,20 +254,33 @@ export const CompaniesView = ({
             onClick: () => void handleExport(),
             variant: "secondary",
           },
-          {
-            label: "Import Excel",
-            icon: FileUp,
-            onClick: () => setIsImportModalOpen(true),
-            variant: "secondary",
-          },
-          {
-            label: "Thêm doanh nghiệp",
-            icon: Plus,
-            onClick: openCreate,
-            variant: "primary",
-          },
+          ...(canMutateOps
+            ? [
+                {
+                  label: "Import Excel",
+                  icon: FileUp,
+                  onClick: () => setIsImportModalOpen(true),
+                  variant: "secondary" as const,
+                },
+                {
+                  label: "Thêm doanh nghiệp",
+                  icon: Plus,
+                  onClick: openCreate,
+                  variant: "primary" as const,
+                },
+              ]
+            : []),
         ]}
       />
+
+      {isSuperAdmin && (
+        <div className="px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900 flex items-center gap-2.5">
+          <Eye className="w-4 h-4 text-blue-600 shrink-0" />
+          <span>
+            Chế độ chỉ xem nghiệp vụ khoa — Super Admin không thể tạo/sửa/xóa doanh nghiệp. Xuất dữ liệu vẫn khả dụng.
+          </span>
+        </div>
+      )}
 
       <Toolbar
         left={
@@ -332,6 +349,7 @@ export const CompaniesView = ({
                 <th className="py-2.5 pr-3">Doanh nghiệp</th>
                 <th className="py-2.5 pr-3">Lĩnh vực</th>
                 <th className="py-2.5 pr-3">Liên hệ</th>
+                <th className="py-2.5 pr-3">Vị trí tuyển dụng</th>
                 <th className="py-2.5 pr-3">SV / Sức chứa</th>
                 <th className="py-2.5 pr-3">Trạng thái</th>
                 <th className="py-2.5 text-right">Thao tác</th>
@@ -362,6 +380,18 @@ export const CompaniesView = ({
                     <div>{c.contactPerson}</div>
                     <div className="text-[10px] text-slate-400">{c.contactEmail}</div>
                   </td>
+                  <td className="py-3 pr-3">
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium ${
+                        (c.openPositionCount ?? 0) > 0
+                          ? "bg-blue-50 text-blue-700 border border-blue-200"
+                          : "bg-slate-50 text-slate-500 border border-slate-200"
+                      }`}
+                    >
+                      <Briefcase className="w-3 h-3" />
+                      {c.openPositionCount ?? 0} vị trí
+                    </span>
+                  </td>
                   <td className="py-3 pr-3 font-semibold text-slate-800">
                     {c.studentCount} / {c.capacity}
                   </td>
@@ -391,7 +421,7 @@ export const CompaniesView = ({
                       >
                         <Eye className="w-3.5 h-3.5" />
                       </button>
-                      {canLink && (
+                      {canMutateOps && canLink && (
                         <button
                           type="button"
                           onClick={() => setLinkTarget(c)}
@@ -412,22 +442,26 @@ export const CompaniesView = ({
                             : "Ngưng liên kết"}
                         </button>
                       )}
-                      <button
-                        type="button"
-                        onClick={() => openEdit(c)}
-                        className="p-1.5 rounded-md text-slate-500 hover:bg-blue-50 hover:text-blue-700 cursor-pointer"
-                        title="Sửa"
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDeleteTarget(c)}
-                        className="p-1.5 rounded-md text-slate-500 hover:bg-rose-50 hover:text-rose-700 cursor-pointer"
-                        title="Xóa khỏi hệ thống"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      {canMutateOps && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => openEdit(c)}
+                            className="p-1.5 rounded-md text-slate-500 hover:bg-blue-50 hover:text-blue-700 cursor-pointer"
+                            title="Sửa"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteTarget(c)}
+                            className="p-1.5 rounded-md text-slate-500 hover:bg-rose-50 hover:text-rose-700 cursor-pointer"
+                            title="Xóa khỏi hệ thống"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>

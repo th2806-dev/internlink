@@ -23,8 +23,13 @@ public class CreateUserRequestValidator : AbstractValidator<CreateUserRequest>
 
         RuleFor(x => x.Role)
             .NotEmpty()
-            .Must(r => r is "Student" or "Lecturer")
-            .WithMessage("Role must be Student or Lecturer");
+            .Must(r => r is "Student" or "Lecturer" or "DepartmentAdmin")
+            .WithMessage("Role must be Student, Lecturer, or DepartmentAdmin");
+
+        RuleFor(x => x.DepartmentId)
+            .NotEmpty()
+            .WithMessage("DepartmentId is required when role is DepartmentAdmin")
+            .When(x => x.Role == "DepartmentAdmin");
 
         RuleFor(x => x.StudentCode)
             .MaximumLength(50)

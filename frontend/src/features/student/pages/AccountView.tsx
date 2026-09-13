@@ -16,6 +16,13 @@ import {
   EyeOff,
   AlertCircle,
   Loader2,
+  Briefcase,
+  MapPin,
+  Monitor,
+  Tags,
+  FileText,
+  ExternalLink,
+  Layers,
 } from "lucide-react";
 import { PageHeader } from "../../../components/common/PageHeader";
 import { Panel } from "../../../components/common/Panel";
@@ -38,6 +45,28 @@ type PersonalInfo = {
   major: string;
 };
 
+type InternshipPrefs = {
+  department: string;
+  desiredPosition: string;
+  alternativePosition: string;
+  desiredLocation: string;
+  workPreference: string;
+  preferredIndustry: string;
+  skills: string;
+  resumeUrl: string;
+};
+
+const EMPTY_PREFS: InternshipPrefs = {
+  department: "",
+  desiredPosition: "",
+  alternativePosition: "",
+  desiredLocation: "",
+  workPreference: "",
+  preferredIndustry: "",
+  skills: "",
+  resumeUrl: "",
+};
+
 function buildPersonalInfo(
   profile: StudentProfile,
   portal?: StudentPortalProfileDto | null,
@@ -51,6 +80,20 @@ function buildPersonalInfo(
     address: "Chưa cập nhật",
     className: s?.class ?? profile.class ?? "—",
     major: s?.major ?? profile.major ?? "—",
+  };
+}
+
+function buildPrefs(portal?: StudentPortalProfileDto | null): InternshipPrefs {
+  const s = portal?.student;
+  return {
+    department: s?.department ?? "",
+    desiredPosition: s?.desiredPosition ?? "",
+    alternativePosition: s?.alternativePosition ?? "",
+    desiredLocation: s?.desiredLocation ?? "",
+    workPreference: s?.workPreference ?? "",
+    preferredIndustry: s?.preferredIndustry ?? "",
+    skills: s?.skills ?? "",
+    resumeUrl: s?.resumeUrl ?? "",
   };
 }
 
@@ -70,6 +113,8 @@ export const AccountView = ({
   const [tempPersonalInfo, setTempPersonalInfo] = useState<PersonalInfo>(() =>
     buildPersonalInfo(profile, portalData),
   );
+  const [prefs, setPrefs] = useState<InternshipPrefs>(() => buildPrefs(portalData));
+  const [tempPrefs, setTempPrefs] = useState<InternshipPrefs>(() => buildPrefs(portalData));
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -82,9 +127,12 @@ export const AccountView = ({
 
   useEffect(() => {
     const base = buildPersonalInfo(profile, portalData);
+    const p = buildPrefs(portalData);
     setPersonalInfo(base);
+    setPrefs(p);
     if (!isEditingProfile) {
       setTempPersonalInfo(base);
+      setTempPrefs(p);
     }
   }, [portalData, profile, isEditingProfile]);
 
@@ -95,6 +143,14 @@ export const AccountView = ({
         fullName: tempPersonalInfo.fullName.trim(),
         email: tempPersonalInfo.email.trim() || undefined,
         phone: tempPersonalInfo.phone.trim() || undefined,
+        department: tempPrefs.department.trim() || undefined,
+        desiredPosition: tempPrefs.desiredPosition.trim() || undefined,
+        alternativePosition: tempPrefs.alternativePosition.trim() || undefined,
+        desiredLocation: tempPrefs.desiredLocation.trim() || undefined,
+        workPreference: tempPrefs.workPreference.trim() || undefined,
+        preferredIndustry: tempPrefs.preferredIndustry.trim() || undefined,
+        skills: tempPrefs.skills.trim() || undefined,
+        resumeUrl: tempPrefs.resumeUrl.trim() || undefined,
       });
       await refresh();
       setIsEditingProfile(false);
@@ -390,6 +446,169 @@ export const AccountView = ({
                   </div>
 
                 </div>
+              </div>
+
+              {/* INTERNSHIP PREFERENCES */}
+              <div className="pt-3 border-t border-slate-100 space-y-3">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-violet-600 flex items-center gap-1.5">
+                  <Briefcase className="w-3.5 h-3.5" /> Nguyện vọng thực tập & Kỹ năng
+                </h3>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1 flex items-center gap-1">
+                      <Layers className="w-3 h-3 text-slate-400" /> Khoa
+                    </label>
+                    <input
+                      type="text"
+                      value={isEditingProfile ? tempPrefs.department : prefs.department}
+                      onChange={(e) => setTempPrefs({ ...tempPrefs, department: e.target.value })}
+                      disabled={!isEditingProfile}
+                      placeholder="VD: Công nghệ thông tin"
+                      className={`w-full px-3.5 py-2 rounded-md border font-medium outline-none transition-all ${isEditingProfile ? "bg-white border-violet-400 focus:border-violet-600 text-slate-900 shadow-xs" : "bg-slate-50 border-slate-200/80 text-slate-700"}`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1 flex items-center gap-1">
+                      <Briefcase className="w-3 h-3 text-blue-500" /> Vị trí mong muốn
+                    </label>
+                    <input
+                      type="text"
+                      value={isEditingProfile ? tempPrefs.desiredPosition : prefs.desiredPosition}
+                      onChange={(e) => setTempPrefs({ ...tempPrefs, desiredPosition: e.target.value })}
+                      disabled={!isEditingProfile}
+                      placeholder="VD: Backend Developer, Data Analyst"
+                      className={`w-full px-3.5 py-2 rounded-md border font-medium outline-none transition-all ${isEditingProfile ? "bg-white border-violet-400 focus:border-violet-600 text-slate-900 shadow-xs" : "bg-slate-50 border-slate-200/80 text-slate-700"}`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1 flex items-center gap-1">
+                      <Briefcase className="w-3 h-3 text-amber-500" /> Vị trí thay thế
+                    </label>
+                    <input
+                      type="text"
+                      value={isEditingProfile ? tempPrefs.alternativePosition : prefs.alternativePosition}
+                      onChange={(e) => setTempPrefs({ ...tempPrefs, alternativePosition: e.target.value })}
+                      disabled={!isEditingProfile}
+                      placeholder="VD: QA/Tester, DevOps"
+                      className={`w-full px-3.5 py-2 rounded-md border font-medium outline-none transition-all ${isEditingProfile ? "bg-white border-violet-400 focus:border-violet-600 text-slate-900 shadow-xs" : "bg-slate-50 border-slate-200/80 text-slate-700"}`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1 flex items-center gap-1">
+                      <Tags className="w-3 h-3 text-emerald-500" /> Kỹ năng chuyên môn
+                    </label>
+                    <input
+                      type="text"
+                      value={isEditingProfile ? tempPrefs.skills : prefs.skills}
+                      onChange={(e) => setTempPrefs({ ...tempPrefs, skills: e.target.value })}
+                      disabled={!isEditingProfile}
+                      placeholder="VD: C#, .NET, SQL Server, React"
+                      className={`w-full px-3.5 py-2 rounded-md border font-medium outline-none transition-all ${isEditingProfile ? "bg-white border-violet-400 focus:border-violet-600 text-slate-900 shadow-xs" : "bg-slate-50 border-slate-200/80 text-slate-700"}`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1 flex items-center gap-1">
+                      <MapPin className="w-3 h-3 text-rose-500" /> Địa điểm mong muốn
+                    </label>
+                    <input
+                      type="text"
+                      value={isEditingProfile ? tempPrefs.desiredLocation : prefs.desiredLocation}
+                      onChange={(e) => setTempPrefs({ ...tempPrefs, desiredLocation: e.target.value })}
+                      disabled={!isEditingProfile}
+                      placeholder="VD: Hà Nội, TP.HCM, Đà Nẵng"
+                      className={`w-full px-3.5 py-2 rounded-md border font-medium outline-none transition-all ${isEditingProfile ? "bg-white border-violet-400 focus:border-violet-600 text-slate-900 shadow-xs" : "bg-slate-50 border-slate-200/80 text-slate-700"}`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1 flex items-center gap-1">
+                      <Monitor className="w-3 h-3 text-indigo-500" /> Hình thức làm việc
+                    </label>
+                    {isEditingProfile ? (
+                      <select
+                        value={tempPrefs.workPreference}
+                        onChange={(e) => setTempPrefs({ ...tempPrefs, workPreference: e.target.value })}
+                        className="w-full px-3.5 py-2 rounded-md border font-medium outline-none transition-all bg-white border-violet-400 focus:border-violet-600 text-slate-900 shadow-xs"
+                      >
+                        <option value="">— Chọn —</option>
+                        <option value="Onsite">Onsite</option>
+                        <option value="Remote">Remote</option>
+                        <option value="Hybrid">Hybrid</option>
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        value={prefs.workPreference || "Chưa chọn"}
+                        disabled
+                        className="w-full px-3.5 py-2 rounded-md border font-medium outline-none bg-slate-50 border-slate-200/80 text-slate-700"
+                      />
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1 flex items-center gap-1">
+                      <Building2 className="w-3 h-3 text-cyan-600" /> Lĩnh vực quan tâm
+                    </label>
+                    <input
+                      type="text"
+                      value={isEditingProfile ? tempPrefs.preferredIndustry : prefs.preferredIndustry}
+                      onChange={(e) => setTempPrefs({ ...tempPrefs, preferredIndustry: e.target.value })}
+                      disabled={!isEditingProfile}
+                      placeholder="VD: Fintech, E-Commerce, AI"
+                      className={`w-full px-3.5 py-2 rounded-md border font-medium outline-none transition-all ${isEditingProfile ? "bg-white border-violet-400 focus:border-violet-600 text-slate-900 shadow-xs" : "bg-slate-50 border-slate-200/80 text-slate-700"}`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1 flex items-center gap-1">
+                      <FileText className="w-3 h-3 text-orange-500" /> Link CV / Portfolio
+                    </label>
+                    <div className="flex gap-1.5">
+                      <input
+                        type="url"
+                        value={isEditingProfile ? tempPrefs.resumeUrl : prefs.resumeUrl}
+                        onChange={(e) => setTempPrefs({ ...tempPrefs, resumeUrl: e.target.value })}
+                        disabled={!isEditingProfile}
+                        placeholder="https://drive.google.com/..."
+                        className={`flex-1 px-3.5 py-2 rounded-md border font-medium outline-none transition-all ${isEditingProfile ? "bg-white border-violet-400 focus:border-violet-600 text-slate-900 shadow-xs" : "bg-slate-50 border-slate-200/80 text-slate-700"}`}
+                      />
+                      {(prefs.resumeUrl || tempPrefs.resumeUrl) && !isEditingProfile && (
+                        <a
+                          href={prefs.resumeUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-2 py-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-md border border-blue-200 transition-colors flex items-center"
+                          title="Mở CV"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Skill badges preview (read-only mode) */}
+                {!isEditingProfile && prefs.skills && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {prefs.skills.split(/[,;]/).map((skill, i) => {
+                      const s = skill.trim();
+                      if (!s) return null;
+                      return (
+                        <span
+                          key={i}
+                          className="px-2 py-0.5 bg-violet-50 text-violet-700 border border-violet-200 rounded-full text-[10px] font-bold"
+                        >
+                          {s}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* SAVE / CANCEL BUTTONS */}

@@ -8,6 +8,14 @@ public class CreateStudentRequest
     public string? Major { get; set; }
     public string? Email { get; set; }
     public string? Phone { get; set; }
+    public string? Department { get; set; }
+    public string? DesiredPosition { get; set; }
+    public string? AlternativePosition { get; set; }
+    public string? DesiredLocation { get; set; }
+    public string? WorkPreference { get; set; }
+    public string? PreferredIndustry { get; set; }
+    public string? Skills { get; set; }
+    public string? ResumeUrl { get; set; }
     public Guid? UserId { get; set; }
     /// <summary>
     /// Optional login username. Defaults to StudentCode when GrantAccount is true.
@@ -26,6 +34,14 @@ public class UpdateStudentRequest
     public string? Major { get; set; }
     public string? Email { get; set; }
     public string? Phone { get; set; }
+    public string? Department { get; set; }
+    public string? DesiredPosition { get; set; }
+    public string? AlternativePosition { get; set; }
+    public string? DesiredLocation { get; set; }
+    public string? WorkPreference { get; set; }
+    public string? PreferredIndustry { get; set; }
+    public string? Skills { get; set; }
+    public string? ResumeUrl { get; set; }
     public Guid? UserId { get; set; }
     /// <summary>
     /// Optional login username. Defaults to StudentCode when GrantAccount is true.
@@ -42,6 +58,14 @@ public sealed class UpdateStudentProfileRequest
     public string FullName { get; set; } = null!;
     public string? Email { get; set; }
     public string? Phone { get; set; }
+    public string? Department { get; set; }
+    public string? DesiredPosition { get; set; }
+    public string? AlternativePosition { get; set; }
+    public string? DesiredLocation { get; set; }
+    public string? WorkPreference { get; set; }
+    public string? PreferredIndustry { get; set; }
+    public string? Skills { get; set; }
+    public string? ResumeUrl { get; set; }
 }
 
 public class StudentDto
@@ -54,8 +78,18 @@ public class StudentDto
     public string? Major { get; set; }
     public string? Email { get; set; }
     public string? Phone { get; set; }
+    public string? Department { get; set; }
+    public string? DesiredPosition { get; set; }
+    public string? AlternativePosition { get; set; }
+    public string? DesiredLocation { get; set; }
+    public string? WorkPreference { get; set; }
+    public string? PreferredIndustry { get; set; }
+    public string? Skills { get; set; }
+    public string? ResumeUrl { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
+    /// <summary>Department this student belongs to (null = global/unassigned).</summary>
+    public Guid? DepartmentId { get; set; }
 }
 
 /// <summary>

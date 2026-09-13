@@ -39,6 +39,8 @@ public class WeeklyReportService : IWeeklyReportService
     public async Task<WeeklyReportDto?> GetByIdAsync(Guid id)
     {
         var report = await _db.WeeklyReports
+            .Include(r => r.Internship)
+                .ThenInclude(i => i.Semester)
             .FirstOrDefaultAsync(r => r.Id == id && !r.IsDeleted);
 
         return report == null ? null : _mapper.Map<WeeklyReportDto>(report);
@@ -49,6 +51,8 @@ public class WeeklyReportService : IWeeklyReportService
         var report = await _db.WeeklyReports
             .Include(r => r.Internship)
                 .ThenInclude(i => i.Student)
+            .Include(r => r.Internship)
+                .ThenInclude(i => i.Semester)
             .Include(r => r.Internship)
                 .ThenInclude(i => i.Lecturer)
             .Include(r => r.Feedbacks.Where(f => !f.IsDeleted))
@@ -122,10 +126,14 @@ public class WeeklyReportService : IWeeklyReportService
     {
         var internship = await _db.Internships
             .Include(i => i.Student)
+            .Include(i => i.Semester)
             .FirstOrDefaultAsync(i => i.Id == request.InternshipId && !i.IsDeleted);
 
         if (internship == null)
             throw new InvalidOperationException("Internship not found");
+
+        if (internship.Semester?.TotalWeeks > 0 && (request.WeekNumber < 1 || request.WeekNumber > internship.Semester.TotalWeeks))
+            throw new InvalidOperationException($"Tuần báo cáo phải nằm trong khoảng 1 đến {internship.Semester.TotalWeeks}.");
 
         if (internship.Student?.UserId != userId)
             throw new UnauthorizedAccessException("Internship does not belong to the current student");
@@ -167,6 +175,9 @@ public class WeeklyReportService : IWeeklyReportService
         var internship = await GetOwnedInternshipAsync(userId, request.InternshipId);
         if (internship == null)
             throw new UnauthorizedAccessException("Internship does not belong to the current student");
+
+        if (internship.Semester?.TotalWeeks > 0 && (request.WeekNumber < 1 || request.WeekNumber > internship.Semester.TotalWeeks))
+            throw new InvalidOperationException($"Tuần báo cáo phải nằm trong khoảng 1 đến {internship.Semester.TotalWeeks}.");
 
         var duplicate = await _db.WeeklyReports.AnyAsync(r =>
             r.InternshipId == request.InternshipId &&
@@ -380,6 +391,17 @@ public class WeeklyReportService : IWeeklyReportService
 
         if (report.Status != WeeklyReportStatus.Draft && report.Status != WeeklyReportStatus.RevisionRequested)
             throw new InvalidOperationException("Only draft or revision-requested reports can be submitted");
+
+        if (report.Internship?.SemesterId != null)
+        {
+            var schedule = await _db.SemesterReportSchedules
+                .FirstOrDefaultAsync(s => s.SemesterId == report.Internship.SemesterId && s.WeekNumber == report.WeekNumber && !s.IsDeleted);
+
+            if (schedule != null && !schedule.AllowLateSubmission && DateTime.UtcNow > schedule.DueDate)
+            {
+                throw new InvalidOperationException($"Hạn nộp báo cáo tuần {report.WeekNumber} đã kết thúc vào ngày {schedule.DueDate:dd/MM/yyyy HH:mm}. Không cho phép nộp muộn.");
+            }
+        }
 
         report.Status = WeeklyReportStatus.Submitted;
         report.SubmittedAt = DateTime.UtcNow;
@@ -643,6 +665,7 @@ public class WeeklyReportService : IWeeklyReportService
     {
         return await _db.Internships
             .Include(i => i.Student)
+            .Include(i => i.Semester)
             .FirstOrDefaultAsync(i => i.Id == internshipId && !i.IsDeleted && i.Student != null && i.Student.UserId == userId);
     }
 

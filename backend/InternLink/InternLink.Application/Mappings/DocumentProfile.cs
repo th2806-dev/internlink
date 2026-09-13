@@ -9,9 +9,11 @@ public class DocumentProfile : Profile
     public DocumentProfile()
     {
         CreateMap<Document, DocumentListItemDto>().MaxDepth(64)
+            .ForMember(dest => dest.SemesterName, opt => opt.MapFrom(src => src.Semester != null ? src.Semester.Name : null))
             .ForMember(dest => dest.UploadedBy, opt => opt.MapFrom(src => MapUploadedBy(src.UploadedBy)));
 
         CreateMap<Document, DocumentDetailDto>().MaxDepth(64)
+            .ForMember(dest => dest.SemesterName, opt => opt.MapFrom(src => src.Semester != null ? src.Semester.Name : null))
             .ForMember(dest => dest.UploadedBy, opt => opt.MapFrom(src => MapUploadedBy(src.UploadedBy)));
 
         CreateMap<CreateDocumentRequest, Document>().MaxDepth(64)
@@ -21,6 +23,8 @@ public class DocumentProfile : Profile
 
         CreateMap<UpdateDocumentRequest, Document>().MaxDepth(64)
             .ForAllMembers(opts => opts.Condition((src, dest, srcMember) => srcMember != null));
+
+        CreateMap<DocumentVersion, DocumentVersionDto>().MaxDepth(64);
     }
 
     private static UserSummaryDto? MapUploadedBy(Lecturer? lecturer)

@@ -216,4 +216,134 @@ public class DocumentController : ControllerBase
             return Forbid();
         }
     }
+
+    [HttpGet("templates")]
+    public async Task<IActionResult> GetTemplates(
+        [FromQuery] Guid? semesterId = null,
+        [FromQuery] string? department = null,
+        [FromQuery] string? category = null,
+        [FromQuery] bool? isPublishedOnly = null)
+    {
+        var isLecturerOrAdmin = User.IsInRole("Lecturer") || User.IsInRole("SuperAdmin");
+        var publishedFilter = !isLecturerOrAdmin ? true : isPublishedOnly;
+
+        var templates = await _documentService.GetTemplatesAsync(semesterId, department, category, publishedFilter);
+        return Ok(ApiResponse<IEnumerable<DocumentListItemDto>>.Ok(templates));
+    }
+
+    [HttpGet("templates/stats")]
+    [Authorize(Policy = "RequireAdmin")]
+    public async Task<IActionResult> GetTemplateStats()
+    {
+        var stats = await _documentService.GetTemplateStatsAsync();
+        return Ok(ApiResponse<TemplateStatsDto>.Ok(stats));
+    }
+
+    [HttpPost("templates")]
+    [Authorize(Policy = "RequireAdmin")]
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> CreateTemplate([FromForm] CreateTemplateRequest form)
+    {
+        var userId = User.GetUserId();
+        if (userId == null)
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+
+        if (form.File == null || form.File.Length == 0)
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Tệp đính kèm không được để trống" }));
+
+        try
+        {
+            var created = await _documentService.CreateTemplateAsync(form, userId.Value);
+            return Ok(ApiResponse<DocumentDetailDto>.Ok(created));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = ex.Message }));
+        }
+    }
+
+    [HttpPut("templates/{id:guid}")]
+    [Authorize(Policy = "RequireAdmin")]
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> UpdateTemplate(Guid id, [FromForm] UpdateTemplateRequest form)
+    {
+        var userId = User.GetUserId();
+        if (userId == null)
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+
+        try
+        {
+            var updated = await _documentService.UpdateTemplateAsync(id, form, userId.Value);
+            if (updated == null)
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Biểu mẫu không tồn tại" }));
+
+            return Ok(ApiResponse<DocumentDetailDto>.Ok(updated));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = ex.Message }));
+        }
+    }
+
+    [HttpDelete("templates/{id:guid}")]
+    [Authorize(Policy = "RequireAdmin")]
+    public async Task<IActionResult> DeleteTemplate(Guid id)
+    {
+        var userId = User.GetUserId();
+        if (userId == null)
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+
+        try
+        {
+            var success = await _documentService.DeleteDocumentAsync(id, userId.Value);
+            if (!success)
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Biểu mẫu không tồn tại" }));
+
+            return Ok(ApiResponse<object>.Ok(null));
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+    }
+
+    [HttpPost("templates/seed")]
+    [Authorize(Policy = "RequireAdmin")]
+    public async Task<IActionResult> SeedDefaultTemplates()
+    {
+        await _documentService.SeedDefaultTemplatesAsync();
+        return Ok(ApiResponse<object>.Ok(new { message = "Khởi tạo biểu mẫu chuẩn thành công" }));
+    }
+
+    [HttpGet("{id:guid}/versions")]
+    public async Task<IActionResult> GetDocumentVersions(Guid id)
+    {
+        var userId = User.GetUserId();
+        if (userId == null)
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+
+        var versions = await _documentService.GetDocumentVersionsAsync(id);
+        return Ok(ApiResponse<IEnumerable<DocumentVersionDto>>.Ok(versions));
+    }
+
+    [HttpGet("versions/{versionId:guid}/download")]
+    public async Task<IActionResult> DownloadDocumentVersion(Guid versionId)
+    {
+        var userId = User.GetUserId();
+        if (userId == null)
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+
+        try
+        {
+            var download = await _documentService.DownloadDocumentVersionAsync(versionId);
+            if (download == null)
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Phiên bản tài liệu không tồn tại hoặc tệp đã bị xóa" }));
+
+            return File(download.FileContent, download.MimeType ?? "application/octet-stream", download.FileName);
+        }
+        catch (FileNotFoundException ex)
+        {
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = ex.Message }));
+        }
+    }
 }

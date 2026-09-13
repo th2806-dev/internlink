@@ -5,6 +5,7 @@ import { getApiErrorMessage } from '../lib/apiClient';
 export interface UseLecturerExportsState {
   isExporting: boolean;
   exportEndOfTerm: () => Promise<{ success: boolean; filename?: string; error?: string }>;
+  exportGuidanceSchedule: (semesterId: string) => Promise<{ success: boolean; filename?: string; error?: string }>;
 }
 
 export const useLecturerExports = (
@@ -35,5 +36,34 @@ export const useLecturerExports = (
     }
   }, [onShowToast]);
 
-  return { isExporting, exportEndOfTerm };
+  const exportGuidanceSchedule = useCallback(async (semesterId: string) => {
+    if (!semesterId || semesterId === 'all') {
+      const errorMsg = 'Vui lòng chọn học kỳ để xuất lịch hướng dẫn.';
+      onShowToast?.(errorMsg);
+      return { success: false, error: errorMsg };
+    }
+
+    setIsExporting(true);
+    try {
+      const { blob, filename } = await lecturerExportService.downloadGuidanceSchedule(semesterId);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      onShowToast?.(`Đã tải xuống ${filename}`);
+      return { success: true, filename };
+    } catch (err) {
+      const errorMsg = getApiErrorMessage(err);
+      onShowToast?.(errorMsg);
+      return { success: false, error: errorMsg };
+    } finally {
+      setIsExporting(false);
+    }
+  }, [onShowToast]);
+
+  return { isExporting, exportEndOfTerm, exportGuidanceSchedule };
 };

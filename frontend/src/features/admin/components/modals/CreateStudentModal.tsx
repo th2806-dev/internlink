@@ -8,6 +8,14 @@ export interface CreateStudentFormPayload {
   major?: string;
   email?: string;
   phone?: string;
+  department?: string;
+  desiredPosition?: string;
+  alternativePosition?: string;
+  desiredLocation?: string;
+  workPreference?: string;
+  preferredIndustry?: string;
+  skills?: string;
+  resumeUrl?: string;
   grantAccount?: boolean;
 }
 
@@ -18,6 +26,14 @@ const emptyForm: CreateStudentFormPayload = {
   major: "",
   email: "",
   phone: "",
+  department: "",
+  desiredPosition: "",
+  alternativePosition: "",
+  desiredLocation: "",
+  workPreference: "",
+  preferredIndustry: "",
+  skills: "",
+  resumeUrl: "",
   grantAccount: false,
 };
 
@@ -70,6 +86,14 @@ export const CreateStudentModal = ({
       major: form.major?.trim() || undefined,
       email: form.email?.trim() || undefined,
       phone: form.phone?.trim() || undefined,
+      department: form.department?.trim() || undefined,
+      desiredPosition: form.desiredPosition?.trim() || undefined,
+      alternativePosition: form.alternativePosition?.trim() || undefined,
+      desiredLocation: form.desiredLocation?.trim() || undefined,
+      workPreference: form.workPreference?.trim() || undefined,
+      preferredIndustry: form.preferredIndustry?.trim() || undefined,
+      skills: form.skills?.trim() || undefined,
+      resumeUrl: form.resumeUrl?.trim() || undefined,
       grantAccount: form.grantAccount,
     };
 
@@ -191,6 +215,104 @@ export const CreateStudentModal = ({
                 placeholder="0901234567"
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-blue-500"
               />
+            </div>
+          </div>
+
+          {/* INTERNSHIP PREFERENCES SECTION */}
+          <div className="pt-3 border-t border-slate-100 space-y-3">
+            <h3 className="text-[11px] font-bold uppercase tracking-wider text-violet-600">
+              Nguyện vọng thực tập & Kỹ năng (Tùy chọn)
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Khoa</label>
+                <input
+                  type="text"
+                  value={form.department}
+                  onChange={(e) => setField("department", e.target.value)}
+                  placeholder="Công nghệ thông tin"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-violet-500"
+                />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Vị trí mong muốn</label>
+                <input
+                  type="text"
+                  value={form.desiredPosition}
+                  onChange={(e) => setField("desiredPosition", e.target.value)}
+                  placeholder="Backend Developer"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-violet-500"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Vị trí thay thế</label>
+                <input
+                  type="text"
+                  value={form.alternativePosition}
+                  onChange={(e) => setField("alternativePosition", e.target.value)}
+                  placeholder="QA/Tester"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-violet-500"
+                />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Kỹ năng</label>
+                <input
+                  type="text"
+                  value={form.skills}
+                  onChange={(e) => setField("skills", e.target.value)}
+                  placeholder="C#, .NET, React"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-violet-500"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Địa điểm</label>
+                <input
+                  type="text"
+                  value={form.desiredLocation}
+                  onChange={(e) => setField("desiredLocation", e.target.value)}
+                  placeholder="Hà Nội, TP.HCM"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-violet-500"
+                />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Hình thức</label>
+                <select
+                  value={form.workPreference}
+                  onChange={(e) => setField("workPreference", e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-violet-500"
+                >
+                  <option value="">— Chọn hình thức —</option>
+                  <option value="Onsite">Onsite</option>
+                  <option value="Remote">Remote</option>
+                  <option value="Hybrid">Hybrid</option>
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Lĩnh vực ưu tiên</label>
+                <input
+                  type="text"
+                  value={form.preferredIndustry}
+                  onChange={(e) => setField("preferredIndustry", e.target.value)}
+                  placeholder="Fintech, AI, Thương mại điện tử"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-violet-500"
+                />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Link CV / Portfolio</label>
+                <input
+                  type="url"
+                  value={form.resumeUrl}
+                  onChange={(e) => setField("resumeUrl", e.target.value)}
+                  placeholder="https://drive.google.com/..."
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-violet-500"
+                />
+              </div>
             </div>
           </div>
 

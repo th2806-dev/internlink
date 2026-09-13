@@ -7,6 +7,8 @@ import {
   CartesianGrid,
   Cell,
   Legend,
+  Line,
+  LineChart,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -37,6 +39,50 @@ export type TrendPoint = {
   late?: number;
   missing?: number;
 };
+
+export type SemesterComparisonPoint = {
+  label: string;
+  students: number;
+  placed: number;
+  companies: number;
+};
+
+export function DashboardSemesterComparisonChart({
+  data,
+}: {
+  data: SemesterComparisonPoint[];
+}) {
+  return (
+    <div className="space-y-4">
+      <div>
+        <h3 className="text-sm font-bold text-slate-900">So sánh giữa các kỳ</h3>
+        <p className="text-[11px] text-slate-500 mt-0.5">
+          Quy mô sinh viên, số đã có doanh nghiệp và đối tác
+        </p>
+      </div>
+      {data.length === 0 ? (
+        <div className="h-[240px] flex items-center justify-center text-xs text-slate-400">
+          Chưa có dữ liệu học kỳ để so sánh
+        </div>
+      ) : (
+        <div className="h-[240px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={data} margin={{ top: 8, right: 10, left: -20, bottom: 0 }}>
+              <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 10 }} />
+              <YAxis axisLine={false} tickLine={false} allowDecimals={false} tick={{ fill: "#64748b", fontSize: 11 }} />
+              <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12 }} />
+              <Legend iconType="circle" wrapperStyle={{ fontSize: 11 }} />
+              <Line type="monotone" dataKey="students" name="Sinh viên" stroke="#1d4ed8" strokeWidth={3} dot={{ r: 3 }} />
+              <Line type="monotone" dataKey="placed" name="Đã có doanh nghiệp" stroke="#059669" strokeWidth={2} dot={{ r: 3 }} />
+              <Line type="monotone" dataKey="companies" name="Doanh nghiệp" stroke="#d97706" strokeWidth={2} dot={{ r: 3 }} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function DashboardTrendChart({
   title,

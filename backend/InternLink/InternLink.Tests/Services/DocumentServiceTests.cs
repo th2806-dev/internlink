@@ -208,4 +208,262 @@ public class DocumentServiceTests
         result.FileName.Should().Be("presentation.pptx");
         result.MimeType.Should().Be("application/vnd.openxmlformats-officedocument.presentationml.presentation");
     }
+
+    [Fact]
+    public async Task GetTemplatesAsync_WithFilters_ShouldReturnFilteredTemplates()
+    {
+        var db = GetDb();
+        var service = CreateService(db);
+
+        var t1 = new Document
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = null,
+            Title = "Báo cáo tốt nghiệp CNTT",
+            Department = "CNTT",
+            Category = "FinalReport",
+            Version = "1.0",
+            FileName = "t1.docx",
+            FilePath = "uploads/t1.docx",
+            MimeType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            IsPublished = true,
+            CreatedAt = DateTime.UtcNow
+        };
+        var t2 = new Document
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = null,
+            Title = "Báo cáo tuần QTKD",
+            Department = "QTKD",
+            Category = "WeeklyReport",
+            Version = "1.0",
+            FileName = "t2.docx",
+            FilePath = "uploads/t2.docx",
+            MimeType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            IsPublished = true,
+            CreatedAt = DateTime.UtcNow
+        };
+        var t3 = new Document
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = null,
+            Title = "Báo cáo tuần CNTT (Lưu trữ)",
+            Department = "CNTT",
+            Category = "WeeklyReport",
+            Version = "0.9",
+            FileName = "t3.docx",
+            FilePath = "uploads/t3.docx",
+            MimeType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            IsPublished = false,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        await db.Documents.AddRangeAsync(t1, t2, t3);
+        await db.SaveChangesAsync();
+
+        var result1 = await service.GetTemplatesAsync(department: "CNTT", isPublishedOnly: true);
+        result1.Should().ContainSingle();
+        result1.First().Title.Should().Be("Báo cáo tốt nghiệp CNTT");
+
+        var result2 = await service.GetTemplatesAsync(category: "WeeklyReport");
+        result2.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task CreateTemplateAsync_ValidInput_ShouldPersistTemplate()
+    {
+        var db = GetDb();
+        var service = CreateService(db);
+        var adminId = Guid.NewGuid();
+
+        var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes("sample doc content"));
+        var formFile = new Microsoft.AspNetCore.Http.FormFile(stream, 0, stream.Length, "File", "MauBaoCao.docx");
+
+        var request = new CreateTemplateRequest
+        {
+            Title = "Mẫu Báo Cáo Tốt Nghiệp",
+            Department = "CNTT",
+            Category = "FinalReport",
+            Version = "2.0",
+            IsPublished = true,
+            IsRequired = true,
+            File = formFile
+        };
+
+        var result = await service.CreateTemplateAsync(request, adminId);
+
+        result.Should().NotBeNull();
+        result.Title.Should().Be("Mẫu Báo Cáo Tốt Nghiệp");
+        result.Department.Should().Be("CNTT");
+        result.Version.Should().Be("2.0");
+        result.IsPublished.Should().BeTrue();
+        result.IsRequired.Should().BeTrue();
+        result.InternshipId.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task UpdateTemplateAsync_ArchiveTemplate_ShouldSetArchiveFields()
+    {
+        var db = GetDb();
+        var service = CreateService(db);
+        var adminId = Guid.NewGuid();
+
+        var template = new Document
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = null,
+            Title = "Mẫu Đánh Giá",
+            Category = "CompanyEvaluation",
+            Version = "1.0",
+            FileName = "DanhGia.docx",
+            FilePath = "uploads/DanhGia.docx",
+            MimeType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            IsPublished = true,
+            CreatedAt = DateTime.UtcNow
+        };
+        await db.Documents.AddAsync(template);
+        await db.SaveChangesAsync();
+
+        var updateRequest = new UpdateTemplateRequest
+        {
+            Title = "Mẫu Đánh Giá Cũ",
+            IsPublished = false,
+            ArchiveReason = "Thu hồi mẫu cũ để ban hành mẫu mới"
+        };
+
+        var updated = await service.UpdateTemplateAsync(template.Id, updateRequest, adminId);
+
+        updated.Should().NotBeNull();
+        updated!.Title.Should().Be("Mẫu Đánh Giá Cũ");
+        updated.IsPublished.Should().BeFalse();
+        updated.ArchiveReason.Should().Be("Thu hồi mẫu cũ để ban hành mẫu mới");
+        updated.ArchivedAt.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task GetTemplateStatsAsync_ShouldCalculateCorrectMetrics()
+    {
+        var db = GetDb();
+        var service = CreateService(db);
+
+        var t1 = new Document { Id = Guid.NewGuid(), Title = "T1", FileName = "t1.docx", FilePath = "p1", MimeType = "docx", IsPublished = true, DownloadCount = 5, CreatedAt = DateTime.UtcNow };
+        var t2 = new Document { Id = Guid.NewGuid(), Title = "T2", FileName = "t2.docx", FilePath = "p2", MimeType = "docx", IsPublished = true, DownloadCount = 10, CreatedAt = DateTime.UtcNow };
+        var t3 = new Document { Id = Guid.NewGuid(), Title = "T3", FileName = "t3.docx", FilePath = "p3", MimeType = "docx", IsPublished = false, DownloadCount = 2, CreatedAt = DateTime.UtcNow };
+
+        await db.Documents.AddRangeAsync(t1, t2, t3);
+        await db.SaveChangesAsync();
+
+        var stats = await service.GetTemplateStatsAsync();
+
+        stats.TotalTemplates.Should().Be(3);
+        stats.PublishedCount.Should().Be(2);
+        stats.ArchivedCount.Should().Be(1);
+        stats.TotalDownloads.Should().Be(17);
+    }
+
+    [Fact]
+    public async Task DownloadDocumentAsync_UnpublishedTemplate_StudentAccess_ShouldThrowUnauthorized()
+    {
+        var db = GetDb();
+        var (studentUser, _, _, _, _, _) = await SeedDataAsync(db);
+        var service = CreateService(db);
+
+        var unpublishedTemplate = new Document
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = null,
+            Title = "Bản nháp chưa ban hành",
+            FileName = "draft.docx",
+            FilePath = "uploads/draft.docx",
+            MimeType = "docx",
+            IsPublished = false,
+            CreatedAt = DateTime.UtcNow
+        };
+        await db.Documents.AddAsync(unpublishedTemplate);
+        await db.SaveChangesAsync();
+
+        var act = async () => await service.DownloadDocumentAsync(unpublishedTemplate.Id, studentUser.Id, isLecturerOrAdmin: false);
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>();
+    }
+
+    [Fact]
+    public async Task IncrementDownloadCountAsync_ShouldIncreaseCount()
+    {
+        var db = GetDb();
+        var service = CreateService(db);
+
+        var doc = new Document
+        {
+            Id = Guid.NewGuid(),
+            Title = "Mẫu Báo Cáo",
+            FileName = "m.docx",
+            FilePath = "p",
+            MimeType = "docx",
+            DownloadCount = 7,
+            CreatedAt = DateTime.UtcNow
+        };
+        await db.Documents.AddAsync(doc);
+        await db.SaveChangesAsync();
+
+        await service.IncrementDownloadCountAsync(doc.Id);
+
+        var reloaded = await db.Documents.FindAsync(doc.Id);
+        reloaded!.DownloadCount.Should().Be(8);
+    }
+
+    [Fact]
+    public async Task UpdateDocumentWithFileAsync_ShouldCreateNewVersionRecord()
+    {
+        var db = GetDb();
+        var (_, _, _, _, _, doc) = await SeedDataAsync(db);
+        var service = CreateService(db);
+
+        // Seed initial version 1
+        var v1 = new DocumentVersion
+        {
+            Id = Guid.NewGuid(),
+            DocumentId = doc.Id,
+            VersionNumber = 1,
+            FileName = doc.FileName,
+            FilePath = doc.FilePath,
+            FileSize = 100,
+            MimeType = doc.MimeType,
+            UploadedAt = DateTime.UtcNow,
+            ChangeNote = "Phiên bản đầu"
+        };
+        await db.DocumentVersions.AddAsync(v1);
+        await db.SaveChangesAsync();
+
+        // Update with new file
+        var result = await service.UpdateDocumentWithFileAsync(
+            doc.Id,
+            "spec_v2.pdf",
+            "uploads/documents/spec_v2.pdf",
+            250,
+            "application/pdf");
+
+        result.Should().NotBeNull();
+        result!.FileName.Should().Be("spec_v2.pdf");
+
+        // Verify versions
+        var versions = await service.GetDocumentVersionsAsync(doc.Id);
+        versions.Should().HaveCount(2);
+        versions[0].VersionNumber.Should().Be(2);
+        versions[0].FileName.Should().Be("spec_v2.pdf");
+        versions[1].VersionNumber.Should().Be(1);
+        versions[1].FileName.Should().Be("spec.pdf");
+    }
+
+    [Fact]
+    public async Task GetDocumentVersionsAsync_NoVersions_ShouldReturnEmptyList()
+    {
+        var db = GetDb();
+        var service = CreateService(db);
+
+        var docId = Guid.NewGuid();
+        var versions = await service.GetDocumentVersionsAsync(docId);
+
+        versions.Should().BeEmpty();
+    }
 }

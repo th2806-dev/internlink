@@ -6,7 +6,11 @@ import { getApiErrorMessage } from "../../../lib/apiClient";
 import { mapNotificationDtoToLecturerUi } from "../../../lib/portalMappers";
 import { notificationService } from "../../../services/notification.service";
 
-type NotificationItem = ReturnType<typeof mapNotificationDtoToLecturerUi>;
+export type SystemNotificationItem = ReturnType<typeof mapNotificationDtoToLecturerUi> & {
+  student?: string;
+  studentMssv?: string;
+};
+type NotificationItem = SystemNotificationItem;
 type ViewFilter = "all" | "system" | "deadline" | "feedback";
 
 const filterLabels: Record<ViewFilter, string> = {

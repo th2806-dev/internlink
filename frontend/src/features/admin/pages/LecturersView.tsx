@@ -43,14 +43,17 @@ import { adminAssignmentsService } from "../../../services/adminAssignments.serv
 import { adminLecturersService } from "../../../services/adminLecturers.service";
 import { adminUsersService } from "../../../services/adminUsers.service";
 import { useSemester, toApiSemesterId } from "../../../contexts/SemesterContext";
+import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
+import type { ToastType } from "../../../contexts/ToastContext";
 export const LecturersView = ({
   onShowToast,
   onNavigateTab,
 }: {
-  onShowToast: (msg: string) => void;
+  onShowToast: (msg: string, type?: ToastType) => void;
   onNavigateTab?: (tab: string) => void;
 }) => {
   const { selectedSemester } = useSemester();
+  const { canMutateOps, isSuperAdmin } = useAdminCapabilities();
   const [isLoadingApi, setIsLoadingApi] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingLecturer, setEditingLecturer] = useState<LecturerRowForEdit | null>(null);
@@ -322,30 +325,45 @@ export const LecturersView = ({
       <PageHeader
         icon={GraduationCap}
         title="Quản lý Giảng viên"
-        actions={[
-          {
-            label: "Import Excel",
-            icon: FileUp,
-            onClick: () => setIsImportModalOpen(true),
-            variant: "secondary",
-          },
-          {
-            label: "Thêm giảng viên",
-            icon: UserPlus,
-            onClick: () => setIsCreateModalOpen(true),
-            variant: "primary",
-          },
-        ]}
+        actions={
+          canMutateOps
+            ? [
+                {
+                  label: "Import Excel",
+                  icon: FileUp,
+                  onClick: () => setIsImportModalOpen(true),
+                  variant: "secondary" as const,
+                },
+                {
+                  label: "Thêm giảng viên",
+                  icon: UserPlus,
+                  onClick: () => setIsCreateModalOpen(true),
+                  variant: "primary" as const,
+                },
+              ]
+            : []
+        }
       >
-        <button
-          type="button"
-          onClick={() => setIsGenerateAccountsModalOpen(true)}
-          className="il-btn-press px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-md shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
-        >
-          <KeyRound className="w-4 h-4" />
-          <span>Cấp tài khoản nhanh ({pendingAccounts})</span>
-        </button>
+        {canMutateOps && (
+          <button
+            type="button"
+            onClick={() => setIsGenerateAccountsModalOpen(true)}
+            className="il-btn-press px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-md shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+          >
+            <KeyRound className="w-4 h-4" />
+            <span>Cấp tài khoản nhanh ({pendingAccounts})</span>
+          </button>
+        )}
       </PageHeader>
+
+      {isSuperAdmin && (
+        <div className="px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900 flex items-center gap-2.5">
+          <Eye className="w-4 h-4 text-blue-600 shrink-0" />
+          <span>
+            Chế độ chỉ xem nghiệp vụ khoa — Super Admin không thể tạo/sửa/xóa/cấp tài khoản giảng viên.
+          </span>
+        </div>
+      )}
 
       <Toolbar
         left={
@@ -420,7 +438,7 @@ export const LecturersView = ({
               <option value="locked">Tài khoản bị khóa</option>
             </select>
 
-            {selectedIds.length > 0 && (
+            {canMutateOps && selectedIds.length > 0 && (
               <button
                 onClick={handleBatchGenerateAccounts}
                 className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-md transition-colors flex items-center gap-1.5 cursor-pointer animate-in fade-in"
@@ -437,14 +455,16 @@ export const LecturersView = ({
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
-                <th className="py-2.5 px-3 text-center w-10">
-                  <input
-                    type="checkbox"
-                    checked={isAllPageSelected}
-                    onChange={handleToggleSelectAllPage}
-                    className="rounded text-blue-600 cursor-pointer"
-                  />
-                </th>
+                {canMutateOps && (
+                  <th className="py-2.5 px-3 text-center w-10">
+                    <input
+                      type="checkbox"
+                      checked={isAllPageSelected}
+                      onChange={handleToggleSelectAllPage}
+                      className="rounded text-blue-600 cursor-pointer"
+                    />
+                  </th>
+                )}
                 <th className="py-2.5 px-3">Giảng viên</th>
                 <th className="py-2.5 px-3">MSGV</th>
                 <th className="py-2.5 px-3">Khoa / Bộ môn</th>
@@ -458,7 +478,7 @@ export const LecturersView = ({
               {paginatedLecturers.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={canMutateOps ? 8 : 7}
                     className="py-8 text-center text-slate-400 font-medium"
                   >
                     Không tìm thấy giảng viên nào khớp với bộ lọc.
@@ -472,14 +492,16 @@ export const LecturersView = ({
                       key={lec.id}
                       className={`hover:bg-slate-50/80 transition-colors ${isSelected ? "bg-blue-50/50" : ""}`}
                     >
-                      <td className="py-3 px-3 text-center">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => handleToggleSelect(lec.id)}
-                          className="rounded text-blue-600 cursor-pointer"
-                        />
-                      </td>
+                      {canMutateOps && (
+                        <td className="py-3 px-3 text-center">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleToggleSelect(lec.id)}
+                            className="rounded text-blue-600 cursor-pointer"
+                          />
+                        </td>
+                      )}
 
                       {/* Name & Academic Degree */}
                       <td className="py-3 px-3">
@@ -554,7 +576,7 @@ export const LecturersView = ({
                       {/* Action Buttons */}
                       <td className="py-3 px-3 text-center">
                         <div className="flex items-center justify-center gap-1.5">
-                          {lec.accountStatus === "pending" && (
+                          {canMutateOps && lec.accountStatus === "pending" && (
                             <button
                               onClick={() => handleQuickGrantSingle(lec)}
                               className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] rounded-lg shadow-2xs transition-colors flex items-center gap-1 cursor-pointer"
@@ -573,47 +595,51 @@ export const LecturersView = ({
                             <Eye className="w-4 h-4" />
                           </button>
 
-                          <button
-                            type="button"
-                            onClick={() => setEditingLecturer(lec)}
-                            className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-amber-600 rounded-lg transition-colors cursor-pointer"
-                            title="Sửa"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </button>
+                          {canMutateOps && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => setEditingLecturer(lec)}
+                                className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-amber-600 rounded-lg transition-colors cursor-pointer"
+                                title="Sửa"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
 
-                          <button
-                            type="button"
-                            onClick={() => setDeleteTarget(lec)}
-                            className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
-                            title="Xóa"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                              <button
+                                type="button"
+                                onClick={() => setDeleteTarget(lec)}
+                                className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
+                                title="Xóa"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
 
-                          <button
-                            onClick={() => handleResetPassword(lec)}
-                            className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-amber-600 rounded-lg transition-colors cursor-pointer"
-                            title="Đặt lại mật khẩu"
-                          >
-                            <RotateCcw className="w-4 h-4" />
-                          </button>
+                              <button
+                                onClick={() => handleResetPassword(lec)}
+                                className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-amber-600 rounded-lg transition-colors cursor-pointer"
+                                title="Đặt lại mật khẩu"
+                              >
+                                <RotateCcw className="w-4 h-4" />
+                              </button>
 
-                          <button
-                            onClick={() => handleToggleLockAccount(lec.id)}
-                            className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
-                            title={
-                              lec.accountStatus === "locked"
-                                ? "M\u1EDF kh\xF3a t\xE0i kho\u1EA3n"
-                                : "Kh\xF3a t\xE0i kho\u1EA3n"
-                            }
-                          >
-                            {lec.accountStatus === "locked" ? (
-                              <Unlock className="w-4 h-4 text-emerald-600" />
-                            ) : (
-                              <Lock className="w-4 h-4 text-rose-600" />
-                            )}
-                          </button>
+                              <button
+                                onClick={() => handleToggleLockAccount(lec.id)}
+                                className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
+                                title={
+                                  lec.accountStatus === "locked"
+                                    ? "M\u1EDF kh\xF3a t\xE0i kho\u1EA3n"
+                                    : "Kh\xF3a t\xE0i kho\u1EA3n"
+                                }
+                              >
+                                {lec.accountStatus === "locked" ? (
+                                  <Unlock className="w-4 h-4 text-emerald-600" />
+                                ) : (
+                                  <Lock className="w-4 h-4 text-rose-600" />
+                                )}
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -849,6 +875,7 @@ export const LecturersView = ({
             </div>
 
             {/* Quick Actions */}
+            {canMutateOps && (
             <div className="pt-4 border-t border-slate-100 space-y-2">
               {selectedLecturer.accountStatus === "pending" && (
                 <button
@@ -899,6 +926,7 @@ export const LecturersView = ({
                   : "Kh\xF3a t\xE0i kho\u1EA3n"}
               </button>
             </div>
+            )}
           </div>
         </div>
       )}

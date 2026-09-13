@@ -13,6 +13,7 @@ interface WeeklyReportTimelineProps {
   onShowToast?: (msg: string) => void;
   error?: string | null;
   evaluation?: EvaluationDetailDto | null;
+  totalWeeks?: number;
 }
 
 const STATUS_CONFIG: Record<
@@ -39,9 +40,11 @@ export function WeeklyReportTimeline({
   onShowToast,
   error,
   evaluation,
+  totalWeeks: totalWeeksProp,
 }: WeeklyReportTimelineProps) {
-  // Build 6 weeks + defense milestone
-  const weeks = Array.from({ length: INTERNSHIP_WEEKS }, (_, i) => {
+  const totalWeeks = totalWeeksProp || INTERNSHIP_WEEKS;
+  // Build weeks + defense milestone
+  const weeks = Array.from({ length: totalWeeks }, (_, i) => {
     const weekNum = i + 1;
     const report = weeklyReports.find((r) => r.weekNumber === weekNum);
     const config = getWeekConfig(report?.status);
@@ -76,14 +79,14 @@ export function WeeklyReportTimeline({
           <div>
             <h3 className="text-sm font-bold text-slate-900">Tiến độ báo cáo tuần</h3>
             <p className="text-xs text-slate-500">
-              {approvedCount}/{INTERNSHIP_WEEKS} tuần đã duyệt
+              {approvedCount}/{totalWeeks} tuần đã duyệt
             </p>
           </div>
         </div>
         <div className="w-48 bg-slate-100 rounded-full h-2.5 overflow-hidden">
           <div
             className="h-full bg-emerald-500 rounded-full transition-all"
-            style={{ width: `${(approvedCount / INTERNSHIP_WEEKS) * 100}%` }}
+            style={{ width: `${(approvedCount / totalWeeks) * 100}%` }}
           />
         </div>
       </Panel>

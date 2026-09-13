@@ -33,6 +33,7 @@ import {
   useAdminNotifications,
   type AdminNotificationItem,
 } from "../../../hooks/useAdminNotifications";
+import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
 
 type NotificationItem = AdminNotificationItem;
 
@@ -76,14 +77,16 @@ const QUICK_TEMPLATES = [
   },
 ];
 
+import type { ToastType } from "../../../contexts/ToastContext";
 export const NotificationsView = ({
   onShowToast,
 }: {
-  onShowToast: (msg: string) => void;
+  onShowToast: (msg: string, type?: ToastType) => void;
   onNavigateTab?: (tab: string) => void;
 }) => {
   const { selectedSemesterId } = useSemester();
   const { stats: navStats } = useAdminNavStats(true, selectedSemesterId);
+  const { canMutateOps, isSuperAdmin } = useAdminCapabilities();
   const {
     notifications,
     loading: isLoading,
@@ -333,6 +336,14 @@ export const NotificationsView = ({
         </button>
       </PageHeader>
 
+      {isSuperAdmin && (
+        <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-xl text-sm flex items-center justify-between">
+          <span>
+            <strong>Chế độ chỉ xem nghiệp vụ khoa:</strong> Bạn đang đăng nhập tài khoản Super Admin. Thao tác soạn thảo, phát hành và xóa thông báo gửi sinh viên/giảng viên thuộc thẩm quyền nghiệp vụ của Admin khoa. Bạn có thể tra cứu lịch sử, xem chi tiết thông báo và xuất báo cáo CSV.
+          </span>
+        </div>
+      )}
+
       {/* 2. KPI METRICS (Clean & Meaningful) */}
       <KpiGrid>
         <KpiCard
@@ -370,8 +381,9 @@ export const NotificationsView = ({
       </KpiGrid>
 
       {/* 3. COMPOSE SECTION */}
-      <div className="bg-white rounded-lg border border-slate-200/80 shadow-xs p-5 md:p-6 space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+      {canMutateOps && (
+        <div className="bg-white rounded-lg border border-slate-200/80 shadow-xs p-5 md:p-6 space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
           <div className="flex items-center gap-2.5">
             <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
               <Send className="w-5 h-5" />
@@ -551,6 +563,7 @@ export const NotificationsView = ({
           </div>
         </form>
       </div>
+      )}
 
       {/* 4. NOTIFICATIONS HISTORY LIST */}
       <div className="bg-white rounded-lg border border-slate-200/80 shadow-xs p-5 md:p-6 space-y-4">
@@ -698,22 +711,26 @@ export const NotificationsView = ({
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDuplicate(notif)}
-                          className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
-                          title="Sao chép nội dung để gửi lại"
-                        >
-                          <Copy className="w-4 h-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteNotification(notif)}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
-                          title="Xóa thông báo"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {canMutateOps && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleDuplicate(notif)}
+                              className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                              title="Sao chép nội dung để gửi lại"
+                            >
+                              <Copy className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteNotification(notif)}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
+                              title="Xóa thông báo"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>

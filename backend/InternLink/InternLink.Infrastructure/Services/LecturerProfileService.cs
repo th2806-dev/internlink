@@ -89,7 +89,7 @@ public class LecturerProfileService : ILecturerProfileService
         return lecturer == null ? null : _mapper.Map<LecturerDto>(lecturer);
     }
 
-    public async Task<LecturerDto> CreateAsync(CreateLecturerRequest request)
+    public async Task<LecturerDto> CreateAsync(CreateLecturerRequest request, Guid? departmentId = null)
     {
         if (await _db.Lecturers.AnyAsync(l => l.StaffCode == request.StaffCode && !l.IsDeleted))
             throw new InvalidOperationException($"Staff code '{request.StaffCode}' already exists");
@@ -123,6 +123,7 @@ public class LecturerProfileService : ILecturerProfileService
             Phone = NullIfWhiteSpace(request.Phone),
             Department = NullIfWhiteSpace(request.Department),
             UserId = userId,
+            DepartmentId = departmentId, // Scoped to the creating admin's department (null for SuperAdmin)
             CreatedAt = DateTime.UtcNow
         };
 

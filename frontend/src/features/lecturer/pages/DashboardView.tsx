@@ -69,7 +69,7 @@ export const DashboardView = ({
               Chưa có kỳ thực tập đang hoạt động
             </h3>
             <p className="text-sm text-slate-600 max-w-md mx-auto">
-              Hiện tại chưa có kỳ thực tập nào được kích hoạt. Vui lòng chờ Quản trị viên tạo và bắt đầu kỳ thực tập mới.
+              Hiện tại chưa có kỳ thực tập nào được kích hoạt. Vui lòng chờ Super Admin tạo và bắt đầu kỳ thực tập mới.
             </p>
           </div>
           <div className="flex items-center justify-center gap-2 text-xs text-slate-500 font-medium">
@@ -109,6 +109,14 @@ export const DashboardView = ({
         semesterName={selectedSemester?.name}
         onCardClick={() => onNavigate("students")}
       />
+
+      <div className="il-accent-panel px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-blue-700">Nhịp hướng dẫn</p>
+          <p className="text-sm font-semibold text-slate-900 mt-0.5">Một màn hình để biết sinh viên nào cần bạn phản hồi tiếp theo.</p>
+        </div>
+        <span className="text-[11px] font-semibold text-slate-500">Cập nhật theo nhóm phụ trách</span>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         <Panel className="lg:col-span-8">

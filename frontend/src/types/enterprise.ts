@@ -16,6 +16,7 @@ export interface Enterprise {
   contactPhone: string;
   website: string;
   openPositions?: string[];
+  openPositionCount?: number;
   capacity: number;
   rating: number;
   hasStipend: boolean;

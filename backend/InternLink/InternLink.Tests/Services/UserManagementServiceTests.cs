@@ -97,6 +97,24 @@ public class UserManagementServiceTests
     }
 
     [Fact]
+    public async Task CreateUserAsync_DepartmentAdmin_ShouldNotBeAbleToCreateAnotherDepartmentAdmin()
+    {
+        var db = GetDb();
+        var deptId = Guid.NewGuid();
+
+        var service = CreateService(db);
+        var act = () => service.CreateUserAsync(new CreateUserRequest
+        {
+            Username = "dept.admin.2",
+            FullName = "Department Admin 2",
+            Role = "DepartmentAdmin"
+        }, creatorDepartmentId: deptId);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*DepartmentAdmin*SuperAdmin*");
+    }
+
+    [Fact]
     public async Task ResetPasswordAsync_ShouldSetMustChangePasswordAndSendEmail()
     {
         var db = GetDb();

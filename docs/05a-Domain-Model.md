@@ -24,7 +24,7 @@ Hệ thống được thiết kế theo mô hình Clean Architecture (DDD-lite) 
 | **10** | `Submission` | Submissions | Bài nộp đồ án / báo cáo cuối kỳ (Title, Type, Version, FileName, FileUrl, Status, SubmittedAt). |
 | **11** | `Feedback` | Feedbacks | Nhận xét bài nộp. `LecturerId` nullable — null nghĩa là phản hồi từ sinh viên, có giá trị nghĩa là nhận xét từ giảng viên. |
 | **12** | `Evaluation` | Evaluations | Bảng điểm đánh giá (TechnicalScore, CommunicationScore, TeamworkScore, InitiativeScore, FinalGrade, Comments, IsFinalized, CriteriaScoresJson). |
-| **13** | `EvaluationRubric` | EvaluationRubrics | Rubric đánh giá (Name, ApplicationMode, Status: Draft/PendingApproval/Approved/Rejected/Locked). |
+| **13** | `EvaluationRubric` | EvaluationRubrics | Rubric đánh giá (Name, ApplicationMode, Status: Draft/PendingApproval/Approved/Rejected/Locked; flow hiện tại của admin save/apply luôn giữ Approved). |
 | **14** | `EvaluationRubricCriterion` | EvaluationRubricCriteria | Tiêu chí rubric (Name, Description, Weight, MaxScore, OrderIndex). |
 | **15** | `Document` | Documents | Tài liệu biểu mẫu (Title, Category, FileName, FilePath, MimeType, FileSize, IsRequired, IsArchived). |
 | **16** | `Notification` | Notifications | Thông báo hệ thống (Title, Content, Link, IsRead, ReadAt). |

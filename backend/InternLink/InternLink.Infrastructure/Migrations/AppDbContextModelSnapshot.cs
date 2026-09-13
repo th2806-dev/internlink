@@ -127,6 +127,139 @@ namespace InternLink.Infrastructure.Migrations
                     b.ToTable("AccountRequests", (string)null);
                 });
 
+            modelBuilder.Entity("InternLink.Domain.Entities.AttendanceRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("AttendanceRecordId");
+
+                    b.Property<Guid>("AttendanceSessionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid?>("InternshipId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("MarkedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("MarkedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasDefaultValue("Present");
+
+                    b.Property<Guid>("StudentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InternshipId");
+
+                    b.HasIndex("StudentId");
+
+                    b.HasIndex("AttendanceSessionId", "StudentId")
+                        .IsUnique();
+
+                    b.ToTable("AttendanceRecords", (string)null);
+                });
+
+            modelBuilder.Entity("InternLink.Domain.Entities.AttendanceSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("AttendanceSessionId");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int?>("DurationMinutes")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(60);
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("LecturerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Location")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime>("MeetingDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("SemesterId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasDefaultValue("Scheduled");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("WeekNumber")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LecturerId");
+
+                    b.HasIndex("SemesterId", "LecturerId", "WeekNumber");
+
+                    b.ToTable("AttendanceSessions", (string)null);
+                });
+
             modelBuilder.Entity("InternLink.Domain.Entities.Company", b =>
                 {
                     b.Property<Guid>("Id")
@@ -201,12 +334,148 @@ namespace InternLink.Infrastructure.Migrations
                     b.ToTable("Companies", (string)null);
                 });
 
+            modelBuilder.Entity("InternLink.Domain.Entities.CompanyPosition", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("CompanyPositionId");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsOpen")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("Location")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("RequiredMajor")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("RequiredSkills")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<Guid?>("SemesterId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Slots")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
+
+                    b.Property<decimal?>("Stipend")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SemesterId");
+
+                    b.HasIndex("CompanyId", "SemesterId");
+
+                    b.ToTable("CompanyPositions", (string)null);
+                });
+
+            modelBuilder.Entity("InternLink.Domain.Entities.Department", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("DepartmentId");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.ToTable("Departments", (string)null);
+                });
+
             modelBuilder.Entity("InternLink.Domain.Entities.Document", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier")
                         .HasColumnName("DocumentId");
+
+                    b.Property<string>("ArchiveReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("ArchivedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ArchivedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<string>("Category")
                         .HasMaxLength(100)
@@ -219,6 +488,10 @@ namespace InternLink.Infrastructure.Migrations
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Department")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
 
                     b.Property<string>("Description")
                         .HasMaxLength(2000)
@@ -242,11 +515,16 @@ namespace InternLink.Infrastructure.Migrations
                     b.Property<long>("FileSize")
                         .HasColumnType("bigint");
 
-                    b.Property<Guid>("InternshipId")
+                    b.Property<Guid?>("InternshipId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
+
+                    b.Property<bool>("IsPublished")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
 
                     b.Property<bool>("IsRequired")
                         .ValueGeneratedOnAdd()
@@ -257,6 +535,12 @@ namespace InternLink.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("PublishedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("SemesterId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -277,13 +561,88 @@ namespace InternLink.Infrastructure.Migrations
                     b.Property<Guid?>("UploadedById")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("Version")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasDefaultValue("1.0");
+
                     b.HasKey("Id");
 
                     b.HasIndex("InternshipId");
 
                     b.HasIndex("UploadedById");
 
+                    b.HasIndex("SemesterId", "Department", "IsPublished");
+
                     b.ToTable("Documents", (string)null);
+                });
+
+            modelBuilder.Entity("InternLink.Domain.Entities.DocumentVersion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("DocumentVersionId");
+
+                    b.Property<string>("ChangeNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<string>("FilePath")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<long>("FileSize")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("MimeType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("UploadedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<Guid?>("UploadedById")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("VersionNumber")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentId", "VersionNumber")
+                        .IsUnique();
+
+                    b.ToTable("DocumentVersions", (string)null);
                 });
 
             modelBuilder.Entity("InternLink.Domain.Entities.Evaluation", b =>
@@ -668,6 +1027,9 @@ namespace InternLink.Infrastructure.Migrations
                         .HasMaxLength(150)
                         .HasColumnType("nvarchar(150)");
 
+                    b.Property<Guid?>("DepartmentId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("Email")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
@@ -699,6 +1061,8 @@ namespace InternLink.Infrastructure.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("DepartmentId");
 
                     b.HasIndex("StaffCode")
                         .IsUnique();
@@ -917,6 +1281,9 @@ namespace InternLink.Infrastructure.Migrations
                     b.Property<string>("CreatedBy")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<Guid?>("DepartmentId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("Description")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
@@ -950,6 +1317,11 @@ namespace InternLink.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<int>("TotalWeeks")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(6);
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
@@ -957,6 +1329,8 @@ namespace InternLink.Infrastructure.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("DepartmentId");
 
                     b.ToTable("Semesters", (string)null);
                 });
@@ -1046,12 +1420,71 @@ namespace InternLink.Infrastructure.Migrations
                     b.ToTable("SemesterLecturers", (string)null);
                 });
 
+            modelBuilder.Entity("InternLink.Domain.Entities.SemesterReportSchedule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("SemesterReportScheduleId");
+
+                    b.Property<bool>("AllowLateSubmission")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime>("DueDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("SemesterId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("WeekNumber")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SemesterId", "WeekNumber")
+                        .IsUnique();
+
+                    b.ToTable("SemesterReportSchedules", (string)null);
+                });
+
             modelBuilder.Entity("InternLink.Domain.Entities.Student", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier")
                         .HasColumnName("StudentId");
+
+                    b.Property<string>("AlternativePosition")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<string>("Class")
                         .HasMaxLength(100)
@@ -1064,6 +1497,21 @@ namespace InternLink.Infrastructure.Migrations
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Department")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<Guid?>("DepartmentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DesiredLocation")
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<string>("DesiredPosition")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<string>("Email")
                         .HasMaxLength(200)
@@ -1085,6 +1533,18 @@ namespace InternLink.Infrastructure.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<string>("PreferredIndustry")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("ResumeUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Skills")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
                     b.Property<string>("StudentCode")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -1099,7 +1559,13 @@ namespace InternLink.Infrastructure.Migrations
                     b.Property<Guid?>("UserId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("WorkPreference")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("DepartmentId");
 
                     b.HasIndex("StudentCode")
                         .IsUnique()
@@ -1311,6 +1777,9 @@ namespace InternLink.Infrastructure.Migrations
                     b.Property<string>("CreatedBy")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<Guid?>("DepartmentId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("Email")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
@@ -1354,6 +1823,8 @@ namespace InternLink.Infrastructure.Migrations
                         .HasColumnType("nvarchar(100)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("DepartmentId");
 
                     b.ToTable("Users", (string)null);
                 });
@@ -1511,13 +1982,80 @@ namespace InternLink.Infrastructure.Migrations
                     b.Navigation("RequesterUser");
                 });
 
+            modelBuilder.Entity("InternLink.Domain.Entities.AttendanceRecord", b =>
+                {
+                    b.HasOne("InternLink.Domain.Entities.AttendanceSession", "AttendanceSession")
+                        .WithMany("Records")
+                        .HasForeignKey("AttendanceSessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("InternLink.Domain.Entities.Internship", "Internship")
+                        .WithMany()
+                        .HasForeignKey("InternshipId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("InternLink.Domain.Entities.Student", "Student")
+                        .WithMany("AttendanceRecords")
+                        .HasForeignKey("StudentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("AttendanceSession");
+
+                    b.Navigation("Internship");
+
+                    b.Navigation("Student");
+                });
+
+            modelBuilder.Entity("InternLink.Domain.Entities.AttendanceSession", b =>
+                {
+                    b.HasOne("InternLink.Domain.Entities.Lecturer", "Lecturer")
+                        .WithMany("AttendanceSessions")
+                        .HasForeignKey("LecturerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("InternLink.Domain.Entities.Semester", "Semester")
+                        .WithMany("AttendanceSessions")
+                        .HasForeignKey("SemesterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Lecturer");
+
+                    b.Navigation("Semester");
+                });
+
+            modelBuilder.Entity("InternLink.Domain.Entities.CompanyPosition", b =>
+                {
+                    b.HasOne("InternLink.Domain.Entities.Company", "Company")
+                        .WithMany("Positions")
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("InternLink.Domain.Entities.Semester", "Semester")
+                        .WithMany()
+                        .HasForeignKey("SemesterId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Company");
+
+                    b.Navigation("Semester");
+                });
+
             modelBuilder.Entity("InternLink.Domain.Entities.Document", b =>
                 {
                     b.HasOne("InternLink.Domain.Entities.Internship", "Internship")
                         .WithMany("Documents")
                         .HasForeignKey("InternshipId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("InternLink.Domain.Entities.Semester", "Semester")
+                        .WithMany()
+                        .HasForeignKey("SemesterId")
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("InternLink.Domain.Entities.Lecturer", "UploadedBy")
                         .WithMany()
@@ -1526,7 +2064,20 @@ namespace InternLink.Infrastructure.Migrations
 
                     b.Navigation("Internship");
 
+                    b.Navigation("Semester");
+
                     b.Navigation("UploadedBy");
+                });
+
+            modelBuilder.Entity("InternLink.Domain.Entities.DocumentVersion", b =>
+                {
+                    b.HasOne("InternLink.Domain.Entities.Document", "Document")
+                        .WithMany("Versions")
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Document");
                 });
 
             modelBuilder.Entity("InternLink.Domain.Entities.Evaluation", b =>
@@ -1647,10 +2198,17 @@ namespace InternLink.Infrastructure.Migrations
 
             modelBuilder.Entity("InternLink.Domain.Entities.Lecturer", b =>
                 {
+                    b.HasOne("InternLink.Domain.Entities.Department", "DepartmentRef")
+                        .WithMany("Lecturers")
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("InternLink.Domain.Entities.User", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("DepartmentRef");
 
                     b.Navigation("User");
                 });
@@ -1686,6 +2244,16 @@ namespace InternLink.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("InternLink.Domain.Entities.Semester", b =>
+                {
+                    b.HasOne("InternLink.Domain.Entities.Department", "Department")
+                        .WithMany()
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Department");
                 });
 
             modelBuilder.Entity("InternLink.Domain.Entities.SemesterCompany", b =>
@@ -1726,12 +2294,30 @@ namespace InternLink.Infrastructure.Migrations
                     b.Navigation("Semester");
                 });
 
+            modelBuilder.Entity("InternLink.Domain.Entities.SemesterReportSchedule", b =>
+                {
+                    b.HasOne("InternLink.Domain.Entities.Semester", "Semester")
+                        .WithMany("ReportSchedules")
+                        .HasForeignKey("SemesterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Semester");
+                });
+
             modelBuilder.Entity("InternLink.Domain.Entities.Student", b =>
                 {
+                    b.HasOne("InternLink.Domain.Entities.Department", "DepartmentRef")
+                        .WithMany("Students")
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("InternLink.Domain.Entities.User", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("DepartmentRef");
 
                     b.Navigation("User");
                 });
@@ -1758,6 +2344,16 @@ namespace InternLink.Infrastructure.Migrations
                     b.Navigation("Submission");
                 });
 
+            modelBuilder.Entity("InternLink.Domain.Entities.User", b =>
+                {
+                    b.HasOne("InternLink.Domain.Entities.Department", "Department")
+                        .WithMany("Users")
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Department");
+                });
+
             modelBuilder.Entity("InternLink.Domain.Entities.WeeklyReport", b =>
                 {
                     b.HasOne("InternLink.Domain.Entities.Internship", "Internship")
@@ -1780,11 +2376,32 @@ namespace InternLink.Infrastructure.Migrations
                     b.Navigation("WeeklyReport");
                 });
 
+            modelBuilder.Entity("InternLink.Domain.Entities.AttendanceSession", b =>
+                {
+                    b.Navigation("Records");
+                });
+
             modelBuilder.Entity("InternLink.Domain.Entities.Company", b =>
                 {
                     b.Navigation("Internships");
 
+                    b.Navigation("Positions");
+
                     b.Navigation("SemesterCompanies");
+                });
+
+            modelBuilder.Entity("InternLink.Domain.Entities.Department", b =>
+                {
+                    b.Navigation("Lecturers");
+
+                    b.Navigation("Students");
+
+                    b.Navigation("Users");
+                });
+
+            modelBuilder.Entity("InternLink.Domain.Entities.Document", b =>
+                {
+                    b.Navigation("Versions");
                 });
 
             modelBuilder.Entity("InternLink.Domain.Entities.EvaluationRubric", b =>
@@ -1803,6 +2420,8 @@ namespace InternLink.Infrastructure.Migrations
 
             modelBuilder.Entity("InternLink.Domain.Entities.Lecturer", b =>
                 {
+                    b.Navigation("AttendanceSessions");
+
                     b.Navigation("Internships");
 
                     b.Navigation("SemesterLecturers");
@@ -1810,9 +2429,13 @@ namespace InternLink.Infrastructure.Migrations
 
             modelBuilder.Entity("InternLink.Domain.Entities.Semester", b =>
                 {
+                    b.Navigation("AttendanceSessions");
+
                     b.Navigation("EvaluationRubric");
 
                     b.Navigation("Internships");
+
+                    b.Navigation("ReportSchedules");
 
                     b.Navigation("SemesterCompanies");
 
@@ -1821,6 +2444,8 @@ namespace InternLink.Infrastructure.Migrations
 
             modelBuilder.Entity("InternLink.Domain.Entities.Student", b =>
                 {
+                    b.Navigation("AttendanceRecords");
+
                     b.Navigation("Internships");
                 });
 

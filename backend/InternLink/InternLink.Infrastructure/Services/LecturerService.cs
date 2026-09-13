@@ -2,6 +2,7 @@ using AutoMapper;
 
 using ClosedXML.Excel;
 
+using InternLink.Application.Common;
 using InternLink.Application.DTOs;
 
 using InternLink.Application.Interfaces;
@@ -98,7 +99,10 @@ public class LecturerService : ILecturerService
         if (semesterId.HasValue)
             query = query.Where(i => i.SemesterId == semesterId.Value);
         var internships = await query
+            .Include(i => i.Student)
+                .ThenInclude(s => s.User)
             .Include(i => i.Company)
+            .Include(i => i.Semester)
             .Include(i => i.Submissions)
             .Include(i => i.WeeklyReports)
             .ToListAsync();
@@ -108,6 +112,7 @@ public class LecturerService : ILecturerService
         var evaluations = await _db.Evaluations
             .Where(e => !e.IsDeleted && internshipIds.Contains(e.InternshipId))
             .ToListAsync();
+        var evalDict = evaluations.ToDictionary(e => e.InternshipId);
 
         var total = internships.Count;
         var assignedCompanyCount = internships.Count(i => i.CompanyId.HasValue && i.Company != null);
@@ -140,18 +145,18 @@ public class LecturerService : ILecturerService
 
         var averageProgress = total == 0
             ? 0
-            : (int)Math.Round(internships.Average(i => (i.Status == InternshipStatus.NotStarted && i.CompanyId.HasValue
-                ? InternshipStatus.InProgress
-                : i.Status) switch
+            : (int)Math.Round(internships.Average(i =>
             {
-                InternshipStatus.NotStarted => 0,
-                InternshipStatus.InProgress => 50,
-                InternshipStatus.BehindSchedule => 40,
-                InternshipStatus.AwaitingFeedback => 70,
-                InternshipStatus.RequiresRevision => 60,
-                InternshipStatus.Completed => 100,
-                InternshipStatus.Graded => 100,
-                _ => 0,
+                evalDict.TryGetValue(i.Id, out var eval);
+                if (i.Student == null) return 0;
+                var bd = InternshipProgressCalculator.Calculate(
+                    i.Student.User,
+                    i.Student,
+                    i,
+                    i.WeeklyReports,
+                    eval,
+                    i.Semester?.TotalWeeks);
+                return bd.TotalPercent;
             }));
 
         return new LecturerDashboardStatsDto
@@ -184,7 +189,9 @@ public class LecturerService : ILecturerService
 
         query = query
             .Include(i => i.Student)
+                .ThenInclude(s => s.User)
             .Include(i => i.Company)
+            .Include(i => i.Semester)
             .Include(i => i.Submissions)
             .Include(i => i.WeeklyReports);
 
@@ -224,17 +231,19 @@ public class LecturerService : ILecturerService
                 ? InternshipStatus.InProgress
                 : i.Status;
 
-            // Progress reflects submitted work even before the internship status is advanced.
-            int progressPercent = effectiveStatus switch
+            ProgressBreakdownDto? breakdown = null;
+            int progressPercent = 0;
+            if (i.Student != null)
             {
-                InternshipStatus.Completed or InternshipStatus.Graded => 100,
-                InternshipStatus.InProgress or InternshipStatus.BehindSchedule
-                    or InternshipStatus.AwaitingFeedback or InternshipStatus.RequiresRevision
-                    => Math.Min(95, Math.Max(10, weeklyCount * 8 + submissionCount * 2)),
-                _ when weeklyCount > 0 || submissionCount > 0
-                    => Math.Min(95, Math.Max(10, weeklyCount * 8 + submissionCount * 2)),
-                _ => 0,
-            };
+                breakdown = InternshipProgressCalculator.Calculate(
+                    i.Student.User,
+                    i.Student,
+                    i,
+                    i.WeeklyReports,
+                    eval,
+                    i.Semester?.TotalWeeks);
+                progressPercent = breakdown.TotalPercent;
+            }
 
             result.Add(new LecturerStudentListItemDto
             {
@@ -258,7 +267,8 @@ public class LecturerService : ILecturerService
                 FinalGrade = eval?.FinalGrade,
                 HasEvaluation = eval != null,
                 IsEvaluationFinalized = eval?.IsFinalized ?? false,
-                ProgressPercent = progressPercent
+                ProgressPercent = progressPercent,
+                ProgressBreakdown = breakdown
             });
         }
 

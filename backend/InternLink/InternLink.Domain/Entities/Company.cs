@@ -18,4 +18,7 @@ public class Company : BaseEntity
 
     /// <summary>Per-semester link status (IsActive = false means "ngưng liên kết").</summary>
     public ICollection<SemesterCompany> SemesterCompanies { get; set; } = new List<SemesterCompany>();
+
+    /// <summary>Recruitment positions offered by this company.</summary>
+    public ICollection<CompanyPosition> Positions { get; set; } = new List<CompanyPosition>();
 }

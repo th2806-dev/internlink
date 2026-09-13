@@ -38,7 +38,7 @@ flowchart TB
         UC_ADM_06(["UC-ADM-06: Phân công Hướng dẫn<br/>(Bulk/Auto assign, Company allocation)"])
         UC_ADM_07(["UC-ADM-07: Quản lý Yêu cầu TK<br/>(Duyệt/Từ chối/Cấp phát tài khoản)"])
         UC_ADM_08(["UC-ADM-08: Tạo Rubric Đánh giá<br/>(Tiêu chí, trọng số, max điểm)"])
-        UC_ADM_09(["UC-ADM-09: Phê duyệt Rubric<br/>(Approve/Reject rubric cấp khoa)"])
+        UC_ADM_09(["UC-ADM-09: Quản lý Rubric<br/>(Admin save/apply, hệ thống giữ Approved ngay)"])
         UC_ADM_10(["UC-ADM-10: Phát Thông báo Broadcast<br/>(Toàn trường, GV hoặc SV)"])
         UC_ADM_11(["UC-ADM-11: Cấu hình Hệ thống<br/>(Faculty Settings, hạn nộp, rules)"])
         UC_ADM_12(["UC-ADM-12: Dashboard Tổng quan<br/>(Thống kê KPI, biểu đồ tiến độ)"])
@@ -167,7 +167,7 @@ flowchart TB
 | **UC-ADM-06** | Phân công Hướng dẫn | Phân công GVHD cho SV (Manual, Auto-balance, Bulk, Company-based) | `/api/Assignment` |
 | **UC-ADM-07** | Quản lý Yêu cầu TK | Xét duyệt, từ chối hoặc cấp phát tài khoản khi có yêu cầu đăng ký mới | `/api/AccountRequest` |
 | **UC-ADM-08** | Tạo Rubric Đánh giá | Soạn thảo tiêu chí chấm điểm, thiết lập tỷ trọng & điểm tối đa | `/api/Rubric` |
-| **UC-ADM-09** | Phê duyệt Rubric | Duyệt (Approve) hoặc yêu cầu chỉnh sửa (Reject) rubric cấp khoa | `/api/Rubric/{id}/approve` |
+| **UC-ADM-09** | Quản lý Rubric | Tạo/sửa rubric bằng admin save/apply; hệ thống lưu trực tiếp ở trạng thái Approved | `/api/Admin/semesters/{id}/rubric` |
 | **UC-ADM-10** | Phát Thông báo | Gửi thông báo Broadcast đến toàn bộ hệ thống hoặc theo nhóm đối tượng | `/api/Notification/broadcast` |
 | **UC-ADM-11** | Cấu hình Hệ thống | Cấu hình tham số học khoa: hạn nộp, module kích hoạt, quota tối đa | `/api/Settings` |
 | **UC-ADM-12** | Dashboard Tổng quan | Thống kê số lượng SV/GV, tỷ lệ hoàn thành báo cáo, biểu đồ tiến độ khoa | `/api/Dashboard` |

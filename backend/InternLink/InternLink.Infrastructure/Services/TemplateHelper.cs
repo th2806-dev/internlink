@@ -9,6 +9,131 @@ public static class TemplateHelper
 {
     public static string? FindTemplatePath(string templateFileName)
     {
+        var result = FindSingleTemplatePath(templateFileName);
+        if (result != null) return result;
+
+        // Try aliases / fallback names
+        if (templateFileName.Contains("Bao cao tong ket", StringComparison.OrdinalIgnoreCase))
+        {
+            var fallback = FindSingleTemplatePath("Bao cao tong ket cong tac thuc tap tot nghiep.docx")
+                ?? FindSingleTemplatePath("Bao cao tong ket cong tac thuc tap tot nghiep C22A.docx")
+                ?? FindByStem("Bao cao tong ket cong tac thuc tap tot nghiep", ".docx");
+            if (fallback != null) return fallback;
+        }
+
+        if (templateFileName.Contains("Lich huong dan", StringComparison.OrdinalIgnoreCase))
+        {
+            var fallback = FindSingleTemplatePath("Lich huong dan TTTN-C23-Cuong.xlsx")
+                ?? FindSingleTemplatePath("Lich huong dan TTTN.xlsx")
+                ?? FindByStem("Lich huong dan", ".xlsx");
+            if (fallback != null) return fallback;
+        }
+
+        if (templateFileName.Contains("InternshipExportTemplate", StringComparison.OrdinalIgnoreCase)
+            || templateFileName.Contains("DANH SACH THUC TAP", StringComparison.OrdinalIgnoreCase))
+        {
+            var fallback = FindSingleTemplatePath("InternshipExportTemplate.xlsx")
+                ?? FindSingleTemplatePath("DANH SACH THUC TAP C23.xlsx")
+                ?? FindByStem("InternshipExportTemplate", ".xlsx")
+                ?? FindByStem("DANH SACH THUC TAP", ".xlsx");
+            if (fallback != null) return fallback;
+        }
+
+        // Generic: match files whose stem equals the requested name without semester codes (C22A, C23, …)
+        var extension = Path.GetExtension(templateFileName);
+        var stem = StripSemesterCode(Path.GetFileNameWithoutExtension(templateFileName));
+        if (!string.IsNullOrWhiteSpace(stem))
+        {
+            var fuzzy = FindByStem(stem, extension);
+            if (fuzzy != null) return fuzzy;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Removes trailing cohort/semester markers such as " C22A", " C23", "-C23-Cuong".
+    /// </summary>
+    private static string StripSemesterCode(string fileNameWithoutExtension)
+    {
+        if (string.IsNullOrWhiteSpace(fileNameWithoutExtension)) return string.Empty;
+        // Strip "-C23-Cuong" / "_C22A" / " C23" style suffixes
+        var stripped = Regex.Replace(
+            fileNameWithoutExtension.Trim(),
+            @"[\s_-]*C\d{2}[A-Z]?(?:-[\w]+)?$",
+            string.Empty,
+            RegexOptions.IgnoreCase);
+        return stripped.Trim();
+    }
+
+    private static string? FindByStem(string stem, string extension)
+    {
+        if (string.IsNullOrWhiteSpace(stem)) return null;
+        var normalizedStem = NormalizeText(StripSemesterCode(stem));
+        var ext = string.IsNullOrWhiteSpace(extension) ? string.Empty : extension;
+
+        foreach (var dir in GetTemplateDirectories())
+        {
+            if (!Directory.Exists(dir)) continue;
+            foreach (var file in Directory.EnumerateFiles(dir, $"*{ext}", SearchOption.TopDirectoryOnly))
+            {
+                var name = Path.GetFileNameWithoutExtension(file);
+                var normalizedName = NormalizeText(StripSemesterCode(name));
+                if (normalizedName.Equals(normalizedStem, StringComparison.OrdinalIgnoreCase)
+                    || normalizedName.StartsWith(normalizedStem, StringComparison.OrdinalIgnoreCase)
+                    || normalizedStem.StartsWith(normalizedName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return file;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<string> GetTemplateDirectories()
+    {
+        var roots = new List<string>
+        {
+            AppContext.BaseDirectory,
+            Directory.GetCurrentDirectory()
+        };
+
+        var current = new DirectoryInfo(Directory.GetCurrentDirectory());
+        for (int i = 0; i < 5 && current != null; i++)
+        {
+            roots.Add(current.FullName);
+            current = current.Parent;
+        }
+
+        var baseCurrent = new DirectoryInfo(AppContext.BaseDirectory);
+        for (int i = 0; i < 5 && baseCurrent != null; i++)
+        {
+            roots.Add(baseCurrent.FullName);
+            baseCurrent = baseCurrent.Parent;
+        }
+
+        var relativeDirs = new[]
+        {
+            Path.Combine("Templates", "importTemplates"),
+            "Templates",
+            Path.Combine("InternLink.API", "Templates", "importTemplates"),
+            Path.Combine("InternLink.API", "Templates"),
+            Path.Combine("backend", "InternLink", "InternLink.API", "Templates", "importTemplates"),
+            Path.Combine("backend", "InternLink", "InternLink.API", "Templates"),
+        };
+
+        foreach (var root in roots.Distinct())
+        {
+            foreach (var rel in relativeDirs)
+            {
+                yield return Path.Combine(root, rel);
+            }
+        }
+    }
+
+    private static string? FindSingleTemplatePath(string templateFileName)
+    {
         var roots = new List<string>
         {
             AppContext.BaseDirectory,

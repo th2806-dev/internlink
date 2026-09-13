@@ -8,4 +8,9 @@ public sealed class LoginResponse
     public DateTime? RefreshTokenExpiresAt { get; set; }
     public string Role { get; set; } = null!;
     public bool MustChangePassword { get; set; }
+
+    /// <summary>
+    /// Department ID for the user. Null for SuperAdmin (sees all departments).
+    /// </summary>
+    public Guid? DepartmentId { get; set; }
 }

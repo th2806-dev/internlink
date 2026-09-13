@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { adminSemestersService, semesterPortalService, type BackendSemesterDto } from "../services/adminSemesters.service";
-import { getStoredToken } from "../lib/apiClient";
+import { adminDepartmentsService, type DepartmentDto } from "../services/adminDepartments.service";
+import { ApiClientError, getStoredToken } from "../lib/apiClient";
 import { useAuth } from "./AuthContext";
 
 export interface Semester {
@@ -16,8 +17,17 @@ export interface Semester {
   companiesCount: number;
   status: "active" | "upcoming" | "completed" | "draft";
   progressPercent: number;
+  totalWeeks: number;
   currentPhase: string;
   description: string;
+}
+
+export interface DepartmentOption {
+  id: string;
+  name: string;
+  code: string;
+  description?: string | null;
+  isActive: boolean;
 }
 
 const DEFAULT_SEMESTERS: Semester[] = [];
@@ -53,6 +63,7 @@ const mapBackendToFrontend = (dto: BackendSemesterDto): Semester => {
     companiesCount: dto.companiesCount,
     status: statusMap[dto.status] || "upcoming",
     progressPercent: dto.progressPercent,
+    totalWeeks: dto.totalWeeks || 6,
     currentPhase: dto.currentPhase,
     description: dto.description || "",
   };
@@ -64,7 +75,11 @@ interface SemesterContextType {
   selectedSemester: Semester;
   /** The ID of the currently active semester (status=1), or empty string if none. */
   activeSemesterId: string;
+  departments: DepartmentOption[];
+  selectedDepartmentId: string;
+  selectedDepartment: DepartmentOption;
   selectSemester: (id: string) => void;
+  selectDepartment: (id: string) => void;
   createSemester: (data: Partial<Semester> & { name: string; term: string; academicYear: string }) => Promise<void>;
   startSemester: (id: string, onShowToast?: (msg: string) => void) => Promise<void>;
   closeSemester: (id: string, onShowToast?: (msg: string) => void) => Promise<void>;
@@ -83,11 +98,18 @@ export function toApiSemesterId(id: string | undefined | null): string | undefin
   return id;
 }
 
+export function toApiDepartmentId(id: string | undefined | null): string | undefined {
+  if (!id || id === "all") return undefined;
+  return id;
+}
+
 export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { role } = useAuth();
+  const { role, user } = useAuth();
   const [semesters, setSemesters] = useState<Semester[]>(DEFAULT_SEMESTERS);
+  const [departments, setDepartments] = useState<DepartmentOption[]>([]);
 
   const [selectedSemesterId, setSelectedSemesterId] = useState<string>("");
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>("all");
 
   const refreshApiCounts = useCallback(async () => {
     // Wait for AuthProvider to resolve the token before choosing the portal endpoint.
@@ -131,11 +153,75 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   useEffect(() => {
     try {
-      if (selectedSemesterId) {
-        localStorage.setItem("internlink_admin_selected_semester_id", selectedSemesterId);
-      }
+      localStorage.setItem("internlink_admin_selected_semester_id", selectedSemesterId || "all");
     } catch {}
   }, [selectedSemesterId]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("internlink_admin_selected_department_id", selectedDepartmentId || "all");
+    } catch {}
+  }, [selectedDepartmentId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadDepartments = async () => {
+      if (role !== "admin") {
+        if (!cancelled) {
+          setDepartments([]);
+          setSelectedDepartmentId("all");
+        }
+        return;
+      }
+
+      try {
+        if (user?.backendRole === "DepartmentAdmin" && user.departmentId) {
+          const dept = await adminDepartmentsService.getById(user.departmentId);
+          if (!cancelled) {
+            setDepartments([
+              {
+                id: dept.id,
+                name: dept.name,
+                code: dept.code,
+                description: dept.description,
+                isActive: dept.isActive,
+              },
+            ]);
+            setSelectedDepartmentId(dept.id);
+          }
+          return;
+        }
+
+        const backendDepartments = await adminDepartmentsService.getAll();
+        if (!cancelled) {
+          const visibleDepartments = backendDepartments
+            .filter((d) => d.isActive)
+            .map((d) => ({
+              id: d.id,
+              name: d.name,
+              code: d.code,
+              description: d.description,
+              isActive: d.isActive,
+            }));
+
+          setDepartments(visibleDepartments);
+          setSelectedDepartmentId((prev) => (prev && prev !== "all" ? prev : "all"));
+        }
+      } catch (err) {
+        console.warn("Error loading departments for admin header filter:", err);
+        if (!cancelled) {
+          setDepartments([]);
+          setSelectedDepartmentId("all");
+        }
+      }
+    };
+
+    void loadDepartments();
+    return () => {
+      cancelled = true;
+    };
+  }, [role, user?.backendRole, user?.departmentId]);
 
   const activeSemesterId = semesters.find((s) => s.status === "active")?.id ?? "";
 
@@ -154,6 +240,7 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           companiesCount: semesters.reduce((sum, s) => sum + s.companiesCount, 0),
           status: "active" as const,
           progressPercent: 0,
+          totalWeeks: semesters.reduce((max, s) => Math.max(max, s.totalWeeks), 6),
           currentPhase: "",
           description: "",
         }
@@ -173,12 +260,35 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           companiesCount: 0,
           status: "upcoming" as const,
           progressPercent: 0,
+          totalWeeks: 6,
           currentPhase: "",
           description: "",
         };
 
+  const selectedDepartment =
+    selectedDepartmentId === "all"
+      ? {
+          id: "all",
+          name: "Tất cả khoa",
+          code: "ALL",
+          description: "",
+          isActive: true,
+        }
+      : departments.find((d) => d.id === selectedDepartmentId) ||
+        {
+          id: selectedDepartmentId,
+          name: "Khoa đang chọn",
+          code: "",
+          description: "",
+          isActive: true,
+        };
+
   const selectSemester = (id: string) => {
     setSelectedSemesterId(id);
+  };
+
+  const selectDepartment = (id: string) => {
+    setSelectedDepartmentId(id);
   };
 
   const createSemester = async (data: Partial<Semester> & { name: string; term: string; academicYear: string }) => {
@@ -194,6 +304,7 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         endDate: data.endDate || null,
         status: statusNumber,
         description: data.description,
+        totalWeeks: data.totalWeeks || 6,
       });
       const mapped = mapBackendToFrontend(res);
       setSemesters((prev) => [mapped, ...prev]);
@@ -217,6 +328,7 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       companiesCount: 0,
       status: data.status || "upcoming",
       progressPercent: 0,
+      totalWeeks: data.totalWeeks || 6,
       currentPhase: data.currentPhase || "Chuẩn bị danh sách",
       description: data.description || `Đợt thực tập ${data.term} ${data.academicYear}`,
     };
@@ -271,6 +383,10 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setSelectedSemesterId(id);
       onShowToast?.(`Đã bắt đầu kỳ thực tập: "${mapped.name}".`);
     } catch (err) {
+      if (err instanceof ApiClientError && err.status === 409) {
+        onShowToast?.("Không thể bắt đầu kỳ này vì đã có một kỳ thực tập đang hoạt động. Hãy đóng kỳ hiện tại trước.");
+        return;
+      }
       const message = err instanceof Error ? err.message : "Không thể bắt đầu kỳ thực tập.";
       onShowToast?.(message);
     }
@@ -298,7 +414,11 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         selectedSemesterId,
         selectedSemester,
         activeSemesterId,
+        departments,
+        selectedDepartmentId,
+        selectedDepartment,
         selectSemester,
+        selectDepartment,
         createSemester,
         startSemester,
         closeSemester,

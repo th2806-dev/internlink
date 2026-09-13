@@ -180,4 +180,14 @@ public class AdminAssignmentsController : ControllerBase
             return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Lỗi khi xử lý file import", Detail = ex.Message }));
         }
     }
+
+    [HttpPost("suggest-companies")]
+    public async Task<IActionResult> SuggestCompanies([FromBody] CompanySuggestionRequest request, [FromServices] ICompanyService companyService)
+    {
+        if (request.SemesterId == Guid.Empty)
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "SemesterId is required" }));
+
+        var suggestions = await companyService.SuggestCompaniesAsync(request);
+        return Ok(ApiResponse<IEnumerable<CompanySuggestionDto>>.Ok(suggestions));
+    }
 }

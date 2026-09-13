@@ -20,10 +20,15 @@ public class SemesterService : ISemesterService
         _context = context;
     }
 
-    public async Task<IEnumerable<SemesterDto>> GetAllSemestersAsync()
+    public async Task<IEnumerable<SemesterDto>> GetAllSemestersAsync(Guid? departmentId = null)
     {
-        var semesters = await _context.Semesters
-            .Where(s => !s.IsDeleted)
+        var query = _context.Semesters.Where(s => !s.IsDeleted);
+
+        // DepartmentAdmin: only see their department's semesters
+        if (departmentId.HasValue)
+            query = query.Where(s => s.DepartmentId == departmentId.Value);
+
+        var semesters = await query
             .Include(s => s.Internships)
             .Include(s => s.SemesterLecturers)
             .OrderByDescending(s => s.Status == SemesterStatus.Active)
@@ -87,11 +92,15 @@ public class SemesterService : ISemesterService
             Status = dto.Status,
             Description = dto.Description,
             MaxStudentsPerLecturer = dto.MaxStudentsPerLecturer,
+            TotalWeeks = Math.Clamp(dto.TotalWeeks, 1, 52),
+            DepartmentId = dto.DepartmentId,
             CreatedAt = DateTime.UtcNow
         };
 
         _context.Semesters.Add(semester);
         await _context.SaveChangesAsync();
+
+        await GenerateDefaultSchedulesAsync(semester.Id);
 
         return MapToDto(semester);
     }
@@ -115,6 +124,7 @@ public class SemesterService : ISemesterService
         if (dto.Status.HasValue) semester.Status = dto.Status.Value;
         if (dto.Description != null) semester.Description = dto.Description;
         if (dto.MaxStudentsPerLecturer.HasValue) semester.MaxStudentsPerLecturer = dto.MaxStudentsPerLecturer.Value;
+        if (dto.TotalWeeks.HasValue) semester.TotalWeeks = Math.Clamp(dto.TotalWeeks.Value, 1, 52);
 
         semester.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
@@ -139,7 +149,14 @@ public class SemesterService : ISemesterService
         var anotherActiveSemesterExists = await _context.Semesters
             .AnyAsync(s => s.Id != id && !s.IsDeleted && s.Status == SemesterStatus.Active);
         if (anotherActiveSemesterExists)
-            throw new InvalidOperationException("Another semester is already active. Close it before starting this semester.");
+        {
+            var activeSemesterName = await _context.Semesters
+                .Where(s => s.Id != id && !s.IsDeleted && s.Status == SemesterStatus.Active)
+                .Select(s => s.Name)
+                .FirstOrDefaultAsync();
+            throw new InvalidOperationException(
+                $"Không thể bắt đầu kỳ này vì kỳ \"{activeSemesterName ?? "khác"}\" đang hoạt động. Hãy đóng kỳ hiện tại trước.");
+        }
 
         semester.Status = SemesterStatus.Active;
 
@@ -243,6 +260,142 @@ public class SemesterService : ISemesterService
         return true;
     }
 
+    public async Task<IEnumerable<SemesterReportScheduleDto>> GetReportSchedulesAsync(Guid semesterId)
+    {
+        var schedules = await _context.SemesterReportSchedules
+            .Where(s => s.SemesterId == semesterId && !s.IsDeleted)
+            .OrderBy(s => s.WeekNumber)
+            .ToListAsync();
+
+        if (schedules.Count == 0)
+        {
+            var semester = await _context.Semesters.FirstOrDefaultAsync(s => s.Id == semesterId && !s.IsDeleted);
+            if (semester != null)
+            {
+                return await GenerateDefaultSchedulesAsync(semesterId);
+            }
+        }
+
+        return schedules.Select(s => new SemesterReportScheduleDto
+        {
+            Id = s.Id,
+            SemesterId = s.SemesterId,
+            WeekNumber = s.WeekNumber,
+            Title = s.Title,
+            DueDate = s.DueDate,
+            AllowLateSubmission = s.AllowLateSubmission,
+            Description = s.Description
+        });
+    }
+
+    public async Task<IEnumerable<SemesterReportScheduleDto>> GenerateDefaultSchedulesAsync(Guid semesterId)
+    {
+        var semester = await _context.Semesters
+            .Include(s => s.ReportSchedules)
+            .FirstOrDefaultAsync(s => s.Id == semesterId && !s.IsDeleted);
+
+        if (semester == null)
+            throw new KeyNotFoundException($"Semester with ID {semesterId} not found");
+
+        var existingSchedules = await _context.SemesterReportSchedules
+            .Where(s => s.SemesterId == semesterId && !s.IsDeleted)
+            .ToListAsync();
+
+        var existingWeeks = existingSchedules.Select(s => s.WeekNumber).ToHashSet();
+        var totalWeeks = semester.TotalWeeks > 0 ? semester.TotalWeeks : 6;
+        var startDate = semester.StartDate ?? DateTime.UtcNow;
+
+        var newSchedules = new List<SemesterReportSchedule>();
+        for (int week = 1; week <= totalWeeks; week++)
+        {
+            if (!existingWeeks.Contains(week))
+            {
+                var schedule = new SemesterReportSchedule
+                {
+                    Id = Guid.NewGuid(),
+                    SemesterId = semesterId,
+                    WeekNumber = week,
+                    Title = $"Báo cáo tuần {week}",
+                    DueDate = startDate.AddDays(week * 7).Date.AddHours(23).AddMinutes(59).AddSeconds(59),
+                    AllowLateSubmission = true,
+                    Description = $"Hạn nộp báo cáo kết quả thực tập tuần thứ {week}.",
+                    CreatedAt = DateTime.UtcNow
+                };
+                newSchedules.Add(schedule);
+                _context.SemesterReportSchedules.Add(schedule);
+            }
+        }
+
+        if (newSchedules.Count > 0)
+        {
+            await _context.SaveChangesAsync();
+        }
+
+        var allSchedules = await _context.SemesterReportSchedules
+            .Where(s => s.SemesterId == semesterId && !s.IsDeleted)
+            .OrderBy(s => s.WeekNumber)
+            .ToListAsync();
+
+        return allSchedules.Select(s => new SemesterReportScheduleDto
+        {
+            Id = s.Id,
+            SemesterId = s.SemesterId,
+            WeekNumber = s.WeekNumber,
+            Title = s.Title,
+            DueDate = s.DueDate,
+            AllowLateSubmission = s.AllowLateSubmission,
+            Description = s.Description
+        });
+    }
+
+    public async Task<SemesterReportScheduleDto> UpdateReportScheduleAsync(Guid semesterId, int weekNumber, UpdateReportScheduleRequest request)
+    {
+        var schedule = await _context.SemesterReportSchedules
+            .FirstOrDefaultAsync(s => s.SemesterId == semesterId && s.WeekNumber == weekNumber && !s.IsDeleted);
+
+        if (schedule == null)
+        {
+            var semester = await _context.Semesters.FirstOrDefaultAsync(s => s.Id == semesterId && !s.IsDeleted);
+            if (semester == null)
+                throw new KeyNotFoundException($"Semester with ID {semesterId} not found");
+
+            var startDate = semester.StartDate ?? DateTime.UtcNow;
+            schedule = new SemesterReportSchedule
+            {
+                Id = Guid.NewGuid(),
+                SemesterId = semesterId,
+                WeekNumber = weekNumber,
+                Title = request.Title ?? $"Báo cáo tuần {weekNumber}",
+                DueDate = request.DueDate ?? startDate.AddDays(weekNumber * 7).Date.AddHours(23).AddMinutes(59).AddSeconds(59),
+                AllowLateSubmission = request.AllowLateSubmission ?? true,
+                Description = request.Description,
+                CreatedAt = DateTime.UtcNow
+            };
+            _context.SemesterReportSchedules.Add(schedule);
+        }
+        else
+        {
+            if (request.Title != null) schedule.Title = request.Title;
+            if (request.DueDate.HasValue) schedule.DueDate = request.DueDate.Value;
+            if (request.AllowLateSubmission.HasValue) schedule.AllowLateSubmission = request.AllowLateSubmission.Value;
+            if (request.Description != null) schedule.Description = request.Description;
+            schedule.UpdatedAt = DateTime.UtcNow;
+        }
+
+        await _context.SaveChangesAsync();
+
+        return new SemesterReportScheduleDto
+        {
+            Id = schedule.Id,
+            SemesterId = schedule.SemesterId,
+            WeekNumber = schedule.WeekNumber,
+            Title = schedule.Title,
+            DueDate = schedule.DueDate,
+            AllowLateSubmission = schedule.AllowLateSubmission,
+            Description = schedule.Description
+        };
+    }
+
     private static SemesterDto MapToDto(Semester semester)
     {
         var validInternships = semester.Internships.Where(i => !i.IsDeleted).ToList();
@@ -262,13 +415,7 @@ public class SemesterService : ISemesterService
         var companiesCount = validInternships.Select(i => i.CompanyId).Distinct().Count();
         var placedStudents = validInternships.Count(i => i.Status == InternshipStatus.InProgress || i.Status == InternshipStatus.Completed);
 
-        var progressPercent = semester.Status switch
-        {
-            SemesterStatus.Completed => 100,
-            SemesterStatus.Active => 66,
-            SemesterStatus.Upcoming => 10,
-            _ => 0
-        };
+        var progressPercent = CalculateProgressPercent(semester);
 
         var currentPhase = semester.Status switch
         {
@@ -289,6 +436,8 @@ public class SemesterService : ISemesterService
             Status = semester.Status,
             Description = semester.Description,
             MaxStudentsPerLecturer = semester.MaxStudentsPerLecturer,
+            TotalWeeks = semester.TotalWeeks,
+            DepartmentId = semester.DepartmentId,
             StudentsCount = studentsCount,
             LecturersCount = lecturersCount,
             PlacedStudents = placedStudents,
@@ -297,5 +446,15 @@ public class SemesterService : ISemesterService
             CurrentPhase = currentPhase,
             CreatedAt = semester.CreatedAt
         };
+    }
+
+    private static int CalculateProgressPercent(Semester semester)
+    {
+        if (semester.Status == SemesterStatus.Completed) return 100;
+        if (semester.Status != SemesterStatus.Active || !semester.StartDate.HasValue || !semester.EndDate.HasValue) return 0;
+        var totalDays = (semester.EndDate.Value - semester.StartDate.Value).TotalDays;
+        if (totalDays <= 0) return 0;
+        var elapsedDays = (DateTime.UtcNow - semester.StartDate.Value).TotalDays;
+        return Math.Clamp((int)Math.Round(elapsedDays / totalDays * 100), 0, 100);
     }
 }

@@ -14,6 +14,8 @@ public class UserDto
     public DateTime? UpdatedAt { get; set; }
     public string? LinkedStudentCode { get; set; }
     public string? LinkedStaffCode { get; set; }
+    /// <summary>Department this user belongs to (null = SuperAdmin/global).</summary>
+    public Guid? DepartmentId { get; set; }
 }
 
 public class UserFilterRequest : PaginationRequest
@@ -29,6 +31,8 @@ public class CreateUserRequest
     public string FullName { get; set; } = null!;
     public string? Email { get; set; }
     public string Role { get; set; } = null!;
+    /// <summary>Optional department to scope the user to when creating a DepartmentAdmin.</summary>
+    public Guid? DepartmentId { get; set; }
     /// <summary>Link to existing student profile by MSSV.</summary>
     public string? StudentCode { get; set; }
     /// <summary>Link to existing lecturer profile by staff code.</summary>

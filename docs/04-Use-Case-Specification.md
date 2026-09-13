@@ -20,7 +20,7 @@
 | UC-ADM-06 | Phân công Hướng dẫn | Bulk/Auto assign, Company allocation |
 | UC-ADM-07 | Quản lý Yêu cầu TK | Duyệt/Từ chối/Cấp phát tài khoản |
 | UC-ADM-08 | Tạo Rubric | Tạo/Sửa rubric đánh giá |
-| UC-ADM-09 | Phê duyệt Rubric | Approve/Reject rubric |
+| UC-ADM-09 | Quản lý Rubric | Tạo/Sửa rubric theo admin save/apply, hệ thống giữ Approved ngay |
 | UC-ADM-10 | Phát Thông báo | Broadcast toàn hệ thống |
 | UC-ADM-11 | Cấu hình Hệ thống | Settings CRUD + Reset |
 | UC-ADM-12 | Dashboard Tổng quan | Thống kê KPI, Charts |
@@ -75,15 +75,14 @@
   4. Hệ thống tự động cấp phát tài khoản + gửi email thông báo
 - **Hậu điều kiện**: Tài khoản được kích hoạt, email gửi thành công
 
-### UC-ADM-09: Phê duyệt Rubric
+### UC-ADM-09: Quản lý Rubric (Admin Save/Apply)
 
-- **Tác nhân**: SuperAdmin (trưởng khoa)
+- **Tác nhân**: SuperAdmin / DepartmentAdmin (admin_khoa)
 - **Luồng chính**:
-  1. Admin tạo rubric với các tiêu chí (tên, trọng số, max điểm)
-  2. Admin gửi phê duyệt (status: Draft → PendingApproval)
-  3. Trưởng khoa xem chi tiết rubric → Approve hoặc Reject
-  4. Nếu Approve: Rubric được khóa, GVHD bắt đầu sử dụng
-  5. Nếu Reject: Nhập lý do → Admin chỉnh sửa lại
+  1. Admin tạo hoặc cập nhật rubric với các tiêu chí (tên, trọng số, max điểm)
+  2. Hệ thống lưu trực tiếp và đặt trạng thái `Approved`
+  3. GVHD bắt đầu sử dụng rubric ngay sau khi save
+  4. Nếu cần chỉnh sửa, admin cập nhật lại rubric và hệ thống vẫn giữ `Approved`
 
 ### UC-LEC-04: Bulk Notify Sinh viên
 

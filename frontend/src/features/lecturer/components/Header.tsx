@@ -128,7 +128,7 @@ export const Header = ({
                         ? "Phạm Hùng Cường (Thầy Cường)"
                         : currentLecturer === "Cô Minh An"
                           ? "Đặng Minh An (Cô Minh An)"
-                          : "Quản trị viên Super Admin"}
+                          : "Super Admin"}
                 </p>
                 <p className="text-[11px] text-slate-500 font-medium">
                   Giảng viên hướng dẫn ({assignedStudentsCount} SV)

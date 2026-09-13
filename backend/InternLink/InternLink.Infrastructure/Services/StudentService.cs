@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using AutoMapper;
 using ClosedXML.Excel;
+using InternLink.Application.Common;
 using InternLink.Application.DTOs;
 using InternLink.Application.Interfaces;
 using InternLink.Domain.Entities;
@@ -41,6 +42,10 @@ public class StudentService : IStudentService
         [nameof(StudentColumn.Email)] = new("email", "e-mail", "thu dien tu", "thư điện tử", "email address", "email sinh vien"),
         [nameof(StudentColumn.Phone)] = new("phone", "sdt", "sđt", "dien thoai", "điện thoại", "so dien thoai", "số điện thoại", "phone number", "sdt lien he", "so dt"),
         [nameof(StudentColumn.Username)] = new("username", "tendangnhap", "ten dang nhap", "tai khoan", "tài khoản", "user name", "login"),
+        [nameof(StudentColumn.Department)] = new("khoa", "department", "khoa quan ly", "khoa hoc"),
+        [nameof(StudentColumn.DesiredPosition)] = new("nguyen vong", "vi tri mong muon", "desired position", "vi tri nguyen vong", "desiredposition", "vi tri"),
+        [nameof(StudentColumn.Skills)] = new("ky nang", "skills", "ky nang chuyen mon", "chuyen mon", "skill"),
+        [nameof(StudentColumn.ResumeUrl)] = new("cv", "link cv", "resume", "cv url", "resume url", "portfolio"),
     };
 
     public StudentService(
@@ -59,11 +64,12 @@ public class StudentService : IStudentService
         _logger = logger;
     }
 
-    public async Task<IEnumerable<StudentDto>> GetAllStudentsAsync(int skip = 0, int take = 100, Guid? lecturerId = null, Guid? semesterId = null)
+    public async Task<IEnumerable<StudentDto>> GetAllStudentsAsync(int skip = 0, int take = 100, Guid? lecturerId = null, Guid? semesterId = null, Guid? departmentId = null)
     {
         var query = _db.Students.Where(s => !s.IsDeleted);
         query = ApplySemesterScope(query, semesterId);
         query = ApplyLecturerScope(query, lecturerId);
+        query = ApplyDepartmentScope(query, departmentId);
 
         var students = await query
             .OrderBy(s => s.FullName)
@@ -74,10 +80,11 @@ public class StudentService : IStudentService
         return _mapper.Map<List<StudentDto>>(students);
     }
 
-    public async Task<PaginatedResponse<StudentDto>> GetStudentsWithFilterAsync(StudentFilterRequest filter, Guid? lecturerId = null)
+    public async Task<PaginatedResponse<StudentDto>> GetStudentsWithFilterAsync(StudentFilterRequest filter, Guid? lecturerId = null, Guid? departmentId = null)
     {
         var query = _db.Students.Where(s => !s.IsDeleted);
         query = ApplyLecturerScope(query, lecturerId);
+        query = ApplyDepartmentScope(query, departmentId);
 
         if (!string.IsNullOrWhiteSpace(filter.Class))
             query = query.Where(s => s.Class == filter.Class);
@@ -150,6 +157,14 @@ public class StudentService : IStudentService
             s.Internships.Any(i => !i.IsDeleted && i.SemesterId == semesterId.Value));
     }
 
+    private static IQueryable<Student> ApplyDepartmentScope(IQueryable<Student> query, Guid? departmentId)
+    {
+        if (!departmentId.HasValue)
+            return query;
+
+        return query.Where(s => s.DepartmentId == departmentId.Value);
+    }
+
     public async Task<StudentDto?> GetStudentByUserIdAsync(Guid userId)
     {
         var student = await _db.Students
@@ -166,59 +181,63 @@ public class StudentService : IStudentService
         if (student == null)
             return null;
 
-        var activeSemesterId = await _db.Semesters
+        var user = await _db.Users
+            .FirstOrDefaultAsync(u => u.Id == userId && !u.IsDeleted);
+
+        var activeSemester = await _db.Semesters
             .Where(s => !s.IsDeleted && s.Status == SemesterStatus.Active)
             .OrderByDescending(s => s.CreatedAt)
-            .Select(s => (Guid?)s.Id)
             .FirstOrDefaultAsync();
 
         var internshipQuery = _db.Internships
             .Include(i => i.Company)
             .Include(i => i.Lecturer)
             .Include(i => i.Student)
+            .Include(i => i.Semester)
             .Where(i => !i.IsDeleted && i.StudentId == student.Id);
 
-        if (activeSemesterId.HasValue)
-            internshipQuery = internshipQuery.Where(i => i.SemesterId == activeSemesterId.Value);
+        if (activeSemester != null)
+            internshipQuery = internshipQuery.Where(i => i.SemesterId == activeSemester.Id);
 
         var internship = await internshipQuery
             .OrderByDescending(i => i.CreatedAt)
             .ThenByDescending(i => i.Id)
             .FirstOrDefaultAsync();
 
-        var progressPercent = 0;
+        List<WeeklyReport> weeklyReports = new();
+        Evaluation? evaluation = null;
         if (internship != null)
         {
-            var weeklyReportCount = await _db.WeeklyReports
-                .CountAsync(r => !r.IsDeleted && r.InternshipId == internship.Id);
-            var submissionCount = await _db.Submissions
-                .CountAsync(s => !s.IsDeleted && s.InternshipId == internship.Id);
-            var effectiveStatus = internship.Status == InternshipStatus.NotStarted && internship.CompanyId.HasValue
-                ? InternshipStatus.InProgress
-                : internship.Status;
+            weeklyReports = await _db.WeeklyReports
+                .Where(r => !r.IsDeleted && r.InternshipId == internship.Id)
+                .ToListAsync();
 
-            progressPercent = effectiveStatus switch
-            {
-                InternshipStatus.Completed or InternshipStatus.Graded => 100,
-                InternshipStatus.InProgress or InternshipStatus.BehindSchedule
-                    or InternshipStatus.AwaitingFeedback or InternshipStatus.RequiresRevision
-                    => Math.Min(95, Math.Max(10, weeklyReportCount * 8 + submissionCount * 2)),
-                _ when weeklyReportCount > 0 || submissionCount > 0
-                    => Math.Min(95, Math.Max(10, weeklyReportCount * 8 + submissionCount * 2)),
-                _ => 0,
-            };
+            evaluation = await _db.Evaluations
+                .Where(e => !e.IsDeleted && e.InternshipId == internship.Id)
+                .OrderByDescending(e => e.CreatedAt)
+                .FirstOrDefaultAsync();
         }
+
+        var totalWeeks = internship?.Semester?.TotalWeeks ?? activeSemester?.TotalWeeks;
+        var breakdown = InternshipProgressCalculator.Calculate(
+            user,
+            student,
+            internship,
+            weeklyReports,
+            evaluation,
+            totalWeeks);
 
         return new StudentPortalProfileDto
         {
             Student = _mapper.Map<StudentDto>(student),
             Internship = internship == null ? null : _mapper.Map<InternshipDto>(internship),
             LecturerName = internship?.Lecturer?.FullName,
-            ProgressPercent = progressPercent,
+            ProgressPercent = breakdown.TotalPercent,
+            ProgressBreakdown = breakdown,
         };
     }
 
-    public async Task<StudentDto> CreateStudentAsync(CreateStudentRequest request)
+    public async Task<StudentDto> CreateStudentAsync(CreateStudentRequest request, Guid? departmentId = null)
     {
         var normalizedStudentCode = NormalizeStudentCode(request.StudentCode);
         var existingStudent = await _db.Students
@@ -257,6 +276,15 @@ public class StudentService : IStudentService
             Major = NullIfWhiteSpace(request.Major),
             Email = NullIfWhiteSpace(request.Email),
             Phone = NullIfWhiteSpace(request.Phone),
+            Department = NullIfWhiteSpace(request.Department),
+            DesiredPosition = NullIfWhiteSpace(request.DesiredPosition),
+            AlternativePosition = NullIfWhiteSpace(request.AlternativePosition),
+            DesiredLocation = NullIfWhiteSpace(request.DesiredLocation),
+            WorkPreference = NullIfWhiteSpace(request.WorkPreference),
+            PreferredIndustry = NullIfWhiteSpace(request.PreferredIndustry),
+            Skills = NullIfWhiteSpace(request.Skills),
+            ResumeUrl = NullIfWhiteSpace(request.ResumeUrl),
+            DepartmentId = departmentId, // Scoped to the creating admin's department (null for SuperAdmin)
             CreatedAt = DateTime.UtcNow
         };
 
@@ -319,6 +347,14 @@ public class StudentService : IStudentService
         student.Major = NullIfWhiteSpace(request.Major);
         student.Email = NullIfWhiteSpace(request.Email);
         student.Phone = NullIfWhiteSpace(request.Phone);
+        student.Department = NullIfWhiteSpace(request.Department);
+        student.DesiredPosition = NullIfWhiteSpace(request.DesiredPosition);
+        student.AlternativePosition = NullIfWhiteSpace(request.AlternativePosition);
+        student.DesiredLocation = NullIfWhiteSpace(request.DesiredLocation);
+        student.WorkPreference = NullIfWhiteSpace(request.WorkPreference);
+        student.PreferredIndustry = NullIfWhiteSpace(request.PreferredIndustry);
+        student.Skills = NullIfWhiteSpace(request.Skills);
+        student.ResumeUrl = NullIfWhiteSpace(request.ResumeUrl);
         student.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
@@ -346,7 +382,7 @@ public class StudentService : IStudentService
             var hasSubmissions = await _db.Submissions.AnyAsync(s => internshipIds.Contains(s.InternshipId) && !s.IsDeleted);
             var hasReports = await _db.WeeklyReports.AnyAsync(w => internshipIds.Contains(w.InternshipId) && !w.IsDeleted);
             var hasEvaluations = await _db.Evaluations.AnyAsync(e => internshipIds.Contains(e.InternshipId) && !e.IsDeleted);
-            var hasDocuments = await _db.Documents.AnyAsync(d => internshipIds.Contains(d.InternshipId) && !d.IsDeleted);
+            var hasDocuments = await _db.Documents.AnyAsync(d => d.InternshipId.HasValue && internshipIds.Contains(d.InternshipId.Value) && !d.IsDeleted);
 
             if (hasStarted || hasSubmissions || hasReports || hasEvaluations || hasDocuments)
             {
@@ -378,7 +414,7 @@ public class StudentService : IStudentService
         return await query.AnyAsync();
     }
 
-    public async Task<StudentImportResultDto> ImportStudentsFromExcelAsync(Stream excelStream, Guid? semesterId = null)
+    public async Task<StudentImportResultDto> ImportStudentsFromExcelAsync(Stream excelStream, Guid? semesterId = null, Guid? departmentId = null)
     {
         if (excelStream == null || !excelStream.CanRead)
             throw new ArgumentException("Excel file stream is required");
@@ -415,6 +451,13 @@ public class StudentService : IStudentService
         var emailSentCount = 0;
         var emailFailedCount = 0;
 
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+
+        var existingStudents = await _db.Students
+            .Include(s => s.User)
+            .Where(s => !s.IsDeleted)
+            .ToDictionaryAsync(s => s.StudentCode, StringComparer.OrdinalIgnoreCase);
+
         foreach (var row in usedRange.RowsUsed())
         {
             if (row.RowNumber() <= headerRow.RowNumber())
@@ -435,10 +478,14 @@ public class StudentService : IStudentService
             var email = GetCell(row, columnMap, StudentColumn.Email);
             var phone = GetCell(row, columnMap, StudentColumn.Phone);
             var username = GetCell(row, columnMap, StudentColumn.Username);
+            var department = GetCell(row, columnMap, StudentColumn.Department);
+            var desiredPosition = GetCell(row, columnMap, StudentColumn.DesiredPosition);
+            var skills = GetCell(row, columnMap, StudentColumn.Skills);
+            var resumeUrl = GetCell(row, columnMap, StudentColumn.ResumeUrl);
 
             (email, phone) = TemplateHelper.SanitizeEmailAndPhone(email, phone);
 
-            if (IsBlankRow(studentCode, fullName, className, major, email, phone, username))
+            if (IsBlankRow(studentCode, fullName, className, major, email, phone, username, department, desiredPosition, skills, resumeUrl))
                 continue;
 
             totalRows++;
@@ -482,9 +529,7 @@ public class StudentService : IStudentService
                 continue;
             }
 
-            var existingStudent = await _db.Students
-                .Include(s => s.User)
-                .FirstOrDefaultAsync(s => s.StudentCode == studentCode && !s.IsDeleted);
+            existingStudents.TryGetValue(studentCode, out var existingStudent);
 
             if (existingStudent != null)
             {
@@ -497,6 +542,14 @@ public class StudentService : IStudentService
                     existingStudent.Email = email.Trim();
                 if (!string.IsNullOrWhiteSpace(phone))
                     existingStudent.Phone = phone.Trim();
+                if (!string.IsNullOrWhiteSpace(department))
+                    existingStudent.Department = department.Trim();
+                if (!string.IsNullOrWhiteSpace(desiredPosition))
+                    existingStudent.DesiredPosition = desiredPosition.Trim();
+                if (!string.IsNullOrWhiteSpace(skills))
+                    existingStudent.Skills = skills.Trim();
+                if (!string.IsNullOrWhiteSpace(resumeUrl))
+                    existingStudent.ResumeUrl = resumeUrl.Trim();
                 existingStudent.UpdatedAt = DateTime.UtcNow;
 
                 if (existingStudent.User != null)
@@ -586,11 +639,17 @@ public class StudentService : IStudentService
                 Major = NullIfWhiteSpace(major),
                 Email = NullIfWhiteSpace(email),
                 Phone = NullIfWhiteSpace(phone),
+                Department = NullIfWhiteSpace(department),
+                DepartmentId = departmentId, // Scoped to importing admin's department
+                DesiredPosition = NullIfWhiteSpace(desiredPosition),
+                Skills = NullIfWhiteSpace(skills),
+                ResumeUrl = NullIfWhiteSpace(resumeUrl),
                 CreatedAt = DateTime.UtcNow
             };
 
             created.Add(newStudent);
             allEnrolledStudents.Add(newStudent);
+            existingStudents[studentCode] = newStudent;
         }
 
         if (created.Count > 0)
@@ -606,16 +665,17 @@ public class StudentService : IStudentService
             var semesterExists = await _db.Semesters.AnyAsync(s => s.Id == semesterId && !s.IsDeleted);
             if (semesterExists)
             {
+                var enrolledStudentIds = allEnrolledStudents.Select(s => s.Id).ToList();
+                var existingInternshipStudentIds = (await _db.Internships
+                    .Where(i => i.SemesterId == semesterId.Value && enrolledStudentIds.Contains(i.StudentId) && !i.IsDeleted)
+                    .Select(i => i.StudentId)
+                    .ToListAsync())
+                    .ToHashSet();
+
                 var internships = new List<Internship>();
                 foreach (var student in allEnrolledStudents)
                 {
-                    // Check if internship already exists for this student-semester combo
-                    var existingInternship = await _db.Internships.AnyAsync(i =>
-                        i.StudentId == student.Id &&
-                        i.SemesterId == semesterId &&
-                        !i.IsDeleted);
-
-                    if (!existingInternship)
+                    if (!existingInternshipStudentIds.Contains(student.Id))
                     {
                         internships.Add(new Internship
                         {
@@ -627,6 +687,7 @@ public class StudentService : IStudentService
                             Notes = "Nhập từ file Excel",
                             CreatedAt = DateTime.UtcNow
                         });
+                        existingInternshipStudentIds.Add(student.Id);
                     }
                 }
 
@@ -657,6 +718,10 @@ public class StudentService : IStudentService
             }
         }
 
+        sw.Stop();
+        _logger.LogInformation("Imported {TotalRows} student rows (Created: {CreatedCount}, Enrolled: {EnrolledCount}, Errors: {ErrorCount}) in {ElapsedMs}ms",
+            totalRows, created.Count, allEnrolledStudents.Count, errors.Count, sw.ElapsedMilliseconds);
+
         return new StudentImportResultDto
         {
             TotalRows = totalRows,
@@ -686,6 +751,10 @@ public class StudentService : IStudentService
             sheet.Cell(1, 5).Value = "Email";
             sheet.Cell(1, 6).Value = "SDT";
             sheet.Cell(1, 7).Value = "Username";
+            sheet.Cell(1, 8).Value = "Khoa";
+            sheet.Cell(1, 9).Value = "NguyenVong";
+            sheet.Cell(1, 10).Value = "KyNang";
+            sheet.Cell(1, 11).Value = "CV";
 
             sheet.Cell(2, 1).Value = "2421160052";
             sheet.Cell(2, 2).Value = "Nguyen Van A";
@@ -694,6 +763,10 @@ public class StudentService : IStudentService
             sheet.Cell(2, 5).Value = "vana@student.edu.vn";
             sheet.Cell(2, 6).Value = "0901234567";
             sheet.Cell(2, 7).Value = "2421160052";
+            sheet.Cell(2, 8).Value = "Cong nghe thong tin";
+            sheet.Cell(2, 9).Value = "Backend Developer";
+            sheet.Cell(2, 10).Value = "C#, .NET, SQL Server";
+            sheet.Cell(2, 11).Value = "https://drive.google.com/cv.pdf";
 
             sheet.Cell(4, 1).Value = "Ghi chu:";
             sheet.Cell(4, 2).Value =
@@ -710,7 +783,7 @@ public class StudentService : IStudentService
         });
     }
 
-    public async Task<byte[]> ExportStudentsExcelAsync(Guid? semesterId = null, Guid? lecturerId = null)
+    public async Task<byte[]> ExportStudentsExcelAsync(Guid? semesterId = null, Guid? lecturerId = null, Guid? departmentId = null)
     {
         var query = _db.Students
             .Include(s => s.Internships)
@@ -727,6 +800,7 @@ public class StudentService : IStudentService
         }
 
         query = ApplyLecturerScope(query, lecturerId);
+        query = ApplyDepartmentScope(query, departmentId);
 
         var students = await query.OrderBy(s => s.StudentCode).ToListAsync();
 
@@ -737,6 +811,9 @@ public class StudentService : IStudentService
             ["Họ và Tên"] = s => s.FullName,
             ["Lớp"] = s => s.Class ?? "-",
             ["Ngành học"] = s => s.Major ?? "-",
+            ["Khoa"] = s => s.Department ?? "-",
+            ["Nguyện vọng vị trí"] = s => s.DesiredPosition ?? "-",
+            ["Kỹ năng"] = s => s.Skills ?? "-",
             ["Email"] = s => s.Email ?? "-",
             ["Số điện thoại"] = s => s.Phone ?? "-",
             ["Công ty thực tập"] = s => s.Internships.FirstOrDefault(i => !i.IsDeleted)?.Company?.CompanyName ?? "Chưa phân bổ",
@@ -882,7 +959,11 @@ public class StudentService : IStudentService
         Major,
         Email,
         Phone,
-        Username
+        Username,
+        Department,
+        DesiredPosition,
+        Skills,
+        ResumeUrl
     }
 
     private enum InvitationSendStatus { Sent, Failed, SkippedNoEmail }

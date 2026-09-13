@@ -13,8 +13,10 @@ import {
   X,
   ShieldCheck,
   Loader2,
+  AlertCircle,
 } from "lucide-react";
 import { useStudentPortal } from "../../../contexts/StudentPortalContext";
+import { useSemester } from "../../../contexts/SemesterContext";
 import { PageHeader } from "../../../components/common/PageHeader";
 import { Panel } from "../../../components/common/Panel";
 import { Toolbar } from "../../../components/common/Toolbar";
@@ -23,6 +25,7 @@ import { SkeletonBox } from "../../../components/common/SkeletonLoader";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { mapWeeklyReportDtoToUi } from "../../../lib/portalMappers";
 import { weeklyReportService } from "../../../services/weeklyReport.service";
+import { semesterReportScheduleService, type SemesterReportScheduleDto } from "../../../services/semesterReportSchedule.service";
 import { INTERNSHIP_WEEKS } from "../../../config/internship";
 
 type WeeklyReportRow = {
@@ -32,6 +35,8 @@ type WeeklyReportRow = {
   title: string;
   content?: string;
   deadline: string;
+  allowLateSubmission?: boolean;
+  scheduleDueDate?: string;
   submittedAt: string | null;
   version: string;
   status: string;
@@ -53,6 +58,8 @@ type WeeklyReportRow = {
 export const WeeklyReportsView = ({ onShowToast }: { onShowToast: (msg: string) => void }) => {
   const navigate = useNavigate();
   const { internshipId, profile } = useStudentPortal();
+  const { selectedSemester } = useSemester();
+  const totalWeeks = selectedSemester.totalWeeks || INTERNSHIP_WEEKS;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("Tất cả");
@@ -69,9 +76,19 @@ export const WeeklyReportsView = ({ onShowToast }: { onShowToast: (msg: string) 
   } | null>(null);
   const [showRequirementModal, setShowRequirementModal] = useState(false);
   const [reports, setReports] = useState<WeeklyReportRow[]>([]);
+  const [schedules, setSchedules] = useState<SemesterReportScheduleDto[]>([]);
   const [isLoadingApi, setIsLoadingApi] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+
+  useEffect(() => {
+    if (selectedSemester?.id) {
+      semesterReportScheduleService
+        .getSchedules(selectedSemester.id)
+        .then((res) => setSchedules(res))
+        .catch(() => {});
+    }
+  }, [selectedSemester?.id]);
 
   const reloadReports = useCallback(async () => {
     const rows = await weeklyReportService.getMine();
@@ -110,15 +127,41 @@ export const WeeklyReportsView = ({ onShowToast }: { onShowToast: (msg: string) 
     status: "Chưa nộp",
     stepIndex: 0,
     versions: [],
+    allowLateSubmission: true,
   });
 
   const allWeekRows = useMemo(
     () =>
-      Array.from({ length: INTERNSHIP_WEEKS }, (_, i) => {
+      Array.from({ length: totalWeeks }, (_, i) => {
         const week = i + 1;
-        return reports.find((r) => r.weekNumber === week) ?? emptyWeek(week);
+        const existing = reports.find((r) => r.weekNumber === week);
+        const schedule = schedules.find((s) => s.weekNumber === week);
+        const deadline = schedule?.dueDate
+          ? new Date(schedule.dueDate).toLocaleString("vi-VN", {
+              day: "2-digit",
+              month: "2-digit",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          : "—";
+
+        if (existing) {
+          return {
+            ...existing,
+            deadline: existing.deadline && existing.deadline !== "—" ? existing.deadline : deadline,
+            allowLateSubmission: schedule ? schedule.allowLateSubmission : true,
+            scheduleDueDate: schedule?.dueDate,
+          };
+        }
+        return {
+          ...emptyWeek(week),
+          deadline,
+          allowLateSubmission: schedule ? schedule.allowLateSubmission : true,
+          scheduleDueDate: schedule?.dueDate,
+        };
       }),
-    [reports],
+    [reports, totalWeeks, schedules],
   );
 
   const currentReport =
@@ -311,7 +354,7 @@ export const WeeklyReportsView = ({ onShowToast }: { onShowToast: (msg: string) 
         icon={FileCheck2}
         title="Báo cáo thực tập tuần"
         subtitle="Xem biểu mẫu, theo dõi tiến độ và nộp báo cáo đúng hạn cho Giảng viên hướng dẫn."
-        badge={`Tiến độ: ${completedCount} / ${INTERNSHIP_WEEKS} tuần hoàn thành`}
+        badge={`Tiến độ: ${completedCount} / ${totalWeeks} tuần hoàn thành`}
         badgeColor="bg-blue-100 text-blue-800 border-blue-200"
         actions={[
           {
@@ -327,7 +370,7 @@ export const WeeklyReportsView = ({ onShowToast }: { onShowToast: (msg: string) 
         left={
           <span className="text-xs font-semibold text-slate-600">
             <span className="text-slate-900 font-bold">{completedCount}</span> /{" "}
-            {INTERNSHIP_WEEKS} tuần đã hoàn thành · Tuần {selectedWeek} đang chọn
+            {totalWeeks} tuần đã hoàn thành · Tuần {selectedWeek} đang chọn
           </span>
         }
         right={
@@ -352,7 +395,7 @@ export const WeeklyReportsView = ({ onShowToast }: { onShowToast: (msg: string) 
               <div>
                 <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
                   <FileCheck2 className="w-5 h-5 text-blue-600" /> Danh sách báo
-                  cáo ({INTERNSHIP_WEEKS} tuần)
+                  cáo ({totalWeeks} tuần)
                 </h2>
               </div>
 
@@ -443,11 +486,22 @@ export const WeeklyReportsView = ({ onShowToast }: { onShowToast: (msg: string) 
                             )}
                           </td>
                           <td className="p-3 text-slate-600 font-medium">
-                            {rep.deadline}
+                            <div>{rep.deadline}</div>
+                            {rep.scheduleDueDate && new Date() > new Date(rep.scheduleDueDate) && (
+                              <span
+                                className={`inline-block mt-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                                  rep.allowLateSubmission
+                                    ? "bg-amber-100 text-amber-800"
+                                    : "bg-rose-100 text-rose-800"
+                                }`}
+                              >
+                                {rep.allowLateSubmission ? "Nộp trễ" : "Hết hạn"}
+                              </span>
+                            )}
                           </td>
                           <td className="p-3">
                             <span
-                              className={`px-2.5 py-0.5 rounded-md text-[10px] font-bold inline-block ${rep.status === "\u0110\xE3 ho\xE0n th\xE0nh" ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : rep.status === "C\u1EA7n ch\u1EC9nh s\u1EEDa" ? "bg-rose-50 text-rose-800 border border-rose-200" : rep.status === "\u0110ang xem x\xE9t" ? "bg-amber-50 text-amber-800 border border-amber-200" : "bg-slate-100 text-slate-500"}`}
+                              className={`px-2.5 py-0.5 rounded-md text-[10px] font-bold inline-block ${rep.status === "Đã hoàn thành" ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : rep.status === "Cần chỉnh sửa" ? "bg-rose-50 text-rose-800 border border-rose-200" : rep.status === "Đang xem xét" ? "bg-amber-50 text-amber-800 border border-amber-200" : "bg-slate-100 text-slate-500"}`}
                             >
                               {rep.status}
                             </span>
@@ -457,7 +511,7 @@ export const WeeklyReportsView = ({ onShowToast }: { onShowToast: (msg: string) 
                               onClick={() => setSelectedWeek(rep.weekNumber)}
                               className={`px-2.5 py-1 font-bold text-[11px] rounded-lg transition-colors ${isSelected ? "bg-blue-600 text-white" : "bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700"}`}
                             >
-                              {isSelected ? "\u0110ang ch\u1ECDn" : "Ch\u1ECDn"}
+                              {isSelected ? "Đang chọn" : "Chọn"}
                             </button>
                           </td>
                         </tr>
@@ -479,9 +533,26 @@ export const WeeklyReportsView = ({ onShowToast }: { onShowToast: (msg: string) 
                 <h2 className="text-base font-bold text-slate-900 mt-1">
                   Tuần {selectedWeek}: {currentReport.title}
                 </h2>
+                {currentReport.deadline !== "—" && (
+                  <p className="text-xs text-slate-500 mt-1 flex items-center gap-1.5 font-medium">
+                    <Clock className="w-3.5 h-3.5 text-slate-400" />
+                    Hạn nộp: <strong className="text-slate-700">{currentReport.deadline}</strong>
+                    {currentReport.scheduleDueDate && new Date() > new Date(currentReport.scheduleDueDate) && (
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold ml-1 ${
+                          currentReport.allowLateSubmission
+                            ? "bg-amber-100 text-amber-800 border border-amber-200"
+                            : "bg-rose-100 text-rose-800 border border-rose-200"
+                        }`}
+                      >
+                        {currentReport.allowLateSubmission ? "Cho phép nộp trễ" : "Đã khóa nộp"}
+                      </span>
+                    )}
+                  </p>
+                )}
               </div>
               <span
-                className={`px-2.5 py-1 rounded-md text-[10px] font-bold ${currentReport.status === "\u0110\xE3 ho\xE0n th\xE0nh" ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : currentReport.status === "C\u1EA7n ch\u1EC9nh s\u1EEDa" ? "bg-rose-50 text-rose-800 border border-rose-200" : "bg-blue-50 text-blue-800 border border-blue-200"}`}
+                className={`px-2.5 py-1 rounded-md text-[10px] font-bold ${currentReport.status === "Đã hoàn thành" ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : currentReport.status === "Cần chỉnh sửa" ? "bg-rose-50 text-rose-800 border border-rose-200" : "bg-blue-50 text-blue-800 border border-blue-200"}`}
               >
                 {currentReport.status}
               </span>
@@ -502,44 +573,58 @@ export const WeeklyReportsView = ({ onShowToast }: { onShowToast: (msg: string) 
               </div>
             )}
 
-            {/* Compact Drag & Drop Upload Zone */}
-            <div className="space-y-3">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf,application/pdf"
-                className="hidden"
-                onChange={handleFileInputChange}
-              />
-              <div
-                onClick={handleFileSelect}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setIsDragging(true);
-                }}
-                onDragLeave={() => setIsDragging(false)}
-                onDrop={handleDrop}
-                className={`border-2 border-dashed ${
-                  isDragging
-                    ? "border-blue-500 bg-blue-50/60 scale-[1.01]"
-                    : "border-slate-200 hover:border-blue-400 bg-slate-50/60 hover:bg-blue-50/30"
-                } p-6 text-center rounded-md cursor-pointer transition-all space-y-2`}
-              >
-                <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-md flex items-center justify-center mx-auto">
-                  <Upload className="w-5 h-5" />
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-slate-800">
-                    Bấm để chọn file PDF hoặc kéo thả file báo cáo vào đây
-                  </p>
-                  <p className="text-[11px] text-slate-400 font-medium">
-                    Định dạng chấp nhận: <strong>PDF (.pdf)</strong> (Dưới 20MB)
+            {/* Compact Drag & Drop Upload Zone or Deadline Locked Warning */}
+            {currentReport.scheduleDueDate &&
+            new Date() > new Date(currentReport.scheduleDueDate) &&
+            currentReport.allowLateSubmission === false &&
+            (currentReport.status === "Chưa nộp" || currentReport.status === "Cần chỉnh sửa") ? (
+              <div className="p-4 bg-rose-50 border border-rose-200 rounded-lg flex items-start gap-3 text-rose-800 text-xs">
+                <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <h4 className="font-bold text-rose-900 text-sm">Hạn nộp báo cáo tuần này đã kết thúc</h4>
+                  <p className="leading-relaxed text-rose-700">
+                    Thời hạn nộp báo cáo tuần {selectedWeek} đã kết thúc vào lúc {currentReport.deadline}. Học kỳ hiện tại không cho phép nộp trễ hạn. Vui lòng liên hệ giảng viên hướng dẫn để được hỗ trợ.
                   </p>
                 </div>
               </div>
+            ) : (
+              <div className="space-y-3">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  className="hidden"
+                  onChange={handleFileInputChange}
+                />
+                <div
+                  onClick={handleFileSelect}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsDragging(true);
+                  }}
+                  onDragLeave={() => setIsDragging(false)}
+                  onDrop={handleDrop}
+                  className={`border-2 border-dashed ${
+                    isDragging
+                      ? "border-blue-500 bg-blue-50/60 scale-[1.01]"
+                      : "border-slate-200 hover:border-blue-400 bg-slate-50/60 hover:bg-blue-50/30"
+                  } p-6 text-center rounded-md cursor-pointer transition-all space-y-2`}
+                >
+                  <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-md flex items-center justify-center mx-auto">
+                    <Upload className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-800">
+                      Bấm để chọn file PDF hoặc kéo thả file báo cáo vào đây
+                    </p>
+                    <p className="text-[11px] text-slate-400 font-medium">
+                      Định dạng chấp nhận: <strong>PDF (.pdf)</strong> (Dưới 20MB)
+                    </p>
+                  </div>
+                </div>
 
-              {/* Selected PDF file info */}
-              {selectedPdfFile && (
+                {/* Selected PDF file info */}
+                {selectedPdfFile && (
                 <div className="p-3.5 bg-slate-50 rounded-md border border-slate-200 flex items-center justify-between text-xs">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-lg bg-rose-100 text-rose-700 font-bold text-[11px] flex items-center justify-center shrink-0">
@@ -578,6 +663,7 @@ export const WeeklyReportsView = ({ onShowToast }: { onShowToast: (msg: string) 
                 </div>
               )}
             </div>
+            )}
           </Panel>
         </div>
 

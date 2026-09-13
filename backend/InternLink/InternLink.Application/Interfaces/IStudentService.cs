@@ -10,12 +10,12 @@ public interface IStudentService
     /// <summary>
     /// Get all students with optional pagination and semester filter
     /// </summary>
-    Task<IEnumerable<StudentDto>> GetAllStudentsAsync(int skip = 0, int take = 100, Guid? lecturerId = null, Guid? semesterId = null);
+    Task<IEnumerable<StudentDto>> GetAllStudentsAsync(int skip = 0, int take = 100, Guid? lecturerId = null, Guid? semesterId = null, Guid? departmentId = null);
 
     /// <summary>
     /// Get students with filtering and pagination
     /// </summary>
-    Task<PaginatedResponse<StudentDto>> GetStudentsWithFilterAsync(StudentFilterRequest filter, Guid? lecturerId = null);
+    Task<PaginatedResponse<StudentDto>> GetStudentsWithFilterAsync(StudentFilterRequest filter, Guid? lecturerId = null, Guid? departmentId = null);
 
     /// <summary>
     /// Get a student by ID
@@ -38,9 +38,9 @@ public interface IStudentService
     Task<StudentPortalProfileDto?> GetPortalProfileByUserIdAsync(Guid userId);
 
     /// <summary>
-    /// Create a new student
+    /// Create a new student. departmentId scopes the record to the creating admin's department.
     /// </summary>
-    Task<StudentDto> CreateStudentAsync(CreateStudentRequest request);
+    Task<StudentDto> CreateStudentAsync(CreateStudentRequest request, Guid? departmentId = null);
 
     /// <summary>
     /// Update an existing student
@@ -60,7 +60,7 @@ public interface IStudentService
     /// <summary>
     /// Import students from an Excel (.xlsx) stream. Row 1 = headers.
     /// </summary>
-    Task<StudentImportResultDto> ImportStudentsFromExcelAsync(Stream excelStream, Guid? semesterId = null);
+    Task<StudentImportResultDto> ImportStudentsFromExcelAsync(Stream excelStream, Guid? semesterId = null, Guid? departmentId = null);
 
     /// <summary>
     /// Build a blank Excel template for student import.
@@ -70,5 +70,5 @@ public interface IStudentService
     /// <summary>
     /// Export students list to styled Excel.
     /// </summary>
-    Task<byte[]> ExportStudentsExcelAsync(Guid? semesterId = null, Guid? lecturerId = null);
+    Task<byte[]> ExportStudentsExcelAsync(Guid? semesterId = null, Guid? lecturerId = null, Guid? departmentId = null);
 }

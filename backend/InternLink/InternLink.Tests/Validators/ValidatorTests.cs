@@ -6,6 +6,27 @@ using Xunit;
 
 namespace InternLink.Tests.Validators;
 
+public class UserValidatorTests
+{
+    private readonly CreateUserRequestValidator _createValidator = new();
+
+    [Fact]
+    public void CreateUserRequestValidator_WithDepartmentAdminRole_ShouldSucceed()
+    {
+        var request = new CreateUserRequest
+        {
+            Username = "admin-cntt",
+            FullName = "Admin Khoa CNTT",
+            Email = "admin.cntt@example.com",
+            Role = "DepartmentAdmin"
+        };
+
+        var result = _createValidator.Validate(request);
+
+        result.IsValid.Should().BeTrue();
+    }
+}
+
 public class StudentValidatorTests
 {
     private readonly CreateStudentRequestValidator _createValidator;

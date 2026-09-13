@@ -35,6 +35,12 @@ public class StudentFilterRequest : PaginationRequest
     /// Search by name or student number (contains match)
     /// </summary>
     public string? SearchTerm { get; set; }
+
+    /// <summary>
+    /// Optional department filter for SuperAdmin narrowing the view to one department.
+    /// DepartmentAdmins are always re-scoped to their own department server-side.
+    /// </summary>
+    public Guid? DepartmentId { get; set; }
 }
 
 /// <summary>

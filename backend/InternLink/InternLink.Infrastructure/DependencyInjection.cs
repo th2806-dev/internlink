@@ -109,6 +109,9 @@ public static class DependencyInjection
         // Weekly report service
         services.AddScoped<InternLink.Application.Interfaces.IWeeklyReportService, InternLink.Infrastructure.Services.WeeklyReportService>();
 
+        // Attendance & Meeting service
+        services.AddScoped<IAttendanceService, InternLink.Infrastructure.Services.AttendanceService>();
+
         // Notification service
         services.AddScoped<InternLink.Application.Interfaces.INotificationService, InternLink.Infrastructure.Services.NotificationService>();
 
@@ -126,6 +129,9 @@ public static class DependencyInjection
         // User management (Admin)
         services.AddScoped<IUserManagementService, InternLink.Infrastructure.Services.UserManagementService>();
 
+        // Department management service
+        services.AddScoped<InternLink.Application.Interfaces.IDepartmentService, InternLink.Infrastructure.Services.DepartmentService>();
+
         // System settings (DB-backed)
         services.AddScoped<Application.Interfaces.ISettingsService, Services.SettingsService>();
 
@@ -134,6 +140,16 @@ public static class DependencyInjection
 
         // Student–lecturer assignment (Admin)
         services.AddScoped<IAssignmentService, InternLink.Infrastructure.Services.AssignmentService>();
+
+        // Department-based multi-tenancy scoping
+        services.AddHttpContextAccessor();
+        services.AddScoped<IDepartmentScopeService, Services.DepartmentScopeService>();
+
+        // AutoMapper profile from Infrastructure layer (Department DTO etc.)
+        services.AddAutoMapper(cfg => { }, typeof(AutoMapper.AutoMapperProfile).Assembly);
+
+        // AutoMapper profile from Infrastructure layer (Department DTO etc.)
+        services.AddAutoMapper(cfg => { }, typeof(AutoMapper.AutoMapperProfile).Assembly);
 
         // Email (invitation / notifications)
         var emailSection = configuration.GetSection(EmailSettings.SectionName);
@@ -144,16 +160,18 @@ public static class DependencyInjection
         else
             services.AddScoped<IEmailService, LoggingEmailService>();
 
-        // Authorization policies for roles
-        // RequireAdmin and RequireSuperAdmin are equivalent (SuperAdmin only).
-        // RequireAdmin is the preferred name for new Admin module endpoints.
+        // Authorization policies for roles.
+        // RequireSuperAdmin = SuperAdmin only. Used for global system setup and creating DepartmentAdmin accounts.
+        // RequireDepartmentAdmin = DepartmentAdmin only. Used for department-scoped operational management.
+        // RequireAdmin = SuperAdmin or DepartmentAdmin. Kept as a compatibility helper for shared department-scoped admin endpoints.
         services.AddAuthorization(options =>
         {
             options.AddPolicy("RequireSuperAdmin", p => p.RequireRole("SuperAdmin"));
-            options.AddPolicy("RequireAdmin", p => p.RequireRole("SuperAdmin"));
+            options.AddPolicy("RequireDepartmentAdmin", p => p.RequireRole("DepartmentAdmin"));
+            options.AddPolicy("RequireAdmin", p => p.RequireRole("SuperAdmin", "DepartmentAdmin"));
             options.AddPolicy("RequireLecturer", p => p.RequireRole("Lecturer"));
             options.AddPolicy("RequireStudent", p => p.RequireRole("Student"));
-            options.AddPolicy("RequireLecturerOrAdmin", p => p.RequireRole("Lecturer", "SuperAdmin"));
+            options.AddPolicy("RequireLecturerOrAdmin", p => p.RequireRole("Lecturer", "SuperAdmin", "DepartmentAdmin"));
         });
 
         return services;

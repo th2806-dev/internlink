@@ -11,6 +11,7 @@ export const CreateSemesterModal = ({ isOpen, onClose, onShowToast, onCreate }: 
     startDate: string;
     endDate: string;
     targetStudents: number;
+    totalWeeks: number;
   }) => void;
 }) => {
   const [semesterName, setSemesterName] = useState(
@@ -21,6 +22,7 @@ export const CreateSemesterModal = ({ isOpen, onClose, onShowToast, onCreate }: 
   const [startDate, setStartDate] = useState("2026-09-01");
   const [endDate, setEndDate] = useState("2026-12-15");
   const [targetStudents, setTargetStudents] = useState("1350");
+  const [totalWeeks, setTotalWeeks] = useState("6");
   if (!isOpen) return null;
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,6 +34,7 @@ export const CreateSemesterModal = ({ isOpen, onClose, onShowToast, onCreate }: 
         startDate,
         endDate,
         targetStudents: parseInt(targetStudents) || 0,
+        totalWeeks: Math.min(52, Math.max(1, parseInt(totalWeeks) || 6)),
       });
     }
     onShowToast(
@@ -148,6 +151,22 @@ export const CreateSemesterModal = ({ isOpen, onClose, onShowToast, onCreate }: 
               onChange={(e) => setTargetStudents(e.target.value)}
               className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-900 outline-none focus:bg-white focus:border-blue-500"
             />
+          </div>
+
+          <div>
+            <label className="block font-bold text-slate-700 mb-1">
+              Số tuần thực tập *
+            </label>
+            <input
+              type="number"
+              min={1}
+              max={52}
+              value={totalWeeks}
+              onChange={(e) => setTotalWeeks(e.target.value)}
+              required
+              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-900 outline-none focus:bg-white focus:border-blue-500"
+            />
+            <p className="text-[11px] text-slate-500 mt-1">Cấu hình theo quy định của từng kỳ.</p>
           </div>
 
           {/* Action Buttons */}

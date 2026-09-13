@@ -16,12 +16,12 @@ public class JwtService : IJwtService
         _settings = settings.Value;
     }
 
-    public string CreateToken(string userId, IEnumerable<string>? roles = null)
+    public string CreateToken(string userId, IEnumerable<string>? roles = null, Guid? departmentId = null)
     {
-        return CreateTokenWithMetadata(userId, roles).Token;
+        return CreateTokenWithMetadata(userId, roles, departmentId).Token;
     }
 
-    public (string Token, string JwtId, DateTime ExpiresAt) CreateTokenWithMetadata(string userId, IEnumerable<string>? roles = null)
+    public (string Token, string JwtId, DateTime ExpiresAt) CreateTokenWithMetadata(string userId, IEnumerable<string>? roles = null, Guid? departmentId = null)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_settings.Secret ?? string.Empty));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -38,6 +38,12 @@ public class JwtService : IJwtService
         if (roles != null)
         {
             claims.AddRange(roles.Select(r => new Claim(ClaimTypes.Role, r)));
+        }
+
+        // Department-based scoping claim
+        if (departmentId.HasValue)
+        {
+            claims.Add(new Claim("DepartmentId", departmentId.Value.ToString()));
         }
 
         var token = new JwtSecurityToken(

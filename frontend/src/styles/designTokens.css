@@ -66,6 +66,9 @@ body {
 body {
   font-family: var(--il-font-sans);
   background-color: var(--il-surface-bg);
+  background-image: linear-gradient(rgba(226, 232, 240, 0.32) 1px, transparent 1px), linear-gradient(90deg, rgba(226, 232, 240, 0.32) 1px, transparent 1px);
+  background-size: 32px 32px;
+  background-position: center top;
   color: var(--il-text-primary);
   min-height: 100vh;
 }
@@ -118,9 +121,14 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: 0.75rem 0;
+  padding: 0.25rem 0 1rem;
   border-bottom: 1px solid var(--il-surface-border);
   margin-bottom: 1rem;
+}
+
+.il-toolbar h1 {
+  font-family: var(--il-font-display);
+  letter-spacing: -0.03em;
 }
 
 /* Buttons */
@@ -407,12 +415,26 @@ textarea {
 }
 
 .il-kpi-cell {
-  padding: 1rem 1.25rem;
+  padding: 1.25rem 1.25rem 1.1rem;
   border-right: 1px solid var(--il-surface-border);
   border-bottom: 1px solid var(--il-surface-border);
   background: var(--il-surface-card);
   transition: background-color var(--il-transition-base);
 }
+
+.il-kpi-cell svg {
+  padding: 0.4rem;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--il-radius-base);
+  background: var(--il-surface-muted);
+}
+
+.il-kpi-cell-accent-blue svg { background: #dbeafe; }
+.il-kpi-cell-accent-emerald svg { background: #d1fae5; }
+.il-kpi-cell-accent-amber svg { background: #fef3c7; }
+.il-kpi-cell-accent-sky svg { background: #e0f2fe; }
+.il-kpi-cell-accent-rose svg { background: #ffe4e6; }
 
 @media (min-width: 640px) {
   .il-kpi-cell {

@@ -318,6 +318,8 @@
 | `SubmissionStatus` | Submitted, Reviewed, RevisionRequested, Approved, Rejected |
 | `WeeklyReportStatus` | Draft, Submitted, Reviewed, RevisionRequested, Approved |
 | `RubricStatus` | Draft, PendingApproval, Approved, Rejected, Locked |
+
+> Ghi chú: Luồng active hiện tại của admin save/apply là tạo/cập nhật rubric rồi giữ ngay ở trạng thái `Approved`; các trạng thái legacy như `PendingApproval`, `Rejected`, `Locked` vẫn có thể tồn tại trong schema để tương thích với dữ liệu cũ hoặc flow trước đó.
 | `RubricApplicationMode` | PerStudent, PerSemester |
 | `AccountRequestStatus` | Pending, Approved, Rejected, NeedInfo |
 | `AccountRequestPriority` | Low, Medium, High, Urgent |

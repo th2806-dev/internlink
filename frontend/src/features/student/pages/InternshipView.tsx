@@ -17,6 +17,7 @@ import {
   MessageSquare,
 } from "lucide-react";
 import { useStudentPortal } from "../../../contexts/StudentPortalContext";
+import { useSemester } from "../../../contexts/SemesterContext";
 import { PageHeader } from "../../../components/common/PageHeader";
 import { Panel } from "../../../components/common/Panel";
 import { CompanyAvatar } from "../../../components/common/CompanyAvatar";
@@ -55,6 +56,8 @@ function weekDeadline(startDate: string | null | undefined, week: number) {
 
 export const InternshipView = ({ onShowToast, onNavigate }) => {
   const { profile, internship, internshipId } = useStudentPortal();
+  const { selectedSemester } = useSemester();
+  const dynamicWeeks = selectedSemester?.totalWeeks || INTERNSHIP_WEEKS;
   const [activeContactModal, setActiveContactModal] = useState(null);
   const [selectedWeekDetail, setSelectedWeekDetail] = useState(null);
   const [apiWeeklyPlans, setApiWeeklyPlans] = useState([]);
@@ -100,7 +103,7 @@ export const InternshipView = ({ onShowToast, onNavigate }) => {
 
   const weeklyPlans = useMemo(() => {
     const byWeek = new Map(apiWeeklyPlans.map((p) => [p.week, p]));
-    return Array.from({ length: INTERNSHIP_WEEKS }, (_, i) => {
+    return Array.from({ length: dynamicWeeks }, (_, i) => {
       const week = i + 1;
       return (
         byWeek.get(week) ?? {
@@ -115,7 +118,7 @@ export const InternshipView = ({ onShowToast, onNavigate }) => {
     });
   }, [apiWeeklyPlans]);
   const progressSummary = useMemo(() => {
-    const total = INTERNSHIP_WEEKS;
+    const total = dynamicWeeks;
     const done = weeklyPlans.filter(
       (w) => w.status === "Đã hoàn thành" || w.progress >= 100,
     ).length;
@@ -151,7 +154,7 @@ export const InternshipView = ({ onShowToast, onNavigate }) => {
     const start = internship?.startDate;
     const end = internship?.endDate;
     const status = internship?.status ?? "NotStarted";
-    const midWeek = Math.ceil(INTERNSHIP_WEEKS / 2);
+    const midWeek = Math.ceil(dynamicWeeks / 2);
     const week = progressSummary.current;
 
     const steps = [
@@ -190,7 +193,7 @@ export const InternshipView = ({ onShowToast, onNavigate }) => {
         return "upcoming";
       }
       if (phase === 4) {
-        if (week >= INTERNSHIP_WEEKS) return "active";
+        if (week >= dynamicWeeks) return "active";
         return "upcoming";
       }
       return "upcoming";
@@ -221,14 +224,14 @@ export const InternshipView = ({ onShowToast, onNavigate }) => {
 
     items.push({
       title: "Đánh giá giữa kỳ",
-      date: weekDeadline(start, Math.ceil(INTERNSHIP_WEEKS / 2)),
+      date: weekDeadline(start, Math.ceil(dynamicWeeks / 2)),
       nearest: false,
       status: "Giảng viên & Doanh nghiệp",
     });
 
     items.push({
       title: "Nộp báo cáo cuối kỳ",
-      date: end ? formatDateVi(end) : weekDeadline(start, INTERNSHIP_WEEKS),
+      date: end ? formatDateVi(end) : weekDeadline(start, dynamicWeeks),
       nearest: false,
       status: "Báo cáo PDF chính thức",
     });
@@ -390,7 +393,7 @@ export const InternshipView = ({ onShowToast, onNavigate }) => {
             </span>
             <p className="font-bold text-slate-800">{internshipRange}</p>
             <p className="text-[10px] text-slate-500 font-medium">
-              {INTERNSHIP_WEEKS} tuần
+              {dynamicWeeks} tuần
             </p>
           </div>
 
@@ -550,7 +553,7 @@ export const InternshipView = ({ onShowToast, onNavigate }) => {
                   tập (Weekly Plan)
                 </h2>
                 <p className="text-xs text-slate-500 font-medium mt-0.5">
-                  Lộ trình công việc {INTERNSHIP_WEEKS} tuần đã phê duyệt bởi Giảng viên & Doanh
+                  Lộ trình công việc {dynamicWeeks} tuần đã phê duyệt bởi Giảng viên & Doanh
                   nghiệp.
                 </p>
               </div>

@@ -206,6 +206,7 @@ public sealed class LecturerStudentListItemDto
     public bool HasEvaluation { get; set; }
     public bool IsEvaluationFinalized { get; set; }
     public int ProgressPercent { get; set; }
+    public ProgressBreakdownDto? ProgressBreakdown { get; set; }
 }
 
 public sealed class LecturerCompanySummaryDto

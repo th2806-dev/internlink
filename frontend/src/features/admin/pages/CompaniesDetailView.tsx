@@ -31,6 +31,7 @@ export const CompaniesDetailView = () => {
       totalSubmissions: internships.reduce((sum, item) => sum + item.submissionCount, 0),
       totalWeeklyReports: 0,
       pendingReviewsCount: 0,
+      positions: payload.positions ?? [],
       internships,
     };
   }, []);
@@ -42,6 +43,7 @@ export const CompaniesDetailView = () => {
       backPath="/admin/companies"
       semesterId={selectedSemesterId}
       studentPath={() => "/admin/students"}
+      isAdmin={true}
     />
   );
 };

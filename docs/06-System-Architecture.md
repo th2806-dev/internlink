@@ -20,7 +20,7 @@ Hệ thống được thiết kế theo mô hình **Client - Server Phân Tầng
 │  - Import/Export Excel │   - Chấm điểm Rubric    │  - Nộp đồ án        │
 │  - Phân công & Notify │   - Xuất PDF / Excel     │  - Tra cứu điểm     │
 │  - Account Requests   │   - Ghi chú SV           │  - Phản hồi bài nộp │
-│  - Rubric Approvals   │   - Bulk Notify SV       │  - Tải PDF chứng nhận│
+│  - Rubric Management  │   - Bulk Notify SV       │  - Tải PDF chứng nhận│
 └───────────────────▲──────────────────────────────────────▲─────────────┘
                     │ HTTPS / RESTful API (JSON)           │ WSS / SignalR
 ┌───────────────────▼──────────────────────────────────────▼─────────────┐

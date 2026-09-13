@@ -36,6 +36,11 @@ export interface AppState {
   deadlines: Deadline[];
   stats: Stats;
   weeklyReports: WeeklyReportDto[];
+  weeklyReportPage: { total: number; skip: number; take: number };
+  weeklyReportQuery: { status: string; searchTerm: string; skip: number };
+  queryWeeklyReports: (query: { status: string; searchTerm: string; skip: number }) => void;
+  isLecturerLoading: boolean;
+  lecturerError: string | null;
   weeklyTrendData: {
     label: string;
     value: number;

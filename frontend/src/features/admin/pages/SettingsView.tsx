@@ -40,10 +40,11 @@ const DEFAULT_FACULTY_SETTINGS: FacultySettings = {
 
 const STORAGE_KEY = "internlink_faculty_settings";
 
+import type { ToastType } from "../../../contexts/ToastContext";
 export const SettingsView = ({
   onShowToast,
 }: {
-  onShowToast: (msg: string) => void;
+  onShowToast: (msg: string, type?: ToastType) => void;
   onNavigateTab?: (tab: string) => void;
 }) => {
   const [settings, setSettings] = useState<FacultySettings>(() => {
@@ -165,7 +166,7 @@ export const SettingsView = ({
     try {
       await adminEmailService.testEmail({
         toEmail,
-        fullName: "Quản trị viên Khoa",
+        fullName: "Ban quản lý khoa",
         role: "Lecturer",
       });
       onShowToast(`Đã gửi email kiểm tra kết nối tới ${toEmail}`);

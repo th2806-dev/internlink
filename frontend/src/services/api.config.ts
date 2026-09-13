@@ -40,15 +40,28 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
-    if (error.response?.status === 401) {
-      console.warn('Unauthorized (401)');
-    } else if (error.response?.status === 403) {
-      console.warn('Forbidden (403)');
-    } else if (error.response?.status === 500) {
-      console.warn('Server Error (500):', error.response.data);
+    const status = error.response?.status;
+
+    if (status === 401) {
+      console.warn('Unauthorized (401): Phiên đăng nhập đã hết hạn hoặc không hợp lệ.');
+      localStorage.removeItem(TOKEN_STORAGE_KEY);
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('auth_token');
+      if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
+        window.location.href = '/login';
+      }
+    } else if (status === 403) {
+      console.warn('Forbidden (403): Bạn không có quyền thực hiện thao tác này.');
+    } else if (status === 409) {
+      console.warn('Conflict (409): Dữ liệu xung đột hoặc đã tồn tại.', error.response?.data);
+    } else if (status === 422) {
+      console.warn('Unprocessable Entity (422): Dữ liệu gửi lên không hợp lệ.', error.response?.data);
+    } else if (status && status >= 500) {
+      console.warn(`Server Error (${status}): Hệ thống máy chủ gặp sự cố.`, error.response?.data);
     } else if (!error.response) {
-      console.warn('Network Error / Backend unreachable:', error.message);
+      console.warn('Network Error: Không thể kết nối tới máy chủ backend.', error.message);
     }
+
     return Promise.reject(error);
   }
 );

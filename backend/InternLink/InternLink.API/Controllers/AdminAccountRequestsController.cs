@@ -7,11 +7,13 @@ using Microsoft.AspNetCore.Mvc;
 namespace InternLink.API.Controllers;
 
 /// <summary>
-/// Admin controller for managing user account requests (password reset, unlock, info change).
+/// Account request management controller.
+/// SuperAdmin manages global account provisioning and admin-khoa account approvals.
+/// DepartmentAdmin is not allowed to process or approve requests that could create another DepartmentAdmin.
 /// </summary>
 [ApiController]
 [Route("api/Admin/account-requests")]
-[Authorize(Policy = "RequireAdmin")]
+[Authorize(Policy = "RequireSuperAdmin")]
 public class AdminAccountRequestsController : ControllerBase
 {
     private readonly IAccountRequestService _service;

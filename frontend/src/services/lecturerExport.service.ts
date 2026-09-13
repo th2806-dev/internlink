@@ -31,5 +31,12 @@ export const lecturerExportService = {
       `phieu-danh-gia-thuc-tap-${internshipId.slice(0, 8)}.pdf`,
     );
   },
+
+  async downloadGuidanceSchedule(semesterId: string): Promise<{ blob: Blob; filename: string }> {
+    return downloadAuthenticatedFile(
+      `/api/Export/guidance-schedule?semesterId=${semesterId}`,
+      `LichHuongDanTTTN_C23_${new Date().toISOString().slice(0, 10)}.xlsx`,
+    );
+  },
 };
 

@@ -51,6 +51,8 @@ public class CompanyDto
     public bool IsActive { get; set; }
     /// <summary>Number of internships hosted by the company (optionally scoped to the selected semester).</summary>
     public int StudentCount { get; set; }
+    /// <summary>Number of active open positions currently offered.</summary>
+    public int OpenPositionCount { get; set; }
     /// <summary>
     /// Link status for the requested semester. Null when no semester context.
     /// False = "ngưng liên kết" for that term (hidden from new assignments).
@@ -67,12 +69,13 @@ public class SetSemesterLinkRequest
 }
 
 /// <summary>
-/// Admin company detail (master data + internships hosted).
+/// Admin company detail (master data + internships hosted + positions).
 /// </summary>
 public class AdminCompanyDetailDto
 {
     public CompanyDto Company { get; set; } = null!;
     public IEnumerable<InternshipListItemDto> Internships { get; set; } = Array.Empty<InternshipListItemDto>();
+    public IEnumerable<CompanyPositionDto> Positions { get; set; } = Array.Empty<CompanyPositionDto>();
 }
 
 /// <summary>
@@ -98,3 +101,86 @@ public class CompanyImportErrorDto
     public string? CompanyName { get; set; }
     public string Message { get; set; } = null!;
 }
+
+/// <summary>
+/// Recruitment position offered by a company.
+/// </summary>
+public class CompanyPositionDto
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public string? CompanyName { get; set; }
+    public Guid? SemesterId { get; set; }
+    public string Title { get; set; } = null!;
+    public string? Description { get; set; }
+    public string? RequiredMajor { get; set; }
+    public string? RequiredSkills { get; set; }
+    public string? Location { get; set; }
+    public int Slots { get; set; } = 1;
+    public int FilledSlots { get; set; }
+    public decimal? Stipend { get; set; }
+    public bool IsOpen { get; set; } = true;
+    public DateTime CreatedAt { get; set; }
+}
+
+/// <summary>
+/// Request to create a new recruitment position.
+/// </summary>
+public class CreateCompanyPositionRequest
+{
+    public Guid? SemesterId { get; set; }
+    public string Title { get; set; } = null!;
+    public string? Description { get; set; }
+    public string? RequiredMajor { get; set; }
+    public string? RequiredSkills { get; set; }
+    public string? Location { get; set; }
+    public int Slots { get; set; } = 1;
+    public decimal? Stipend { get; set; }
+    public bool IsOpen { get; set; } = true;
+}
+
+/// <summary>
+/// Request to update an existing recruitment position.
+/// </summary>
+public class UpdateCompanyPositionRequest
+{
+    public Guid? SemesterId { get; set; }
+    public string Title { get; set; } = null!;
+    public string? Description { get; set; }
+    public string? RequiredMajor { get; set; }
+    public string? RequiredSkills { get; set; }
+    public string? Location { get; set; }
+    public int Slots { get; set; } = 1;
+    public decimal? Stipend { get; set; }
+    public bool IsOpen { get; set; } = true;
+}
+
+/// <summary>
+/// Company suggestion with match score and breakdown for student assignment.
+/// </summary>
+public class CompanySuggestionDto
+{
+    public Guid CompanyId { get; set; }
+    public string CompanyName { get; set; } = null!;
+    public string? Industry { get; set; }
+    public string? Address { get; set; }
+    public int Capacity { get; set; }
+    public int CurrentStudentCount { get; set; }
+    public int AvailableSlots { get; set; }
+    public double MatchScore { get; set; }
+    public string MatchReason { get; set; } = null!;
+    public IEnumerable<CompanyPositionDto> OpenPositions { get; set; } = Array.Empty<CompanyPositionDto>();
+}
+
+/// <summary>
+/// Request to suggest matching companies for a student or criteria.
+/// </summary>
+public class CompanySuggestionRequest
+{
+    public Guid SemesterId { get; set; }
+    public Guid? StudentId { get; set; }
+    public string? PreferredIndustry { get; set; }
+    public string? PreferredLocation { get; set; }
+    public int MaxResults { get; set; } = 10;
+}
+

@@ -10,6 +10,7 @@ export interface BackendSemesterDto {
   status: number; // 0: Upcoming, 1: Active, 2: Completed, 3: Draft
   description?: string | null;
   maxStudentsPerLecturer: number;
+  totalWeeks: number;
   studentsCount: number;
   lecturersCount: number;
   placedStudents: number;
@@ -28,6 +29,7 @@ export interface CreateSemesterRequest {
   status?: number;
   description?: string | null;
   maxStudentsPerLecturer?: number;
+  totalWeeks?: number;
 }
 
 export interface UpdateSemesterRequest {
@@ -39,6 +41,7 @@ export interface UpdateSemesterRequest {
   status?: number;
   description?: string | null;
   maxStudentsPerLecturer?: number;
+  totalWeeks?: number;
 }
 
 export const adminSemestersService = {

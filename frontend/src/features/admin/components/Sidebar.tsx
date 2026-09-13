@@ -9,10 +9,12 @@ import {
   Settings,
   User,
   Calendar,
+  FileText,
 } from "lucide-react";
 import { FEATURES } from "../../../config/featureFlags";
 import { formatCountBadge } from "../../../lib/userDisplay";
 import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
+import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
 import type { AdminNavStats } from "../../../hooks/useAdminNavStats";
 import type { AuthUser } from "../../../contexts/AuthContext";
 
@@ -37,6 +39,7 @@ export const Sidebar = ({
   stats?: AdminNavStats;
   user?: AuthUser | null;
 }) => {
+  const { isSuperAdmin, roleDisplayLabel } = useAdminCapabilities();
   const unassigned = stats?.unassignedCount ?? 0;
   const campaigns = stats?.notificationCampaignCount ?? 0;
   const unread = stats?.unreadNotificationCount ?? 0;
@@ -46,6 +49,16 @@ export const Sidebar = ({
       title: "TỔNG QUAN",
       items: [
         { id: "admin-dashboard", label: "Tổng quan", icon: LayoutDashboard },
+      ],
+    },
+    {
+      title: "HỆ THỐNG",
+      items: [
+        {
+          id: "admin-departments",
+          label: "Khoa",
+          icon: Building2,
+        },
       ],
     },
     {
@@ -79,6 +92,11 @@ export const Sidebar = ({
           id: "admin-companies",
           label: "Doanh nghiệp",
           icon: Building2,
+        },
+        {
+          id: "admin-templates",
+          label: "Biểu mẫu & Tài liệu",
+          icon: FileText,
         },
       ],
     },
@@ -119,16 +137,18 @@ export const Sidebar = ({
     },
   ];
 
-  const displayName = user?.name ?? "Quản trị viên";
-  const displayRole =
-    user?.role === "admin" ? "Super Admin" : (user?.role ?? "Admin");
+  const displayName = user?.name || user?.username || roleDisplayLabel;
+  const displayRole = roleDisplayLabel;
 
   const visibleSections = navSections
     .map((section) => ({
       ...section,
-      items: section.items.filter(
-        (item) => !item.flag || FEATURES[item.flag],
-      ),
+      items: section.items.filter((item) => {
+        if ((item.id === "admin-departments" || item.id === "admin-settings") && !isSuperAdmin) {
+          return false;
+        }
+        return !item.flag || FEATURES[item.flag];
+      }),
     }))
     .filter((section) => section.items.length > 0);
 
@@ -148,7 +168,7 @@ export const Sidebar = ({
               <span className="il-sidebar-brand-intern">Intern</span>
               <span className="il-sidebar-brand-link">Link</span>
             </div>
-            <p className="il-portal-badge">SUPER ADMIN</p>
+            <p className="il-portal-badge">{isSuperAdmin ? "SUPER ADMIN" : "ADMIN KHOA"}</p>
           </div>
         </div>
 

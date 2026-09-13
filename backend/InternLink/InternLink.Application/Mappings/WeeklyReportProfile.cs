@@ -11,11 +11,21 @@ public class WeeklyReportProfile : Profile
         CreateMap<WeeklyReport, WeeklyReportDto>().MaxDepth(64)
             .ForMember(d => d.Feedbacks, o => o.MapFrom(s => s.Feedbacks.Where(f => !f.IsDeleted)))
             .ForMember(d => d.Versions, o => o.MapFrom(s => s.Versions.OrderByDescending(v => v.Version)))
-            .ForMember(d => d.DueDate, o => o.MapFrom(s => s.Internship.Semester != null && s.Internship.Semester.StartDate.HasValue
-                ? s.Internship.Semester.StartDate.Value.Date.AddDays((s.WeekNumber * 7) - 1)
-                : (DateTime?)null))
+            .ForMember(d => d.DueDate, o => o.MapFrom(s => CalculateDueDate(s)))
             .ForMember(d => d.Status, o => o.MapFrom(s => s.Status.ToString()));
 
         CreateMap<WeeklyReportVersion, WeeklyReportVersionDto>();
+    }
+
+    private static DateTime? CalculateDueDate(WeeklyReport report)
+    {
+        var semester = report.Internship?.Semester;
+        if (semester?.StartDate is not DateTime start || semester.EndDate is not DateTime end)
+            return null;
+
+        var totalWeeks = Math.Max(semester.TotalWeeks, 1);
+        var week = Math.Clamp(report.WeekNumber, 1, totalWeeks);
+        var totalDays = (end.Date - start.Date).TotalDays;
+        return start.Date.AddDays(Math.Round(totalDays * week / totalWeeks));
     }
 }

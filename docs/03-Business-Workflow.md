@@ -24,7 +24,7 @@
 ### 2.1. Giai Đoạn 1: Chuẩn Bị (Admin)
 
 1. **Tạo Học kỳ**: Admin tạo học kỳ mới, thiết lập thời gian, max students/lecturer.
-2. **Phê duyệt Rubric**: Admin tạo rubric đánh giá → Gửi phê duyệt → Trưởng khoa duyệt/rút lại.
+2. **Quản lý Rubric**: Admin tạo hoặc sửa rubric đánh giá → lưu ngay → hệ thống áp dụng và giữ trạng thái Approved.
 3. **Import Danh sách**: Import Excel Sinh viên, Giảng viên, Doanh nghiệp.
 4. **Phân công Hướng dẫn**: Bulk assign / Auto-assign SV cho GVHD. Import phân bổ DN.
 5. **Quản lý Yêu cầu Tài khoản**: SV/GV mới gửi yêu cầu → Admin duyệt/cấp phát tự động.

@@ -21,9 +21,11 @@ import { Toolbar } from "../../../components/common/Toolbar";
 import type { AdminUser, AdminUserRole, AdminUserStatus } from "../../../types/user";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { useAdminUsers } from "../../../hooks/useAdminUsers";
+import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
 import {
   CreateUserModal,
   type CreateUserFormPayload,
+  type CreateUserRole,
 } from "../components/modals/CreateUserModal";
 
 const ROLE_LABEL: Record<AdminUserRole, string> = {
@@ -44,10 +46,11 @@ const STATUS_LABEL: Record<AdminUserStatus, string> = {
   pending: "Chờ kích hoạt",
 };
 
+import type { ToastType } from "../../../contexts/ToastContext";
 export const UsersView = ({
   onShowToast,
 }: {
-  onShowToast: (msg: string) => void;
+  onShowToast: (msg: string, type?: ToastType) => void;
 }) => {
   const {
     users,
@@ -58,6 +61,14 @@ export const UsersView = ({
     resetPassword: resetUserPassword,
     deleteUser: removeUser,
   } = useAdminUsers();
+  const { isSuperAdmin, isDepartmentAdmin } = useAdminCapabilities();
+
+  const allowedCreateRoles: CreateUserRole[] = isSuperAdmin
+    ? ["DepartmentAdmin"]
+    : ["Student", "Lecturer"];
+  const canCreateUser = isSuperAdmin || isDepartmentAdmin;
+  const canMutateUser = (u: AdminUser) =>
+    isSuperAdmin ? u.role === "admin" : u.role === "student" || u.role === "lecturer";
 
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<"all" | AdminUserRole>("all");
@@ -177,15 +188,28 @@ export const UsersView = ({
         icon={Users}
         title="Người dùng"
         subtitle="Tài khoản hệ thống — danh sách, khóa/mở, đặt lại mật khẩu"
-        actions={[
-          {
-            label: "Tạo tài khoản",
-            icon: UserPlus,
-            onClick: () => setIsCreateOpen(true),
-            variant: "primary",
-          },
-        ]}
+        actions={
+          canCreateUser
+            ? [
+                {
+                  label: "Tạo tài khoản",
+                  icon: UserPlus,
+                  onClick: () => setIsCreateOpen(true),
+                  variant: "primary" as const,
+                },
+              ]
+            : []
+        }
       />
+
+      {isSuperAdmin && (
+        <div className="px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900 flex items-center gap-2.5">
+          <Shield className="w-4 h-4 text-blue-600 shrink-0" />
+          <span>
+            <strong>Phân quyền quản lý tài khoản:</strong> Super Admin chỉ tạo và quản lý tài khoản Admin khoa. Tài khoản Sinh viên và Giảng viên do Admin khoa trực tiếp phụ trách.
+          </span>
+        </div>
+      )}
 
       <Toolbar
         left={
@@ -294,36 +318,40 @@ export const UsersView = ({
                       )}
                     </td>
                     <td className="py-3 text-right">
-                      <div className="inline-flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => setResetTarget(u)}
-                          className="p-1.5 rounded-md text-slate-500 hover:bg-amber-50 hover:text-amber-700 cursor-pointer"
-                          title="Đặt lại mật khẩu"
-                        >
-                          <KeyRound className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => toggleLock(u)}
-                          className="p-1.5 rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800 cursor-pointer"
-                          title={u.status === "locked" ? "Mở khóa" : "Khóa"}
-                        >
-                          {u.status === "locked" ? (
-                            <Unlock className="w-3.5 h-3.5" />
-                          ) : (
-                            <Lock className="w-3.5 h-3.5" />
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setDeleteTarget(u)}
-                          className="p-1.5 rounded-md text-slate-500 hover:bg-rose-50 hover:text-rose-700 cursor-pointer"
-                          title="Xóa tài khoản"
-                        >
-                          <Trash2 className="w-3.5 h-3.5 text-rose-500" />
-                        </button>
-                      </div>
+                      {canMutateUser(u) ? (
+                        <div className="inline-flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setResetTarget(u)}
+                            className="p-1.5 rounded-md text-slate-500 hover:bg-amber-50 hover:text-amber-700 cursor-pointer"
+                            title="Đặt lại mật khẩu"
+                          >
+                            <KeyRound className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => toggleLock(u)}
+                            className="p-1.5 rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800 cursor-pointer"
+                            title={u.status === "locked" ? "Mở khóa" : "Khóa"}
+                          >
+                            {u.status === "locked" ? (
+                              <Unlock className="w-3.5 h-3.5" />
+                            ) : (
+                              <Lock className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteTarget(u)}
+                            className="p-1.5 rounded-md text-slate-500 hover:bg-rose-50 hover:text-rose-700 cursor-pointer"
+                            title="Xóa tài khoản"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-[11px] text-slate-400 font-medium">Chỉ xem</span>
+                      )}
                     </td>
                   </tr>
                 );
@@ -437,6 +465,7 @@ export const UsersView = ({
         onClose={() => setIsCreateOpen(false)}
         onShowToast={onShowToast}
         onCreateUser={handleCreateUser}
+        allowedRoles={allowedCreateRoles}
       />
     </div>
   );

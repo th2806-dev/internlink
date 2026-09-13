@@ -12,7 +12,7 @@ namespace InternLink.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/Admin/settings")]
-[Authorize(Policy = "RequireAdmin")]
+[Authorize(Policy = "RequireSuperAdmin")]
 public class AdminSettingsController : ControllerBase
 {
     private readonly ISettingsService _settingsService;

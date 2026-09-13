@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { getApiErrorMessage } from "../lib/apiClient";
-import { mapCompanyDtoToEnterprise } from "../lib/adminMappers";
+import { mapLecturerCompanySummaryToEnterprise } from "../lib/adminMappers";
 import {
   mapLecturerStudentDtoToStudent,
   mapSubmissionDtoToRow,
@@ -87,9 +87,9 @@ export function useLecturerPortalData(
       const submissionRows = allSubmissions.map((s) => {
         const ctx = s.internshipId ? internshipCtx.get(s.internshipId) : undefined;
         return mapSubmissionDtoToRow(s, ctx ?? {
-          studentName: s.internship?.student?.fullName,
-          mssv: s.internship?.student?.studentCode,
-          company: s.internship?.company?.companyName,
+          studentName: "—",
+          mssv: "—",
+          company: "—",
         });
       });
 
@@ -127,7 +127,7 @@ export function useLecturerPortalData(
       setStudents(studentRows);
       setSubmissions([...weeklyReportRows, ...submissionRows]);
       setWeeklyReports(allWeeklyReports);
-      setEnterprises(companies.map(mapCompanyDtoToEnterprise));
+      setEnterprises(companies.map(mapLecturerCompanySummaryToEnterprise));
       setDashboardStats(stats);
       setWeeklyTrend(trend);
     } catch (err) {

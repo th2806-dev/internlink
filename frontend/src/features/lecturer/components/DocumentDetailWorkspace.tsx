@@ -40,7 +40,7 @@ export const DocumentDetailWorkspace = ({
   const [pdfLoading, setPdfLoading] = useState(true);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [zoomLevel, setZoomLevel] = useState(100);
-  const [activeSidebarTab] = useState<"info">("info");
+  const [activeSidebarTab, setActiveSidebarTab] = useState<"info">("info");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const triggerToast = (msg: string) => {

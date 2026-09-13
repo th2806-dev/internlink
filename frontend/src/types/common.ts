@@ -91,6 +91,8 @@ export interface StudentNotification {
   type: string;
 }
 
+import type { ProgressBreakdownDto } from "./api";
+
 export interface StudentProfile {
   name: string;
   mssv: string;
@@ -102,6 +104,7 @@ export interface StudentProfile {
   position: string;
   statusBadge: string;
   overallProgress: number;
+  progressBreakdown?: ProgressBreakdownDto | null;
   currentGrade: number;
   reportsSubmitted: number;
   totalReports: number;

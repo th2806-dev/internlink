@@ -64,7 +64,7 @@ public class AuthService : IAuthService
 
         user.LastLoginAt = DateTime.UtcNow;
 
-        var (token, jwtId, expires) = _jwt.CreateTokenWithMetadata(user.Id.ToString(), new[] { user.Role.ToString() });
+        var (token, jwtId, expires) = _jwt.CreateTokenWithMetadata(user.Id.ToString(), new[] { user.Role.ToString() }, user.DepartmentId);
         var refreshTokenString = GenerateRefreshTokenString();
         var refreshTokenExpiry = DateTime.UtcNow.AddDays(7);
 
@@ -93,7 +93,8 @@ public class AuthService : IAuthService
             RefreshToken = refreshTokenString,
             RefreshTokenExpiresAt = refreshTokenExpiry,
             Role = user.Role.ToString(),
-            MustChangePassword = user.MustChangePassword
+            MustChangePassword = user.MustChangePassword,
+            DepartmentId = user.DepartmentId
         };
     }
 
@@ -176,7 +177,7 @@ public class AuthService : IAuthService
         storedToken.RevokedByIp = ipAddress;
         storedToken.ReplacedByToken = newRefreshTokenString;
 
-        var (newToken, newJwtId, newExpires) = _jwt.CreateTokenWithMetadata(user.Id.ToString(), new[] { user.Role.ToString() });
+        var (newToken, newJwtId, newExpires) = _jwt.CreateTokenWithMetadata(user.Id.ToString(), new[] { user.Role.ToString() }, user.DepartmentId);
         var newRefreshTokenExpiry = DateTime.UtcNow.AddDays(7);
 
         var newRefreshTokenEntity = new RefreshToken
@@ -204,7 +205,8 @@ public class AuthService : IAuthService
             RefreshToken = newRefreshTokenString,
             RefreshTokenExpiresAt = newRefreshTokenExpiry,
             Role = user.Role.ToString(),
-            MustChangePassword = user.MustChangePassword
+            MustChangePassword = user.MustChangePassword,
+            DepartmentId = user.DepartmentId
         };
     }
 

@@ -8,6 +8,7 @@ namespace InternLink.API.Controllers;
 
 /// <summary>
 /// Admin student master-data management (import, create accounts, invitation email).
+/// DepartmentAdmin sees only their department's students.
 /// </summary>
 [ApiController]
 [Route("api/Admin/students")]
@@ -15,21 +16,24 @@ namespace InternLink.API.Controllers;
 public class AdminStudentsController : ControllerBase
 {
     private readonly IStudentService _studentService;
+    private readonly IDepartmentScopeService _deptScope;
 
-    public AdminStudentsController(IStudentService studentService)
+    public AdminStudentsController(IStudentService studentService, IDepartmentScopeService deptScope)
     {
         _studentService = studentService;
+        _deptScope = deptScope;
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll([FromQuery] int skip = 0, [FromQuery] int take = 100, [FromQuery] Guid? semesterId = null)
+    public async Task<IActionResult> GetAll([FromQuery] int skip = 0, [FromQuery] int take = 100, [FromQuery] Guid? semesterId = null, [FromQuery] Guid? departmentId = null)
     {
         if (skip < 0)
             return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Skip must be greater than or equal to 0" }));
         if (take < 1 || take > 1000)
             return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Take must be between 1 and 1000" }));
 
-        var students = await _studentService.GetAllStudentsAsync(skip, take, semesterId: semesterId);
+        var deptId = _deptScope.ResolveEffectiveDepartmentId(User, departmentId);
+        var students = await _studentService.GetAllStudentsAsync(skip, take, semesterId: semesterId, departmentId: deptId);
         return Ok(ApiResponse<IEnumerable<StudentDto>>.Ok(students));
     }
 
@@ -41,7 +45,8 @@ public class AdminStudentsController : ControllerBase
         if (request.Take < 1 || request.Take > 1000)
             return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Take must be between 1 and 1000" }));
 
-        var result = await _studentService.GetStudentsWithFilterAsync(request);
+        var deptId = _deptScope.ResolveEffectiveDepartmentId(User, request.DepartmentId);
+        var result = await _studentService.GetStudentsWithFilterAsync(request, departmentId: deptId);
         return Ok(ApiResponse<PaginatedResponse<StudentDto>>.Ok(result));
     }
 
@@ -50,6 +55,9 @@ public class AdminStudentsController : ControllerBase
     {
         var student = await _studentService.GetStudentByIdAsync(id);
         if (student == null)
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Student not found" }));
+
+        if (!_deptScope.HasAccess(User, student.DepartmentId))
             return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Student not found" }));
 
         return Ok(ApiResponse<StudentDto>.Ok(student));
@@ -65,6 +73,9 @@ public class AdminStudentsController : ControllerBase
         if (student == null)
             return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Student not found" }));
 
+        if (!_deptScope.HasAccess(User, student.DepartmentId))
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Student not found" }));
+
         return Ok(ApiResponse<StudentDto>.Ok(student));
     }
 
@@ -75,6 +86,13 @@ public class AdminStudentsController : ControllerBase
             return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Student number is required" }));
 
         var exists = await _studentService.StudentCodeExistsAsync(studentCode);
+        if (exists)
+        {
+            var existing = await _studentService.GetStudentByCodeAsync(studentCode);
+            if (existing != null && !_deptScope.HasAccess(User, existing.DepartmentId))
+                return Ok(ApiResponse<bool>.Ok(false));
+        }
+
         return Ok(ApiResponse<bool>.Ok(exists));
     }
 
@@ -86,7 +104,8 @@ public class AdminStudentsController : ControllerBase
             if (!ModelState.IsValid)
                 return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Invalid input" }));
 
-            var student = await _studentService.CreateStudentAsync(request);
+            // DepartmentAdmin creates within their own department; SuperAdmin's records start unassigned.
+            var student = await _studentService.CreateStudentAsync(request, _deptScope.GetCurrentDepartmentId(User));
             return CreatedAtAction(nameof(GetById), new { id = student.Id }, ApiResponse<StudentDto>.Ok(student));
         }
         catch (InvalidOperationException ex)
@@ -107,6 +126,9 @@ public class AdminStudentsController : ControllerBase
             if (student == null)
                 return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Student not found" }));
 
+            if (!_deptScope.HasAccess(User, student.DepartmentId))
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Student not found" }));
+
             return Ok(ApiResponse<StudentDto>.Ok(student));
         }
         catch (InvalidOperationException ex)
@@ -118,6 +140,10 @@ public class AdminStudentsController : ControllerBase
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id)
     {
+        var target = await _studentService.GetStudentByIdAsync(id);
+        if (target == null || !_deptScope.HasAccess(User, target.DepartmentId))
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Student not found" }));
+
         try
         {
             var ok = await _studentService.DeleteStudentAsync(id);
@@ -152,8 +178,9 @@ public class AdminStudentsController : ControllerBase
             if (!string.Equals(Path.GetExtension(file.FileName), ".xlsx", StringComparison.OrdinalIgnoreCase))
                 return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Only .xlsx files are supported" }));
 
+            var deptId = _deptScope.GetCurrentDepartmentId(User);
             await using var stream = file.OpenReadStream();
-            var result = await _studentService.ImportStudentsFromExcelAsync(stream, semesterId);
+            var result = await _studentService.ImportStudentsFromExcelAsync(stream, semesterId, deptId);
             return Ok(ApiResponse<StudentImportResultDto>.Ok(result));
         }
         catch (InvalidOperationException ex)
@@ -169,7 +196,8 @@ public class AdminStudentsController : ControllerBase
     [HttpGet("export")]
     public async Task<IActionResult> Export([FromQuery] Guid? semesterId = null)
     {
-        var bytes = await _studentService.ExportStudentsExcelAsync(semesterId);
+        var deptId = _deptScope.GetCurrentDepartmentId(User);
+        var bytes = await _studentService.ExportStudentsExcelAsync(semesterId, departmentId: deptId);
         var fileName = $"Danh-sach-SV-{DateTime.UtcNow:yyyyMMdd-HHmmss}.xlsx";
         return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
     }

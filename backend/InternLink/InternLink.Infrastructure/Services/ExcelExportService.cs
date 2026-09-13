@@ -26,16 +26,16 @@ public class ExcelExportService : IExcelExportService
     }
 
     /// <inheritdoc />
-    public async Task<InternshipExportDataDto> GetExportDataAsync(Guid? semesterId = null, Guid? lecturerId = null, CancellationToken cancellationToken = default)
+    public async Task<InternshipExportDataDto> GetExportDataAsync(Guid? semesterId = null, Guid? lecturerId = null, string? department = null, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Retrieving export datasets from relational tables. SemesterId: {SemesterId}", semesterId);
+        _logger.LogInformation("Retrieving export datasets from relational tables. SemesterId: {SemesterId}, Department: {Department}", semesterId, department);
 
         // ────────────────────────────────────────────────────────────────────
         // 1. Relational Query for Sheet 1: DANH SÁCH THỰC TẬP
         // ────────────────────────────────────────────────────────────────────
         // Join Students with their semester Internship (LEFT JOIN), Company (LEFT JOIN),
         // Lecturer (LEFT JOIN), Evaluation (LEFT JOIN), and WeeklyReports.
-        var students = await _db.Students
+        var studentsQuery = _db.Students
             .AsNoTracking()
             .Include(s => s.Internships.Where(i => !i.IsDeleted && (!semesterId.HasValue || i.SemesterId == semesterId.Value) && (!lecturerId.HasValue || i.LecturerId == lecturerId.Value)))
                 .ThenInclude(i => i.Company)
@@ -43,7 +43,14 @@ public class ExcelExportService : IExcelExportService
                 .ThenInclude(i => i.Lecturer)
             .Include(s => s.Internships.Where(i => !i.IsDeleted && (!semesterId.HasValue || i.SemesterId == semesterId.Value) && (!lecturerId.HasValue || i.LecturerId == lecturerId.Value)))
                 .ThenInclude(i => i.WeeklyReports)
-            .Where(s => !lecturerId.HasValue || s.Internships.Any(i => !i.IsDeleted && i.LecturerId == lecturerId.Value && (!semesterId.HasValue || i.SemesterId == semesterId.Value)))
+            .Where(s => !lecturerId.HasValue || s.Internships.Any(i => !i.IsDeleted && i.LecturerId == lecturerId.Value && (!semesterId.HasValue || i.SemesterId == semesterId.Value)));
+
+        if (!string.IsNullOrWhiteSpace(department))
+        {
+            studentsQuery = studentsQuery.Where(s => s.Department == department || s.Internships.Any(i => !i.IsDeleted && i.Lecturer != null && i.Lecturer.Department == department));
+        }
+
+        var students = await studentsQuery
             .OrderBy(s => s.Class)
             .ThenBy(s => s.FullName)
             .ToListAsync(cancellationToken);
@@ -127,17 +134,36 @@ public class ExcelExportService : IExcelExportService
         }
 
         // ────────────────────────────────────────────────────────────────────
-        // 2. Relational Query for Sheet 2: DANH SÁCH DOANH NGHIỆP
+        // 2. Relational Query for Sheet 2: DANH SÁCH DOANH NGHIỆP / TÊN CÔNG TY
         // ────────────────────────────────────────────────────────────────────
-        var companies = await _db.Companies
+        var companiesQuery = _db.Companies
             .AsNoTracking()
-            .Where(c => c.IsActive)
+            .Where(c => c.IsActive);
+
+        if (semesterId.HasValue || lecturerId.HasValue || !string.IsNullOrWhiteSpace(department))
+        {
+            companiesQuery = companiesQuery.Where(c => c.Internships.Any(i =>
+                !i.IsDeleted
+                && (!semesterId.HasValue || i.SemesterId == semesterId.Value)
+                && (!lecturerId.HasValue || i.LecturerId == lecturerId.Value)
+                && (string.IsNullOrWhiteSpace(department)
+                    || i.Student.Department == department
+                    || (i.Lecturer != null && i.Lecturer.Department == department))));
+        }
+
+        var companies = await companiesQuery
             .Select(c => new CompanyExportDto
             {
                 CompanyId = c.Id,
                 CompanyName = c.CompanyName,
                 Address = c.Address ?? "—",
-                StudentCount = c.Internships.Count(i => !i.IsDeleted && (!semesterId.HasValue || i.SemesterId == semesterId.Value) && (!lecturerId.HasValue || i.LecturerId == lecturerId.Value)),
+                StudentCount = c.Internships.Count(i =>
+                    !i.IsDeleted
+                    && (!semesterId.HasValue || i.SemesterId == semesterId.Value)
+                    && (!lecturerId.HasValue || i.LecturerId == lecturerId.Value)
+                    && (string.IsNullOrWhiteSpace(department)
+                        || i.Student.Department == department
+                        || (i.Lecturer != null && i.Lecturer.Department == department))),
                 ContactInfo = string.IsNullOrWhiteSpace(c.ContactPhone)
                     ? (c.ContactPerson ?? "—")
                     : $"{c.ContactPerson} - {c.ContactPhone}"
@@ -154,9 +180,16 @@ public class ExcelExportService : IExcelExportService
         // ────────────────────────────────────────────────────────────────────
         // 3. Relational Query for Sheet 3: DANH SÁCH GIẢNG VIÊN PHÂN CÔNG / DATABASE
         // ────────────────────────────────────────────────────────────────────
-        var assignments = await _db.Internships
+        var assignmentsQuery = _db.Internships
             .AsNoTracking()
-            .Where(i => !i.IsDeleted && (!semesterId.HasValue || i.SemesterId == semesterId.Value) && (!lecturerId.HasValue || i.LecturerId == lecturerId.Value))
+            .Where(i => !i.IsDeleted && (!semesterId.HasValue || i.SemesterId == semesterId.Value) && (!lecturerId.HasValue || i.LecturerId == lecturerId.Value));
+
+        if (!string.IsNullOrWhiteSpace(department))
+        {
+            assignmentsQuery = assignmentsQuery.Where(i => i.Student.Department == department || (i.Lecturer != null && i.Lecturer.Department == department));
+        }
+
+        var assignments = await assignmentsQuery
             .Select(i => new LecturerAssignmentExportDto
             {
                 StudentFullName = i.Student.FullName,
@@ -184,9 +217,9 @@ public class ExcelExportService : IExcelExportService
     }
 
     /// <inheritdoc />
-    public async Task<byte[]> GenerateInternshipExportExcelAsync(Guid? semesterId = null, Guid? lecturerId = null, CancellationToken cancellationToken = default)
+    public async Task<byte[]> GenerateInternshipExportExcelAsync(Guid? semesterId = null, Guid? lecturerId = null, string? department = null, CancellationToken cancellationToken = default)
     {
-        var data = await GetExportDataAsync(semesterId, lecturerId, cancellationToken);
+        var data = await GetExportDataAsync(semesterId, lecturerId, department, cancellationToken);
         return GenerateFromData(data);
     }
 
@@ -221,6 +254,169 @@ public class ExcelExportService : IExcelExportService
         }
     }
 
+    /// <inheritdoc />
+    public async Task<byte[]> GenerateGuidanceScheduleExcelAsync(Guid semesterId, Guid lecturerId, CancellationToken cancellationToken = default)
+    {
+        var semester = await _db.Semesters
+            .Include(s => s.ReportSchedules)
+            .FirstOrDefaultAsync(s => s.Id == semesterId, cancellationToken);
+
+        if (semester == null)
+            throw new InvalidOperationException($"Không tìm thấy học kỳ có mã {semesterId}");
+
+        var lecturer = await _db.Lecturers
+            .Include(l => l.User)
+            .FirstOrDefaultAsync(l => l.Id == lecturerId, cancellationToken);
+
+        if (lecturer == null)
+            throw new InvalidOperationException($"Không tìm thấy giảng viên có mã {lecturerId}");
+
+        var internships = await _db.Internships
+            .Include(i => i.Student)
+            .Include(i => i.Company)
+            .Where(i => i.SemesterId == semesterId && i.LecturerId == lecturerId && !i.IsDeleted)
+            .OrderBy(i => i.Student.Class)
+            .ThenBy(i => i.Student.FullName)
+            .ToListAsync(cancellationToken);
+
+        var templatePath = TemplateHelper.FindTemplatePath("Lich huong dan TTTN-C23-Cuong.xlsx")
+            ?? TemplateHelper.FindTemplatePath("Lich huong dan TTTN.xlsx");
+
+        XLWorkbook workbook;
+        MemoryStream? workbookSourceStream = null;
+        if (!string.IsNullOrEmpty(templatePath) && File.Exists(templatePath))
+        {
+            // Keep the backing stream alive for the workbook's lifetime — ClosedXML reads
+            // it lazily (e.g. during SaveAs), so disposing it here corrupts the workbook.
+            var templateBytes = await File.ReadAllBytesAsync(templatePath, cancellationToken);
+            workbookSourceStream = new MemoryStream(templateBytes);
+            workbook = new XLWorkbook(workbookSourceStream);
+        }
+        else
+        {
+            workbook = new XLWorkbook();
+            workbook.Worksheets.Add("LỊCH HƯỚNG DẪN");
+        }
+
+        try
+        {
+            var ws1 = workbook.Worksheets.FirstOrDefault() ?? workbook.Worksheets.Add("LỊCH HƯỚNG DẪN");
+
+            var studentCount = internships.Count;
+            var distinctClassesList = internships
+                .Select(i => i.Student.Class)
+                .Where(c => !string.IsNullOrWhiteSpace(c))
+                .Distinct()
+                .ToList();
+            var distinctClasses = distinctClassesList.Count > 0
+                ? string.Join(", ", distinctClassesList)
+                : "C23A.TH1, C23A.TH2";
+
+            var academicYear = semester.AcademicYear ?? $"{DateTime.Now.Year}-{DateTime.Now.Year + 1}";
+            var semesterNumber = semester.Name.Contains("2") ? "2" : (semester.Name.Contains("3") ? "Hè" : "1");
+
+            // Header & metadata
+            ws1.Cell("E5").Value = "HỌC KỲ:";
+            ws1.Cell("F5").Value = semesterNumber;
+            ws1.Cell("G5").Value = $"NĂM HỌC: {academicYear}";
+            ws1.Cell("A6").Value = $"Tên Giảng Viên: {lecturer.FullName}";
+            ws1.Cell("A7").Value = $"Tên học phần: Thực tập tốt nghiệp, Lớp {distinctClasses}";
+            ws1.Cell("G7").Value = $"Số SV: {studentCount:D2}";
+            ws1.Cell("I7").Value = $" Số tiết qui đổi:  2x{studentCount:D2} = {2 * studentCount} tiết";
+
+            if (ws1.Cell("D19").IsEmpty() || ws1.Cell("A19").GetString().Contains("Tổng", StringComparison.OrdinalIgnoreCase))
+            {
+                ws1.Cell("D19").Value = 2 * studentCount;
+            }
+
+            ws1.Cell("H20").Value = $"TP. Hồ Chí Minh, ngày {DateTime.Now:dd} tháng {DateTime.Now:MM} năm {DateTime.Now:yyyy}";
+            ws1.Cell("J26").Value = lecturer.FullName;
+
+            if (!string.IsNullOrWhiteSpace(lecturer.Department))
+            {
+                ws1.Cell("G22").Value = $"Khoa {lecturer.Department.ToUpperInvariant()}";
+            }
+
+            // Sync report schedules if configured in semester
+            if (semester.ReportSchedules != null && semester.ReportSchedules.Count > 0)
+            {
+                var schedules = semester.ReportSchedules.OrderBy(s => s.WeekNumber).ToList();
+                for (int i = 0; i < schedules.Count && i < 10; i++)
+                {
+                    int r = 9 + i;
+                    var sched = schedules[i];
+                    ws1.Cell(r, 2).Value = sched.DueDate.ToString("dd/MM/yyyy");
+                    ws1.Cell(r, 3).Value = sched.WeekNumber;
+                    if (!string.IsNullOrWhiteSpace(sched.Title))
+                    {
+                        ws1.Cell(r, 5).Value = sched.Title;
+                    }
+                }
+            }
+
+            // Sheet 2: Danh sách sinh viên thực tập của giảng viên
+            var ws2 = workbook.Worksheets.Count > 1 ? workbook.Worksheets.Worksheet(2) : workbook.Worksheets.Add("DANH SÁCH SINH VIÊN");
+            ws2.Name = "DANH SÁCH SINH VIÊN";
+            ws2.Clear();
+
+            // Title
+            ws2.Cell("A1").Value = "DANH SÁCH SINH VIÊN THỰC TẬP HƯỚNG DẪN";
+            ws2.Cell("A1").Style.Font.Bold = true;
+            ws2.Cell("A1").Style.Font.FontSize = 14;
+            ws2.Range("A1:G1").Merge().Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+
+            ws2.Cell("A2").Value = $"Giảng viên: {lecturer.FullName} ({lecturer.StaffCode}) | Học kỳ: {semester.Name} | Năm học: {academicYear}";
+            ws2.Cell("A2").Style.Font.Italic = true;
+            ws2.Range("A2:G2").Merge().Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+
+            // Table Headers
+            var headers = new[] { "STT", "MSSV", "Họ và tên", "Lớp", "Đơn vị thực tập", "Địa chỉ / Người phụ trách", "Ghi chú" };
+            for (int col = 0; col < headers.Length; col++)
+            {
+                var cell = ws2.Cell(4, col + 1);
+                cell.Value = headers[col];
+                cell.Style.Font.Bold = true;
+                cell.Style.Fill.SetBackgroundColor(XLColor.FromHtml("#E2EFDA"));
+                cell.Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                cell.Style.Border.SetOutsideBorder(XLBorderStyleValues.Thin);
+            }
+
+            int rowIdx = 5;
+            int sttIdx = 1;
+            foreach (var intern in internships)
+            {
+                ws2.Cell(rowIdx, 1).Value = sttIdx++;
+                ws2.Cell(rowIdx, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                ws2.Cell(rowIdx, 2).Value = intern.Student.StudentCode;
+                ws2.Cell(rowIdx, 2).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                ws2.Cell(rowIdx, 3).Value = intern.Student.FullName;
+                ws2.Cell(rowIdx, 4).Value = intern.Student.Class ?? "—";
+                ws2.Cell(rowIdx, 4).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                ws2.Cell(rowIdx, 5).Value = intern.Company?.CompanyName ?? "Chưa có";
+                ws2.Cell(rowIdx, 6).Value = intern.Company != null
+                    ? $"{intern.Company.Address ?? ""} {(string.IsNullOrEmpty(intern.Company.ContactPerson) ? "" : " - LH: " + intern.Company.ContactPerson)}"
+                    : "—";
+                ws2.Cell(rowIdx, 7).Value = intern.Notes ?? string.Empty;
+
+                ws2.Range(rowIdx, 1, rowIdx, 7).Style.Border.SetOutsideBorder(XLBorderStyleValues.Thin);
+                ws2.Range(rowIdx, 1, rowIdx, 7).Style.Border.SetInsideBorder(XLBorderStyleValues.Thin);
+
+                rowIdx++;
+            }
+
+            ws2.Columns(1, 7).AdjustToContents();
+
+            using var ms = new MemoryStream();
+            workbook.SaveAs(ms);
+            return ms.ToArray();
+        }
+        finally
+        {
+            workbook.Dispose();
+            workbookSourceStream?.Dispose();
+        }
+    }
+
     // ────────────────────────────────────────────────────────────────────────
     // Modular Sheet Exporters
     // ────────────────────────────────────────────────────────────────────────
@@ -230,7 +426,8 @@ public class ExcelExportService : IExcelExportService
     /// </summary>
     private void ExportStudents(XLWorkbook workbook, List<InternshipStudentExportDto> students)
     {
-        var ws = FindWorksheet(workbook, "DANH SÁCH (2)", "DANH SÁCH THỰC TẬP", "DANH SÁCH");
+        var ws = FindWorksheet(workbook, "DANH SÁCH (2)", "DANH SÁCH THỰC TẬP", "DANH SÁCH")
+            ?? workbook.Worksheets.FirstOrDefault();
         if (ws == null) return;
 
         const int dataStartRow = 3;
@@ -338,7 +535,7 @@ public class ExcelExportService : IExcelExportService
             ws.Row(r).Clear();
         }
 
-        ws.Columns(1, 5).AdjustToContents();
+        ws.Columns(1, 6).AdjustToContents();
     }
 
     // ────────────────────────────────────────────────────────────────────────
@@ -443,9 +640,10 @@ public class ExcelExportService : IExcelExportService
         ws.Cell(row, 2).Value = a.StudentFullName;
         ws.Cell(row, 3).Value = a.StudentClass;
         ws.Cell(row, 4).Value = a.CompanyName;
-        ws.Cell(row, 5).Value = a.CompanyName;
+        ws.Cell(row, 5).Value = a.LecturerName;
+        ws.Cell(row, 6).Value = a.LecturerDepartment;
 
-        for (int col = 1; col <= 5; col++)
+        for (int col = 1; col <= 6; col++)
         {
             var cell = ws.Cell(row, col);
             cell.Style.Font.FontName = "Times New Roman";
@@ -564,10 +762,19 @@ public class ExcelExportService : IExcelExportService
         }
 
         var ws2 = wb.Worksheets.Add("DATABASE");
-        ws2.Cell(2, 1).Value = "STT"; ws2.Cell(2, 2).Value = "HỌ TÊN"; ws2.Cell(2, 3).Value = "LỚP"; ws2.Cell(2, 4).Value = "CÔNG TY THỰC TẬP";
+        ws2.Cell(2, 1).Value = "STT";
+        ws2.Cell(2, 2).Value = "HỌ TÊN";
+        ws2.Cell(2, 3).Value = "LỚP";
+        ws2.Cell(2, 4).Value = "CÔNG TY THỰC TẬP";
+        ws2.Cell(2, 5).Value = "GV HƯỚNG DẪN";
+        ws2.Cell(2, 6).Value = "KHOA / BỘ MÔN";
 
         var ws3 = wb.Worksheets.Add("TÊN CÔNG TY (2)");
-        ws3.Cell(1, 1).Value = "STT"; ws3.Cell(1, 2).Value = "Tên Công Ty"; ws3.Cell(1, 3).Value = "Địa Chỉ"; ws3.Cell(1, 4).Value = "Số Lượng"; ws3.Cell(1, 6).Value = "Liên Hệ";
+        ws3.Cell(1, 1).Value = "STT";
+        ws3.Cell(1, 2).Value = "Tên Công Ty";
+        ws3.Cell(1, 3).Value = "Địa Chỉ";
+        ws3.Cell(1, 4).Value = "Số Lượng";
+        ws3.Cell(1, 6).Value = "Liên Hệ";
 
         return wb;
     }
@@ -580,10 +787,12 @@ public class ExcelExportService : IExcelExportService
     {
         foreach (var name in candidateNames)
         {
-            var ws = workbook.Worksheets.FirstOrDefault(w => w.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            var ws = workbook.Worksheets.FirstOrDefault(w =>
+                w.Name.Equals(name, StringComparison.OrdinalIgnoreCase)
+                || w.Name.Contains(name, StringComparison.OrdinalIgnoreCase));
             if (ws != null) return ws;
         }
-        return workbook.Worksheets.FirstOrDefault();
+        return null;
     }
 
     private static string? ResolveTemplatePath(string? customPath)
@@ -591,6 +800,7 @@ public class ExcelExportService : IExcelExportService
         if (!string.IsNullOrEmpty(customPath) && File.Exists(customPath))
             return customPath;
 
+        // Prefer the multi-sheet internship list template — never the guidance-schedule workbook.
         return TemplateHelper.FindTemplatePath("InternshipExportTemplate.xlsx")
             ?? TemplateHelper.FindTemplatePath("DANH SACH THUC TAP C23.xlsx");
     }

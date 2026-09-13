@@ -6,7 +6,8 @@ namespace InternLink.Application.DTOs;
 public enum InvitationRole
 {
     Student = 0,
-    Lecturer = 1
+    Lecturer = 1,
+    DepartmentAdmin = 2
 }
 
 /// <summary>

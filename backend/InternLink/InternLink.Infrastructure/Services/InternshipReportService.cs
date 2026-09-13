@@ -23,7 +23,7 @@ public class InternshipReportService : IInternshipReportService
     }
 
     /// <inheritdoc />
-    public async Task<byte[]> ExportC23ExcelAsync(Guid? semesterId = null)
+    public async Task<byte[]> ExportC23ExcelAsync(Guid? semesterId = null, string? department = null)
     {
         // ── Load data ──────────────────────────────────────────────────────
         var internshipsQuery = _db.Internships
@@ -35,6 +35,12 @@ public class InternshipReportService : IInternshipReportService
 
         if (semesterId.HasValue)
             internshipsQuery = internshipsQuery.Where(i => i.SemesterId == semesterId.Value);
+
+        // Scope by the STUDENT's department: the report summarizes a khoa's students.
+        // Matching by lecturer's department would leak other departments' students
+        // whenever a lecturer supervises cross-department internships.
+        if (!string.IsNullOrWhiteSpace(department))
+            internshipsQuery = internshipsQuery.Where(i => i.Student.Department == department);
 
         var internships = await internshipsQuery
             .OrderBy(i => i.Student.Class)
@@ -50,8 +56,13 @@ public class InternshipReportService : IInternshipReportService
 
         // Load students without internship
         var studentsWithInternshipIds = internships.Select(i => i.StudentId).ToHashSet();
-        var studentsWithoutInternship = await _db.Students
-            .Where(s => !studentsWithInternshipIds.Contains(s.Id))
+        var studentsQuery = _db.Students
+            .Where(s => !studentsWithInternshipIds.Contains(s.Id) && !s.IsDeleted);
+
+        if (!string.IsNullOrWhiteSpace(department))
+            studentsQuery = studentsQuery.Where(s => s.Department == department);
+
+        var studentsWithoutInternship = await studentsQuery
             .AsNoTracking()
             .OrderBy(s => s.Class)
             .ThenBy(s => s.FullName)
@@ -90,7 +101,7 @@ public class InternshipReportService : IInternshipReportService
     }
 
     /// <inheritdoc />
-    public async Task<byte[]> ExportC22ASummaryReportAsync(Guid? semesterId = null)
+    public async Task<byte[]> ExportC22ASummaryReportAsync(Guid? semesterId = null, string? department = null)
     {
         // ── Load data ──────────────────────────────────────────────────────
         var internshipsQuery = _db.Internships
@@ -103,6 +114,12 @@ public class InternshipReportService : IInternshipReportService
         if (semesterId.HasValue)
             internshipsQuery = internshipsQuery.Where(i => i.SemesterId == semesterId.Value);
 
+        // Scope by the STUDENT's department: the report summarizes a khoa's students.
+        // Matching by lecturer's department would leak other departments' students
+        // whenever a lecturer supervises cross-department internships.
+        if (!string.IsNullOrWhiteSpace(department))
+            internshipsQuery = internshipsQuery.Where(i => i.Student.Department == department);
+
         var internships = await internshipsQuery.ToListAsync();
 
         var internshipIds = internships.Select(i => i.Id).ToHashSet();
@@ -111,7 +128,11 @@ public class InternshipReportService : IInternshipReportService
             .AsNoTracking()
             .ToDictionaryAsync(e => e.InternshipId);
 
-        var totalStudents = await _db.Students.CountAsync();
+        var studentsCountQuery = _db.Students.Where(s => !s.IsDeleted);
+        if (!string.IsNullOrWhiteSpace(department))
+            studentsCountQuery = studentsCountQuery.Where(s => s.Department == department);
+        var totalStudents = await studentsCountQuery.CountAsync();
+
         var totalCompanies = internships.Select(i => i.CompanyId).Where(c => c.HasValue).Distinct().Count();
 
         // Build the summary report as a styled Excel file (matching the C22A Word structure)
@@ -125,7 +146,7 @@ public class InternshipReportService : IInternshipReportService
     }
 
     /// <inheritdoc />
-    public async Task<byte[]> ExportC22AWordReportAsync(Guid? semesterId = null)
+    public async Task<byte[]> ExportC22AWordReportAsync(Guid? semesterId = null, string? department = null)
     {
         // ── Load data ──────────────────────────────────────────────────────
         var internshipsQuery = _db.Internships
@@ -138,6 +159,12 @@ public class InternshipReportService : IInternshipReportService
         if (semesterId.HasValue)
             internshipsQuery = internshipsQuery.Where(i => i.SemesterId == semesterId.Value);
 
+        // Scope by the STUDENT's department: the report summarizes a khoa's students.
+        // Matching by lecturer's department would leak other departments' students
+        // whenever a lecturer supervises cross-department internships.
+        if (!string.IsNullOrWhiteSpace(department))
+            internshipsQuery = internshipsQuery.Where(i => i.Student.Department == department);
+
         var internships = await internshipsQuery.ToListAsync();
 
         var internshipIds = internships.Select(i => i.Id).ToHashSet();
@@ -146,10 +173,21 @@ public class InternshipReportService : IInternshipReportService
             .AsNoTracking()
             .ToDictionaryAsync(e => e.InternshipId);
 
-        var totalStudents = await _db.Students.CountAsync();
+        var studentsCountQuery = _db.Students.Where(s => !s.IsDeleted);
+        if (!string.IsNullOrWhiteSpace(department))
+            studentsCountQuery = studentsCountQuery.Where(s => s.Department == department);
+        var totalStudents = await studentsCountQuery.CountAsync();
+
         var totalCompanies = internships
             .Select(i => i.CompanyId)
             .Where(c => c.HasValue).Distinct().Count();
+
+        var semester = semesterId.HasValue
+            ? await _db.Semesters.FirstOrDefaultAsync(s => s.Id == semesterId.Value)
+            : await _db.Semesters.OrderByDescending(s => s.StartDate).FirstOrDefaultAsync();
+
+        var startDateStr = semester?.StartDate?.ToString("dd/MM/yyyy") ?? DateTime.Now.ToString("dd/MM/yyyy");
+        var endDateStr = semester?.EndDate?.ToString("dd/MM/yyyy") ?? DateTime.Now.AddDays(45).ToString("dd/MM/yyyy");
 
         // ── Calculate statistics ────────────────────────────────────────────
         var interning = internships.Count;
@@ -199,6 +237,9 @@ public class InternshipReportService : IInternshipReportService
             ["{{TOTAL_NOT_COMPLETED_STUDENTS}}"] = incompleteCount.ToString(),
             ["{{TOTAL_STUDENTS}}"] = totalStudents.ToString(),
             ["{{TOTAL_NOT_INTERNSHIP}}"] = notInterning.ToString(),
+            ["{{START_DATE}}"] = startDateStr,
+            ["{{END_DATE}}"] = endDateStr,
+            ["{{DEPARTMENT}}"] = !string.IsNullOrWhiteSpace(department) ? department : "CÔNG NGHỆ THÔNG TIN",
         };
 
         // Grade stats placeholders
@@ -222,14 +263,13 @@ public class InternshipReportService : IInternshipReportService
         }
 
         // ── Load Word template ─────────────────────────────────────────────
-        var templatePath = Path.Combine(
-            AppContext.BaseDirectory, "Templates",
-            "Bao cao tong ket cong tac thuc tap tot nghiep C22A.docx");
+        var templatePath = TemplateHelper.FindTemplatePath("Bao cao tong ket cong tac thuc tap tot nghiep.docx")
+            ?? TemplateHelper.FindTemplatePath("Bao cao tong ket cong tac thuc tap tot nghiep C22A.docx");
 
-        if (!File.Exists(templatePath))
+        if (string.IsNullOrEmpty(templatePath) || !File.Exists(templatePath))
         {
             throw new FileNotFoundException(
-                $"Word template not found at: {templatePath}", templatePath);
+                $"Word template not found. Checked 'Bao cao tong ket cong tac thuc tap tot nghiep.docx' and 'Bao cao tong ket cong tac thuc tap tot nghiep C22A.docx'");
         }
 
         var templateBytes = await File.ReadAllBytesAsync(templatePath);
@@ -246,8 +286,14 @@ public class InternshipReportService : IInternshipReportService
             if (body == null)
                 throw new InvalidOperationException("Word document has no body.");
 
-            // ── Replace all placeholders in paragraphs ──────────────────────
+            // ── Replace placeholders in paragraphs and tables ───────────────
             ReplacePlaceholdersInBody(body, placeholders);
+
+            // ── Update institutional paragraphs ─────────────────────────────
+            UpdateInstitutionalParagraphs(body, department, startDateStr, endDateStr, totalCompanies, interning, completedCount, incompleteCount);
+
+            // ── Update Grade Statistics Table ───────────────────────────────
+            UpdateGradeStatisticsTable(body, gradeCounts, totalStudents);
 
             // ── Populate the incomplete students table ──────────────────────
             PopulateIncompleteStudentsTable(body, incompleteStudents);
@@ -261,6 +307,119 @@ public class InternshipReportService : IInternshipReportService
     // ────────────────────────────────────────────────────────────────────────
     // Word document helpers
     // ────────────────────────────────────────────────────────────────────────
+
+    private static void UpdateInstitutionalParagraphs(
+        DocumentFormat.OpenXml.Wordprocessing.Body body,
+        string? department,
+        string startDateStr,
+        string endDateStr,
+        int totalCompanies,
+        int interning,
+        int completedCount,
+        int incompleteCount)
+    {
+        var dateStr = $"Tp. Hồ Chí Minh, ngày {DateTime.Now:dd} tháng {DateTime.Now:MM} năm {DateTime.Now:yyyy}";
+
+        foreach (var p in body.Descendants<Paragraph>())
+        {
+            var text = string.Concat(p.Descendants<Text>().Select(t => t.Text));
+            if (string.IsNullOrWhiteSpace(text)) continue;
+
+            if (text.Contains("Tp. Hồ Chí Minh, ngày") || text.Contains("Tp. Hồ Chí Minh , ngày"))
+            {
+                SetParagraphTextPreserveFormat(p, dateStr);
+            }
+            else if (text.Contains("Thời gian thực tập:"))
+            {
+                SetParagraphTextPreserveFormat(p, $"Thời gian thực tập: từ {startDateStr} đến {endDateStr}");
+            }
+            else if (text.Contains("Số lượng doanh nghiệp nhận sinh viên thực tập:"))
+            {
+                SetParagraphTextPreserveFormat(p, $"Số lượng doanh nghiệp nhận sinh viên thực tập: {totalCompanies} đơn vị");
+            }
+            else if (text.Contains("Số lượng sinh viên đăng ký thực tập:"))
+            {
+                SetParagraphTextPreserveFormat(p, $"Số lượng sinh viên đăng ký thực tập: {interning} sinh viên");
+            }
+            else if (text.Contains("Số lượng sinh viên hoàn thành đợt thực tập:"))
+            {
+                SetParagraphTextPreserveFormat(p, $"Số lượng sinh viên hoàn thành đợt thực tập: {completedCount} sinh viên");
+            }
+            else if (text.Contains("Số sinh viên không hoàn thành thực tập:"))
+            {
+                SetParagraphTextPreserveFormat(p, $"Số sinh viên không hoàn thành thực tập: {incompleteCount} sinh viên");
+            }
+            else if (!string.IsNullOrWhiteSpace(department) && (text.Contains("KHOA CÔNG NGHỆ THÔNG TIN") || text.Contains("KHOA ")))
+            {
+                SetParagraphTextPreserveFormat(p, $"KHOA {department.ToUpperInvariant()}");
+            }
+        }
+    }
+
+    private static void SetParagraphTextPreserveFormat(Paragraph paragraph, string newText)
+    {
+        var firstRun = paragraph.Descendants<Run>().FirstOrDefault();
+        var rPr = firstRun?.RunProperties?.CloneNode(true) as RunProperties;
+
+        foreach (var run in paragraph.Descendants<Run>().ToList())
+            run.Remove();
+        foreach (var child in paragraph.ChildElements.Where(c => c is not ParagraphProperties).ToList())
+            child.Remove();
+
+        var newRun = new Run();
+        if (rPr != null) newRun.Append(rPr);
+        newRun.Append(new Text(newText) { Space = SpaceProcessingModeValues.Preserve });
+        paragraph.Append(newRun);
+    }
+
+    private static void UpdateGradeStatisticsTable(
+        DocumentFormat.OpenXml.Wordprocessing.Body body,
+        Dictionary<string, int> gradeCounts,
+        int totalStudents)
+    {
+        var tables = body.Descendants<Table>().ToList();
+        Table? statsTable = null;
+
+        foreach (var table in tables)
+        {
+            var text = string.Concat(table.Descendants<Text>().Select(t => t.Text));
+            if (text.Contains("Xuất sắc") && (text.Contains("Giỏi") || text.Contains("Trung bình")))
+            {
+                statsTable = table;
+                break;
+            }
+        }
+
+        if (statsTable == null) return;
+
+        int totalForPct = totalStudents > 0 ? totalStudents : 1;
+
+        foreach (var row in statsTable.Descendants<TableRow>())
+        {
+            var cells = row.Descendants<TableCell>().ToList();
+            if (cells.Count < 3) continue;
+
+            var rowLabel = string.Concat(cells[0].Descendants<Text>().Select(t => t.Text)).Trim();
+
+            foreach (var kvp in gradeCounts)
+            {
+                if (rowLabel.Equals(kvp.Key, StringComparison.OrdinalIgnoreCase))
+                {
+                    var count = kvp.Value;
+                    var pct = Math.Round(count * 100.0 / totalForPct, 1);
+                    SetCellText(cells[1], count.ToString());
+                    SetCellText(cells[2], $"{pct}%");
+                    break;
+                }
+            }
+
+            if (rowLabel.Equals("TỔNG", StringComparison.OrdinalIgnoreCase) || rowLabel.Equals("Tổng", StringComparison.OrdinalIgnoreCase))
+            {
+                SetCellText(cells[1], totalStudents.ToString());
+                SetCellText(cells[2], "100%");
+            }
+        }
+    }
 
     private static void ReplacePlaceholdersInBody(
         DocumentFormat.OpenXml.Wordprocessing.Body body,
@@ -352,8 +511,8 @@ public class InternshipReportService : IInternshipReportService
         DocumentFormat.OpenXml.Wordprocessing.Body body,
         List<Domain.Entities.Student> incompleteStudents)
     {
-        // Find the incomplete students table by looking for a table containing
-        // "Chưa hoàn thành" or similar header text
+        // Find the incomplete students table by its header cells.
+        // The C22A template header is "TT | MSSV | Họ Tên | Lớp | Lý do".
         var tables = body.Descendants<Table>().ToList();
         Table? targetTable = null;
 
@@ -361,9 +520,9 @@ public class InternshipReportService : IInternshipReportService
         {
             var tableText = string.Concat(
                 table.Descendants<Text>().Select(t => t.Text));
-            if (tableText.Contains("Chưa hoàn thành") ||
-                tableText.Contains("chưa hoàn thành") ||
-                tableText.Contains("DANH SÁCH") && tableText.Contains("Lý do"))
+            if (tableText.Contains("Lý do") && (tableText.Contains("MSSV") || tableText.Contains("Họ Tên")) ||
+                tableText.Contains("Chưa hoàn thành") ||
+                tableText.Contains("chưa hoàn thành"))
             {
                 targetTable = table;
                 break;
@@ -381,8 +540,16 @@ public class InternshipReportService : IInternshipReportService
 
         if (incompleteStudents.Count == 0)
         {
-            // Remove the template data row and add a "no data" message
-            templateRow.Remove();
+            var cells = templateRow.Descendants<TableCell>().ToList();
+            if (cells.Count >= 4)
+            {
+                SetCellText(cells[0], "—");
+                SetCellText(cells[1], "Không có sinh viên chưa hoàn thành");
+                SetCellText(cells[2], "—");
+                SetCellText(cells[3], "—");
+                if (cells.Count >= 5)
+                    SetCellText(cells[4], "—");
+            }
             return;
         }
 
@@ -397,7 +564,15 @@ public class InternshipReportService : IInternshipReportService
             if (newRow == null) continue;
 
             var cells = newRow.Descendants<TableCell>().ToList();
-            if (cells.Count >= 4)
+            if (cells.Count >= 5)
+            {
+                SetCellText(cells[0], stt.ToString());
+                SetCellText(cells[1], student.StudentCode);
+                SetCellText(cells[2], student.FullName);
+                SetCellText(cells[3], student.Class ?? "—");
+                SetCellText(cells[4], "Chưa hoàn thành báo cáo / thực tập");
+            }
+            else if (cells.Count >= 4)
             {
                 SetCellText(cells[0], stt.ToString());
                 SetCellText(cells[1], student.FullName);

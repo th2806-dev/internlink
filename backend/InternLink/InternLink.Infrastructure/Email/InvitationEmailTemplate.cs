@@ -16,28 +16,50 @@ public static class InvitationEmailTemplate
         ArgumentNullException.ThrowIfNull(settings);
 
         var isLecturer = request.Role == InvitationRole.Lecturer;
-        var roleLabel = isLecturer ? "Giảng viên hướng dẫn" : "Sinh viên thực tập";
-        var greeting = isLecturer
-            ? $"Kính gửi Giảng viên {request.FullName},"
-            : $"Kính gửi Sinh viên {request.FullName},";
+        var isDepartmentAdmin = request.Role == InvitationRole.DepartmentAdmin;
 
-        var subject = isLecturer
-            ? "[InternLink] Thư mời tham gia hệ thống hướng dẫn thực tập"
-            : "[InternLink] Thư mời tham gia hệ thống quản lý thực tập";
+        var roleLabel = request.Role switch
+        {
+            InvitationRole.Lecturer => "Giảng viên hướng dẫn",
+            InvitationRole.DepartmentAdmin => "Admin khoa",
+            _ => "Sinh viên thực tập"
+        };
 
-        var capabilities = isLecturer
-            ? """
+        var greeting = request.Role switch
+        {
+            InvitationRole.Lecturer => $"Kính gửi Giảng viên {request.FullName},",
+            InvitationRole.DepartmentAdmin => $"Kính gửi Admin khoa {request.FullName},",
+            _ => $"Kính gửi Sinh viên {request.FullName},"
+        };
+
+        var subject = request.Role switch
+        {
+            InvitationRole.Lecturer => "[InternLink] Thư mời tham gia hệ thống hướng dẫn thực tập",
+            InvitationRole.DepartmentAdmin => "[InternLink] Thư mời tham gia hệ thống với vai trò Admin khoa",
+            _ => "[InternLink] Thư mời tham gia hệ thống quản lý thực tập"
+        };
+
+        var capabilities = request.Role switch
+        {
+            InvitationRole.Lecturer => """
               Sau khi đăng nhập, Anh/Chị có thể:
               - Theo dõi sinh viên được phân công hướng dẫn
               - Nhận xét, duyệt báo cáo và chấm điểm
               - Xuất báo cáo tổng kết cuối kỳ
-              """
-            : """
+              """,
+            InvitationRole.DepartmentAdmin => """
+              Sau khi đăng nhập, Anh/Chị có thể:
+              - Quản lý thông tin khoa, sinh viên và giảng viên thuộc đơn vị
+              - Theo dõi tiến độ thực tập và báo cáo theo kỳ
+              - Duyệt, kiểm tra và xuất dữ liệu phục vụ quản lý khoa
+              """,
+            _ => """
               Sau khi đăng nhập, bạn có thể:
               - Xem tài liệu và biểu mẫu hướng dẫn thực tập
               - Nộp báo cáo tuần và sản phẩm cuối kỳ
               - Theo dõi phản hồi từ giảng viên hướng dẫn
-              """;
+              """
+        };
 
         var supportPhoneLine = string.IsNullOrWhiteSpace(settings.SupportPhone)
             ? string.Empty

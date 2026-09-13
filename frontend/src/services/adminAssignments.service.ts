@@ -7,6 +7,8 @@ import type {
   BulkAssignResultDto,
   CompanyAllocationImportResultDto,
   CompanyAllocationItemDto,
+  CompanySuggestionDto,
+  CompanySuggestionRequest,
   LecturerAssignmentImportResultDto,
   LecturerAssignmentItemDto,
 } from "../types/api";
@@ -118,6 +120,14 @@ export const adminAssignmentsService = {
         body: formData,
       },
     );
+  },
+
+  /** Suggest companies based on matching criteria, capacity, and open positions */
+  suggestCompanies(body: CompanySuggestionRequest): Promise<CompanySuggestionDto[]> {
+    return apiRequest<CompanySuggestionDto[]>("/api/Admin/assignments/suggest-companies", {
+      method: "POST",
+      body,
+    });
   },
 };
 

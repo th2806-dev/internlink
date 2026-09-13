@@ -20,6 +20,7 @@ import {
   PlayCircle,
 } from "lucide-react";
 import { useSemester } from "../../../contexts/SemesterContext";
+import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
 import { RubricEditor } from "../components/RubricEditor";
 import { CreateSemesterModal } from "../components/modals/CreateSemesterModal";
 import { AssignLecturerModal } from "../components/modals/AssignLecturerModal";
@@ -31,6 +32,7 @@ import { Panel } from "../../../components/common/Panel";
 import { adminStudentsService } from "../../../services/adminStudents.service";
 import { adminLecturersService } from "../../../services/adminLecturers.service";
 import { adminCompaniesService } from "../../../services/adminCompanies.service";
+import type { ToastType } from "../../../contexts/ToastContext";
 
 const EMPTY_SEMESTER = {
   id: "",
@@ -49,7 +51,8 @@ const EMPTY_SEMESTER = {
   description: "Nhấn nút \u201Ctạo kỳ thực tập mới\u201D để bắt đầu.",
 };
 
-export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (msg: string) => void; onNavigateTab?: (tab: string) => void }) => {
+export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (msg: string, type?: ToastType) => void; onNavigateTab?: (tab: string) => void }) => {
+  const { canMutateOps, isSuperAdmin } = useAdminCapabilities();
   const {
     semesters: semestersList,
     selectedSemesterId,
@@ -98,6 +101,7 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
       endDate: formData.endDate || "15/12/2026",
       status: isDraft ? "draft" : "upcoming",
       description: formData.description || `Đợt thực tập ${formData.term} ${formData.academicYear}`,
+      totalWeeks: 6,
     });
     onShowToast(
       `Đã ${isDraft ? "lưu nháp" : "tạo thành công"} kỳ thực tập: "${formData.name}"`,
@@ -157,27 +161,40 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
       <PageHeader
         icon={CalendarDays}
         title="Quản lý kỳ thực tập"
-        actions={[
-          {
-            label: "Import Giảng viên",
-            icon: FileUp,
-            onClick: () => setImportType("lecturers"),
-            variant: "secondary",
-          },
-          {
-            label: "Import Sinh viên",
-            icon: Users,
-            onClick: () => setImportType("students"),
-            variant: "secondary",
-          },
-          {
-            label: "Tạo kỳ thực tập mới",
-            icon: Plus,
-            onClick: () => setShowCreateModal(true),
-            variant: "primary",
-          },
-        ]}
+        actions={
+          canMutateOps
+            ? [
+                {
+                  label: "Import Giảng viên",
+                  icon: FileUp,
+                  onClick: () => setImportType("lecturers"),
+                  variant: "secondary",
+                },
+                {
+                  label: "Import Sinh viên",
+                  icon: Users,
+                  onClick: () => setImportType("students"),
+                  variant: "secondary",
+                },
+                {
+                  label: "Tạo kỳ thực tập mới",
+                  icon: Plus,
+                  onClick: () => setShowCreateModal(true),
+                  variant: "primary",
+                },
+              ]
+            : []
+        }
       />
+
+      {isSuperAdmin && (
+        <div className="px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900 flex items-center gap-2.5">
+          <Eye className="w-4 h-4 text-blue-600 shrink-0" />
+          <span>
+            Chế độ chỉ xem nghiệp vụ khoa — Super Admin chỉ xem danh sách &amp; tiến độ các kỳ thực tập.
+          </span>
+        </div>
+      )}
 
       <KpiGrid>
         <KpiCard
@@ -249,37 +266,41 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
 
               {/* Action Buttons */}
               <div className="flex items-center gap-2 shrink-0">
-                <button
-                  onClick={() => setShowCreateModal(true)}
-                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-md border border-slate-200/80 transition-colors flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Edit3 className="w-3.5 h-3.5" />
-                  <span>Chỉnh sửa</span>
-                </button>
-
-                {currentActiveSem.id && (
+                {canMutateOps && (
                   <>
-                    {(activeSem.status === "upcoming" || activeSem.status === "draft") && (
-                      <button
-                        onClick={() => handleStartSemester(currentActiveSem.id)}
-                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-md border border-emerald-600 transition-colors flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <PlayCircle className="w-3.5 h-3.5" />
-                        <span>Bắt đầu kỳ</span>
-                      </button>
+                    <button
+                      onClick={() => setShowCreateModal(true)}
+                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-md border border-slate-200/80 transition-colors flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                      <span>Chỉnh sửa</span>
+                    </button>
+
+                    {currentActiveSem.id && (
+                      <>
+                        {(activeSem.status === "upcoming" || activeSem.status === "draft") && (
+                          <button
+                            onClick={() => handleStartSemester(currentActiveSem.id)}
+                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-md border border-emerald-600 transition-colors flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <PlayCircle className="w-3.5 h-3.5" />
+                            <span>Bắt đầu kỳ</span>
+                          </button>
+                        )}
+                        <button
+                          onClick={() =>
+                            handleCloseSemester(
+                              currentActiveSem.id,
+                              currentActiveSem.name,
+                            )
+                          }
+                          className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-md border border-rose-200 transition-colors flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Lock className="w-3.5 h-3.5" />
+                          <span>Đóng đợt</span>
+                        </button>
+                      </>
                     )}
-                <button
-                  onClick={() =>
-                    handleCloseSemester(
-                      currentActiveSem.id,
-                      currentActiveSem.name,
-                    )
-                  }
-                  className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-md border border-rose-200 transition-colors flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Lock className="w-3.5 h-3.5" />
-                  <span>Đóng đợt</span>
-                </button>
                   </>
                 )}
               </div>
@@ -368,6 +389,7 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
               semesterId={currentActiveSem.id}
               semesterName={currentActiveSem.name}
               onShowToast={onShowToast}
+              readOnly={!canMutateOps}
             />
           )}
 
@@ -501,34 +523,38 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
                             <Eye className="w-3.5 h-3.5" />
                           </button>
 
-                          <button
-                            onClick={() => handleDuplicateSemester(sem)}
-                            className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-slate-900 rounded-lg transition-colors cursor-pointer"
-                            title="Sao chép"
-                          >
-                            <Copy className="w-3.5 h-3.5" />
-                          </button>
+                          {canMutateOps && (
+                            <>
+                              <button
+                                onClick={() => handleDuplicateSemester(sem)}
+                                className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-slate-900 rounded-lg transition-colors cursor-pointer"
+                                title="Sao chép"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                              </button>
 
-                          {(sem.status === "upcoming" || sem.status === "draft") && (
-                            <button
-                              onClick={() => handleStartSemester(sem.id)}
-                              className="p-1.5 hover:bg-emerald-50 text-slate-600 hover:text-emerald-600 rounded-lg transition-colors cursor-pointer"
-                              title="Bắt đầu kỳ"
-                            >
-                              <PlayCircle className="w-3.5 h-3.5" />
-                            </button>
-                          )}
+                              {(sem.status === "upcoming" || sem.status === "draft") && (
+                                <button
+                                  onClick={() => handleStartSemester(sem.id)}
+                                  className="p-1.5 hover:bg-emerald-50 text-slate-600 hover:text-emerald-600 rounded-lg transition-colors cursor-pointer"
+                                  title="Bắt đầu kỳ"
+                                >
+                                  <PlayCircle className="w-3.5 h-3.5" />
+                                </button>
+                              )}
 
-                          {sem.status !== "completed" && (
-                            <button
-                              onClick={() =>
-                                handleCloseSemester(sem.id, sem.name)
-                              }
-                              className="p-1.5 hover:bg-rose-50 text-slate-600 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
-                              title="Đóng kỳ"
-                            >
-                              <Lock className="w-3.5 h-3.5" />
-                            </button>
+                              {sem.status !== "completed" && (
+                                <button
+                                  onClick={() =>
+                                    handleCloseSemester(sem.id, sem.name)
+                                  }
+                                  className="p-1.5 hover:bg-rose-50 text-slate-600 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
+                                  title="Đóng kỳ"
+                                >
+                                  <Lock className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </>
                           )}
                         </div>
                       </td>
@@ -632,6 +658,7 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
             startDate: data.startDate,
             endDate: data.endDate,
             studentsCount: data.targetStudents,
+            totalWeeks: data.totalWeeks,
             status: "upcoming",
             description: `Đợt thực tập ${data.term} ${data.academicYear}`,
           });

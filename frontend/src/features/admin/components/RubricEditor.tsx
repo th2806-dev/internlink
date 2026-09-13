@@ -70,12 +70,14 @@ interface RubricEditorProps {
   semesterId: string;
   semesterName: string;
   onShowToast: (msg: string) => void;
+  readOnly?: boolean;
 }
 
 export const RubricEditor = ({
   semesterId,
   semesterName,
   onShowToast,
+  readOnly = false,
 }: RubricEditorProps) => {
   const [rubric, setRubric] = useState<EvaluationRubricDto | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -125,7 +127,7 @@ export const RubricEditor = ({
 
   const totalWeight = criteria.reduce((sum, c) => sum + c.weight, 0);
   const isValidTotal = Math.abs(totalWeight - 100) < 0.01;
-  const isEditable = !rubric || rubric.status !== "Locked";
+  const isEditable = !readOnly && (!rubric || rubric.status !== "Locked");
 
   const addCriterion = () => {
     const newOrder = criteria.length + 1;

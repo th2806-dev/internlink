@@ -78,4 +78,35 @@ public interface ICompanyService
     /// Export companies list to styled Excel.
     /// </summary>
     Task<byte[]> ExportCompaniesExcelAsync();
+
+    /// <summary>
+    /// Get recruitment positions for a company, optionally scoped to a semester.
+    /// </summary>
+    Task<IEnumerable<CompanyPositionDto>> GetPositionsAsync(Guid companyId, Guid? semesterId = null);
+
+    /// <summary>
+    /// Get a recruitment position by ID.
+    /// </summary>
+    Task<CompanyPositionDto?> GetPositionByIdAsync(Guid positionId);
+
+    /// <summary>
+    /// Create a new recruitment position for a company.
+    /// </summary>
+    Task<CompanyPositionDto> CreatePositionAsync(Guid companyId, CreateCompanyPositionRequest request);
+
+    /// <summary>
+    /// Update a recruitment position.
+    /// </summary>
+    Task<CompanyPositionDto?> UpdatePositionAsync(Guid positionId, UpdateCompanyPositionRequest request);
+
+    /// <summary>
+    /// Delete a recruitment position.
+    /// </summary>
+    Task<bool> DeletePositionAsync(Guid positionId);
+
+    /// <summary>
+    /// Suggest companies for student assignment based on major, industry, capacity, and open positions.
+    /// </summary>
+    Task<IEnumerable<CompanySuggestionDto>> SuggestCompaniesAsync(CompanySuggestionRequest request);
 }
+

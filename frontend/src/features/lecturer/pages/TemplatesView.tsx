@@ -60,9 +60,10 @@ export const TemplatesView = () => {
     (async () => {
       setIsLoadingDocs(true);
       try {
-        const [internshipsResult, documentsResult] = await Promise.allSettled([
+        const [internshipsResult, documentsResult, templatesResult] = await Promise.allSettled([
           lecturerInternshipsService.getAll(),
           documentService.getAll(),
+          documentService.getTemplates(),
         ]);
         if (cancelled) return;
 
@@ -70,12 +71,16 @@ export const TemplatesView = () => {
           setDefaultInternshipId(internshipsResult.value[0].id);
         }
 
-        if (documentsResult.status === "fulfilled") {
-          const mapped = documentsResult.value.map(mapDocumentListItemToUi) as unknown as DocumentItem[];
-          setDocuments(mapped);
-        } else {
-          throw documentsResult.reason;
+        const docMap = new Map<string, any>();
+        if (templatesResult.status === "fulfilled") {
+          templatesResult.value.forEach((d) => docMap.set(d.id, d));
         }
+        if (documentsResult.status === "fulfilled") {
+          documentsResult.value.forEach((d) => docMap.set(d.id, d));
+        }
+
+        const mapped = Array.from(docMap.values()).map(mapDocumentListItemToUi) as unknown as DocumentItem[];
+        setDocuments(mapped);
       } catch (err) {
         showToast(getApiErrorMessage(err));
       } finally {
@@ -648,39 +653,45 @@ export const TemplatesView = () => {
                               title="Xem chi tiết"
                             >
                               <Eye className="w-4 h-4" />
-                            </button>          <button
-              onClick={() => handleDeleteClick(doc)}
-              className="p-1.5 hover:bg-rose-100 rounded-lg text-slate-600 hover:text-rose-700"
-              title="Xóa biểu mẫu"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
+                            </button>
 
-            <button
-              onClick={() => handleDownload(doc)}
-              className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-emerald-600"
-              title="Tải xuống"
-            >
-              <Download className="w-4 h-4" />
-            </button>
+                            {!(doc as any).isOfficial && (
+                              <button
+                                onClick={() => handleDeleteClick(doc)}
+                                className="p-1.5 hover:bg-rose-100 rounded-lg text-slate-600 hover:text-rose-700"
+                                title="Xóa biểu mẫu"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
 
-            {/* Archive / Reactivate Button */}
-                            {isCirc ? (
-                              <button
-                                onClick={() => setArchivingDoc(doc)}
-                                className="p-1.5 hover:bg-amber-100 rounded-lg text-slate-600 hover:text-amber-700"
-                                title="Ngưng lưu hành & Chuyển vào Log"
-                              >
-                                <Archive className="w-4 h-4" />
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => handleReactivateCirculation(doc)}
-                                className="p-1.5 hover:bg-emerald-100 rounded-lg text-slate-600 hover:text-emerald-700"
-                                title="Mở lưu hành lại cho SV"
-                              >
-                                <RotateCcw className="w-4 h-4" />
-                              </button>
+                            <button
+                              onClick={() => handleDownload(doc)}
+                              className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-emerald-600"
+                              title="Tải xuống"
+                            >
+                              <Download className="w-4 h-4" />
+                            </button>
+
+                            {/* Archive / Reactivate Button */}
+                            {!(doc as any).isOfficial && (
+                              isCirc ? (
+                                <button
+                                  onClick={() => setArchivingDoc(doc)}
+                                  className="p-1.5 hover:bg-amber-100 rounded-lg text-slate-600 hover:text-amber-700"
+                                  title="Ngưng lưu hành & Chuyển vào Log"
+                                >
+                                  <Archive className="w-4 h-4" />
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => handleReactivateCirculation(doc)}
+                                  className="p-1.5 hover:bg-emerald-100 rounded-lg text-slate-600 hover:text-emerald-700"
+                                  title="Mở lưu hành lại cho SV"
+                                >
+                                  <RotateCcw className="w-4 h-4" />
+                                </button>
+                              )
                             )}
 
                           </div>
@@ -766,13 +777,15 @@ export const TemplatesView = () => {
                     >
                       <Eye className="w-3.5 h-3.5" />
                       <span>Chi tiết</span>
-                    </button>                      <button
-                        onClick={() => handleDeleteClick(doc)}
-                        className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-md border border-rose-200"
-                        title="Xóa biểu mẫu"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                    </button>                      {!(doc as any).isOfficial && (
+                        <button
+                          onClick={() => handleDeleteClick(doc)}
+                          className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-md border border-rose-200"
+                          title="Xóa biểu mẫu"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
 
                       <button
                         onClick={() => handleDownload(doc)}
@@ -782,23 +795,25 @@ export const TemplatesView = () => {
                         <span>Tải về</span>
                       </button>
 
-                      {isCirc ? (
-                      <button
-                        onClick={() => setArchivingDoc(doc)}
-                        className="p-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-md border border-amber-200"
-                        title="Ngưng lưu hành"
-                      >
-                        <Archive className="w-3.5 h-3.5" />
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => handleReactivateCirculation(doc)}
-                        className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-md border border-emerald-200"
-                        title="Mở lưu hành lại"
-                      >
-                        <RotateCcw className="w-3.5 h-3.5" />
-                      </button>
-                    )}
+                      {!(doc as any).isOfficial && (
+                        isCirc ? (
+                          <button
+                            onClick={() => setArchivingDoc(doc)}
+                            className="p-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-md border border-amber-200"
+                            title="Ngưng lưu hành"
+                          >
+                            <Archive className="w-3.5 h-3.5" />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleReactivateCirculation(doc)}
+                            className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-md border border-emerald-200"
+                            title="Mở lưu hành lại"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                          </button>
+                        )
+                      )}
                   </div>
                 </div>
               </div>

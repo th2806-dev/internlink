@@ -14,6 +14,7 @@ public class SemesterDto
     public SemesterStatus Status { get; set; }
     public string? Description { get; set; }
     public int MaxStudentsPerLecturer { get; set; }
+    public int TotalWeeks { get; set; } = 6;
     public int StudentsCount { get; set; }
     public int LecturersCount { get; set; }
     public int PlacedStudents { get; set; }
@@ -21,6 +22,8 @@ public class SemesterDto
     public int ProgressPercent { get; set; }
     public string CurrentPhase { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
+    /// <summary>Department owning this semester (null = shared/global).</summary>
+    public Guid? DepartmentId { get; set; }
 }
 
 public class CreateSemesterDto
@@ -33,7 +36,10 @@ public class CreateSemesterDto
     public SemesterStatus Status { get; set; } = SemesterStatus.Upcoming;
     public string? Description { get; set; }
     public int MaxStudentsPerLecturer { get; set; } = 30;
+    public int TotalWeeks { get; set; } = 6;
     public int TargetStudents { get; set; } = 0;
+    /// <summary>Department owning this semester. SuperAdmin may set it; DepartmentAdmin is forced to their own.</summary>
+    public Guid? DepartmentId { get; set; }
 }
 
 public class UpdateSemesterDto
@@ -46,4 +52,5 @@ public class UpdateSemesterDto
     public SemesterStatus? Status { get; set; }
     public string? Description { get; set; }
     public int? MaxStudentsPerLecturer { get; set; }
+    public int? TotalWeeks { get; set; }
 }

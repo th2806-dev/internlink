@@ -7,10 +7,12 @@ import type {
   NotificationDto,
   SubmissionDto,
   WeeklyReportDto,
+  CompanyDetailDto,
 } from "../types/api";
 import type { Student } from "../types/student";
 import type { Submission } from "../types/submission";
 import type { Enterprise } from "../types/enterprise";
+import type { EnterpriseDetail } from "../types/enterprise";
 
 /** Check if a URL is an external placeholder (Unsplash) or empty. */
 function isPlaceholderAvatar(url: string): boolean {

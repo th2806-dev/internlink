@@ -28,7 +28,7 @@ Tài liệu đặc tả toàn bộ yêu cầu chức năng (FR) và phi chức n
 | Mã | Chức năng | Mô tả |
 |:---|:---|:---|
 | FR-AUTH-01 | Đăng nhập | JWT Access Token (60 phút) + Refresh Token (7 ngày) |
-| FR-AUTH-02 | Phân quyền RBAC | Policy: RequireAdmin, RequireLecturer, RequireStudent |
+| FR-AUTH-02 | Phân quyền RBAC | Policy: RequireAdmin (SuperAdmin + DepartmentAdmin), RequireLecturerOrAdmin, RequireStudent |
 | FR-AUTH-03 | Đổi mật khẩu lần đầu | MustChangePassword = true |
 | FR-AUTH-04 | Quên mật khẩu | Token 15 phút + Email link |
 | FR-AUTH-05 | Hồ sơ cá nhân | Xem + cập nhật thông tin |
@@ -45,7 +45,7 @@ Tài liệu đặc tả toàn bộ yêu cầu chức năng (FR) và phi chức n
 | FR-ADM-06 | Phân công Hướng dẫn | **Bulk/Auto assign** + Company allocation |
 | FR-ADM-07 | **Yêu cầu Tài khoản** | Request Queue + **Provision tự động** |
 | FR-ADM-08 | **Tạo Rubric** | Dynamic rubric với tiêu chí tùy chỉnh |
-| FR-ADM-09 | **Phê duyệt Rubric** | Submit → Approve/Reject workflow |
+| FR-ADM-09 | **Quản lý Rubric** | Save/Update rubric bằng admin; hệ thống áp dụng ngay và lưu trạng thái Approved |
 | FR-ADM-10 | Phát Thông báo | Broadcast toàn hệ thống |
 | FR-ADM-11 | Cấu hình Hệ thống | Settings CRUD + Reset |
 | FR-ADM-12 | Dashboard Tổng quan | KPI, Charts, Action items |

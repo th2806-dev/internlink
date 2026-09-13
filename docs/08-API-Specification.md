@@ -131,12 +131,9 @@
 | Method | Endpoint | Mô tả |
 |:---|:---|:---|
 | `GET` | `/api/Admin/semesters/{id}/rubric` | Lấy rubric |
-| `POST` | `/api/Admin/semesters/{id}/rubric` | Tạo rubric |
-| `PUT` | `/api/Admin/semesters/{id}/rubric` | Cập nhật rubric |
+| `POST` | `/api/Admin/semesters/{id}/rubric` | Tạo rubric (save/apply tức thì, trạng thái Approved) |
+| `PUT` | `/api/Admin/semesters/{id}/rubric` | Cập nhật rubric (giữ trạng thái Approved) |
 | `DELETE` | `/api/Admin/semesters/{id}/rubric` | Xóa rubric |
-| `POST` | `/api/Admin/semesters/{id}/rubric/submit` | Gửi phê duyệt |
-| `POST` | `/api/Admin/semesters/{id}/rubric/approve` | Phê duyệt |
-| `POST` | `/api/Admin/semesters/{id}/rubric/reject` | Từ chối |
 
 ### 3.9. Notifications (`/api/Admin/notifications`)
 

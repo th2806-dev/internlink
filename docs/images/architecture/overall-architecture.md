@@ -75,7 +75,7 @@ flowchart TB
 
 1. **Phân quyền 3 vai trò chặt chẽ (RBAC)**: SuperAdmin, Lecturer, Student — mỗi vai trò có bộ endpoint và giao diện riêng biệt, kiểm soát qua JWT Claims + Policy.
 2. **Xử lý tài liệu Server-side**: PDF và Excel được tạo trực tiếp từ Backend (QuestPDF, ClosedXML), đảm bảo chuẩn mực và bảo mật dữ liệu.
-3. **Hệ thống tài khoản linh hoạt**: Bao gồm luồng Account Requests (Admin duyệt cấp tài khoản) và Rubric Approval (Admin phê duyệt rubric giảng viên).
+3. **Hệ thống tài khoản linh hoạt**: Bao gồm luồng Account Requests (Admin duyệt cấp tài khoản) và Rubric Management (Admin save/apply rubric, hệ thống giữ Approved ngay).
 4. **Thao tác phản hồi 2 chiều**: Giảng viên ghi chú sinh viên (`/notes`), gửi thông báo hàng loạt scoped (`/notify`); Sinh viên phản hồi bài nộp (`/student-reply`).
 5. **Chi phí vận hành tối ưu**: Docker Volume cục bộ, không phụ thuộc dịch vụ cloud bên ngoài.
 

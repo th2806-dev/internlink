@@ -30,6 +30,7 @@ import {
   AlertTriangle,
   X,
   RefreshCw,
+  CalendarDays,
 } from "lucide-react";
 import type {
   LecturerEvaluationStudentDto,
@@ -181,6 +182,23 @@ export const EvaluationDashboard = () => {
     }
   };
 
+  const handleExportGuidanceSchedule = async () => {
+    const semesterId = semesterFilter && semesterFilter !== "all" ? semesterFilter : activeSemesterId;
+    if (!semesterId) {
+      showToast("Vui lòng chọn học kỳ để xuất lịch hướng dẫn.");
+      return;
+    }
+    setIsExporting(true);
+    try {
+      await lecturerExportService.downloadGuidanceSchedule(semesterId);
+      showToast("Đã tải xuống Lịch hướng dẫn thực tập (.xlsx)");
+    } catch (err) {
+      showToast(getApiErrorMessage(err));
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   if (rubricStudent) {
     const gradingStudent = mapStudentToGrading(rubricStudent);
     const semesterId =
@@ -245,6 +263,14 @@ export const EvaluationDashboard = () => {
         badge={semesterFilter ?? "Tất cả kỳ"}
         badgeColor="bg-blue-100 text-blue-800 border-blue-200"
         actions={[
+          {
+            label: "Xuất lịch hướng dẫn",
+            icon: CalendarDays,
+            onClick: () => void handleExportGuidanceSchedule(),
+            variant: "secondary",
+            disabled: isExporting || isLoadingApi,
+            loading: isExporting,
+          },
           {
             label: "Xuất bảng điểm",
             icon: Download,

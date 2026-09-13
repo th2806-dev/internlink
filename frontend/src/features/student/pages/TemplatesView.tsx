@@ -34,11 +34,23 @@ export const TemplatesView = ({ onShowToast }: { onShowToast: (msg: string) => v
     (async () => {
       setIsLoading(true);
       try {
-        const docs = await documentService.getAll();
+        const [templatesResult, docsResult] = await Promise.allSettled([
+          documentService.getTemplates({ isPublishedOnly: true }),
+          documentService.getAll(),
+        ]);
         if (!cancelled) {
-          // Only show published / circulating documents for students
-          const activeDocs = docs.filter((d: any) => d.isPublished !== false);
-          setTemplates(activeDocs.map(mapDocumentListItemToStudentTemplate));
+          const docMap = new Map<string, any>();
+          if (templatesResult.status === "fulfilled") {
+            templatesResult.value
+              .filter((d: any) => d.isPublished !== false)
+              .forEach((d) => docMap.set(d.id, d));
+          }
+          if (docsResult.status === "fulfilled") {
+            docsResult.value
+              .filter((d: any) => d.isPublished !== false)
+              .forEach((d) => docMap.set(d.id, d));
+          }
+          setTemplates(Array.from(docMap.values()).map(mapDocumentListItemToStudentTemplate));
         }
       } catch (err) {
         if (!cancelled) onShowToast(getApiErrorMessage(err));
@@ -66,6 +78,11 @@ export const TemplatesView = ({ onShowToast }: { onShowToast: (msg: string) => v
       await documentService.download(
         doc.id,
         doc.fileName || `${doc.name}.bin`,
+      );
+      setTemplates((prev) =>
+        prev.map((t) =>
+          t.id === doc.id ? { ...t, downloadCount: (t.downloadCount || 0) + 1 } : t
+        )
       );
       onShowToast(`Đã tải xuống: ${doc.name}`);
     } catch (err) {

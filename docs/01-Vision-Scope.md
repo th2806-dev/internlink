@@ -11,7 +11,7 @@
 
 **InternLink** là nền tảng quản lý và giám sát thực tập tốt nghiệp toàn diện dành cho Khoa Công nghệ Thông tin, số hóa 100% quy trình kết nối giữa 3 chủ thể:
 
-1. **Ban Quản trị Khoa (SuperAdmin)**: Quản lý học kỳ, danh mục doanh nghiệp, import hàng loạt danh sách SV/GV bằng Excel, phân công hướng dẫn, quản lý yêu cầu tài khoản, phê duyệt rubric đánh giá, phát thông báo broadcast.
+1. **Ban Quản trị Khoa (SuperAdmin)**: Quản lý học kỳ, danh mục doanh nghiệp, import hàng loạt danh sách SV/GV bằng Excel, phân công hướng dẫn, quản lý yêu cầu tài khoản, quản lý rubric đánh giá (save/apply tức thì), phát thông báo broadcast.
 2. **Giảng viên hướng dẫn (Lecturer)**: Theo dõi tiến độ sinh viên, duyệt báo cáo tuần, phản hồi bài nộp, chấm điểm rubric, lưu ghi chú SV, gửi thông báo hàng loạt, xuất báo cáo PDF/Excel.
 3. **Sinh viên thực tập (Student)**: Theo dõi tiến độ thực tập, nộp báo cáo tuần, nộp bài nộp sản phẩm, phản hồi 2 chiều với GV, xem điểm đánh giá, tải PDF chứng nhận thực tập.
 
@@ -27,7 +27,7 @@
 | **P4. Tổng hợp điểm thủ công** | Mất 1-2 tuần tổng hợp điểm từ phiếu giấy | Tự động tính điểm + xuất Excel/PDF |
 | **P5. Khởi tạo tài khoản nặng nề** | Nhập liệu thủ công hàng trăm tài khoản | Import Excel + tự động tạo tài khoản |
 | **P6. Không có hệ thống yêu cầu tài khoản** | SV/GV mới phải chờ Admin tạo thủ công | Account Requests + Provision tự động |
-| **P7. Không có rubric chuẩn hóa** | Mỗi GV chấm theo tiêu chí riêng | Dynamic Rubric Editor + Approval workflow |
+| **P7. Không có rubric chuẩn hóa** | Mỗi GV chấm theo tiêu chí riêng | Dynamic Rubric Editor + save/apply Approved tức thì |
 
 ---
 
@@ -35,7 +35,7 @@
 
 - **G1. Tự động hóa 90% quy trình hành chính**: Import/Export Excel, auto-assign, bulk operations.
 - **G2. Tăng cường tương tác 2 chiều**: SignalR real-time, feedback submission, student reply.
-- **G3. Đảm bảo minh bạch học thuật**: Rubric 4 tiêu chí, approval workflow, audit trail.
+- **G3. Đảm bảo minh bạch học thuật**: Rubric 4 tiêu chí, save/apply tức thì, audit trail.
 - **G4. Bảo mật & 0đ Cloud**: Local Docker Volume, JWT + Refresh Token, PBKDF2.
 
 ---
@@ -49,7 +49,7 @@
 - Quản lý Sinh viên/Giảng viên/Doanh nghiệp (CRUD + Import/Export Excel)
 - Quản lý Tài khoản (CRUD + Reset password + Lock/Unlock)
 - Yêu cầu & Cấp phát Tài khoản (Request Queue + Provision)
-- Duyệt Rubric (Approve/Reject workflow)
+- Quản lý Rubric (save/apply tức thì, Approved ngay)
 - Thông báo Broadcast (Campaign history + Delete)
 - Cấu hình Hệ thống
 

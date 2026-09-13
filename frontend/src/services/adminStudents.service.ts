@@ -20,6 +20,14 @@ export const adminStudentsService = {
     major?: string;
     email?: string;
     phone?: string;
+    department?: string;
+    desiredPosition?: string;
+    alternativePosition?: string;
+    desiredLocation?: string;
+    workPreference?: string;
+    preferredIndustry?: string;
+    skills?: string;
+    resumeUrl?: string;
     grantAccount?: boolean;
   }): Promise<StudentDto> {
     return apiRequest<StudentDto>("/api/Admin/students", {
@@ -36,6 +44,14 @@ export const adminStudentsService = {
       major?: string;
       email?: string;
       phone?: string;
+      department?: string;
+      desiredPosition?: string;
+      alternativePosition?: string;
+      desiredLocation?: string;
+      workPreference?: string;
+      preferredIndustry?: string;
+      skills?: string;
+      resumeUrl?: string;
       grantAccount?: boolean;
     },
   ): Promise<StudentDto> {

@@ -23,6 +23,7 @@ export interface LoginResponseDto {
   refreshTokenExpiresAt?: string;
   role: string;
   mustChangePassword: boolean;
+  departmentId?: string | null;
 }
 
 export interface RefreshTokenRequestDto {
@@ -42,6 +43,7 @@ export interface CurrentUserDto {
   role: string;
   isActive: boolean;
   mustChangePassword: boolean;
+  departmentId?: string | null;
 }
 
 export interface AuthSessionDto {
@@ -86,6 +88,14 @@ export interface StudentDto {
   major?: string | null;
   email?: string | null;
   phone?: string | null;
+  department?: string | null;
+  desiredPosition?: string | null;
+  alternativePosition?: string | null;
+  desiredLocation?: string | null;
+  workPreference?: string | null;
+  preferredIndustry?: string | null;
+  skills?: string | null;
+  resumeUrl?: string | null;
   createdAt: string;
   updatedAt?: string | null;
 }
@@ -115,11 +125,75 @@ export interface CompanyDto {
   capacity?: number | null;
   isActive: boolean;
   studentCount?: number;
+  openPositionCount?: number;
   /** Link status for the requested semester: false = "ngưng liên kết". */
   isSemesterLinked?: boolean | null;
   createdAt: string;
   updatedAt?: string | null;
 }
+
+export interface CompanyPositionDto {
+  id: string;
+  companyId: string;
+  companyName?: string | null;
+  semesterId?: string | null;
+  title: string;
+  description?: string | null;
+  requiredMajor?: string | null;
+  requiredSkills?: string | null;
+  location?: string | null;
+  slots: number;
+  filledSlots: number;
+  stipend?: number | null;
+  isOpen: boolean;
+  createdAt: string;
+}
+
+export interface CreateCompanyPositionRequest {
+  semesterId?: string | null;
+  title: string;
+  description?: string | null;
+  requiredMajor?: string | null;
+  requiredSkills?: string | null;
+  location?: string | null;
+  slots?: number;
+  stipend?: number | null;
+  isOpen?: boolean;
+}
+
+export interface UpdateCompanyPositionRequest {
+  semesterId?: string | null;
+  title: string;
+  description?: string | null;
+  requiredMajor?: string | null;
+  requiredSkills?: string | null;
+  location?: string | null;
+  slots?: number;
+  stipend?: number | null;
+  isOpen?: boolean;
+}
+
+export interface CompanySuggestionDto {
+  companyId: string;
+  companyName: string;
+  industry?: string | null;
+  address?: string | null;
+  capacity: number;
+  currentStudentCount: number;
+  availableSlots: number;
+  matchScore: number;
+  matchReason: string;
+  openPositions: CompanyPositionDto[];
+}
+
+export interface CompanySuggestionRequest {
+  semesterId: string;
+  studentId?: string;
+  preferredIndustry?: string;
+  preferredLocation?: string;
+  maxResults?: number;
+}
+
 
 export interface UserDto {
   id: string;
@@ -247,11 +321,24 @@ export interface LecturerAssignmentImportResultDto {
   errors: LecturerAssignmentImportErrorDto[];
 }
 
+export interface ProgressBreakdownDto {
+  accountPercent: number;
+  profilePercent: number;
+  companyPercent: number;
+  reportPercent: number;
+  evaluationPercent: number;
+  totalPercent: number;
+  submittedReportsCount: number;
+  requiredWeeksCount: number;
+  summaryText: string;
+}
+
 export interface StudentPortalProfileDto {
   student: StudentDto;
   internship?: InternshipDto | null;
   lecturerName?: string | null;
   progressPercent?: number | null;
+  progressBreakdown?: ProgressBreakdownDto | null;
 }
 
 // --- Portal DTOs (Lecturer / Student) ---
@@ -297,6 +384,7 @@ export interface LecturerStudentListItemDto {
   hasEvaluation: boolean;
   isEvaluationFinalized: boolean;
   progressPercent: number;
+  progressBreakdown?: ProgressBreakdownDto | null;
 }
 
 export interface CompanyDetailDto {
@@ -604,7 +692,12 @@ export interface InternshipStatsDto {
 
 export interface DocumentListItemDto {
   id: string;
-  internshipId: string;
+  internshipId?: string | null;
+  semesterId?: string | null;
+  semesterName?: string | null;
+  department?: string | null;
+  version: string;
+  publishedAt?: string | null;
   title: string;
   description?: string | null;
   fileName: string;
@@ -625,6 +718,38 @@ export interface DocumentDetailDto extends DocumentListItemDto {
   filePath: string;
   createdAt: string;
   updatedAt?: string | null;
+}
+
+export interface TemplateStatsDto {
+  totalTemplates: number;
+  publishedCount: number;
+  archivedCount: number;
+  totalDownloads: number;
+}
+
+export interface CreateTemplatePayload {
+  semesterId?: string;
+  department?: string;
+  title: string;
+  description?: string;
+  category?: string;
+  version?: string;
+  isPublished?: boolean;
+  isRequired?: boolean;
+  file: File;
+}
+
+export interface UpdateTemplatePayload {
+  semesterId?: string;
+  department?: string;
+  title?: string;
+  description?: string;
+  category?: string;
+  version?: string;
+  isPublished?: boolean;
+  isRequired?: boolean;
+  archiveReason?: string;
+  file?: File;
 }
 
 export interface StudentImportResultDto {
@@ -705,3 +830,142 @@ export interface CompanyImportErrorDto {
   companyName?: string | null;
   message: string;
 }
+
+export interface SemesterReportScheduleDto {
+  id: string;
+  semesterId: string;
+  weekNumber: number;
+  title: string;
+  dueDate: string;
+  allowLateSubmission: boolean;
+  description?: string | null;
+}
+
+export interface UpdateReportScheduleRequest {
+  title?: string;
+  dueDate?: string;
+  allowLateSubmission?: boolean;
+  description?: string;
+}
+
+// ==========================================
+// ATTENDANCE & MEETING SESSIONS (GIAI ĐOẠN 8)
+// ==========================================
+
+export type AttendanceStatus = "Present" | "Absent";
+export type AttendanceSessionStatus = "Scheduled" | "Completed" | "Cancelled";
+
+export interface AttendanceRecordDto {
+  id: string;
+  attendanceSessionId: string;
+  studentId: string;
+  studentName: string;
+  studentCode: string;
+  class?: string | null;
+  major?: string | null;
+  internshipId?: string | null;
+  companyName?: string | null;
+  status: AttendanceStatus;
+  notes?: string | null;
+  markedAt?: string | null;
+  markedBy?: string | null;
+}
+
+export interface AttendanceSessionDto {
+  id: string;
+  semesterId: string;
+  semesterName: string;
+  lecturerId: string;
+  lecturerName: string;
+  weekNumber: number;
+  title: string;
+  description?: string | null;
+  meetingDate: string;
+  durationMinutes?: number | null;
+  location?: string | null;
+  status: AttendanceSessionStatus;
+  totalStudents: number;
+  presentCount: number;
+  absentCount: number;
+  attendanceRate: number;
+  createdAt: string;
+}
+
+export interface AttendanceSessionDetailDto extends AttendanceSessionDto {
+  records: AttendanceRecordDto[];
+}
+
+export interface CreateAttendanceSessionDto {
+  semesterId: string;
+  weekNumber: number;
+  title: string;
+  description?: string | null;
+  meetingDate: string;
+  durationMinutes?: number;
+  location?: string | null;
+  studentIds?: string[] | null;
+}
+
+export interface UpdateAttendanceSessionDto {
+  title?: string;
+  description?: string | null;
+  meetingDate?: string;
+  durationMinutes?: number;
+  location?: string | null;
+  status?: AttendanceSessionStatus;
+}
+
+export interface MarkStudentAttendanceItemDto {
+  studentId: string;
+  status: AttendanceStatus;
+  notes?: string | null;
+}
+
+export interface MarkAttendanceDto {
+  records: MarkStudentAttendanceItemDto[];
+}
+
+export interface StudentAttendanceItemDto {
+  sessionId: string;
+  weekNumber: number;
+  title: string;
+  description?: string | null;
+  meetingDate: string;
+  durationMinutes?: number | null;
+  location?: string | null;
+  lecturerName: string;
+  status: AttendanceStatus;
+  notes?: string | null;
+  markedAt?: string | null;
+}
+
+export interface StudentAttendanceOverviewDto {
+  totalSessions: number;
+  presentCount: number;
+  absentCount: number;
+  attendanceRate: number;
+  sessions: StudentAttendanceItemDto[];
+}
+
+export interface StudentAbsentSummaryDto {
+  studentId: string;
+  studentName: string;
+  studentCode: string;
+  class?: string | null;
+  lecturerName?: string | null;
+  totalSessions: number;
+  absentCount: number;
+  absentRate: number;
+}
+
+export interface AdminAttendanceReportDto {
+  semesterId: string;
+  semesterName: string;
+  totalSessions: number;
+  totalStudents: number;
+  overallAttendanceRate: number;
+  highAbsentStudentsCount: number;
+  topAbsentees: StudentAbsentSummaryDto[];
+  sessions: AttendanceSessionDto[];
+}
+

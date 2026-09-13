@@ -11,7 +11,8 @@ public class StudentProfile : Profile
 {
     public StudentProfile()
     {
-        CreateMap<Student, StudentDto>().MaxDepth(64);
+        CreateMap<Student, StudentDto>().MaxDepth(64)
+            .ForMember(d => d.DepartmentId, o => o.MapFrom(s => s.DepartmentId));
         CreateMap<CreateStudentRequest, Student>().MaxDepth(64);
         CreateMap<UpdateStudentRequest, Student>().MaxDepth(64);
     }

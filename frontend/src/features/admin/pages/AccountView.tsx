@@ -6,6 +6,7 @@ import { formatDateTimeVi } from "../../../lib/formatDateTimeVi";
 import { authService } from "../../../services/auth.service";
 import type { AuthActivityDto, AuthSessionDto } from "../../../types/api";
 import { useAuth } from "../../../hooks/useAuth";
+import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
 import { useAdminNavStats } from "../../../hooks/useAdminNavStats";
 import { useSemester } from "../../../contexts/SemesterContext";
 import {
@@ -63,12 +64,14 @@ const DEFAULT_ADMIN_PROFILE: AdminProfileData = {
 const STORAGE_KEY = "internlink_admin_profile_standard";
 const PREFERENCES_KEY = "internlink_admin_notification_preferences";
 
+import type { ToastType } from "../../../contexts/ToastContext";
 export const AccountView = ({
   onShowToast,
 }: {
-  onShowToast: (msg: string) => void;
+  onShowToast: (msg: string, type?: ToastType) => void;
 }) => {
   const { user } = useAuth();
+  const { isSuperAdmin, roleDisplayLabel } = useAdminCapabilities();
   const { selectedSemesterId } = useSemester();
   const { stats: navStats } = useAdminNavStats(true, selectedSemesterId);
 
@@ -129,6 +132,7 @@ export const AccountView = ({
       ...prev,
       fullName: user.name || prev.fullName,
       email: user.email || prev.email,
+      roleTitle: isSuperAdmin ? "Super Admin" : "Admin khoa",
       adminCode: user.id ? `AD-${user.id.slice(0, 6).toUpperCase()}` : prev.adminCode,
     });
     setProfile(nextProfile);
@@ -203,7 +207,7 @@ export const AccountView = ({
       /* ignore */
     }
     setIsEditing(false);
-    onShowToast("Đã lưu cập nhật thông tin hồ sơ Quản trị viên thành công!");
+    onShowToast(`Đã lưu cập nhật thông tin hồ sơ ${roleDisplayLabel} thành công!`);
   };
 
   // Avatar update
@@ -217,7 +221,7 @@ export const AccountView = ({
       /* ignore */
     }
     setShowAvatarModal(false);
-    onShowToast("Đã cập nhật ảnh đại diện quản trị viên.");
+    onShowToast(`Đã cập nhật ảnh đại diện ${roleDisplayLabel.toLowerCase()}.`);
   };
 
   // Password Change Handler
@@ -283,8 +287,16 @@ export const AccountView = ({
       {/* 1. PAGE HEADER */}
       <PageHeader
         icon={User}
-        title="Quản lý Tài khoản & Hồ sơ Quản trị viên"
-        subtitle="Quản lý thông tin quản trị, cập nhật bảo mật tài khoản và theo dõi lịch sử hoạt động hệ thống."
+        title={
+          isSuperAdmin
+            ? "Quản lý Tài khoản & Hồ sơ Super Admin"
+            : "Quản lý Tài khoản & Hồ sơ Admin khoa"
+        }
+        subtitle={
+          isSuperAdmin
+            ? "Quản lý thông tin quản trị, cập nhật bảo mật tài khoản và theo dõi lịch sử hoạt động hệ thống."
+            : "Quản lý thông tin Admin khoa, cập nhật bảo mật tài khoản và theo dõi lịch sử hoạt động hệ thống."
+        }
       />
 
       {/* 2. ADMIN PROFILE HERO CARD */}
@@ -293,7 +305,7 @@ export const AccountView = ({
           {/* Avatar Container */}
           <div className="relative group shrink-0">
             <InitialsAvatar
-              name={profile.fullName || "Quản trị viên"}
+              name={profile.fullName || roleDisplayLabel}
               seed={profile.email || profile.fullName}
               size={112}
               className="text-2xl sm:text-3xl ring-4 ring-blue-50"
@@ -422,7 +434,7 @@ export const AccountView = ({
                 <div>
                   <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
                     <User className="w-4 h-4 text-blue-600" />
-                    Chi tiết Hồ sơ Quản trị viên
+                    Chi tiết Hồ sơ {roleDisplayLabel}
                   </h2>
                   <p className="text-xs text-slate-500 font-medium">
                     Thông tin hiển thị khi ban hành thông báo, phân công và trao đổi với Giảng viên / Sinh viên.
@@ -459,7 +471,7 @@ export const AccountView = ({
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block font-bold text-slate-700 mb-1">
-                        Họ và tên Quản trị viên <span className="text-rose-500">*</span>
+                        Họ và tên {roleDisplayLabel} <span className="text-rose-500">*</span>
                       </label>
                       <input
                         type="text"
@@ -474,7 +486,7 @@ export const AccountView = ({
 
                     <div>
                       <label className="block font-bold text-slate-700 mb-1">
-                        Mã Quản trị viên
+                        Mã {roleDisplayLabel}
                       </label>
                       <input
                         type="text"
@@ -613,7 +625,7 @@ export const AccountView = ({
 
                     <div className="p-3 bg-slate-50 rounded-md border border-slate-100">
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                        Mã Quản trị viên
+                        Mã {roleDisplayLabel}
                       </span>
                       <p className="font-mono font-bold text-blue-700">{profile.adminCode}</p>
                     </div>
@@ -1074,31 +1086,56 @@ export const AccountView = ({
           <div className="bg-white rounded-lg border border-slate-200/80 shadow-xs p-5 space-y-3 text-xs">
             <h3 className="font-bold text-slate-900 flex items-center gap-2 pb-2 border-b border-slate-100">
               <ShieldCheck className="w-4 h-4 text-emerald-600" />
-              Quyền hạn Quản trị viên (Privileges)
+              Quyền hạn {roleDisplayLabel} (Privileges)
             </h3>
 
-            <ul className="space-y-2 text-slate-600 font-medium">
-              <li className="flex items-start gap-2">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
-                <span>Toàn quyền tạo, cấu hình &amp; chốt đợt thực tập học kỳ</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
-                <span>Phân công Giảng viên phụ trách nhóm sinh viên</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
-                <span>Phê duyệt tài khoản và tiếp nhận hồ sơ doanh nghiệp</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
-                <span>Phát hành thông báo khẩn tới toàn bộ hệ thống</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
-                <span>Xuất bảng điểm tổng kết và lưu trữ hồ sơ Khoa</span>
-              </li>
-            </ul>
+            {isSuperAdmin ? (
+              <ul className="space-y-2 text-slate-600 font-medium">
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                  <span>Quản trị toàn bộ hệ thống &amp; cấu hình danh mục các Khoa</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                  <span>Quản lý &amp; phân quyền tài khoản Quản trị viên Khoa</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                  <span>Xem tổng quan dữ liệu và tiến độ thực tập toàn trường (Chế độ chỉ xem)</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                  <span>Cấu hình tham số hệ thống &amp; tiếp nhận yêu cầu cấp tài khoản</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                  <span>Xuất dữ liệu thống kê tổng hợp toàn trường</span>
+                </li>
+              </ul>
+            ) : (
+              <ul className="space-y-2 text-slate-600 font-medium">
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                  <span>Toàn quyền tạo, cấu hình &amp; chốt đợt thực tập của Khoa</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                  <span>Phân công Giảng viên phụ trách nhóm sinh viên trong Khoa</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                  <span>Quản lý danh sách sinh viên, giảng viên và doanh nghiệp liên kết</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                  <span>Cấp và quản lý tài khoản sinh viên / giảng viên trong Khoa</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                  <span>Xuất bảng điểm tổng kết và lưu trữ hồ sơ Khoa</span>
+                </li>
+              </ul>
+            )}
           </div>
         </div>
       </div>
@@ -1108,7 +1145,7 @@ export const AccountView = ({
         <div className="fixed inset-0 z-50 bg-slate-900/40 flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-white rounded-lg max-w-md w-full p-6 space-y-4 shadow-xl border border-slate-200 text-xs">
             <h3 className="text-base font-bold text-slate-900">
-              Cập nhật Ảnh đại diện Quản trị viên
+              Cập nhật Ảnh đại diện {roleDisplayLabel}
             </h3>
             <p className="text-slate-500 font-medium">
               Nhập liên kết (URL) hình ảnh đại diện của bạn:

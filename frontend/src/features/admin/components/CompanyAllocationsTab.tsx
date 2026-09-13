@@ -13,12 +13,16 @@ import {
   ChevronLeft,
   ChevronRight,
   Sparkles,
+  Briefcase,
+  Check,
+  Eye,
 } from "lucide-react";
 import { adminAssignmentsService } from "../../../services/adminAssignments.service";
 import { adminCompaniesService } from "../../../services/adminCompanies.service";
 import { apiRequest, getApiErrorMessage } from "../../../lib/apiClient";
+import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
 import { ImportCompanyAllocationsModal } from "./modals/ImportCompanyAllocationsModal";
-import type { CompanyAllocationItemDto, CompanyDto } from "../../../types/api";
+import type { CompanyAllocationItemDto, CompanyDto, CompanySuggestionDto } from "../../../types/api";
 
 interface Props {
   selectedSemesterId?: string | null;
@@ -29,6 +33,7 @@ export const CompanyAllocationsTab = ({
   selectedSemesterId,
   onShowToast,
 }: Props) => {
+  const { canMutateOps, isSuperAdmin } = useAdminCapabilities();
   const [allocations, setAllocations] = useState<CompanyAllocationItemDto[]>([]);
   const [companies, setCompanies] = useState<CompanyDto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -49,6 +54,8 @@ export const CompanyAllocationsTab = ({
   const [assignTarget, setAssignTarget] = useState<CompanyAllocationItemDto | null>(null);
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
   const [isSavingAssign, setIsSavingAssign] = useState(false);
+  const [suggestions, setSuggestions] = useState<CompanySuggestionDto[]>([]);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -150,6 +157,20 @@ export const CompanyAllocationsTab = ({
   const handleOpenAssign = (item: CompanyAllocationItemDto) => {
     setAssignTarget(item);
     setSelectedCompanyId(item.companyId || "");
+    setSuggestions([]);
+    const semId = selectedSemesterId === "all" || !selectedSemesterId ? undefined : selectedSemesterId;
+    if (semId) {
+      setIsLoadingSuggestions(true);
+      adminAssignmentsService
+        .suggestCompanies({
+          semesterId: semId,
+          studentId: item.studentId,
+          maxResults: 4,
+        })
+        .then(setSuggestions)
+        .catch(() => setSuggestions([]))
+        .finally(() => setIsLoadingSuggestions(false));
+    }
   };
 
   const handleSaveQuickAssign = async () => {
@@ -176,6 +197,15 @@ export const CompanyAllocationsTab = ({
 
   return (
     <div className="space-y-4">
+      {isSuperAdmin && (
+        <div className="px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900 flex items-center gap-2.5">
+          <Eye className="w-4 h-4 text-blue-600 shrink-0" />
+          <span>
+            Chế độ chỉ xem nghiệp vụ khoa — Super Admin không thể phân bổ hoặc import doanh nghiệp.
+          </span>
+        </div>
+      )}
+
       {/* 1. TOP TOOLBAR & ACTION BUTTONS */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-lg border border-slate-200 shadow-xs">
         {/* KPI Quick Stats */}
@@ -217,14 +247,16 @@ export const CompanyAllocationsTab = ({
             <span>Tải mẫu Excel</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => setShowImportModal(true)}
-            className="px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors"
-          >
-            <FileUp className="w-3.5 h-3.5" />
-            <span>Import Phân Bổ DN</span>
-          </button>
+          {canMutateOps && (
+            <button
+              type="button"
+              onClick={() => setShowImportModal(true)}
+              className="px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors"
+            >
+              <FileUp className="w-3.5 h-3.5" />
+              <span>Import Phân Bổ DN</span>
+            </button>
+          )}
 
           <button
             type="button"
@@ -396,15 +428,19 @@ export const CompanyAllocationsTab = ({
                         </span>
                       </td>
                       <td className="py-3 px-3 text-center">
-                        <button
-                          type="button"
-                          onClick={() => handleOpenAssign(item)}
-                          className="px-2 py-1 rounded border border-slate-200 bg-white hover:bg-blue-50 hover:text-blue-600 text-slate-600 text-[11px] font-bold inline-flex items-center gap-1 shadow-2xs transition-colors"
-                          title="Gán hoặc đổi doanh nghiệp"
-                        >
-                          <Edit2 className="w-3 h-3" />
-                          <span>Gán DN</span>
-                        </button>
+                        {canMutateOps ? (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenAssign(item)}
+                            className="px-2 py-1 rounded border border-slate-200 bg-white hover:bg-blue-50 hover:text-blue-600 text-slate-600 text-[11px] font-bold inline-flex items-center gap-1 shadow-2xs transition-colors"
+                            title="Gán hoặc đổi doanh nghiệp"
+                          >
+                            <Edit2 className="w-3 h-3" />
+                            <span>Gán DN</span>
+                          </button>
+                        ) : (
+                          <span className="text-[11px] text-slate-400 font-medium">—</span>
+                        )}
                       </td>
                     </tr>
                   );
@@ -505,9 +541,92 @@ export const CompanyAllocationsTab = ({
               </p>
             </div>
 
+            {/* AI Company Suggestions */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="font-bold text-slate-700 flex items-center gap-1.5 text-xs">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Gợi ý doanh nghiệp phù hợp:</span>
+                </label>
+                {isLoadingSuggestions && (
+                  <span className="text-[10px] text-slate-400 animate-pulse">Đang tính điểm match...</span>
+                )}
+              </div>
+
+              {isLoadingSuggestions ? (
+                <div className="p-3 bg-slate-50 rounded-lg border border-slate-200/80 text-center text-slate-400 text-[11px] animate-pulse">
+                  Đang phân tích chuyên ngành &amp; vị trí tuyển dụng phù hợp...
+                </div>
+              ) : suggestions.length > 0 ? (
+                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                  {suggestions.map((s) => {
+                    const isSelected = selectedCompanyId === s.companyId;
+                    return (
+                      <div
+                        key={s.companyId}
+                        onClick={() => setSelectedCompanyId(s.companyId)}
+                        className={`p-2.5 rounded-lg border cursor-pointer transition-all ${
+                          isSelected
+                            ? "bg-blue-50 border-blue-500 ring-2 ring-blue-500/20 shadow-xs"
+                            : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/60"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-bold text-slate-900 text-xs truncate">
+                                {s.companyName}
+                              </span>
+                              <span
+                                className={`px-1.5 py-0.2 rounded text-[10px] font-bold border ${
+                                  s.matchScore >= 70
+                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                    : "bg-amber-50 text-amber-700 border-amber-200"
+                                }`}
+                              >
+                                {s.matchScore}% phù hợp
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">
+                              {s.matchReason}
+                            </p>
+                            {s.openPositions.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {s.openPositions.slice(0, 2).map((pos) => (
+                                  <span
+                                    key={pos.id}
+                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 text-[9px] font-medium"
+                                  >
+                                    <Briefcase className="w-2.5 h-2.5 text-slate-400" />
+                                    {pos.title} ({pos.slots} chỉ tiêu)
+                                  </span>
+                                ))}
+                                {s.openPositions.length > 2 && (
+                                  <span className="text-[9px] text-slate-400">
+                                    +{s.openPositions.length - 2} vị trí
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          {isSelected && (
+                            <Check className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="p-2 bg-slate-50 rounded-md border border-dashed border-slate-200 text-center text-[10px] text-slate-400">
+                  Chưa có gợi ý phù hợp hoặc chưa chọn kỳ học. Chọn thủ công bên dưới:
+                </div>
+              )}
+            </div>
+
             <div>
               <label className="block font-bold text-slate-700 mb-1">
-                Chọn Doanh nghiệp tiếp nhận:
+                Hoặc chọn Doanh nghiệp từ danh sách:
               </label>
               <select
                 value={selectedCompanyId}

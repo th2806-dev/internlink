@@ -7,7 +7,7 @@ namespace InternLink.Application.Interfaces;
 
 public interface ISemesterService
 {
-    Task<IEnumerable<SemesterDto>> GetAllSemestersAsync();
+    Task<IEnumerable<SemesterDto>> GetAllSemestersAsync(Guid? departmentId = null);
     Task<SemesterDto?> GetActiveSemesterAsync();
     Task<SemesterDto?> GetSemesterByIdAsync(Guid id);
     Task<SemesterDto> CreateSemesterAsync(CreateSemesterDto dto);
@@ -15,4 +15,7 @@ public interface ISemesterService
     Task<SemesterDto?> StartSemesterAsync(Guid id);
     Task<bool> CloseSemesterAsync(Guid id);
     Task<bool> DeleteSemesterAsync(Guid id);
+    Task<IEnumerable<SemesterReportScheduleDto>> GetReportSchedulesAsync(Guid semesterId);
+    Task<IEnumerable<SemesterReportScheduleDto>> GenerateDefaultSchedulesAsync(Guid semesterId);
+    Task<SemesterReportScheduleDto> UpdateReportScheduleAsync(Guid semesterId, int weekNumber, UpdateReportScheduleRequest request);
 }

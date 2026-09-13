@@ -14,7 +14,7 @@ flowchart TD
         A3["1.3. Phân công Hướng dẫn<br/>(Manual, Auto, Bulk, Import/Export)"]
         A4["1.4. Gửi Email Thư mời<br/>(Cấp tài khoản & MK ngẫu nhiên)"]
         A5["1.5. Duyệt yêu cầu cấp tài khoản<br/>(Account Requests → Auto Provision)"]
-        A6["1.6. Phê duyệt Rubric mẫu<br/>(Admin duyệt rubric GV tạo)"]
+        A6["1.6. Quản lý Rubric mẫu<br/>(Admin save/apply rubric, giữ Approved ngay)"]
 
         A1 --> A2
         A2 --> A3
@@ -89,7 +89,7 @@ flowchart TD
 | 1.3 | Admin | Phân công GVHD cho SV | `POST /api/Admin/assignments/bulk-assign` |
 | 1.4 | Admin | Gửi email thư mời | `POST /api/Admin/assignments/send-emails` |
 | 1.5 | Admin | Duyệt yêu cầu tài khoản | `POST /api/Admin/account-requests/{id}/process` |
-| 1.6 | Admin | Phê duyệt rubric GV | `POST /api/Admin/rubrics/{id}/approve` |
+| 1.6 | Admin | Quản lý rubric để chấm điểm | `POST/PUT /api/Admin/semesters/{id}/rubric` |
 
 ### Giai đoạn 2: Khai báo & Nộp bài
 | Bước | Tác nhân | Thao tác | API |

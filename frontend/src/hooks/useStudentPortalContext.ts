@@ -10,6 +10,7 @@ import { weeklyReportService } from "../services/weeklyReport.service";
 import type { StudentProfile } from "../types/common";
 import type { InternshipDto, StudentPortalProfileDto } from "../types/api";
 import { useAuth } from "./useAuth";
+import { useSemester } from "../contexts/SemesterContext";
 
 const DEFAULT_LOGO =
   "https://images.unsplash.com/photo-1560179707-f14e90ef3623?w=120&auto=format&fit=crop&q=80";
@@ -54,6 +55,7 @@ export function buildStudentProfileFromPortal(
   portal: StudentPortalProfileDto,
   weeklyReportCount = 0,
   approvedWeeklyCount = 0,
+  totalWeeks = INTERNSHIP_WEEKS,
 ): StudentProfile {
   const s = portal.student;
   const i = portal.internship;
@@ -68,11 +70,12 @@ export function buildStudentProfileFromPortal(
     company: company?.companyName ?? "Chưa có doanh nghiệp",
     companyLogo: DEFAULT_LOGO,
     position: i?.position ?? "—",
-    statusBadge: i ? internshipStatusToBadge(i.status) : "Chưa có hồ sơ TT",
-    overallProgress: i ? (portal.progressPercent ?? 0) : 0,
+    statusBadge: internshipStatusToBadge(i?.status ?? "NotStarted"),
+    overallProgress: portal.progressPercent ?? 0,
+    progressBreakdown: portal.progressBreakdown ?? null,
     currentGrade: 0,
     reportsSubmitted: approvedWeeklyCount,
-    totalReports: Math.max(weeklyReportCount, approvedWeeklyCount, INTERNSHIP_WEEKS),
+    totalReports: Math.max(weeklyReportCount, approvedWeeklyCount, totalWeeks),
     daysLeftForReport: 0,
     lecturerName: portal.lecturerName ?? "—",
     supervisorName: i?.supervisorName ?? company?.contactPerson ?? "—",
@@ -87,6 +90,8 @@ export function buildStudentProfileFromPortal(
 
 export function useStudentPortalContext() {
   const { user, isLoggedIn } = useAuth();
+  const { selectedSemester } = useSemester();
+  const semesterWeeks = selectedSemester?.totalWeeks || INTERNSHIP_WEEKS;
   const [portalData, setPortalData] = useState<StudentPortalProfileDto | null>(
     null,
   );
@@ -132,14 +137,16 @@ export function useStudentPortalContext() {
         portalData,
         weeklyCount,
         approvedWeeklyCount,
+        semesterWeeks,
       );
     }
     return {
       ...DEFAULT_EMPTY_STUDENT_PROFILE,
       name: user?.name ?? "Sinh viên",
       mssv: user?.username ?? "—",
+      totalReports: semesterWeeks,
     };
-  }, [portalData, weeklyCount, approvedWeeklyCount, user]);
+  }, [portalData, weeklyCount, approvedWeeklyCount, user, semesterWeeks]);
 
   const internship: InternshipDto | null = portalData?.internship ?? null;
 

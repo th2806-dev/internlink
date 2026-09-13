@@ -7,8 +7,8 @@ namespace InternLink.Shared.Interfaces
     /// </summary>
     public interface IJwtService
     {
-        string CreateToken(string userId, IEnumerable<string>? roles = null);
-        (string Token, string JwtId, DateTime ExpiresAt) CreateTokenWithMetadata(string userId, IEnumerable<string>? roles = null);
+        string CreateToken(string userId, IEnumerable<string>? roles = null, Guid? departmentId = null);
+        (string Token, string JwtId, DateTime ExpiresAt) CreateTokenWithMetadata(string userId, IEnumerable<string>? roles = null, Guid? departmentId = null);
         ClaimsPrincipal? GetPrincipalFromExpiredToken(string token);
     }
 }

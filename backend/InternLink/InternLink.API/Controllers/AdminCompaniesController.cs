@@ -214,4 +214,61 @@ public class AdminCompaniesController : ControllerBase
         var fileName = $"Danh-sach-doanh-nghiep-{DateTime.UtcNow:yyyyMMdd-HHmmss}.xlsx";
         return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
     }
+
+    [HttpGet("{id:guid}/positions")]
+    public async Task<IActionResult> GetPositions(Guid id, [FromQuery] Guid? semesterId = null)
+    {
+        var positions = await _companyService.GetPositionsAsync(id, semesterId);
+        return Ok(ApiResponse<IEnumerable<CompanyPositionDto>>.Ok(positions));
+    }
+
+    [HttpGet("positions/{positionId:guid}")]
+    public async Task<IActionResult> GetPositionById(Guid positionId)
+    {
+        var position = await _companyService.GetPositionByIdAsync(positionId);
+        if (position == null)
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Vị trí tuyển dụng không tồn tại" }));
+
+        return Ok(ApiResponse<CompanyPositionDto>.Ok(position));
+    }
+
+    [HttpPost("{id:guid}/positions")]
+    public async Task<IActionResult> CreatePosition(Guid id, [FromBody] CreateCompanyPositionRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Title))
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Tên vị trí tuyển dụng không được để trống" }));
+
+        try
+        {
+            var position = await _companyService.CreatePositionAsync(id, request);
+            return CreatedAtAction(nameof(GetPositionById), new { positionId = position.Id }, ApiResponse<CompanyPositionDto>.Ok(position));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = ex.Message }));
+        }
+    }
+
+    [HttpPut("positions/{positionId:guid}")]
+    public async Task<IActionResult> UpdatePosition(Guid positionId, [FromBody] UpdateCompanyPositionRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Title))
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Tên vị trí tuyển dụng không được để trống" }));
+
+        var updated = await _companyService.UpdatePositionAsync(positionId, request);
+        if (updated == null)
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Vị trí tuyển dụng không tồn tại" }));
+
+        return Ok(ApiResponse<CompanyPositionDto>.Ok(updated));
+    }
+
+    [HttpDelete("positions/{positionId:guid}")]
+    public async Task<IActionResult> DeletePosition(Guid positionId)
+    {
+        var deleted = await _companyService.DeletePositionAsync(positionId);
+        if (!deleted)
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Vị trí tuyển dụng không tồn tại" }));
+
+        return Ok(ApiResponse<object>.Ok(new { message = "Đã xóa vị trí tuyển dụng thành công" }));
+    }
 }

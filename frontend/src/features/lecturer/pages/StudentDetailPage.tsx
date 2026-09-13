@@ -68,7 +68,7 @@ export const StudentDetailPage = ({ onRefresh }: { onRefresh?: () => Promise<voi
     setSupervisorName(detail?.supervisorName ?? "");
     setShowAssignmentModal(true);
     try {
-      const activeCompanies = await lecturerCompaniesService.getActive(selectedSemesterId || undefined);
+      const activeCompanies = await lecturerCompaniesService.getAvailableForAssignment(selectedSemesterId || undefined);
       setCompanies(activeCompanies);
     } catch {
       setAssignmentError("Không thể tải danh sách doanh nghiệp theo học kỳ hiện tại.");

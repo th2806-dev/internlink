@@ -22,7 +22,7 @@ function getInitials(name: string): string {
 interface InitialsAvatarProps {
   name: string;
   seed?: string;
-  size?: number;
+  size?: number | "sm";
   className?: string;
 }
 
@@ -34,15 +34,16 @@ export function InitialsAvatar({
 }: InitialsAvatarProps) {
   const initials = getInitials(name);
   const gradient = nameToGradient(seed || name);
+  const normalizedSize = typeof size === "number" ? size : size === "sm" ? 24 : 32;
 
   return (
     <div
       className={`flex items-center justify-center shrink-0 rounded-full text-white font-bold shadow-sm select-none ${className}`}
       style={{
-        width: size,
-        height: size,
+        width: normalizedSize,
+        height: normalizedSize,
         background: gradient,
-        fontSize: size * 0.38,
+        fontSize: normalizedSize * 0.38,
         lineHeight: 1,
       }}
       title={name}

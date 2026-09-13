@@ -22,6 +22,8 @@ import {
   Building2,
   FileUp,
   Check,
+  Briefcase,
+  ExternalLink,
 } from "lucide-react";
 import { CreateStudentModal } from "../components/modals/CreateStudentModal";
 import type { CreateStudentFormPayload } from "../components/modals/CreateStudentModal";
@@ -42,15 +44,18 @@ import { adminStudentsService } from "../../../services/adminStudents.service";
 import { adminUsersService } from "../../../services/adminUsers.service";
 import { exportService } from "../../../services/export.service";
 import { useAdminStudentsPage } from "../../../hooks/useAdminStudentsPage";
+import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
 import { useSemester, toApiSemesterId } from "../../../contexts/SemesterContext";
+import type { ToastType } from "../../../contexts/ToastContext";
 export const StudentsView = ({
   onShowToast,
   onNavigateTab,
 }: {
-  onShowToast: (msg: string) => void;
+  onShowToast: (msg: string, type?: ToastType) => void;
   onNavigateTab?: (tab: string) => void;
 }) => {
   const { selectedSemester } = useSemester();
+  const { canMutateOps, isSuperAdmin } = useAdminCapabilities();
   const [searchParams] = useSearchParams();
   const apiPage = useAdminStudentsPage(toApiSemesterId(selectedSemester?.id), onShowToast);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -94,7 +99,6 @@ export const StudentsView = ({
   }, [students]);
 
   const handleAddStudent = async (payload: CreateStudentFormPayload) => {
-
     try {
       await adminStudentsService.create({
         studentCode: payload.studentCode,
@@ -103,6 +107,14 @@ export const StudentsView = ({
         major: payload.major,
         email: payload.email,
         phone: payload.phone,
+        department: payload.department,
+        desiredPosition: payload.desiredPosition,
+        alternativePosition: payload.alternativePosition,
+        desiredLocation: payload.desiredLocation,
+        workPreference: payload.workPreference,
+        preferredIndustry: payload.preferredIndustry,
+        skills: payload.skills,
+        resumeUrl: payload.resumeUrl,
         grantAccount: payload.grantAccount,
       });
       await reloadStudents();
@@ -119,8 +131,6 @@ export const StudentsView = ({
     const existing = students.find((s) => s.id === id);
     if (!existing) return;
 
-
-
     try {
       await adminStudentsService.update(id, {
         fullName: payload.fullName,
@@ -128,6 +138,14 @@ export const StudentsView = ({
         major: payload.major,
         email: payload.email,
         phone: payload.phone,
+        department: payload.department,
+        desiredPosition: payload.desiredPosition,
+        alternativePosition: payload.alternativePosition,
+        desiredLocation: payload.desiredLocation,
+        workPreference: payload.workPreference,
+        preferredIndustry: payload.preferredIndustry,
+        skills: payload.skills,
+        resumeUrl: payload.resumeUrl,
       });
       await reloadStudents();
     } catch (err) {
@@ -360,29 +378,44 @@ export const StudentsView = ({
             onClick: () => void handleExportInternshipList(),
             variant: "secondary",
           },
-          {
-            label: "Import Excel",
-            icon: FileUp,
-            onClick: () => setIsImportModalOpen(true),
-            variant: "secondary",
-          },
-          {
-            label: "Thêm sinh viên",
-            icon: UserPlus,
-            onClick: () => setIsCreateModalOpen(true),
-            variant: "primary",
-          },
+          ...(canMutateOps
+            ? [
+                {
+                  label: "Import Excel",
+                  icon: FileUp,
+                  onClick: () => setIsImportModalOpen(true),
+                  variant: "secondary" as const,
+                },
+                {
+                  label: "Thêm sinh viên",
+                  icon: UserPlus,
+                  onClick: () => setIsCreateModalOpen(true),
+                  variant: "primary" as const,
+                },
+              ]
+            : []),
         ]}
       >
-        <button
-          type="button"
-          onClick={() => setIsGenerateAccountsModalOpen(true)}
-          className="il-btn-press px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-md shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
-        >
-          <KeyRound className="w-4 h-4" />
-          <span>Cấp tài khoản nhanh ({pendingAccounts})</span>
-        </button>
+        {canMutateOps && (
+          <button
+            type="button"
+            onClick={() => setIsGenerateAccountsModalOpen(true)}
+            className="il-btn-press px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-md shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+          >
+            <KeyRound className="w-4 h-4" />
+            <span>Cấp tài khoản nhanh ({pendingAccounts})</span>
+          </button>
+        )}
       </PageHeader>
+
+      {isSuperAdmin && (
+        <div className="px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900 flex items-center gap-2.5">
+          <Eye className="w-4 h-4 text-blue-600 shrink-0" />
+          <span>
+            Chế độ chỉ xem nghiệp vụ khoa — Super Admin không thể tạo/sửa/xóa/cấp tài khoản sinh viên. Xuất dữ liệu vẫn khả dụng.
+          </span>
+        </div>
+      )}
 
       {selectedSemester.status === "completed" && (
         <div className="px-4 py-3 bg-slate-100 border border-slate-300 rounded-lg text-xs text-slate-800 flex items-center gap-2.5">
@@ -485,7 +518,7 @@ export const StudentsView = ({
               <option value="class">Sắp xếp: Lớp</option>
             </select>
 
-            {selectedIds.length > 0 && (
+            {canMutateOps && selectedIds.length > 0 && (
               <button
                 onClick={handleBatchGenerateAccounts}
                 className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-md transition-colors flex items-center gap-1.5 cursor-pointer animate-in fade-in"
@@ -502,14 +535,16 @@ export const StudentsView = ({
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
-                <th className="py-2.5 px-3 text-center w-10">
-                  <input
-                    type="checkbox"
-                    checked={isAllPageSelected}
-                    onChange={handleToggleSelectAllPage}
-                    className="rounded text-blue-600 cursor-pointer"
-                  />
-                </th>
+                {canMutateOps && (
+                  <th className="py-2.5 px-3 text-center w-10">
+                    <input
+                      type="checkbox"
+                      checked={isAllPageSelected}
+                      onChange={handleToggleSelectAllPage}
+                      className="rounded text-blue-600 cursor-pointer"
+                    />
+                  </th>
+                )}
                 <th className="py-2.5 px-3 text-center w-10">STT</th>
                 <th className="py-2.5 px-3">Họ & tên</th>
                 <th className="py-2.5 px-3">MSSV & Lớp</th>
@@ -523,7 +558,9 @@ export const StudentsView = ({
               {isLoadingApi ? (
                 Array.from({ length: 6 }).map((_, idx) => (
                   <tr key={idx} className="animate-pulse">
-                    <td className="py-3 px-3 text-center"><SkeletonBox className="h-4 w-4 mx-auto" /></td>
+                    {canMutateOps && (
+                      <td className="py-3 px-3 text-center"><SkeletonBox className="h-4 w-4 mx-auto" /></td>
+                    )}
                     <td className="py-3 px-3 text-center"><SkeletonBox className="h-3.5 w-6 mx-auto" /></td>
                     <td className="py-3 px-3">
                       <div className="flex items-center gap-2.5">
@@ -543,7 +580,7 @@ export const StudentsView = ({
                 ))
               ) : paginatedStudents.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-4">
+                  <td colSpan={canMutateOps ? 8 : 7} className="p-4">
                     <EmptyState
                       title="Không tìm thấy sinh viên phù hợp"
                       description="Hãy thử đổi bộ lọc lớp, trạng thái tài khoản hoặc từ khóa tìm kiếm."
@@ -566,14 +603,16 @@ export const StudentsView = ({
                       key={st.id}
                       className={`hover:bg-slate-50/80 transition-colors ${isSelected ? "bg-blue-50/50" : ""}`}
                     >
-                      <td className="py-3 px-3 text-center">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => handleToggleSelect(st.id)}
-                          className="rounded text-blue-600 cursor-pointer"
-                        />
-                      </td>
+                      {canMutateOps && (
+                        <td className="py-3 px-3 text-center">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleToggleSelect(st.id)}
+                            className="rounded text-blue-600 cursor-pointer"
+                          />
+                        </td>
+                      )}
 
                       {/* STT */}
                       <td className="py-3 px-3 text-center text-slate-400 font-mono font-bold">
@@ -647,7 +686,7 @@ export const StudentsView = ({
                       {/* Action Buttons */}
                       <td className="py-3 px-3 text-center">
                         <div className="flex items-center justify-center gap-1.5">
-                          {st.accountStatus === "pending" && (
+                          {canMutateOps && st.accountStatus === "pending" && (
                             <button
                               onClick={() => handleQuickGrantSingle(st)}
                               className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] rounded-lg shadow-2xs transition-colors flex items-center gap-1 cursor-pointer"
@@ -666,47 +705,51 @@ export const StudentsView = ({
                             <Eye className="w-4 h-4" />
                           </button>
 
-                          <button
-                            type="button"
-                            onClick={() => setEditingStudent(st as AdminStudentRow)}
-                            className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-amber-600 rounded-lg transition-colors cursor-pointer"
-                            title="Sửa"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </button>
+                          {canMutateOps && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => setEditingStudent(st as AdminStudentRow)}
+                                className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-amber-600 rounded-lg transition-colors cursor-pointer"
+                                title="Sửa"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
 
-                          <button
-                            type="button"
-                            onClick={() => setDeleteTarget(st as AdminStudentRow)}
-                            className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
-                            title="Xóa"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                              <button
+                                type="button"
+                                onClick={() => setDeleteTarget(st as AdminStudentRow)}
+                                className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
+                                title="Xóa"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
 
-                          <button
-                            onClick={() => handleResetPassword(st)}
-                            className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-amber-600 rounded-lg transition-colors cursor-pointer"
-                            title="Đặt lại mật khẩu"
-                          >
-                            <RotateCcw className="w-4 h-4" />
-                          </button>
+                              <button
+                                onClick={() => handleResetPassword(st)}
+                                className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-amber-600 rounded-lg transition-colors cursor-pointer"
+                                title="Đặt lại mật khẩu"
+                              >
+                                <RotateCcw className="w-4 h-4" />
+                              </button>
 
-                          <button
-                            onClick={() => handleToggleLockAccount(st.id)}
-                            className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
-                            title={
-                              st.accountStatus === "locked"
-                                ? "M\u1EDF kh\xF3a t\xE0i kho\u1EA3n"
-                                : "Kh\xF3a t\xE0i kho\u1EA3n"
-                            }
-                          >
-                            {st.accountStatus === "locked" ? (
-                              <Unlock className="w-4 h-4 text-emerald-600" />
-                            ) : (
-                              <Lock className="w-4 h-4 text-rose-600" />
-                            )}
-                          </button>
+                              <button
+                                onClick={() => handleToggleLockAccount(st.id)}
+                                className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
+                                title={
+                                  st.accountStatus === "locked"
+                                    ? "M\u1EDF kh\xF3a t\xE0i kho\u1EA3n"
+                                    : "Kh\xF3a t\xE0i kho\u1EA3n"
+                                }
+                              >
+                                {st.accountStatus === "locked" ? (
+                                  <Unlock className="w-4 h-4 text-emerald-600" />
+                                ) : (
+                                  <Lock className="w-4 h-4 text-rose-600" />
+                                )}
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -908,7 +951,81 @@ export const StudentsView = ({
               </div>
             </div>
 
+            {/* Internship Preferences */}
+            {(selectedStudent.desiredPosition || selectedStudent.skills || selectedStudent.desiredLocation || selectedStudent.preferredIndustry || selectedStudent.department) && (
+              <div className="space-y-3 text-xs">
+                <h4 className="font-bold text-violet-700 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                  <Briefcase className="w-3.5 h-3.5" /> Nguyện vọng thực tập
+                </h4>
+                <div className="p-3 bg-violet-50/50 rounded-md space-y-2 font-medium text-slate-700 border border-violet-100">
+                  {selectedStudent.department && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Khoa:</span>
+                      <span className="font-bold text-slate-900">{selectedStudent.department}</span>
+                    </div>
+                  )}
+                  {selectedStudent.desiredPosition && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Vị trí mong muốn:</span>
+                      <span className="font-bold text-blue-700">{selectedStudent.desiredPosition}</span>
+                    </div>
+                  )}
+                  {selectedStudent.alternativePosition && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Vị trí thay thế:</span>
+                      <span className="font-bold text-slate-900">{selectedStudent.alternativePosition}</span>
+                    </div>
+                  )}
+                  {selectedStudent.desiredLocation && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Địa điểm:</span>
+                      <span className="font-bold text-slate-900">{selectedStudent.desiredLocation}</span>
+                    </div>
+                  )}
+                  {selectedStudent.workPreference && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Hình thức:</span>
+                      <span className="font-bold text-slate-900">{selectedStudent.workPreference}</span>
+                    </div>
+                  )}
+                  {selectedStudent.preferredIndustry && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Lĩnh vực:</span>
+                      <span className="font-bold text-slate-900">{selectedStudent.preferredIndustry}</span>
+                    </div>
+                  )}
+                  {selectedStudent.resumeUrl && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-400">CV / Portfolio:</span>
+                      <a
+                        href={selectedStudent.resumeUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 underline"
+                      >
+                        Xem CV <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                  )}
+                </div>
+                {selectedStudent.skills && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedStudent.skills.split(/[,;]/).map((skill: string, i: number) => {
+                      const s = skill.trim();
+                      if (!s) return null;
+                      return (
+                        <span key={i} className="px-2 py-0.5 bg-violet-100 text-violet-700 border border-violet-200 rounded-full text-[10px] font-bold">
+                          {s}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Quick Actions */}
+            {canMutateOps && (
             <div className="pt-4 border-t border-slate-100 space-y-2">
               {selectedStudent.accountStatus === "pending" && (
                 <button
@@ -959,6 +1076,7 @@ export const StudentsView = ({
                   : "Kh\xF3a t\xE0i kho\u1EA3n"}
               </button>
             </div>
+            )}
           </div>
         </div>
       )}

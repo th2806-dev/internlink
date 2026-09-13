@@ -529,7 +529,7 @@ export const SubmissionsHub = ({
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="bg-slate-50/80 border-b border-slate-100 text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+              <tr className="bg-slate-50/80 border-b border-slate-100 text-[11px] font-bold uppercase text-slate-500 tracking-wider">
                 <th className="py-3 px-3.5 w-10 text-center">
                   <input
                     type="checkbox"
@@ -592,7 +592,7 @@ export const SubmissionsHub = ({
                             >
                               {sub.studentName}
                             </p>
-                            <p className="text-[10px] text-slate-400 font-mono font-bold">
+                            <p className="text-[11px] text-slate-500 font-mono font-bold">
                               MSSV: {sub.mssv}
                             </p>
                           </div>
@@ -616,12 +616,12 @@ export const SubmissionsHub = ({
                           </span>
                           <button
                             onClick={() => handleOpenDetail(sub)}
-                            className="text-[11px] text-blue-600 font-semibold hover:underline flex items-center gap-1"
+                            className="text-xs text-blue-600 font-semibold hover:underline flex items-center gap-1"
                           >
                             <FileText className="w-3 h-3" />
                             <span>{sub.fileName || "Không có tệp đính kèm"}</span>
                             {sub.fileName && sub.fileSize && (
-                              <span className="text-slate-400 text-[10px]">
+                              <span className="text-slate-500 text-[11px]">
                                 ({sub.fileSize})
                               </span>
                             )}
@@ -634,7 +634,7 @@ export const SubmissionsHub = ({
                         <div className="font-semibold text-slate-800">
                           {sub.date}
                         </div>
-                        <div className="text-[10px] text-slate-400">
+                        <div className="text-[11px] text-slate-500">
                           {sub.time}
                         </div>
                       </td>
@@ -672,7 +672,7 @@ export const SubmissionsHub = ({
                           </span>
 
                           {sub.lecturerNote && (
-                            <p className="text-[11px] text-slate-500 italic line-clamp-1">
+                            <p className="text-xs text-slate-600 italic line-clamp-1">
                               &ldquo;{sub.lecturerNote}&rdquo;
                             </p>
                           )}

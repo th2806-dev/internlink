@@ -380,6 +380,15 @@ public class EvaluationService : IEvaluationService
         // Calculate final grade
         evaluation.CalculateFinalGrade();
 
+        if (evaluation.IsFinalized && internship != null)
+        {
+            internship.Status = evaluation.FinalGrade > 0
+                ? InternshipStatus.Graded
+                : InternshipStatus.Completed;
+            internship.UpdatedAt = DateTime.UtcNow;
+            _db.Internships.Update(internship);
+        }
+
         _db.Evaluations.Add(evaluation);
         await _db.SaveChangesAsync();
 
@@ -445,6 +454,15 @@ public class EvaluationService : IEvaluationService
         // Recalculate final grade
         evaluation.CalculateFinalGrade();
 
+        if (evaluation.IsFinalized && evaluation.Internship != null)
+        {
+            evaluation.Internship.Status = evaluation.FinalGrade > 0
+                ? InternshipStatus.Graded
+                : InternshipStatus.Completed;
+            evaluation.Internship.UpdatedAt = DateTime.UtcNow;
+            _db.Internships.Update(evaluation.Internship);
+        }
+
         _db.Evaluations.Update(evaluation);
         await _db.SaveChangesAsync();
 
@@ -479,6 +497,15 @@ public class EvaluationService : IEvaluationService
 
         evaluation.IsFinalized = true;
         evaluation.UpdatedAt = DateTime.UtcNow;
+
+        if (evaluation.Internship != null)
+        {
+            evaluation.Internship.Status = evaluation.FinalGrade > 0
+                ? InternshipStatus.Graded
+                : InternshipStatus.Completed;
+            evaluation.Internship.UpdatedAt = DateTime.UtcNow;
+            _db.Internships.Update(evaluation.Internship);
+        }
 
         _db.Evaluations.Update(evaluation);
         await _db.SaveChangesAsync();

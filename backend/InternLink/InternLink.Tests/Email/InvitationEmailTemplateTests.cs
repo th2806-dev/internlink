@@ -69,6 +69,27 @@ public class InvitationEmailTemplateTests
     }
 
     [Fact]
+    public void Build_DepartmentAdminInvitation_UsesDepartmentAdminWording()
+    {
+        var request = new InvitationEmailRequest
+        {
+            ToEmail = "admin.cntt@demo.edu.vn",
+            FullName = "Le Thi C",
+            Role = InvitationRole.DepartmentAdmin,
+            Username = "admin.cntt",
+            TemporaryPassword = "Welcome@2026"
+        };
+
+        var rendered = InvitationEmailTemplate.Build(request, CreateSettings());
+
+        rendered.Subject.Should().Contain("Admin khoa");
+        rendered.PlainTextBody.Should().Contain("Admin khoa");
+        rendered.PlainTextBody.Should().Contain("Quản lý thông tin khoa");
+        rendered.PlainTextBody.Should().NotContain("Sinh viên thực tập");
+        rendered.HtmlBody.Should().Contain("Admin khoa");
+    }
+
+    [Fact]
     public void Build_HtmlEncodesUserInput()
     {
         var request = new InvitationEmailRequest

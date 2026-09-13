@@ -18,8 +18,10 @@ export interface AuthUser {
   username: string;
   name: string;
   role: UserRole;
+  backendRole?: string | null;
   email?: string | null;
   avatarUrl?: string | null;
+  departmentId?: string | null;
 }
 
 export interface AuthSession {
@@ -60,7 +62,9 @@ function mapMeToAuthUser(me: CurrentUserDto): AuthUser {
     username: me.username,
     name: me.fullName?.trim() || me.username,
     role,
+    backendRole: me.role,
     email: me.email,
+    departmentId: me.departmentId,
   };
 }
 
@@ -115,7 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser((prev) => {
       if (!prev) return prev;
       const roleLabels: Record<UserRole, string> = {
-        admin: "Quản trị viên",
+        admin: "Super Admin",
         lecturer: "Giảng viên",
         student: "Sinh viên",
       };

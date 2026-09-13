@@ -21,7 +21,7 @@ Thư mục này chứa toàn bộ mã nguồn sơ đồ chuẩn hóa bằng **Me
 ### 2. Sơ Đồ Use Case (`/docs/images/usecase/`)
 | Tên Sơ Đồ | File Nguồn | Mô Tả Nội Dung |
 |:---|:---|:---|
-| **Sơ đồ Use Case Toàn hệ thống** | [`usecase-diagram.md`](usecase/usecase-diagram.md) | 37 Use Cases: Admin (15), Lecturer (12), Student (10). Bao gồm Account Requests, Rubric Approval, Student Reply, Bulk Notify, PDF Certificate. |
+| **Sơ đồ Use Case Toàn hệ thống** | [`usecase-diagram.md`](usecase/usecase-diagram.md) | 37 Use Cases: Admin (15), Lecturer (12), Student (10). Bao gồm Account Requests, Rubric Management, Student Reply, Bulk Notify, PDF Certificate. |
 
 ---
 

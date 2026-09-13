@@ -8,8 +8,14 @@ export const lecturerCompaniesService = {
     return apiRequest<LecturerCompanySummaryDto[]>(`/api/Lecturer/companies${params}`);
   },
 
-  /** Active companies (optionally scoped to a semester — "ngưng liên kết" ones are excluded). */
-  getActive(semesterId?: string): Promise<CompanyDto[]> {
+  /** Scoped companies for lecturer portal (only enterprises of assigned students). */
+  getActive(semesterId?: string): Promise<LecturerCompanySummaryDto[]> {
+    const params = semesterId && semesterId !== "all" ? `?semesterId=${semesterId}` : "";
+    return apiRequest<LecturerCompanySummaryDto[]>(`/api/Lecturer/companies${params}`);
+  },
+
+  /** Active partner companies available for student assignment (from semester partner roster). */
+  getAvailableForAssignment(semesterId?: string): Promise<CompanyDto[]> {
     const qs = semesterId && semesterId !== "all" ? `&semesterId=${semesterId}` : "";
     return apiRequest<CompanyDto[]>(
       `/api/Company/active?take=100${qs}`,

@@ -1,4 +1,4 @@
-import { apiRequest, apiRequestRaw } from "../lib/apiClient";
+import { apiRequestRaw, ApiClientError } from "../lib/apiClient";
 
 import type {
   CreateEvaluationRequestDto,
@@ -85,7 +85,7 @@ export const evaluationService = {
     return apiRequestRaw<EvaluationDetailDto>(
       `/api/Evaluation/internship/${internshipId}`,
     ).then(normalizeEvaluationDetail).catch((error) => {
-      if (error instanceof Error && error.message.includes("404")) return null;
+      if (error instanceof ApiClientError && error.status === 404) return null;
       throw error;
     });
   },

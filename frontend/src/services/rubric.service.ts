@@ -187,66 +187,6 @@ export const rubricService = {
   },
 
   /**
-   * Submit rubric for approval
-   */
-  async submitForApproval(
-    semesterId: string,
-    note?: string,
-  ): Promise<EvaluationRubricDto> {
-    const raw = await apiRequest<RubricApiDto>(
-      `/api/Admin/semesters/${semesterId}/rubric/submit`,
-      {
-        method: "POST",
-        body: { note },
-      },
-    );
-    if (!raw || typeof raw !== "object" || !("criteria" in raw) || !("id" in raw)) {
-      throw new Error("Phản hồi gửi phê duyệt rubric không hợp lệ");
-    }
-    return mapFromApi(raw as RubricApiDto);
-  },
-
-  /**
-   * Approve rubric (SuperAdmin acts as DepartmentHead)
-   */
-  async approve(
-    semesterId: string,
-    note?: string,
-  ): Promise<EvaluationRubricDto> {
-    const raw = await apiRequest<RubricApiDto>(
-      `/api/Admin/semesters/${semesterId}/rubric/approve`,
-      {
-        method: "POST",
-        body: { note },
-      },
-    );
-    if (!raw || typeof raw !== "object" || !("criteria" in raw) || !("id" in raw)) {
-      throw new Error("Phản hồi phê duyệt rubric không hợp lệ");
-    }
-    return mapFromApi(raw as RubricApiDto);
-  },
-
-  /**
-   * Reject rubric
-   */
-  async reject(
-    semesterId: string,
-    rejectionReason: string,
-  ): Promise<EvaluationRubricDto> {
-    const raw = await apiRequest<RubricApiDto>(
-      `/api/Admin/semesters/${semesterId}/rubric/reject`,
-      {
-        method: "POST",
-        body: { rejectionReason },
-      },
-    );
-    if (!raw || typeof raw !== "object" || !("criteria" in raw) || !("id" in raw)) {
-      throw new Error("Phản hồi từ chối rubric không hợp lệ");
-    }
-    return mapFromApi(raw as RubricApiDto);
-  },
-
-  /**
    * Save rubric-based evaluation scores for a student.
    * If an evaluation already exists it is updated; otherwise a draft evaluation
    * is created first so rubric scoring does not depend on legacy score fields.
@@ -330,7 +270,7 @@ export const rubricService = {
     );
   },
 
-  async getStudentScores(evaluationId: string): ReturnType<typeof rubricService.getScores> {
+  async getStudentScores(evaluationId: string): Promise<Awaited<ReturnType<typeof rubricService.getScores>>> {
     return apiRequestRaw(
       `/api/Evaluation/${evaluationId}/scores`,
     );

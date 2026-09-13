@@ -5,6 +5,8 @@ export function mapBackendRole(role: string): UserRole | null {
   switch (role) {
     case "SuperAdmin":
       return "admin";
+    case "DepartmentAdmin":
+      return "admin"; // DepartmentAdmin uses the same admin portal
     case "Lecturer":
       return "lecturer";
     case "Student":
@@ -26,7 +28,9 @@ export function mapBackendRoleToAdminUserRole(
 export function backendRoleLabel(role: string): string {
   switch (role) {
     case "SuperAdmin":
-      return "Quản trị";
+      return "Quản trị hệ thống";
+    case "DepartmentAdmin":
+      return "Admin khoa";
     case "Lecturer":
       return "Giảng viên";
     case "Student":

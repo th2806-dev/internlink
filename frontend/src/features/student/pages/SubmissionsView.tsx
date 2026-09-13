@@ -38,6 +38,7 @@ type UploadItem = {
   status: string;
   notes: string;
   fileUrl?: string;
+  assetId?: string;
 };
 
 type SubmissionLink = { label: string; url: string };

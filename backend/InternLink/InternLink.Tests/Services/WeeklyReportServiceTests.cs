@@ -192,4 +192,69 @@ public class WeeklyReportServiceTests
         result.WeekNumber.Should().Be(2);
         result.Title.Should().Be("Week 2 Progress");
     }
+
+    [Fact]
+    public async Task SubmitAsync_WhenPastDeadlineAndLateNotAllowed_ShouldThrowInvalidOperationException()
+    {
+        var db = GetDb();
+        var (studentUser, _, _, _, internship, report) = await SeedDataAsync(db);
+        var service = CreateService(db);
+
+        var semesterId = Guid.NewGuid();
+        internship.SemesterId = semesterId;
+        report.Status = WeeklyReportStatus.Draft;
+        report.WeekNumber = 1;
+
+        // Schedule with past due date and AllowLateSubmission = false
+        var schedule = new SemesterReportSchedule
+        {
+            Id = Guid.NewGuid(),
+            SemesterId = semesterId,
+            WeekNumber = 1,
+            Title = "Báo cáo tuần 1",
+            DueDate = DateTime.UtcNow.AddDays(-2), // 2 days ago
+            AllowLateSubmission = false,
+            CreatedAt = DateTime.UtcNow
+        };
+        db.SemesterReportSchedules.Add(schedule);
+        await db.SaveChangesAsync();
+
+        var act = () => service.SubmitAsync(report.Id, studentUser.Id);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Không cho phép nộp muộn*");
+    }
+
+    [Fact]
+    public async Task SubmitAsync_WhenPastDeadlineAndLateAllowed_ShouldSucceed()
+    {
+        var db = GetDb();
+        var (studentUser, _, _, _, internship, report) = await SeedDataAsync(db);
+        var service = CreateService(db);
+
+        var semesterId = Guid.NewGuid();
+        internship.SemesterId = semesterId;
+        report.Status = WeeklyReportStatus.Draft;
+        report.WeekNumber = 1;
+
+        // Schedule with past due date but AllowLateSubmission = true
+        var schedule = new SemesterReportSchedule
+        {
+            Id = Guid.NewGuid(),
+            SemesterId = semesterId,
+            WeekNumber = 1,
+            Title = "Báo cáo tuần 1",
+            DueDate = DateTime.UtcNow.AddDays(-2),
+            AllowLateSubmission = true,
+            CreatedAt = DateTime.UtcNow
+        };
+        db.SemesterReportSchedules.Add(schedule);
+        await db.SaveChangesAsync();
+
+        var result = await service.SubmitAsync(report.Id, studentUser.Id);
+
+        result.Should().NotBeNull();
+        result!.Status.Should().Be("Submitted");
+    }
 }
+

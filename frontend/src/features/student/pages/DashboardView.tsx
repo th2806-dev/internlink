@@ -74,7 +74,8 @@ export const DashboardView = ({
     { id: string; title: string; comment: string; date: string }[]
   >([]);
 
-  const totalWeeks = Math.max(profile.totalReports, reports.length, INTERNSHIP_WEEKS);
+  const semesterWeeks = selectedSemester?.totalWeeks || INTERNSHIP_WEEKS;
+  const totalWeeks = Math.max(profile.totalReports, reports.length, semesterWeeks);
 
   const loadExtra = useCallback(async () => {
     if (internshipId) {
@@ -258,7 +259,7 @@ export const DashboardView = ({
         <div className="px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800 flex items-center gap-2.5">
           <CalendarIcon className="w-4 h-4 text-blue-600 shrink-0" />
           <span>
-            Chưa có kỳ thực tập nào đang hoạt động. Dữ liệu sẽ tự động hiển thị khi Quản trị viên bắt đầu kỳ thực tập.
+            Chưa có kỳ thực tập nào đang hoạt động. Dữ liệu sẽ tự động hiển thị khi Super Admin bắt đầu kỳ thực tập.
           </span>
         </div>
       )}
@@ -341,6 +342,160 @@ export const DashboardView = ({
               }}
             />
           </KpiGrid>
+
+          {/* PROGRESS BREAKDOWN 5-MILESTONE CARD */}
+          {profile.progressBreakdown && (
+            <Panel className="p-4 bg-gradient-to-r from-slate-50 via-blue-50/20 to-slate-50 border border-slate-200/80 rounded-xl shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-200/60">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-blue-600 text-white rounded-lg">
+                    <Target className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900">
+                      Chi tiết tiến độ thực tập (5 tiêu chí)
+                    </h3>
+                    <p className="text-[11px] text-slate-500 font-medium">
+                      {profile.progressBreakdown.summaryText || "Đo lường minh bạch từ hoạt động thực tế"}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-700 font-mono">
+                    Tổng: <span className="text-blue-600 text-sm font-black">{profile.overallProgress}%</span> / 100%
+                  </span>
+                </div>
+              </div>
+
+              {/* Multi-segment progress bar */}
+              <div className="w-full bg-slate-200 rounded-full h-2.5 my-3 flex overflow-hidden">
+                <div
+                  style={{ width: `${profile.progressBreakdown.accountPercent}%` }}
+                  className="bg-sky-500 h-full transition-all duration-300"
+                  title={`Tài khoản: ${profile.progressBreakdown.accountPercent}%`}
+                />
+                <div
+                  style={{ width: `${profile.progressBreakdown.profilePercent}%` }}
+                  className="bg-indigo-500 h-full transition-all duration-300"
+                  title={`Hồ sơ: ${profile.progressBreakdown.profilePercent}%`}
+                />
+                <div
+                  style={{ width: `${profile.progressBreakdown.companyPercent}%` }}
+                  className="bg-teal-500 h-full transition-all duration-300"
+                  title={`Doanh nghiệp: ${profile.progressBreakdown.companyPercent}%`}
+                />
+                <div
+                  style={{ width: `${profile.progressBreakdown.reportPercent}%` }}
+                  className="bg-blue-600 h-full transition-all duration-300"
+                  title={`Báo cáo tuần: ${profile.progressBreakdown.reportPercent}%`}
+                />
+                <div
+                  style={{ width: `${profile.progressBreakdown.evaluationPercent}%` }}
+                  className="bg-emerald-500 h-full transition-all duration-300"
+                  title={`Đánh giá: ${profile.progressBreakdown.evaluationPercent}%`}
+                />
+              </div>
+
+              {/* 5 Milestones */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 pt-1 text-xs">
+                <div className="p-2.5 rounded-lg border bg-white shadow-2xs border-slate-100 flex flex-col justify-between">
+                  <div className="flex items-center justify-between text-[11px] font-bold">
+                    <span className="text-slate-600">1. Tài khoản</span>
+                    <span className={profile.progressBreakdown.accountPercent > 0 ? "text-sky-600" : "text-slate-400"}>
+                      {profile.progressBreakdown.accountPercent}/10%
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-1">
+                    {profile.progressBreakdown.accountPercent > 0 ? (
+                      <span className="text-sky-600 font-semibold flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3" /> Đã kích hoạt
+                      </span>
+                    ) : (
+                      <span className="text-slate-400 flex items-center gap-1">
+                        <Circle className="w-3 h-3" /> Chưa đăng nhập
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-2.5 rounded-lg border bg-white shadow-2xs border-slate-100 flex flex-col justify-between">
+                  <div className="flex items-center justify-between text-[11px] font-bold">
+                    <span className="text-slate-600">2. Hồ sơ cá nhân</span>
+                    <span className={profile.progressBreakdown.profilePercent > 0 ? "text-indigo-600" : "text-slate-400"}>
+                      {profile.progressBreakdown.profilePercent}/15%
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-1">
+                    {profile.progressBreakdown.profilePercent >= 15 ? (
+                      <span className="text-indigo-600 font-semibold flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3" /> Đầy đủ thông tin
+                      </span>
+                    ) : profile.progressBreakdown.profilePercent > 0 ? (
+                      <span className="text-amber-600 font-semibold">Cơ bản</span>
+                    ) : (
+                      <span className="text-slate-400 flex items-center gap-1">
+                        <Circle className="w-3 h-3" /> Chưa cập nhật
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-2.5 rounded-lg border bg-white shadow-2xs border-slate-100 flex flex-col justify-between">
+                  <div className="flex items-center justify-between text-[11px] font-bold">
+                    <span className="text-slate-600">3. Doanh nghiệp</span>
+                    <span className={profile.progressBreakdown.companyPercent > 0 ? "text-teal-600" : "text-slate-400"}>
+                      {profile.progressBreakdown.companyPercent}/20%
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-1">
+                    {profile.progressBreakdown.companyPercent > 0 ? (
+                      <span className="text-teal-600 font-semibold flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3" /> Đã phân bổ
+                      </span>
+                    ) : (
+                      <span className="text-slate-400 flex items-center gap-1">
+                        <Circle className="w-3 h-3" /> Chờ phân bổ
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-2.5 rounded-lg border bg-white shadow-2xs border-slate-100 flex flex-col justify-between">
+                  <div className="flex items-center justify-between text-[11px] font-bold">
+                    <span className="text-slate-600">4. Báo cáo tuần</span>
+                    <span className={profile.progressBreakdown.reportPercent > 0 ? "text-blue-600" : "text-slate-400"}>
+                      {profile.progressBreakdown.reportPercent}/35%
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-1">
+                    <span className="text-slate-600 font-semibold">
+                      {profile.progressBreakdown.submittedReportsCount}/{profile.progressBreakdown.requiredWeeksCount} tuần
+                    </span>
+                  </div>
+                </div>
+
+                <div className="p-2.5 rounded-lg border bg-white shadow-2xs border-slate-100 flex flex-col justify-between">
+                  <div className="flex items-center justify-between text-[11px] font-bold">
+                    <span className="text-slate-600">5. Đánh giá cuối kỳ</span>
+                    <span className={profile.progressBreakdown.evaluationPercent > 0 ? "text-emerald-600" : "text-slate-400"}>
+                      {profile.progressBreakdown.evaluationPercent}/20%
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-1">
+                    {profile.progressBreakdown.evaluationPercent > 0 ? (
+                      <span className="text-emerald-600 font-semibold flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3" /> Đã chốt điểm
+                      </span>
+                    ) : (
+                      <span className="text-slate-400 flex items-center gap-1">
+                        <Circle className="w-3 h-3" /> Cuối kỳ
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </Panel>
+          )}
 
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
             <Panel className="lg:col-span-8">

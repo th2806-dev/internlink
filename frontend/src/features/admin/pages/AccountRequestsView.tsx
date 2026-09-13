@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
+import type { ToastType } from "../../../contexts/ToastContext";
 import { accountRequestService, type AccountRequestDto } from "../../../services/accountRequest.service";
 import { adminUsersService } from "../../../services/adminUsers.service";
 import {
@@ -43,7 +44,7 @@ export const AccountRequestsView = ({
   onShowToast,
   onNavigateTab,
 }: {
-  onShowToast: (msg: string) => void;
+  onShowToast: (msg: string, type?: ToastType) => void;
   onNavigateTab?: (tab: string) => void;
 }) => {
   const [activeMainTab, setActiveMainTab] = useState("requests");
@@ -1026,7 +1027,7 @@ export const AccountRequestsView = ({
               </h2>
               <p className="text-xs text-slate-500 font-medium mt-0.5">
                 Quản lý trạng thái tài khoản sinh viên, giảng viên, cán bộ doanh
-                nghiệp và quản trị viên.
+                nghiệp và Super Admin.
               </p>
             </div>
 
@@ -1061,7 +1062,7 @@ export const AccountRequestsView = ({
               <option value="student">Sinh viên</option>
               <option value="lecturer">Giảng viên</option>
               <option value="enterprise">Doanh nghiệp</option>
-              <option value="admin">Quản trị viên</option>
+              <option value="admin">Super Admin</option>
             </select>
 
             <select
@@ -1437,7 +1438,7 @@ export const AccountRequestsView = ({
 
               <div className="space-y-2">
                 <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
-                  Ghi chú của Quản trị viên
+                  Ghi chú của Super Admin
                 </span>
                 <p className="p-3 bg-slate-50 rounded-md border border-slate-200 font-medium text-slate-700 italic">
                   {selectedRequest.adminNote ||
@@ -1653,7 +1654,7 @@ export const AccountRequestsView = ({
                     <option value="enterprise">
                       Cán bộ Doanh nghiệp (Mentor)
                     </option>
-                    <option value="admin">Quản trị viên (Admin)</option>
+                    <option value="admin">Super Admin</option>
                   </select>
                 </div>
               </div>

@@ -1,10 +1,14 @@
 import { useState } from "react";
+import { useAuth } from "../../../contexts/AuthContext";
+import type { ToastType } from "../../../contexts/ToastContext";
 import {
   LayoutDashboard,
   RefreshCw,
   Download,
   ArrowUpRight,
   AlertTriangle,
+  FileSpreadsheet,
+  FileText,
 } from "lucide-react";
 import { PageHeader } from "../../../components/common/PageHeader";
 import { Panel } from "../../../components/common/Panel";
@@ -13,6 +17,8 @@ import { WorkloadOverviewCard } from "../components/cards/WorkloadOverviewCard";
 import { AdminActivityTimeline } from "../components/ActivityTimeline";
 import {
   buildInternshipStatusTrend,
+  DashboardDonutChart,
+  DashboardSemesterComparisonChart,
   DashboardTrendChart,
 } from "../../../components/common/DashboardCharts";
 import { useAdminDashboardStats } from "../../../hooks/useAdminDashboardStats";
@@ -20,20 +26,34 @@ import { exportAdminDashboardReport } from "../../../lib/adminDashboardExport";
 import { exportService } from "../../../services/export.service";
 import { useSemester, toApiSemesterId } from "../../../contexts/SemesterContext";
 
+const EXPORT_DEPARTMENTS = [
+  { value: "", label: "Tất cả Khoa" },
+  { value: "CNTT", label: "CNTT" },
+  { value: "QTKD", label: "QTKD" },
+  { value: "Du lịch", label: "Du lịch" },
+  { value: "Ngoại ngữ", label: "Ngoại ngữ" },
+];
+
 export const DashboardView = ({
   onShowToast,
   onNavigateTab,
 }: {
-  onShowToast: (msg: string) => void;
+  onShowToast: (msg: string, type?: ToastType) => void;
   onNavigateTab: (tab: string) => void;
 }) => {
+  const { user } = useAuth();
   const [isExporting, setIsExporting] = useState(false);
-  const { selectedSemester } = useSemester();
+  const [exportDepartment, setExportDepartment] = useState("");
+  const { semesters, selectedSemester } = useSemester();
   const { stats, isLoading, updatedAt, reload } = useAdminDashboardStats(
     true,
     toApiSemesterId(selectedSemester?.id),
     onShowToast,
   );
+
+  const semesterId = toApiSemesterId(selectedSemester?.id);
+  const departmentFilter = exportDepartment || undefined;
+  const isSuperAdmin = user?.backendRole === "SuperAdmin";
 
   const handleRefresh = async () => {
     if (isLoading) return;
@@ -44,7 +64,7 @@ export const DashboardView = ({
   const handleExportInternshipList = async () => {
     setIsExporting(true);
     try {
-      await exportService.downloadInternshipExcel(toApiSemesterId(selectedSemester?.id));
+      await exportService.downloadInternshipExcel(semesterId, departmentFilter);
       onShowToast("Đã tải xuống Danh sách thực tập (.xlsx)");
     } catch (err) {
       onShowToast("Xuất danh sách thực tập thất bại. Đang tải báo cáo tổng quan...");
@@ -54,13 +74,25 @@ export const DashboardView = ({
     }
   };
 
-  const handleExportSummaryReport = async () => {
+  const handleExportSummaryReportWord = async () => {
     setIsExporting(true);
     try {
-      await exportService.downloadSummaryReportWord(toApiSemesterId(selectedSemester?.id));
+      await exportService.downloadSummaryReportWord(semesterId, departmentFilter);
       onShowToast("Đã tải xuống Báo cáo tổng kết thực tập (.docx)");
     } catch (err) {
       onShowToast("Xuất báo cáo tổng kết Word thất bại.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExportSummaryReportExcel = async () => {
+    setIsExporting(true);
+    try {
+      await exportService.downloadSummaryReport(semesterId, departmentFilter);
+      onShowToast("Đã tải xuống Báo cáo tổng kết thực tập (.xlsx)");
+    } catch (err) {
+      onShowToast("Xuất báo cáo tổng kết Excel thất bại.");
     } finally {
       setIsExporting(false);
     }
@@ -74,6 +106,19 @@ export const DashboardView = ({
     ? buildInternshipStatusTrend(stats.internshipStats)
     : [];
   const actionItems = stats?.actionItems ?? [];
+  const semesterComparison = semesters.map((semester) => ({
+    label: semester.name.length > 16 ? `${semester.name.slice(0, 16)}…` : semester.name,
+    students: semester.studentsCount,
+    placed: semester.placedStudents,
+    companies: semester.companiesCount,
+  }));
+  const outcomeSlices = stats
+    ? [
+        { name: "Hoàn thành", value: stats.internshipStats.completed, tone: "emerald" as const },
+        { name: "Đã chấm", value: stats.internshipStats.graded, tone: "blue" as const },
+        { name: "Cần bổ sung", value: stats.internshipStats.requiresRevision, tone: "amber" as const },
+      ].filter((item) => item.value > 0)
+    : [];
   const toneClass = {
     amber: "text-amber-700",
     blue: "text-[#1d4ed8]",
@@ -97,7 +142,7 @@ export const DashboardView = ({
           },
           {
             label: isExporting ? "Đang xuất…" : "Xuất danh sách thực tập",
-            icon: Download,
+            icon: FileSpreadsheet,
             onClick: () => void handleExportInternshipList(),
             variant: "secondary",
             disabled: isExporting || isLoading,
@@ -105,14 +150,48 @@ export const DashboardView = ({
           },
           {
             label: isExporting ? "Đang xuất…" : "Xuất báo cáo tổng kết (.docx)",
+            icon: FileText,
+            onClick: () => void handleExportSummaryReportWord(),
+            variant: "secondary",
+            disabled: isExporting || isLoading,
+            loading: isExporting,
+          },
+          {
+            label: isExporting ? "Đang xuất…" : "Xuất báo cáo tổng kết (.xlsx)",
             icon: Download,
-            onClick: () => void handleExportSummaryReport(),
+            onClick: () => void handleExportSummaryReportExcel(),
             variant: "secondary",
             disabled: isExporting || isLoading,
             loading: isExporting,
           },
         ]}
       />
+
+      {isSuperAdmin && (
+        <div className="il-accent-panel px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-blue-700">Bộ lọc xuất báo cáo</p>
+            <p className="text-sm font-semibold text-slate-900 mt-0.5">
+              Áp dụng Khoa cho danh sách thực tập và báo cáo tổng kết theo kỳ đang chọn.
+            </p>
+          </div>
+          <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+            <span>Khoa</span>
+            <select
+              value={exportDepartment}
+              onChange={(e) => setExportDepartment(e.target.value)}
+              className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-800 outline-none focus:border-blue-500"
+              aria-label="Lọc Khoa khi xuất báo cáo"
+            >
+              {EXPORT_DEPARTMENTS.map((d) => (
+                <option key={d.value || "all"} value={d.value}>
+                  {d.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
 
       <AdminKpiSection
         stats={stats}
@@ -125,6 +204,14 @@ export const DashboardView = ({
         }}
       />
 
+      <div className="il-accent-panel px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-blue-700">Bức tranh vận hành</p>
+          <p className="text-sm font-semibold text-slate-900 mt-0.5">Theo dõi nhanh nguồn lực, tiến độ và các điểm cần can thiệp.</p>
+        </div>
+        <span className="text-[11px] font-semibold text-slate-500">Dữ liệu theo kỳ đang chọn</span>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         <Panel className="lg:col-span-8">
           <DashboardTrendChart
@@ -132,7 +219,7 @@ export const DashboardView = ({
             subtitle="Số lượng sinh viên trong đợt thực tập đang chọn"
             data={isLoading ? [] : internshipTrend}
             valueLabel="Số sinh viên"
-            variant="horizontalBar"
+            variant="bar"
           />
         </Panel>
         <Panel className="lg:col-span-4">
@@ -177,6 +264,23 @@ export const DashboardView = ({
               ))}
             </ul>
           )}
+        </Panel>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        <Panel className="lg:col-span-8">
+          <DashboardSemesterComparisonChart data={semesterComparison} />
+        </Panel>
+        <Panel className="lg:col-span-4">
+          <DashboardDonutChart
+            title="Kết quả thực tập"
+            subtitle="Tổng hợp trạng thái đánh giá của kỳ đang chọn"
+            data={
+              outcomeSlices.length > 0
+                ? outcomeSlices
+                : [{ name: "Chưa có dữ liệu", value: 1, tone: "slate" as const }]
+            }
+          />
         </Panel>
       </div>
 
