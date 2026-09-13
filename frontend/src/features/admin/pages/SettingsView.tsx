@@ -166,7 +166,7 @@ export const SettingsView = ({
     try {
       await adminEmailService.testEmail({
         toEmail,
-        fullName: "Ban quản lý khoa",
+        fullName: "Quản trị khoa",
         role: "Lecturer",
       });
       onShowToast(`Đã gửi email kiểm tra kết nối tới ${toEmail}`);
@@ -291,7 +291,7 @@ export const SettingsView = ({
             </div>
             <div>
               <h2 className="text-base font-bold text-slate-900">
-                1. Thông tin Liên hệ Khoa &amp; Ban Quản lý
+                1. Thông tin Liên hệ Khoa &amp; Ban Giám hiệu
               </h2>
               <p className="text-xs text-slate-500 font-medium">
                 Thông tin xuất hiện trên các văn bản, thông báo và hỗ trợ sinh viên liên hệ.

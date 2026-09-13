@@ -430,7 +430,7 @@ export function mapNotificationDtoToStudentUi(
   } else if (text.includes("hạn nộp") || text.includes("deadline") || text.includes("nhắc nhở") || text.includes("hạn chót") || text.includes("khóa cổng")) {
     category = "Deadline";
     senderName = n.senderName || "Hệ thống InternLink";
-    senderRole = "Ban Quản lý";
+    senderRole = "Quản trị khoa";
   } else if (n.senderName) {
     senderName = n.senderName;
   }
@@ -475,7 +475,7 @@ export function mapNotificationDtoToLecturerUi(n: NotificationDto) {
     sender = n.senderName || "Sinh viên thực tập";
   } else if (text.includes("deadline") || text.includes("hạn") || text.includes("nhắc nhở") || text.includes("khóa sổ") || text.includes("hết hạn")) {
     category = "Tiến độ Deadline";
-    sender = "Ban Quản lý đào tạo";
+    sender = "Ban Quản lý đào tạo"; // fallback hiển thị, không phải role hệ thống
   } else if (text.includes("doanh nghiệp") || text.includes("công ty") || text.includes("đối tác") || text.includes("tiếp nhận")) {
     category = "Doanh nghiệp";
     sender = n.senderName || "Doanh nghiệp đối tác";

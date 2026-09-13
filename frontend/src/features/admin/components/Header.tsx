@@ -80,7 +80,7 @@ export const Header = ({
       case "admin-settings":
         return "Cài đặt Hệ thống";
       case "admin-account":
-        return "Hồ sơ Ban Quản lý";
+        return "Hồ sơ Quản trị";
       default:
         return "Trang quản trị";
     }

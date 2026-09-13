@@ -10,18 +10,19 @@ public interface IInternshipService
     /// <summary>
     /// Get all internships with pagination
     /// </summary>
-    Task<IEnumerable<InternshipListItemDto>> GetAllInternshipsAsync(int skip = 0, int take = 100, Guid? lecturerId = null);
+    Task<IEnumerable<InternshipListItemDto>> GetAllInternshipsAsync(int skip = 0, int take = 100, Guid? lecturerId = null, Guid? departmentId = null);
 
     /// <summary>
     /// Get internships with filtering, sorting, and pagination
     /// </summary>
-    Task<PaginatedResponse<InternshipListItemDto>> GetInternshipsWithFilterAsync(InternshipFilterRequest filter, Guid? lecturerId = null);
+    Task<PaginatedResponse<InternshipListItemDto>> GetInternshipsWithFilterAsync(InternshipFilterRequest filter, Guid? lecturerId = null, Guid? departmentId = null);
 
     /// <summary>
     /// Get a specific internship by ID with full details and submissions
     /// </summary>
     Task<InternshipDetailFullDto?> GetInternshipByIdAsync(Guid id);
     Task<InternshipDetailFullDto?> GetInternshipByIdAsync(Guid id, Guid userId, bool isLecturerOrAdmin);
+    Task<InternshipDetailFullDto?> GetInternshipByIdForDepartmentAdminAsync(Guid id, Guid? departmentId);
 
     /// <summary>
     /// Get internships for a specific student

@@ -252,7 +252,7 @@ public class LecturerProfileService : ILecturerProfileService
         };
     }
 
-    public async Task<LecturerImportResultDto> ImportFromExcelAsync(Stream excelStream, Guid? semesterId = null)
+    public async Task<LecturerImportResultDto> ImportFromExcelAsync(Stream excelStream, Guid? semesterId = null, Guid? departmentId = null)
     {
         if (excelStream == null || !excelStream.CanRead)
             throw new ArgumentException("Excel file stream is required");
@@ -440,6 +440,7 @@ public class LecturerProfileService : ILecturerProfileService
                 Email = NullIfWhiteSpace(email),
                 Phone = NullIfWhiteSpace(phone),
                 Department = NullIfWhiteSpace(department),
+                DepartmentId = departmentId,
                 UserId = userId,
                 CreatedAt = DateTime.UtcNow
             };
@@ -561,12 +562,19 @@ public class LecturerProfileService : ILecturerProfileService
         });
     }
 
-    public async Task<byte[]> ExportLecturersExcelAsync()
+    public async Task<byte[]> ExportLecturersExcelAsync(Guid? departmentId = null)
     {
-        var lecturers = await _db.Lecturers
+        var lecturersQuery = _db.Lecturers
             .Include(l => l.Internships)
             .Include(l => l.User)
-            .Where(l => !l.IsDeleted)
+            .Where(l => !l.IsDeleted);
+
+        if (departmentId.HasValue)
+        {
+            lecturersQuery = lecturersQuery.Where(l => l.DepartmentId == departmentId.Value);
+        }
+
+        var lecturers = await lecturersQuery
             .OrderBy(l => l.StaffCode)
             .ToListAsync();
 

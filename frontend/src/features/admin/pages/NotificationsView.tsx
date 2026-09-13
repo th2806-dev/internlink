@@ -339,7 +339,7 @@ export const NotificationsView = ({
       {isSuperAdmin && (
         <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-xl text-sm flex items-center justify-between">
           <span>
-            <strong>Chế độ chỉ xem nghiệp vụ khoa:</strong> Bạn đang đăng nhập tài khoản Super Admin. Thao tác soạn thảo, phát hành và xóa thông báo gửi sinh viên/giảng viên thuộc thẩm quyền nghiệp vụ của Admin khoa. Bạn có thể tra cứu lịch sử, xem chi tiết thông báo và xuất báo cáo CSV.
+            <strong>Chế độ chỉ xem nghiệp vụ khoa:</strong> Bạn đang đăng nhập tài khoản Quản trị hệ thống. Thao tác soạn thảo, phát hành và xóa thông báo gửi sinh viên/giảng viên thuộc thẩm quyền nghiệp vụ của Quản trị khoa. Bạn có thể tra cứu lịch sử, xem chi tiết thông báo và xuất báo cáo CSV.
           </span>
         </div>
       )}

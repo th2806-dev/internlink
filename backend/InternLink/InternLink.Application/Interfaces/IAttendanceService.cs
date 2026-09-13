@@ -11,6 +11,6 @@ public interface IAttendanceService
     Task<bool> DeleteSessionAsync(Guid sessionId, Guid lecturerId);
     Task<AttendanceSessionDetailDto> MarkAttendanceAsync(Guid sessionId, Guid lecturerId, MarkAttendanceDto dto);
     Task<StudentAttendanceOverviewDto> GetStudentAttendanceAsync(Guid studentId, Guid semesterId);
-    Task<AdminAttendanceReportDto> GetAdminAttendanceReportAsync(Guid semesterId);
+    Task<AdminAttendanceReportDto> GetAdminAttendanceReportAsync(Guid semesterId, Guid? departmentId = null);
     Task<List<AttendanceRecordDto>> GetStudentAttendanceForLecturerAsync(Guid lecturerId, Guid studentId, Guid semesterId);
 }

@@ -119,7 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser((prev) => {
       if (!prev) return prev;
       const roleLabels: Record<UserRole, string> = {
-        admin: "Super Admin",
+        admin: "Quản trị hệ thống",
         lecturer: "Giảng viên",
         student: "Sinh viên",
       };

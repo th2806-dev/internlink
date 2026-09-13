@@ -119,17 +119,7 @@ export const Header = ({
           {showProfileMenu && (
             <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-md border border-slate-200 p-2 z-50">
               <div className="p-3 border-b border-slate-100">
-                <p className="text-xs font-bold text-slate-900">
-                  {currentLecturer === "Thầy Phước"
-                    ? "Trần Minh Huy (Thầy Phước)"
-                    : currentLecturer === "Thầy Thành"
-                      ? "Nguyễn Đức Thành (Thầy Thành)"
-                      : currentLecturer === "Thầy Cường"
-                        ? "Phạm Hùng Cường (Thầy Cường)"
-                        : currentLecturer === "Cô Minh An"
-                          ? "Đặng Minh An (Cô Minh An)"
-                          : "Super Admin"}
-                </p>
+                <p className="text-xs font-bold text-slate-900">{lecturerName}</p>
                 <p className="text-[11px] text-slate-500 font-medium">
                   Giảng viên hướng dẫn ({assignedStudentsCount} SV)
                 </p>

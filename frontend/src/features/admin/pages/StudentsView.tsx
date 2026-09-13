@@ -422,7 +422,7 @@ export const StudentsView = ({
         <div className="px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900 flex items-center gap-2.5">
           <Eye className="w-4 h-4 text-blue-600 shrink-0" />
           <span>
-            Chế độ chỉ xem nghiệp vụ khoa — Super Admin không thể tạo/sửa/xóa/cấp tài khoản sinh viên. Xuất dữ liệu vẫn khả dụng.
+            Chế độ chỉ xem nghiệp vụ khoa — Quản trị hệ thống không thể tạo/sửa/xóa/cấp tài khoản sinh viên. Xuất dữ liệu vẫn khả dụng.
           </span>
         </div>
       )}

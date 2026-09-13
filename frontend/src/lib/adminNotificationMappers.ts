@@ -30,7 +30,7 @@ export function mapCampaignToAdminRow(
     recipientCount: c.recipientCount,
     sentAt: sentLabel,
     createdAt: sentLabel,
-    createdBy: "Super Admin",
+    createdBy: "Quản trị hệ thống",
     status: "sent" as const,
     readCount: c.readCount,
     totalRecipients: c.recipientCount,

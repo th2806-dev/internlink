@@ -65,6 +65,7 @@ public class AdminCompaniesController : ControllerBase
     /// Existing internships are kept; the company is just hidden from new assignments in that term.
     /// </summary>
     [HttpPut("{id:guid}/semester/{semesterId:guid}")]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     public async Task<IActionResult> SetSemesterLink(Guid id, Guid semesterId, [FromBody] SetSemesterLinkRequest request)
     {
         try
@@ -123,6 +124,7 @@ public class AdminCompaniesController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     public async Task<IActionResult> Create([FromBody] CreateCompanyRequest request)
     {
         try
@@ -140,6 +142,7 @@ public class AdminCompaniesController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateCompanyRequest request)
     {
         try
@@ -160,6 +163,7 @@ public class AdminCompaniesController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     public async Task<IActionResult> Delete(Guid id)
     {
         try
@@ -186,6 +190,7 @@ public class AdminCompaniesController : ControllerBase
     [HttpPost("import")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(10 * 1024 * 1024)]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     public async Task<IActionResult> Import(IFormFile file)
     {
         try
@@ -236,6 +241,7 @@ public class AdminCompaniesController : ControllerBase
     }
 
     [HttpPost("{id:guid}/positions")]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     public async Task<IActionResult> CreatePosition(Guid id, [FromBody] CreateCompanyPositionRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Title))
@@ -253,6 +259,7 @@ public class AdminCompaniesController : ControllerBase
     }
 
     [HttpPut("positions/{positionId:guid}")]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     public async Task<IActionResult> UpdatePosition(Guid positionId, [FromBody] UpdateCompanyPositionRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Title))
@@ -266,6 +273,7 @@ public class AdminCompaniesController : ControllerBase
     }
 
     [HttpDelete("positions/{positionId:guid}")]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     public async Task<IActionResult> DeletePosition(Guid positionId)
     {
         var deleted = await _companyService.DeletePositionAsync(positionId);

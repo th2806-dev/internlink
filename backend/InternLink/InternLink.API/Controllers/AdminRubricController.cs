@@ -54,6 +54,7 @@ public class AdminRubricController : ControllerBase
     /// Create a new rubric for a semester
     /// </summary>
     [HttpPost]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     [ProducesResponseType(typeof(RubricDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<RubricDto>> CreateRubric(Guid semesterId, [FromBody] CreateRubricRequest request)
@@ -85,6 +86,7 @@ public class AdminRubricController : ControllerBase
     /// Update rubric (only Draft or Rejected status)
     /// </summary>
     [HttpPut]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     [ProducesResponseType(typeof(RubricDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<RubricDto>> UpdateRubric(Guid semesterId, [FromBody] UpdateRubricRequest request)
@@ -120,6 +122,7 @@ public class AdminRubricController : ControllerBase
     /// Delete rubric (only Draft or Rejected status)
     /// </summary>
     [HttpDelete]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> DeleteRubric(Guid semesterId)

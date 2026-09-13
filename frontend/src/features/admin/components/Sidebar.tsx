@@ -168,7 +168,7 @@ export const Sidebar = ({
               <span className="il-sidebar-brand-intern">Intern</span>
               <span className="il-sidebar-brand-link">Link</span>
             </div>
-            <p className="il-portal-badge">{isSuperAdmin ? "SUPER ADMIN" : "ADMIN KHOA"}</p>
+            <p className="il-portal-badge">{isSuperAdmin ? "QUẢN TRỊ HỆ THỐNG" : "QUẢN TRỊ KHOA"}</p>
           </div>
         </div>
 

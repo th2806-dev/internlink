@@ -258,7 +258,7 @@ public class InternshipReportService : IInternshipReportService
             ["{{TOTAL_NOT_INTERNSHIP}}"] = notInterning.ToString(),
             ["{{START_DATE}}"] = startDateStr,
             ["{{END_DATE}}"] = endDateStr,
-            ["{{DEPARTMENT}}"] = !string.IsNullOrWhiteSpace(department) ? department : "CÔNG NGHỆ THÔNG TIN",
+            ["{{DEPARTMENT}}"] = !string.IsNullOrWhiteSpace(department) ? department : "TOÀN HỆ THỐNG",
         };
 
         // Grade stats placeholders

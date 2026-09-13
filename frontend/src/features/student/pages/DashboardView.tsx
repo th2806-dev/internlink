@@ -259,7 +259,7 @@ export const DashboardView = ({
         <div className="px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800 flex items-center gap-2.5">
           <CalendarIcon className="w-4 h-4 text-blue-600 shrink-0" />
           <span>
-            Chưa có kỳ thực tập nào đang hoạt động. Dữ liệu sẽ tự động hiển thị khi Super Admin bắt đầu kỳ thực tập.
+            Chưa có kỳ thực tập nào đang hoạt động. Dữ liệu sẽ tự động hiển thị khi Quản trị hệ thống bắt đầu kỳ thực tập.
           </span>
         </div>
       )}

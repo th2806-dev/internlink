@@ -45,6 +45,10 @@ public class LecturerProfileController : ControllerBase
     [Authorize(Policy = "RequireAdmin")]
     public async Task<IActionResult> GetOverview(Guid id)
     {
+        var lecturer = await _service.GetByIdAsync(id);
+        if (lecturer == null || !_deptScope.HasAccess(User, lecturer.DepartmentId))
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Lecturer not found" }));
+
         var overview = await _service.GetOverviewAsync(id);
         if (overview == null)
             return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Lecturer not found" }));
@@ -53,7 +57,7 @@ public class LecturerProfileController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Policy = "RequireAdmin")]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     public async Task<IActionResult> Create([FromBody] CreateLecturerRequest request)
     {
         try
@@ -68,11 +72,15 @@ public class LecturerProfileController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
-    [Authorize(Policy = "RequireAdmin")]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateLecturerRequest request)
     {
         try
         {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null || !_deptScope.HasAccess(User, existing.DepartmentId))
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Lecturer not found" }));
+
             var updated = await _service.UpdateAsync(id, request);
             if (updated == null)
                 return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Lecturer not found" }));
@@ -86,11 +94,15 @@ public class LecturerProfileController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
-    [Authorize(Policy = "RequireAdmin")]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     public async Task<IActionResult> Delete(Guid id)
     {
         try
         {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null || !_deptScope.HasAccess(User, existing.DepartmentId))
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Lecturer not found" }));
+
             var ok = await _service.DeleteAsync(id);
             if (!ok)
                 return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Lecturer not found" }));
@@ -111,7 +123,7 @@ public class LecturerProfileController : ControllerBase
     }
 
     [HttpPost("import")]
-    [Authorize(Policy = "RequireAdmin")]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(10 * 1024 * 1024)]
     public async Task<IActionResult> Import(IFormFile file, [FromQuery] Guid? semesterId = null)
@@ -125,7 +137,8 @@ public class LecturerProfileController : ControllerBase
                 return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Only .xlsx files are supported" }));
 
             await using var stream = file.OpenReadStream();
-            var result = await _service.ImportFromExcelAsync(stream, semesterId);
+            var deptId = _deptScope.GetCurrentDepartmentId(User);
+            var result = await _service.ImportFromExcelAsync(stream, semesterId, deptId);
             return Ok(ApiResponse<LecturerImportResultDto>.Ok(result));
         }
         catch (InvalidOperationException ex)
@@ -141,7 +154,7 @@ public class LecturerProfileController : ControllerBase
     [HttpGet("export")]
     public async Task<IActionResult> Export()
     {
-        var bytes = await _service.ExportLecturersExcelAsync();
+        var bytes = await _service.ExportLecturersExcelAsync(_deptScope.GetCurrentDepartmentId(User));
         var fileName = $"Danh-sach-GV-{DateTime.UtcNow:yyyyMMdd-HHmmss}.xlsx";
         return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
     }

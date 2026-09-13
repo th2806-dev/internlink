@@ -21,6 +21,7 @@ public class AdminAssignmentsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     public async Task<IActionResult> BulkAssign([FromBody] BulkAssignRequest request)
     {
         try
@@ -28,7 +29,8 @@ public class AdminAssignmentsController : ControllerBase
             if (!ModelState.IsValid)
                 return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Invalid input" }));
 
-            var result = await _assignmentService.BulkAssignAsync(request);
+            var deptId = _deptScope.GetCurrentDepartmentId(User);
+            var result = await _assignmentService.BulkAssignAsync(request, deptId);
             return Ok(ApiResponse<BulkAssignResultDto>.Ok(result));
         }
         catch (InvalidOperationException ex)
@@ -50,7 +52,9 @@ public class AdminAssignmentsController : ControllerBase
     {
         try
         {
-            var items = await _assignmentService.GetByLecturerAsync(lecturerId, semesterId);
+            // DepartmentAdmin may only view assignments of lecturers in their own department.
+            var deptId = _deptScope.GetCurrentDepartmentId(User);
+            var items = await _assignmentService.GetByLecturerAsync(lecturerId, semesterId, deptId);
             return Ok(ApiResponse<IReadOnlyList<LecturerAssignmentItemDto>>.Ok(items));
         }
         catch (InvalidOperationException ex)
@@ -60,12 +64,14 @@ public class AdminAssignmentsController : ControllerBase
     }
 
     [HttpDelete]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     public async Task<IActionResult> Unassign([FromBody] UnassignRequest request)
     {
         if (!ModelState.IsValid)
             return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Invalid input" }));
 
-        var ok = await _assignmentService.UnassignAsync(request);
+        var deptId = _deptScope.GetCurrentDepartmentId(User);
+        var ok = await _assignmentService.UnassignAsync(request, deptId);
         if (!ok)
             return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Assignment not found" }));
 
@@ -73,26 +79,30 @@ public class AdminAssignmentsController : ControllerBase
     }
 
     [HttpGet("history")]
-    public async Task<IActionResult> GetHistory([FromQuery] int limit = 50, [FromQuery] Guid? semesterId = null)
+    public async Task<IActionResult> GetHistory([FromQuery] int limit = 50, [FromQuery] Guid? semesterId = null, [FromQuery] Guid? departmentId = null)
     {
-        var items = await _assignmentService.GetHistoryAsync(Math.Clamp(limit, 1, 200), semesterId);
+        var deptId = _deptScope.ResolveEffectiveDepartmentId(User, departmentId);
+        var items = await _assignmentService.GetHistoryAsync(Math.Clamp(limit, 1, 200), semesterId, deptId);
         return Ok(ApiResponse<IReadOnlyList<AssignmentHistoryItemDto>>.Ok(items));
     }
 
     [HttpGet("export")]
-    public async Task<IActionResult> ExportExcel([FromQuery] Guid? semesterId = null)
+    public async Task<IActionResult> ExportExcel([FromQuery] Guid? semesterId = null, [FromQuery] Guid? departmentId = null)
     {
-        var bytes = await _assignmentService.ExportExcelAsync(semesterId);
+        var deptId = _deptScope.ResolveEffectiveDepartmentId(User, departmentId);
+        var bytes = await _assignmentService.ExportExcelAsync(semesterId, deptId);
         var fileName = $"Danh-sach-phan-cong-GVHD-{DateTime.UtcNow:yyyyMMdd}.xlsx";
         return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
     }
 
     [HttpPost("auto")]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     public async Task<IActionResult> AutoAssign([FromBody] AutoAssignRequest request)
     {
         try
         {
-            var result = await _assignmentService.AutoAssignAsync(request);
+            var deptId = _deptScope.GetCurrentDepartmentId(User);
+            var result = await _assignmentService.AutoAssignAsync(request, deptId);
             return Ok(ApiResponse<AutoAssignResultDto>.Ok(result));
         }
         catch (InvalidOperationException ex)
@@ -114,6 +124,7 @@ public class AdminAssignmentsController : ControllerBase
     }
 
     [HttpPost("company-allocation/import")]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     public async Task<IActionResult> ImportCompanyAllocations(IFormFile file, [FromQuery] Guid? semesterId = null)
     {
         if (file == null || file.Length == 0)
@@ -126,7 +137,8 @@ public class AdminAssignmentsController : ControllerBase
         try
         {
             using var stream = file.OpenReadStream();
-            var result = await _assignmentService.ImportCompanyAllocationsFromExcelAsync(stream, semesterId);
+            var deptId = _deptScope.GetCurrentDepartmentId(User);
+            var result = await _assignmentService.ImportCompanyAllocationsFromExcelAsync(stream, semesterId, deptId);
             return Ok(ApiResponse<CompanyAllocationImportResultDto>.Ok(result));
         }
         catch (Exception ex)
@@ -136,17 +148,19 @@ public class AdminAssignmentsController : ControllerBase
     }
 
     [HttpGet("company-allocation/export")]
-    public async Task<IActionResult> ExportCompanyAllocations([FromQuery] Guid? semesterId = null)
+    public async Task<IActionResult> ExportCompanyAllocations([FromQuery] Guid? semesterId = null, [FromQuery] Guid? departmentId = null)
     {
-        var bytes = await _assignmentService.ExportCompanyAllocationsExcelAsync(semesterId);
+        var deptId = _deptScope.ResolveEffectiveDepartmentId(User, departmentId);
+        var bytes = await _assignmentService.ExportCompanyAllocationsExcelAsync(semesterId, deptId);
         var fileName = $"Danh-sach-SV-thuc-tap-taiDN-{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
         return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
     }
 
     [HttpGet("company-allocation")]
-    public async Task<IActionResult> GetCompanyAllocations([FromQuery] Guid? semesterId = null)
+    public async Task<IActionResult> GetCompanyAllocations([FromQuery] Guid? semesterId = null, [FromQuery] Guid? departmentId = null)
     {
-        var items = await _assignmentService.GetCompanyAllocationsAsync(semesterId);
+        var deptId = _deptScope.ResolveEffectiveDepartmentId(User, departmentId);
+        var items = await _assignmentService.GetCompanyAllocationsAsync(semesterId, deptId);
         return Ok(ApiResponse<IReadOnlyList<CompanyAllocationItemDto>>.Ok(items));
     }
 
@@ -163,6 +177,7 @@ public class AdminAssignmentsController : ControllerBase
     }
 
     [HttpPost("import")]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     public async Task<IActionResult> ImportLecturerAssignments(IFormFile file, [FromQuery] Guid? semesterId = null)
     {
         if (file == null || file.Length == 0)
@@ -175,7 +190,8 @@ public class AdminAssignmentsController : ControllerBase
         try
         {
             using var stream = file.OpenReadStream();
-            var result = await _assignmentService.ImportLecturerAssignmentsFromExcelAsync(stream, semesterId);
+            var deptId = _deptScope.GetCurrentDepartmentId(User);
+            var result = await _assignmentService.ImportLecturerAssignmentsFromExcelAsync(stream, semesterId, deptId);
             return Ok(ApiResponse<LecturerAssignmentImportResultDto>.Ok(result));
         }
         catch (Exception ex)

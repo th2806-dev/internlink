@@ -229,7 +229,7 @@ export function DepartmentsView({ onShowToast }: { onShowToast?: (msg: string, t
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-slate-800">Quản lý Khoa</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Duy trì danh sách khoa trong hệ thống. Chỉ Super Admin mới thể thêm/sửa/xóa.</p>
+          <p className="text-sm text-slate-500 mt-0.5">Duy trì danh sách khoa trong hệ thống. Chỉ Quản trị hệ thống mới có thể thêm/sửa/xóa.</p>
         </div>
         <button
           type="button"

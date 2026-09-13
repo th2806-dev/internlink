@@ -116,7 +116,11 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (!getStoredToken() || !role) return;
     try {
       if (role === "admin") {
-        const backendSemesters = await adminSemestersService.getAll();
+        // Sync the semester list with the header department filter:
+        // SuperAdmin picks a department -> only that department's terms show up.
+        const backendSemesters = await adminSemestersService.getAll(
+          selectedDepartmentId && selectedDepartmentId !== "all" ? selectedDepartmentId : undefined,
+        );
         setSemesters(backendSemesters.map(mapBackendToFrontend));
         return;
       }
@@ -126,7 +130,7 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     } catch (err) {
       console.warn("Error refreshing semester API counts:", err);
     }
-  }, [role]);
+  }, [role, selectedDepartmentId]);
 
   useEffect(() => {
     refreshApiCounts();

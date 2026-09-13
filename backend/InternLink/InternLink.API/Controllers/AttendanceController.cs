@@ -15,17 +15,20 @@ public class AttendanceController : ControllerBase
     private readonly IAttendanceService _attendanceService;
     private readonly ILecturerAccessService _lecturerAccessService;
     private readonly IStudentService _studentService;
+    private readonly IDepartmentScopeService _deptScope;
     private readonly ILogger<AttendanceController> _logger;
 
     public AttendanceController(
         IAttendanceService attendanceService,
         ILecturerAccessService lecturerAccessService,
         IStudentService studentService,
+        IDepartmentScopeService deptScope,
         ILogger<AttendanceController> logger)
     {
         _attendanceService = attendanceService;
         _lecturerAccessService = lecturerAccessService;
         _studentService = studentService;
+        _deptScope = deptScope;
         _logger = logger;
     }
 
@@ -221,7 +224,8 @@ public class AttendanceController : ControllerBase
     [Authorize(Policy = "RequireAdmin")]
     public async Task<IActionResult> GetAdminAttendanceReport([FromQuery] Guid semesterId)
     {
-        var report = await _attendanceService.GetAdminAttendanceReportAsync(semesterId);
+        var deptId = _deptScope.GetCurrentDepartmentId(User);
+        var report = await _attendanceService.GetAdminAttendanceReportAsync(semesterId, deptId);
         return Ok(ApiResponse<AdminAttendanceReportDto>.Ok(report));
     }
 }

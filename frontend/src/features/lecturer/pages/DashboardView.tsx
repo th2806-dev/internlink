@@ -69,7 +69,7 @@ export const DashboardView = ({
               Chưa có kỳ thực tập đang hoạt động
             </h3>
             <p className="text-sm text-slate-600 max-w-md mx-auto">
-              Hiện tại chưa có kỳ thực tập nào được kích hoạt. Vui lòng chờ Super Admin tạo và bắt đầu kỳ thực tập mới.
+              Hiện tại chưa có kỳ thực tập nào được kích hoạt. Vui lòng chờ Quản trị hệ thống tạo và bắt đầu kỳ thực tập mới.
             </p>
           </div>
           <div className="flex items-center justify-center gap-2 text-xs text-slate-500 font-medium">

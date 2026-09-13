@@ -97,6 +97,7 @@ public class AdminStudentsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     public async Task<IActionResult> Create([FromBody] CreateStudentRequest request)
     {
         try
@@ -115,6 +116,7 @@ public class AdminStudentsController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateStudentRequest request)
     {
         try
@@ -122,11 +124,13 @@ public class AdminStudentsController : ControllerBase
             if (!ModelState.IsValid)
                 return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Invalid input" }));
 
-            var student = await _studentService.UpdateStudentAsync(id, request);
-            if (student == null)
+            // Check access BEFORE mutating (avoid writing another department's record).
+            var target = await _studentService.GetStudentByIdAsync(id);
+            if (target == null || !_deptScope.HasAccess(User, target.DepartmentId))
                 return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Student not found" }));
 
-            if (!_deptScope.HasAccess(User, student.DepartmentId))
+            var student = await _studentService.UpdateStudentAsync(id, request);
+            if (student == null)
                 return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Student not found" }));
 
             return Ok(ApiResponse<StudentDto>.Ok(student));
@@ -138,6 +142,7 @@ public class AdminStudentsController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     public async Task<IActionResult> Delete(Guid id)
     {
         var target = await _studentService.GetStudentByIdAsync(id);
@@ -168,6 +173,7 @@ public class AdminStudentsController : ControllerBase
     [HttpPost("import")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(10 * 1024 * 1024)]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     public async Task<IActionResult> Import(IFormFile file, [FromQuery] Guid? semesterId = null)
     {
         try

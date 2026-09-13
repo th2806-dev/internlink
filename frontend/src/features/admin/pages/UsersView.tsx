@@ -206,7 +206,7 @@ export const UsersView = ({
         <div className="px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900 flex items-center gap-2.5">
           <Shield className="w-4 h-4 text-blue-600 shrink-0" />
           <span>
-            <strong>Phân quyền quản lý tài khoản:</strong> Super Admin chỉ tạo và quản lý tài khoản Admin khoa. Tài khoản Sinh viên và Giảng viên do Admin khoa trực tiếp phụ trách.
+            <strong>Phân quyền quản lý tài khoản:</strong> Quản trị hệ thống chỉ tạo và quản lý tài khoản Quản trị khoa. Tài khoản Sinh viên và Giảng viên do Quản trị khoa trực tiếp phụ trách.
           </span>
         </div>
       )}

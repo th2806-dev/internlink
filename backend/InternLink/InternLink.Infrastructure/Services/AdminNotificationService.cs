@@ -57,7 +57,7 @@ public class AdminNotificationService : IAdminNotificationService
         return campaigns;
     }
 
-    public async Task<AdminBroadcastNotificationResultDto> BroadcastAsync(AdminBroadcastNotificationRequest request)
+    public async Task<AdminBroadcastNotificationResultDto> BroadcastAsync(AdminBroadcastNotificationRequest request, Guid? departmentId = null)
     {
         if (string.IsNullOrWhiteSpace(request.Title))
             throw new InvalidOperationException("Title is required");
@@ -74,6 +74,13 @@ public class AdminNotificationService : IAdminNotificationService
             "all" => query.Where(u => u.Role == Role.Student || u.Role == Role.Lecturer),
             _ => throw new InvalidOperationException("Audience must be all, student, or lecturer")
         };
+
+        // DepartmentAdmin only broadcasts within their own department.
+        // SuperAdmin (departmentId = null) reaches everyone.
+        if (departmentId.HasValue)
+        {
+            query = query.Where(u => u.DepartmentId == departmentId.Value);
+        }
 
         var userIds = await query.Select(u => u.Id).ToListAsync();
         if (userIds.Count == 0)

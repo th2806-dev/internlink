@@ -11,7 +11,10 @@ namespace InternLink.API.Controllers;
 
 /// <summary>
 /// Admin semester management (terms, lifecycle, closing/archiving).
-/// DepartmentAdmin sees only their department's semesters.
+/// Semester lifecycle (create/update/start/close/delete) is DEPARTMENT business:
+/// only DepartmentAdmin operates on their own department's terms.
+/// SuperAdmin is read-only (system-wide oversight); they may view all terms
+/// filtered by the header department selector.
 /// </summary>
 [ApiController]
 [Route("api/Admin/semesters")]
@@ -29,9 +32,9 @@ public class AdminSemestersController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll([FromQuery] Guid? departmentId = null)
     {
-        var deptId = _deptScope.GetCurrentDepartmentId(User);
+        var deptId = _deptScope.ResolveEffectiveDepartmentId(User, departmentId);
         var semesters = await _semesterService.GetAllSemestersAsync(departmentId: deptId);
         return Ok(ApiResponse<IEnumerable<SemesterDto>>.Ok(semesters));
     }
@@ -50,7 +53,7 @@ public class AdminSemestersController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Policy = "RequireAdmin")]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     public async Task<IActionResult> Create([FromBody] CreateSemesterDto dto)
     {
         if (string.IsNullOrWhiteSpace(dto.Name))
@@ -62,31 +65,33 @@ public class AdminSemestersController : ControllerBase
         if (string.IsNullOrWhiteSpace(dto.AcademicYear))
             return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "AcademicYear is required" }));
 
-        // DepartmentAdmin always creates within their own department;
-        // SuperAdmin may choose the department explicitly (or leave null = shared).
-        var deptId = _deptScope.GetCurrentDepartmentId(User);
-        dto.DepartmentId = deptId ?? dto.DepartmentId;
+        // Semesters are department-owned: always force the admin's own department.
+        dto.DepartmentId = _deptScope.GetCurrentDepartmentId(User);
 
         var created = await _semesterService.CreateSemesterAsync(dto);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, ApiResponse<SemesterDto>.Ok(created));
     }
 
     [HttpPut("{id:guid}")]
-    [Authorize(Policy = "RequireAdmin")]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateSemesterDto dto)
     {
-        var updated = await _semesterService.UpdateSemesterAsync(id, dto);
-        if (updated == null)
+        var existing = await _semesterService.GetSemesterByIdAsync(id);
+        if (existing == null)
             return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Semester not found" }));
 
-        if (!_deptScope.HasAccess(User, updated.DepartmentId))
+        if (!_deptScope.HasAccess(User, existing.DepartmentId))
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Semester not found" }));
+
+        var updated = await _semesterService.UpdateSemesterAsync(id, dto);
+        if (updated == null)
             return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Semester not found" }));
 
         return Ok(ApiResponse<SemesterDto>.Ok(updated));
     }
 
     [HttpPost("{id:guid}/close")]
-    [Authorize(Policy = "RequireAdmin")]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     public async Task<IActionResult> Close(Guid id)
     {
         if (!await _deptCanAccessSemester(id))
@@ -100,7 +105,7 @@ public class AdminSemestersController : ControllerBase
     }
 
     [HttpPost("{id:guid}/start")]
-    [Authorize(Policy = "RequireAdmin")]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     public async Task<IActionResult> Start(Guid id)
     {
         if (!await _deptCanAccessSemester(id))
@@ -121,7 +126,7 @@ public class AdminSemestersController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
-    [Authorize(Policy = "RequireAdmin")]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     public async Task<IActionResult> Delete(Guid id)
     {
         if (!await _deptCanAccessSemester(id))
@@ -137,6 +142,10 @@ public class AdminSemestersController : ControllerBase
     private async Task<bool> _deptCanAccessSemester(Guid id)
     {
         var semester = await _semesterService.GetSemesterByIdAsync(id);
-        return semester != null && _deptScope.HasAccess(User, semester.DepartmentId);
+        // DepartmentAdmin may only operate on their OWN department's terms —
+        // shared legacy terms (DepartmentId = null) are read-only for them.
+        return semester != null
+            && semester.DepartmentId != null
+            && _deptScope.HasAccess(User, semester.DepartmentId);
     }
 }

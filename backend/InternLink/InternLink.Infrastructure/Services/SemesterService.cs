@@ -24,9 +24,10 @@ public class SemesterService : ISemesterService
     {
         var query = _context.Semesters.Where(s => !s.IsDeleted);
 
-        // DepartmentAdmin: only see their department's semesters
+        // DepartmentAdmin: see their department's semesters plus legacy shared ones (DepartmentId = null).
+        // Each department manages its own terms; shared terms are view-only for them.
         if (departmentId.HasValue)
-            query = query.Where(s => s.DepartmentId == departmentId.Value);
+            query = query.Where(s => s.DepartmentId == departmentId.Value || s.DepartmentId == null);
 
         var semesters = await query
             .Include(s => s.Internships)
@@ -146,12 +147,14 @@ public class SemesterService : ISemesterService
         if (semester.Status == SemesterStatus.Completed)
             throw new InvalidOperationException("A completed semester cannot be started again.");
 
+        // "One active semester" constraint is scoped per department:
+        // each department runs its own terms independently.
         var anotherActiveSemesterExists = await _context.Semesters
-            .AnyAsync(s => s.Id != id && !s.IsDeleted && s.Status == SemesterStatus.Active);
+            .AnyAsync(s => s.Id != id && !s.IsDeleted && s.Status == SemesterStatus.Active && s.DepartmentId == semester.DepartmentId);
         if (anotherActiveSemesterExists)
         {
             var activeSemesterName = await _context.Semesters
-                .Where(s => s.Id != id && !s.IsDeleted && s.Status == SemesterStatus.Active)
+                .Where(s => s.Id != id && !s.IsDeleted && s.Status == SemesterStatus.Active && s.DepartmentId == semester.DepartmentId)
                 .Select(s => s.Name)
                 .FirstOrDefaultAsync();
             throw new InvalidOperationException(

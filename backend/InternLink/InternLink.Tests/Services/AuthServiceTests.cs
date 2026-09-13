@@ -213,7 +213,7 @@ public class AuthServiceTests
             .Cast<AuthorizeAttribute>()
             .Single();
 
-        createAttr.Policy.Should().Be("RequireAdmin");
+        createAttr.Policy.Should().Be("RequireDepartmentAdmin");
     }
 
     [Fact]

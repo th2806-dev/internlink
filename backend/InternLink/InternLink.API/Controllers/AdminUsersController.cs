@@ -77,11 +77,13 @@ public class AdminUsersController : ControllerBase
             if (!ModelState.IsValid)
                 return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Invalid input" }));
 
-            var user = await _userManagementService.UpdateUserAsync(id, request);
-            if (user == null)
+            // Check access BEFORE mutating (avoid writing another department's record).
+            var target = await _userManagementService.GetUserByIdAsync(id);
+            if (target == null || !_deptScope.HasAccess(User, target.DepartmentId))
                 return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "User not found" }));
 
-            if (!_deptScope.HasAccess(User, user.DepartmentId))
+            var user = await _userManagementService.UpdateUserAsync(id, request);
+            if (user == null)
                 return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "User not found" }));
 
             return Ok(ApiResponse<UserDto>.Ok(user));

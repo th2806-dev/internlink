@@ -2,8 +2,9 @@ import { useAuth } from "./useAuth";
 
 /**
  * Admin portal capabilities.
- * Direction: Super Admin = system overview (read-only on department ops);
- * Department Admin = full mutation within their department.
+ * Direction (per approved plan): "Quản trị hệ thống" (Super Admin) = system overview
+ * (read-only on department ops); "Quản trị khoa" (Department Admin) = full mutation
+ * within their department.
  */
 export function useAdminCapabilities() {
   const { user } = useAuth();
@@ -14,7 +15,7 @@ export function useAdminCapabilities() {
   const canMutateOps = !isSuperAdmin;
   /** System-level actions (khoa, settings, tạo Admin khoa). */
   const canManageSystem = isSuperAdmin;
-  const roleDisplayLabel = isSuperAdmin ? "Super Admin" : "Admin khoa";
+  const roleDisplayLabel = isSuperAdmin ? "Quản trị hệ thống" : "Quản trị khoa";
 
   return {
     user,

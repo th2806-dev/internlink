@@ -251,14 +251,24 @@ public class AttendanceService : IAttendanceService
         };
     }
 
-    public async Task<AdminAttendanceReportDto> GetAdminAttendanceReportAsync(Guid semesterId)
+    public async Task<AdminAttendanceReportDto> GetAdminAttendanceReportAsync(Guid semesterId, Guid? departmentId = null)
     {
         var semester = await _context.Semesters.FindAsync(semesterId);
         var semesterName = semester?.Name ?? "Học kỳ";
 
-        var sessions = await _context.AttendanceSessions
+        var sessionsQuery = _context.AttendanceSessions
             .AsNoTracking()
-            .Where(s => s.SemesterId == semesterId)
+            .Where(s => s.SemesterId == semesterId);
+
+        // Department scope: keep sessions whose students (or lecturer) belong to the department.
+        if (departmentId.HasValue)
+        {
+            sessionsQuery = sessionsQuery.Where(s =>
+                s.Records.Any(r => r.Student != null && r.Student.DepartmentId == departmentId.Value) ||
+                (s.Lecturer != null && s.Lecturer.DepartmentId == departmentId.Value));
+        }
+
+        var sessions = await sessionsQuery
             .Include(s => s.Lecturer)
             .Include(s => s.Records)
                 .ThenInclude(r => r.Student)

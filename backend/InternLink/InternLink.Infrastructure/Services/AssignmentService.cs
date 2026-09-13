@@ -26,11 +26,20 @@ public class AssignmentService : IAssignmentService
         _notificationService = notificationService;
     }
 
-    public async Task<BulkAssignResultDto> BulkAssignAsync(BulkAssignRequest request)
+    public async Task<BulkAssignResultDto> BulkAssignAsync(BulkAssignRequest request, Guid? departmentId = null)
     {
         var lecturerExists = await _db.Lecturers.AnyAsync(l => l.Id == request.LecturerId && !l.IsDeleted);
         if (!lecturerExists)
             throw new InvalidOperationException($"Lecturer with ID {request.LecturerId} not found");
+
+        // Department scope: DepartmentAdmin may only assign lecturers of their own department.
+        if (departmentId.HasValue)
+        {
+            var lecturerInDept = await _db.Lecturers
+                .AnyAsync(l => l.Id == request.LecturerId && !l.IsDeleted && l.DepartmentId == departmentId.Value);
+            if (!lecturerInDept)
+                throw new InvalidOperationException("Giảng viên không thuộc khoa của bạn");
+        }
 
         // Validate or fallback semester
         Guid targetSemesterId;
@@ -68,6 +77,17 @@ public class AssignmentService : IAssignmentService
                 {
                     StudentId = studentId,
                     Message = $"Student with ID {studentId} not found"
+                });
+                continue;
+            }
+
+            // Department scope: skip students outside the admin's department.
+            if (departmentId.HasValue && student.DepartmentId != departmentId.Value)
+            {
+                errors.Add(new AssignmentErrorDto
+                {
+                    StudentId = studentId,
+                    Message = "Sinh viên không thuộc khoa của bạn"
                 });
                 continue;
             }
@@ -151,11 +171,20 @@ public class AssignmentService : IAssignmentService
         return result;
     }
 
-    public async Task<IReadOnlyList<LecturerAssignmentItemDto>> GetByLecturerAsync(Guid lecturerId, Guid? semesterId = null)
+    public async Task<IReadOnlyList<LecturerAssignmentItemDto>> GetByLecturerAsync(Guid lecturerId, Guid? semesterId = null, Guid? departmentId = null)
     {
         var lecturerExists = await _db.Lecturers.AnyAsync(l => l.Id == lecturerId && !l.IsDeleted);
         if (!lecturerExists)
             throw new InvalidOperationException($"Lecturer with ID {lecturerId} not found");
+
+        // DepartmentAdmin may only view assignments of lecturers in their own department.
+        if (departmentId.HasValue)
+        {
+            var lecturerInDept = await _db.Lecturers
+                .AnyAsync(l => l.Id == lecturerId && !l.IsDeleted && l.DepartmentId == departmentId.Value);
+            if (!lecturerInDept)
+                throw new InvalidOperationException("Giảng viên không thuộc khoa của bạn");
+        }
 
         var query = _db.Internships
             .Where(i => !i.IsDeleted && i.LecturerId == lecturerId);
@@ -200,7 +229,7 @@ public class AssignmentService : IAssignmentService
         return internships.Select(MapAssignmentItem).ToList();
     }
 
-    public async Task<bool> UnassignAsync(UnassignRequest request)
+    public async Task<bool> UnassignAsync(UnassignRequest request, Guid? departmentId = null)
     {
         var query = _db.Internships
             .Where(i =>
@@ -211,6 +240,14 @@ public class AssignmentService : IAssignmentService
         if (request.SemesterId.HasValue && request.SemesterId.Value != Guid.Empty)
         {
             query = query.Where(i => i.SemesterId == request.SemesterId.Value);
+        }
+
+        // Department scope: DepartmentAdmin cannot unassign pairs outside their department.
+        if (departmentId.HasValue)
+        {
+            query = query.Where(i =>
+                (i.Student != null && i.Student.DepartmentId == departmentId.Value) ||
+                (i.Lecturer != null && i.Lecturer.DepartmentId == departmentId.Value));
         }
 
         var internship = await query
@@ -225,7 +262,7 @@ public class AssignmentService : IAssignmentService
         return true;
     }
 
-    public async Task<IReadOnlyList<AssignmentHistoryItemDto>> GetHistoryAsync(int limit = 50, Guid? semesterId = null)
+    public async Task<IReadOnlyList<AssignmentHistoryItemDto>> GetHistoryAsync(int limit = 50, Guid? semesterId = null, Guid? departmentId = null)
     {
         IQueryable<Internship> query = _db.Internships
             .AsNoTracking()
@@ -236,6 +273,11 @@ public class AssignmentService : IAssignmentService
         if (semesterId.HasValue && semesterId.Value != Guid.Empty)
         {
             query = query.Where(i => i.SemesterId == semesterId.Value);
+        }
+
+        if (departmentId.HasValue)
+        {
+            query = query.Where(i => i.Student != null && i.Student.DepartmentId == departmentId.Value);
         }
 
         var internships = await query
@@ -275,11 +317,18 @@ public class AssignmentService : IAssignmentService
             .ToList();
     }
 
-    public async Task<byte[]> ExportExcelAsync(Guid? semesterId = null)
+    public async Task<byte[]> ExportExcelAsync(Guid? semesterId = null, Guid? departmentId = null)
     {
-        var students = await _db.Students
+        var studentsQuery = _db.Students
             .AsNoTracking()
-            .Where(s => !s.IsDeleted)
+            .Where(s => !s.IsDeleted);
+
+        if (departmentId.HasValue)
+        {
+            studentsQuery = studentsQuery.Where(s => s.DepartmentId == departmentId.Value);
+        }
+
+        var students = await studentsQuery
             .OrderBy(s => s.StudentCode)
             .ToListAsync();
 
@@ -345,15 +394,22 @@ public class AssignmentService : IAssignmentService
         return stream.ToArray();
     }
 
-    public async Task<AutoAssignResultDto> AutoAssignAsync(AutoAssignRequest request)
+    public async Task<AutoAssignResultDto> AutoAssignAsync(AutoAssignRequest request, Guid? departmentId = null)
     {
         var strategy = (request.Strategy ?? "even").Trim().ToLowerInvariant();
         if (strategy is not ("department" or "even"))
             throw new InvalidOperationException("Strategy must be 'department' or 'even'");
 
-        var lecturers = await _db.Lecturers
+        var lecturersQuery = _db.Lecturers
             .AsNoTracking()
-            .Where(l => !l.IsDeleted)
+            .Where(l => !l.IsDeleted);
+
+        if (departmentId.HasValue)
+        {
+            lecturersQuery = lecturersQuery.Where(l => l.DepartmentId == departmentId.Value);
+        }
+
+        var lecturers = await lecturersQuery
             .OrderBy(l => l.FullName)
             .ToListAsync();
 
@@ -363,6 +419,11 @@ public class AssignmentService : IAssignmentService
         var studentsQuery = _db.Students
             .AsNoTracking()
             .Where(s => !s.IsDeleted);
+
+        if (departmentId.HasValue)
+        {
+            studentsQuery = studentsQuery.Where(s => s.DepartmentId == departmentId.Value);
+        }
 
         var internshipsQuery = _db.Internships
             .Where(i => !i.IsDeleted);
@@ -570,7 +631,7 @@ public class AssignmentService : IAssignmentService
         });
     }
 
-    public async Task<CompanyAllocationImportResultDto> ImportCompanyAllocationsFromExcelAsync(Stream excelStream, Guid? semesterId = null)
+    public async Task<CompanyAllocationImportResultDto> ImportCompanyAllocationsFromExcelAsync(Stream excelStream, Guid? semesterId = null, Guid? departmentId = null)
     {
         if (excelStream == null || !excelStream.CanRead)
             throw new ArgumentException("Excel file stream is required");
@@ -597,11 +658,14 @@ public class AssignmentService : IAssignmentService
             throw new InvalidOperationException("File Excel cần có cột [Họ Tên / MSSV] và cột [Công Ty Thực Tập]");
         }
 
-        var targetSemesterId = await ResolveTargetSemesterIdAsync(semesterId);
+        var targetSemesterId = await ResolveTargetSemesterIdAsync(semesterId, departmentId);
         var targetSemesterIsActive = await _db.Semesters
             .AnyAsync(s => s.Id == targetSemesterId && s.Status == SemesterStatus.Active && !s.IsDeleted);
 
-        var allStudents = await _db.Students.Where(s => !s.IsDeleted).ToListAsync();
+        var studentsQuery = _db.Students.Where(s => !s.IsDeleted);
+        if (departmentId.HasValue)
+            studentsQuery = studentsQuery.Where(s => s.DepartmentId == departmentId.Value);
+        var allStudents = await studentsQuery.ToListAsync();
         var allCompanies = await _db.Companies.Where(c => !c.IsDeleted).ToListAsync();
         var existingInternships = await _db.Internships
             .Where(i => i.SemesterId == targetSemesterId && !i.IsDeleted)
@@ -784,13 +848,20 @@ public class AssignmentService : IAssignmentService
         return result;
     }
 
-    public async Task<IReadOnlyList<CompanyAllocationItemDto>> GetCompanyAllocationsAsync(Guid? semesterId = null)
+    public async Task<IReadOnlyList<CompanyAllocationItemDto>> GetCompanyAllocationsAsync(Guid? semesterId = null, Guid? departmentId = null)
     {
-        var targetSemesterId = await ResolveTargetSemesterIdAsync(semesterId);
+        var targetSemesterId = await ResolveTargetSemesterIdAsync(semesterId, departmentId);
 
-        var internships = await _db.Internships
+        var internshipsQuery = _db.Internships
             .AsNoTracking()
-            .Where(i => !i.IsDeleted && i.SemesterId == targetSemesterId)
+            .Where(i => !i.IsDeleted && i.SemesterId == targetSemesterId);
+
+        if (departmentId.HasValue)
+        {
+            internshipsQuery = internshipsQuery.Where(i => i.Student != null && i.Student.DepartmentId == departmentId.Value);
+        }
+
+        var internships = await internshipsQuery
             .Include(i => i.Student)
             .Include(i => i.Company)
             .Include(i => i.Lecturer)
@@ -815,9 +886,9 @@ public class AssignmentService : IAssignmentService
         }).ToList();
     }
 
-    public async Task<byte[]> ExportCompanyAllocationsExcelAsync(Guid? semesterId = null)
+    public async Task<byte[]> ExportCompanyAllocationsExcelAsync(Guid? semesterId = null, Guid? departmentId = null)
     {
-        var allocations = await GetCompanyAllocationsAsync(semesterId);
+        var allocations = await GetCompanyAllocationsAsync(semesterId, departmentId);
 
         using var workbook = new XLWorkbook();
         var sheet = workbook.Worksheets.Add("PhanBoDoanhNghiep");
@@ -904,7 +975,7 @@ public class AssignmentService : IAssignmentService
         });
     }
 
-    public async Task<LecturerAssignmentImportResultDto> ImportLecturerAssignmentsFromExcelAsync(Stream excelStream, Guid? semesterId = null)
+    public async Task<LecturerAssignmentImportResultDto> ImportLecturerAssignmentsFromExcelAsync(Stream excelStream, Guid? semesterId = null, Guid? departmentId = null)
     {
         if (excelStream == null || !excelStream.CanRead)
             throw new ArgumentException("Excel file stream is required");
@@ -931,12 +1002,22 @@ public class AssignmentService : IAssignmentService
             throw new InvalidOperationException("File Excel cần có cột [Mã/Tên Giảng Viên] và cột [Họ Tên/MSSV Sinh viên]");
         }
 
-        var targetSemesterId = await ResolveTargetSemesterIdAsync(semesterId);
+        var targetSemesterId = await ResolveTargetSemesterIdAsync(semesterId, departmentId);
         var targetSemesterIsActive = await _db.Semesters
             .AnyAsync(s => s.Id == targetSemesterId && s.Status == SemesterStatus.Active && !s.IsDeleted);
 
-        var allStudents = await _db.Students.Where(s => !s.IsDeleted).ToListAsync();
-        var allLecturers = await _db.Lecturers.Where(l => !l.IsDeleted).ToListAsync();
+        var allStudentsQuery = _db.Students.Where(s => !s.IsDeleted);
+        var allLecturersQuery = _db.Lecturers.Where(l => !l.IsDeleted);
+
+        // Department scope: imports only match students/lecturers of the admin's department.
+        if (departmentId.HasValue)
+        {
+            allStudentsQuery = allStudentsQuery.Where(s => s.DepartmentId == departmentId.Value);
+            allLecturersQuery = allLecturersQuery.Where(l => l.DepartmentId == departmentId.Value);
+        }
+
+        var allStudents = await allStudentsQuery.ToListAsync();
+        var allLecturers = await allLecturersQuery.ToListAsync();
         var existingInternships = await _db.Internships
             .Where(i => i.SemesterId == targetSemesterId && !i.IsDeleted)
             .ToListAsync();
@@ -1056,7 +1137,7 @@ public class AssignmentService : IAssignmentService
         return result;
     }
 
-    private async Task<Guid> ResolveTargetSemesterIdAsync(Guid? semesterId)
+    private async Task<Guid> ResolveTargetSemesterIdAsync(Guid? semesterId, Guid? departmentId = null)
     {
         if (semesterId.HasValue && semesterId.Value != Guid.Empty)
         {
@@ -1064,12 +1145,22 @@ public class AssignmentService : IAssignmentService
             if (exists) return semesterId.Value;
         }
 
+        // Prefer an active semester of the caller's department, then a shared (unassigned) semester.
         var activeSemester = await _db.Semesters
-            .FirstOrDefaultAsync(s => s.Status == SemesterStatus.Active && !s.IsDeleted)
-            ?? await _db.Semesters.FirstOrDefaultAsync(s => !s.IsDeleted);
+            .FirstOrDefaultAsync(s => s.Status == SemesterStatus.Active && !s.IsDeleted && departmentId != null && s.DepartmentId == departmentId)
+            ?? await _db.Semesters
+            .FirstOrDefaultAsync(s => s.Status == SemesterStatus.Active && !s.IsDeleted && s.DepartmentId == null);
+
+        if (activeSemester == null && departmentId == null)
+        {
+            // System-wide fallback only makes sense for SuperAdmin.
+            activeSemester = await _db.Semesters.FirstOrDefaultAsync(s => !s.IsDeleted);
+        }
 
         if (activeSemester == null)
-            throw new InvalidOperationException("Không tìm thấy học kỳ hợp lệ trong hệ thống");
+            throw new InvalidOperationException(departmentId == null
+                ? "Không tìm thấy học kỳ hợp lệ trong hệ thống"
+                : "Khoa của bạn chưa có học kỳ riêng và chưa có học kỳ dùng chung đang hoạt động");
 
         return activeSemester.Id;
     }

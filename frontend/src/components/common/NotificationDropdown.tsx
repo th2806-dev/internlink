@@ -204,7 +204,7 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
             } else if (text.includes("doanh nghiệp") || text.includes("mentor")) {
               sender = { name: dto.senderName ?? "Doanh nghiệp thực tập", role: "Doanh nghiệp" };
             } else if (text.includes("khoa") || text.includes("đào tạo")) {
-              sender = { name: dto.senderName ?? "Khoa CNTT", role: "Ban Quản lý" };
+              sender = { name: dto.senderName ?? "Khoa CNTT", role: "Quản trị khoa" };
             }
 
             return {

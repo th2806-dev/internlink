@@ -29,7 +29,7 @@ public class SemesterReportScheduleController : ControllerBase
     }
 
     [HttpPost("generate-defaults")]
-    [Authorize(Policy = "RequireAdmin")]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     public async Task<IActionResult> GenerateDefaults(Guid semesterId)
     {
         try
@@ -44,7 +44,7 @@ public class SemesterReportScheduleController : ControllerBase
     }
 
     [HttpPut("{weekNumber:int}")]
-    [Authorize(Policy = "RequireAdmin")]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     public async Task<IActionResult> UpdateSchedule(
         Guid semesterId,
         int weekNumber,

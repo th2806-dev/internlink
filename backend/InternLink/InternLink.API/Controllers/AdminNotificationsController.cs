@@ -12,10 +12,12 @@ namespace InternLink.API.Controllers;
 public class AdminNotificationsController : ControllerBase
 {
     private readonly IAdminNotificationService _adminNotificationService;
+    private readonly IDepartmentScopeService _deptScope;
 
-    public AdminNotificationsController(IAdminNotificationService adminNotificationService)
+    public AdminNotificationsController(IAdminNotificationService adminNotificationService, IDepartmentScopeService deptScope)
     {
         _adminNotificationService = adminNotificationService;
+        _deptScope = deptScope;
     }
 
     [HttpGet]
@@ -33,7 +35,7 @@ public class AdminNotificationsController : ControllerBase
             if (!ModelState.IsValid)
                 return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Invalid input" }));
 
-            var result = await _adminNotificationService.BroadcastAsync(request);
+            var result = await _adminNotificationService.BroadcastAsync(request, _deptScope.GetCurrentDepartmentId(User));
             return Ok(ApiResponse<AdminBroadcastNotificationResultDto>.Ok(result));
         }
         catch (InvalidOperationException ex)

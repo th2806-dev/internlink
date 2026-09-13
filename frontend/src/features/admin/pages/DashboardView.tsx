@@ -124,7 +124,13 @@ export const DashboardView = ({
     <div className="space-y-5 max-w-[1500px] mx-auto">
       <PageHeader
         icon={LayoutDashboard}
-        title="Tổng quan hệ thống"
+        title={
+          isSuperAdmin && !departmentIdFilter
+            ? "Tổng quan hệ thống"
+            : departmentIdFilter
+              ? `Tổng quan khoa ${selectedDepartment.name}`
+              : "Tổng quan"
+        }
         subtitle={subtitle}
         actions={[
           {

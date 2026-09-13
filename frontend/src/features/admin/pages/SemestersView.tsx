@@ -52,7 +52,9 @@ const EMPTY_SEMESTER = {
 };
 
 export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (msg: string, type?: ToastType) => void; onNavigateTab?: (tab: string) => void }) => {
-  const { canMutateOps, isSuperAdmin } = useAdminCapabilities();
+  const { isSuperAdmin, isDepartmentAdmin } = useAdminCapabilities();
+  // Semester lifecycle is department business: only Quản trị khoa mutates terms.
+  const canMutateSemesters = isDepartmentAdmin;
   const {
     semesters: semestersList,
     selectedSemesterId,
@@ -162,7 +164,7 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
         icon={CalendarDays}
         title="Quản lý kỳ thực tập"
         actions={
-          canMutateOps
+          canMutateSemesters
             ? [
                 {
                   label: "Import Giảng viên",
@@ -191,7 +193,7 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
         <div className="px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900 flex items-center gap-2.5">
           <Eye className="w-4 h-4 text-blue-600 shrink-0" />
           <span>
-            Chế độ chỉ xem nghiệp vụ khoa — Super Admin chỉ xem danh sách &amp; tiến độ các kỳ thực tập.
+            Chế độ chỉ xem nghiệp vụ khoa — Quản trị hệ thống chỉ xem danh sách &amp; tiến độ các kỳ thực tập.
           </span>
         </div>
       )}
@@ -266,7 +268,7 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
 
               {/* Action Buttons */}
               <div className="flex items-center gap-2 shrink-0">
-                {canMutateOps && (
+                {canMutateSemesters && (
                   <>
                     <button
                       onClick={() => setShowCreateModal(true)}
@@ -389,7 +391,7 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
               semesterId={currentActiveSem.id}
               semesterName={currentActiveSem.name}
               onShowToast={onShowToast}
-              readOnly={!canMutateOps}
+              readOnly={!canMutateSemesters}
             />
           )}
 
@@ -523,7 +525,7 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
                             <Eye className="w-3.5 h-3.5" />
                           </button>
 
-                          {canMutateOps && (
+                          {canMutateSemesters && (
                             <>
                               <button
                                 onClick={() => handleDuplicateSemester(sem)}

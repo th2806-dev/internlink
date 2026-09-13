@@ -50,7 +50,7 @@ interface AdminProfileData {
 const DEFAULT_ADMIN_PROFILE: AdminProfileData = {
   fullName: "",
   adminCode: "",
-  roleTitle: "Quản trị viên",
+  roleTitle: "Quản trị khoa",
   department: "",
   faculty: "Khoa Công nghệ Thông tin",
   email: "",
@@ -132,7 +132,7 @@ export const AccountView = ({
       ...prev,
       fullName: user.name || prev.fullName,
       email: user.email || prev.email,
-      roleTitle: isSuperAdmin ? "Super Admin" : "Admin khoa",
+      roleTitle: isSuperAdmin ? "Quản trị hệ thống" : "Quản trị khoa",
       adminCode: user.id ? `AD-${user.id.slice(0, 6).toUpperCase()}` : prev.adminCode,
     });
     setProfile(nextProfile);
@@ -289,13 +289,13 @@ export const AccountView = ({
         icon={User}
         title={
           isSuperAdmin
-            ? "Quản lý Tài khoản & Hồ sơ Super Admin"
-            : "Quản lý Tài khoản & Hồ sơ Admin khoa"
+            ? "Quản lý Tài khoản & Hồ sơ Quản trị hệ thống"
+            : "Quản lý Tài khoản & Hồ sơ Quản trị khoa"
         }
         subtitle={
           isSuperAdmin
-            ? "Quản lý thông tin quản trị, cập nhật bảo mật tài khoản và theo dõi lịch sử hoạt động hệ thống."
-            : "Quản lý thông tin Admin khoa, cập nhật bảo mật tài khoản và theo dõi lịch sử hoạt động hệ thống."
+            ? "Quản lý thông tin quản trị hệ thống, cập nhật bảo mật tài khoản và theo dõi lịch sử hoạt động toàn hệ thống."
+            : "Quản lý thông tin quản trị khoa, cập nhật bảo mật tài khoản và theo dõi lịch sử hoạt động của khoa."
         }
       />
 
@@ -1097,7 +1097,7 @@ export const AccountView = ({
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
-                  <span>Quản lý &amp; phân quyền tài khoản Quản trị viên Khoa</span>
+                  <span>Quản lý &amp; phân quyền tài khoản Quản trị khoa</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />

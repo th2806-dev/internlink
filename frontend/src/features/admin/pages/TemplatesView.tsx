@@ -236,7 +236,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
     try {
       await documentService.updateTemplate(tpl.id, {
         isPublished: nextPublished,
-        archiveReason: !nextPublished ? "Ban quản lý khoa thu hồi lưu hành" : undefined,
+        archiveReason: !nextPublished ? "Quản trị khoa thu hồi lưu hành" : undefined,
       });
       onShowToast?.(
         nextPublished ? "Đã ban hành biểu mẫu thành công!" : "Đã thu hồi biểu mẫu vào kho lưu trữ!",
@@ -389,7 +389,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
       {isSuperAdmin && (
         <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-xl text-sm flex items-center justify-between">
           <span>
-            <strong>Chế độ chỉ xem nghiệp vụ khoa:</strong> Bạn đang đăng nhập tài khoản Super Admin. Toàn bộ tính năng nạp, tạo, sửa, lưu hành và xóa biểu mẫu thuộc thẩm quyền quản trị của Admin khoa. Bạn vẫn có thể tra cứu, lọc và tải xuống biểu mẫu.
+            <strong>Chế độ chỉ xem nghiệp vụ khoa:</strong> Bạn đang đăng nhập tài khoản Quản trị hệ thống. Toàn bộ tính năng nạp, tạo, sửa, lưu hành và xóa biểu mẫu thuộc thẩm quyền quản trị của Quản trị khoa. Bạn vẫn có thể tra cứu, lọc và tải xuống biểu mẫu.
           </span>
         </div>
       )}

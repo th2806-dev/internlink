@@ -20,13 +20,16 @@ public class InternshipController : ControllerBase
 {
     private readonly IInternshipService _internshipService;
     private readonly ILecturerAccessService _lecturerAccessService;
+    private readonly IDepartmentScopeService _deptScope;
 
     public InternshipController(
         IInternshipService internshipService,
-        ILecturerAccessService lecturerAccessService)
+        ILecturerAccessService lecturerAccessService,
+        IDepartmentScopeService deptScope)
     {
         _internshipService = internshipService;
         _lecturerAccessService = lecturerAccessService;
+        _deptScope = deptScope;
     }
 
     private async Task<(bool isLecturer, Guid? lecturerId)> ResolveLecturerScopeAsync()
@@ -57,7 +60,8 @@ public class InternshipController : ControllerBase
             if (isLecturer && lecturerId == Guid.Empty)
                 return Ok(ApiResponse<IEnumerable<InternshipListItemDto>>.Ok(Array.Empty<InternshipListItemDto>()));
 
-            var internships = await _internshipService.GetAllInternshipsAsync(skip, take, lecturerId);
+            var deptId = _deptScope.GetCurrentDepartmentId(User);
+            var internships = await _internshipService.GetAllInternshipsAsync(skip, take, lecturerId, deptId);
             return Ok(ApiResponse<IEnumerable<InternshipListItemDto>>.Ok(internships));
         }
         catch (Exception ex)
@@ -89,7 +93,8 @@ public class InternshipController : ControllerBase
                 }));
             }
 
-            var result = await _internshipService.GetInternshipsWithFilterAsync(request, lecturerId);
+            var deptId = _deptScope.GetCurrentDepartmentId(User);
+            var result = await _internshipService.GetInternshipsWithFilterAsync(request, lecturerId, deptId);
             return Ok(ApiResponse<PaginatedResponse<InternshipListItemDto>>.Ok(result));
         }
         catch (Exception ex)
@@ -109,6 +114,15 @@ public class InternshipController : ControllerBase
             var userId = User.GetUserId();
             if (userId == null)
                 return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+
+            // DepartmentAdmin: scoped to their own department's internships.            if (User.IsInRole("DepartmentAdmin"))
+            {
+                var adminInternship = await _internshipService.GetInternshipByIdForDepartmentAdminAsync(id, _deptScope.GetCurrentDepartmentId(User));
+                if (adminInternship == null)
+                    return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Internship not found" }));
+
+                return Ok(ApiResponse<InternshipDetailFullDto>.Ok(adminInternship));
+            }
 
             var isLecturerOrAdmin = User.IsInRole("Lecturer") || User.IsInRole("SuperAdmin");
             var internship = await _internshipService.GetInternshipByIdAsync(id, userId.Value, isLecturerOrAdmin);
@@ -203,7 +217,7 @@ public class InternshipController : ControllerBase
     /// Create a new internship (Admin only)
     /// </summary>
     [HttpPost]
-    [Authorize(Policy = "RequireAdmin")]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     public async Task<IActionResult> CreateInternship([FromBody] CreateInternshipRequest request)
     {
         try
@@ -228,7 +242,7 @@ public class InternshipController : ControllerBase
     /// Update an internship (Admin only)
     /// </summary>
     [HttpPut("{id}")]
-    [Authorize(Policy = "RequireAdmin")]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     public async Task<IActionResult> UpdateInternship(Guid id, [FromBody] UpdateInternshipRequest request)
     {
         try
@@ -256,7 +270,7 @@ public class InternshipController : ControllerBase
     /// Update internship status (Admin only)
     /// </summary>
     [HttpPatch("{id}/status")]
-    [Authorize(Policy = "RequireAdmin")]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     public async Task<IActionResult> UpdateInternshipStatus(Guid id, [FromBody] UpdateInternshipStatusRequest request)
     {
         try
@@ -316,7 +330,7 @@ public class InternshipController : ControllerBase
     /// Delete an internship (Admin only)
     /// </summary>
     [HttpDelete("{id}")]
-    [Authorize(Policy = "RequireAdmin")]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     public async Task<IActionResult> DeleteInternship(Guid id)
     {
         try

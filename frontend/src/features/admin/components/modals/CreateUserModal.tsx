@@ -20,7 +20,7 @@ const ALL_ROLES: CreateUserRole[] = ["Student", "Lecturer", "DepartmentAdmin"];
 const ROLE_LABEL: Record<CreateUserRole, string> = {
   Student: "Sinh viên",
   Lecturer: "Giảng viên",
-  DepartmentAdmin: "Admin khoa",
+  DepartmentAdmin: "Quản trị khoa",
 };
 
 const emptyFormForRole = (role: CreateUserRole) => ({
