@@ -26,8 +26,8 @@ export default function AdminLayout({
 }: AdminLayoutProps) {
   const { message, type, clearToast, showToast } = useToast();
   const { user } = useAuth();
-  const { selectedSemesterId } = useSemester();
-  const { stats, recentNotifications } = useAdminNavStats(true, selectedSemesterId);
+  const { selectedSemesterId, selectedDepartmentId } = useSemester();
+  const { stats, recentNotifications } = useAdminNavStats(true, selectedSemesterId, selectedDepartmentId);
 
   return (
     <div className="min-h-screen bg-[var(--il-surface-bg)] text-slate-800 font-sans flex antialiased">

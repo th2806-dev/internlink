@@ -18,17 +18,20 @@ public class ExportController : ControllerBase
     private readonly IInternshipReportService _reportService;
     private readonly ILogger<ExportController> _logger;
     private readonly ILecturerAccessService _lecturerAccessService;
+    private readonly IDepartmentScopeService _deptScope;
 
     public ExportController(
         IExcelExportService excelExportService,
         IInternshipReportService reportService,
         ILogger<ExportController> logger,
-        ILecturerAccessService lecturerAccessService)
+        ILecturerAccessService lecturerAccessService,
+        IDepartmentScopeService deptScope)
     {
         _excelExportService = excelExportService;
         _reportService = reportService;
         _logger = logger;
         _lecturerAccessService = lecturerAccessService;
+        _deptScope = deptScope;
     }
 
     /// <summary>
@@ -40,12 +43,14 @@ public class ExportController : ControllerBase
         [FromQuery] Guid? semesterId = null,
         [FromQuery] Guid? lecturerId = null,
         [FromQuery] string? department = null,
+        [FromQuery] Guid? departmentId = null,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            _logger.LogInformation("Admin/Lecturer initiated Excel export for semester: {SemesterId}, Lecturer: {LecturerId}, Department: {Department}", semesterId, lecturerId, department);
-            var fileBytes = await _excelExportService.GenerateInternshipExportExcelAsync(semesterId, lecturerId, department, cancellationToken);
+            var deptId = _deptScope.ResolveEffectiveDepartmentId(User, departmentId);
+            _logger.LogInformation("Admin/Lecturer initiated Excel export for semester: {SemesterId}, Lecturer: {LecturerId}, Department: {Department}, DepartmentId: {DepartmentId}", semesterId, lecturerId, department, deptId);
+            var fileBytes = await _excelExportService.GenerateInternshipExportExcelAsync(semesterId, lecturerId, department, deptId, cancellationToken);
             var fileName = $"DanhSachThucTap_{DateTime.Now:yyyy-MM-dd}.xlsx";
 
             return File(
@@ -75,7 +80,7 @@ public class ExportController : ControllerBase
         if (lecturerId == null)
             return Forbid();
 
-        var fileBytes = await _excelExportService.GenerateInternshipExportExcelAsync(semesterId, lecturerId.Value, null, cancellationToken);
+        var fileBytes = await _excelExportService.GenerateInternshipExportExcelAsync(semesterId, lecturerId.Value, null, null, cancellationToken);
         return File(fileBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"DanhSachThucTap_{DateTime.Now:yyyy-MM-dd}.xlsx");
     }
 
@@ -85,12 +90,14 @@ public class ExportController : ControllerBase
     [HttpGet("summary-report")]
     public async Task<IActionResult> ExportSummaryReport(
         [FromQuery] Guid? semesterId = null,
-        [FromQuery] string? department = null)
+        [FromQuery] string? department = null,
+        [FromQuery] Guid? departmentId = null)
     {
         try
         {
-            _logger.LogInformation("Admin initiated summary report export for semester: {SemesterId}, Department: {Department}", semesterId, department);
-            var fileBytes = await _reportService.ExportC22ASummaryReportAsync(semesterId, department);
+            var deptId = _deptScope.ResolveEffectiveDepartmentId(User, departmentId);
+            _logger.LogInformation("Admin initiated summary report export for semester: {SemesterId}, Department: {Department}, DepartmentId: {DepartmentId}", semesterId, department, deptId);
+            var fileBytes = await _reportService.ExportC22ASummaryReportAsync(semesterId, department, deptId);
             var fileName = $"Bao-cao-tong-ket-thuc-tap-{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
 
             return File(
@@ -116,12 +123,14 @@ public class ExportController : ControllerBase
     [HttpGet("summary-report/word")]
     public async Task<IActionResult> ExportSummaryReportWord(
         [FromQuery] Guid? semesterId = null,
-        [FromQuery] string? department = null)
+        [FromQuery] string? department = null,
+        [FromQuery] Guid? departmentId = null)
     {
         try
         {
-            _logger.LogInformation("Admin initiated Word summary report export for semester: {SemesterId}, Department: {Department}", semesterId, department);
-            var fileBytes = await _reportService.ExportC22AWordReportAsync(semesterId, department);
+            var deptId = _deptScope.ResolveEffectiveDepartmentId(User, departmentId);
+            _logger.LogInformation("Admin initiated Word summary report export for semester: {SemesterId}, Department: {Department}, DepartmentId: {DepartmentId}", semesterId, department, deptId);
+            var fileBytes = await _reportService.ExportC22AWordReportAsync(semesterId, department, deptId);
             var fileName = $"Bao-cao-tong-ket-thuc-tap-{DateTime.Now:yyyyMMdd_HHmmss}.docx";
 
             return File(

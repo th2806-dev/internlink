@@ -21,12 +21,13 @@ public class LecturerProfileController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll([FromQuery] int skip = 0, [FromQuery] int take = 100, [FromQuery] Guid? semesterId = null)
+    public async Task<IActionResult> GetAll([FromQuery] int skip = 0, [FromQuery] int take = 100, [FromQuery] Guid? semesterId = null, [FromQuery] Guid? departmentId = null)
     {
         if (skip < 0 || take < 1 || take > 1000)
             return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Invalid pagination" }));
 
-        var items = await _service.GetAllAsync(skip, take, semesterId);
+        var deptId = _deptScope.ResolveEffectiveDepartmentId(User, departmentId);
+        var items = await _service.GetAllAsync(skip, take, semesterId, deptId);
         return Ok(ApiResponse<IEnumerable<LecturerDto>>.Ok(items));
     }
 

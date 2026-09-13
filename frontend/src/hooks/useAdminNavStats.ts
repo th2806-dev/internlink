@@ -33,26 +33,29 @@ interface AdminNavStatsResult {
 const navStatsCache = new Map<string, AdminNavStatsResult>();
 const navStatsRequests = new Map<string, Promise<AdminNavStatsResult>>();
 
-function getNavStatsKey(semesterId?: string | null) {
-  return semesterId ?? "all";
+function getNavStatsKey(semesterId?: string | null, departmentId?: string | null) {
+  return `${semesterId ?? "all"}|${departmentId ?? "all"}`;
 }
 
-function fetchAdminNavStats(semesterId?: string | null): Promise<AdminNavStatsResult> {
-  const key = getNavStatsKey(semesterId);
+function fetchAdminNavStats(semesterId?: string | null, departmentId?: string | null): Promise<AdminNavStatsResult> {
+  const key = getNavStatsKey(semesterId, departmentId);
   const cached = navStatsCache.get(key);
   if (cached) return Promise.resolve(cached);
 
   const existingRequest = navStatsRequests.get(key);
   if (existingRequest) return existingRequest;
 
+  const effectiveSemesterId = semesterId === "all" || !semesterId ? undefined : semesterId;
+  const effectiveDepartmentId = departmentId === "all" || !departmentId ? undefined : departmentId;
+
   const request = Promise.all([
-    adminStudentsService.getAll(0, 500, semesterId ?? undefined),
-    adminLecturersService.getAll(0, 500, semesterId ?? undefined),
-    adminCompaniesService.getAll(0, 500, semesterId ?? undefined),
+    adminStudentsService.getAll(0, 500, effectiveSemesterId, effectiveDepartmentId),
+    adminLecturersService.getAll(0, 500, effectiveSemesterId, effectiveDepartmentId),
+    adminCompaniesService.getAll(0, 500, effectiveSemesterId, effectiveDepartmentId),
     adminNotificationsService.getCampaigns(20).catch(() => []),
     notificationService.getMine(5).catch(() => []),
     notificationService.getUnreadCount().catch(() => 0),
-    adminAssignmentsService.getAll(semesterId ?? undefined).catch(() => []),
+    adminAssignmentsService.getAll(effectiveSemesterId, effectiveDepartmentId).catch(() => []),
   ]).then(([students, lecturers, companies, campaigns, mine, unreadCount, allAssignments]) => {
     const assignedIds = new Set<string>();
     for (const item of allAssignments) assignedIds.add(item.studentId);
@@ -81,6 +84,7 @@ function fetchAdminNavStats(semesterId?: string | null): Promise<AdminNavStatsRe
 export function useAdminNavStats(
   enabled = true,
   semesterId?: string | null,
+  departmentId?: string | null,
 ) {
   const [stats, setStats] = useState<AdminNavStats>(DEFAULT_NAV_STATS);
   const [recentNotifications, setRecentNotifications] = useState<
@@ -93,15 +97,15 @@ export function useAdminNavStats(
 
     setIsLoading(true);
     try {
-      const key = getNavStatsKey(semesterId);
+      const key = getNavStatsKey(semesterId, departmentId);
       if (force) navStatsCache.delete(key);
-      const result = await fetchAdminNavStats(semesterId);
+      const result = await fetchAdminNavStats(semesterId, departmentId);
       setStats(result.stats);
       setRecentNotifications(result.recentNotifications);
     } finally {
       setIsLoading(false);
     }
-  }, [enabled, semesterId]);
+  }, [enabled, semesterId, departmentId]);
 
   useEffect(() => {
     void load();

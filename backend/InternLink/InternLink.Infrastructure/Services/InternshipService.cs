@@ -451,10 +451,15 @@ public class InternshipService : IInternshipService
         return true;
     }
 
-    public async Task<InternshipStatsDto> GetInternshipStatsAsync(Guid? lecturerId = null, Guid? semesterId = null)
+    public async Task<InternshipStatsDto> GetInternshipStatsAsync(Guid? lecturerId = null, Guid? semesterId = null, Guid? departmentId = null)
     {
         var query = _db.Internships.Where(i => !i.IsDeleted);
         query = ApplyLecturerScope(query, lecturerId);
+
+        if (departmentId.HasValue)
+        {
+            query = query.Where(i => i.Student != null && i.Student.DepartmentId == departmentId.Value);
+        }
 
         if (semesterId.HasValue && semesterId.Value != Guid.Empty)
         {

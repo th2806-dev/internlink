@@ -56,10 +56,15 @@ public class LecturerProfileService : ILecturerProfileService
         _logger = logger;
     }
 
-    public async Task<IEnumerable<LecturerDto>> GetAllAsync(int skip = 0, int take = 100, Guid? semesterId = null)
+    public async Task<IEnumerable<LecturerDto>> GetAllAsync(int skip = 0, int take = 100, Guid? semesterId = null, Guid? departmentId = null)
     {
         var query = _db.Lecturers
             .Where(l => !l.IsDeleted);
+
+        if (departmentId.HasValue)
+        {
+            query = query.Where(l => l.DepartmentId == departmentId.Value);
+        }
 
         if (semesterId.HasValue && semesterId != Guid.Empty)
         {

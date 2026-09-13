@@ -174,11 +174,16 @@ public class AssignmentService : IAssignmentService
         return internships.Select(MapAssignmentItem).ToList();
     }
 
-    public async Task<IReadOnlyList<LecturerAssignmentItemDto>> GetAllAssignmentsAsync(Guid? semesterId = null)
+    public async Task<IReadOnlyList<LecturerAssignmentItemDto>> GetAllAssignmentsAsync(Guid? semesterId = null, Guid? departmentId = null)
     {
         var query = _db.Internships
             .AsNoTracking()
             .Where(i => !i.IsDeleted && i.LecturerId != null);
+
+        if (departmentId.HasValue)
+        {
+            query = query.Where(i => i.Student != null && i.Student.DepartmentId == departmentId.Value);
+        }
 
         if (semesterId.HasValue && semesterId.Value != Guid.Empty)
         {

@@ -2,11 +2,11 @@ import { apiRequest, downloadAuthenticatedFile } from "../lib/apiClient";
 import type { LecturerDto, LecturerImportResultDto } from "../types/api";
 
 export const adminLecturersService = {
-  getAll(skip = 0, take = 500, semesterId?: string): Promise<LecturerDto[]> {
-    const qs = semesterId && semesterId !== "all" ? `&semesterId=${semesterId}` : "";
-    return apiRequest<LecturerDto[]>(
-      `/api/LecturerProfile?skip=${skip}&take=${take}${qs}`,
-    );
+  getAll(skip = 0, take = 500, semesterId?: string, departmentId?: string): Promise<LecturerDto[]> {
+    const params = new URLSearchParams({ skip: String(skip), take: String(take) });
+    if (semesterId && semesterId !== "all") params.set("semesterId", semesterId);
+    if (departmentId && departmentId !== "all") params.set("departmentId", departmentId);
+    return apiRequest<LecturerDto[]>(`/api/LecturerProfile?${params.toString()}`);
   },
 
   getById(id: string): Promise<LecturerDto> {

@@ -8,7 +8,8 @@ public class LecturerProfile : Profile
 {
     public LecturerProfile()
     {
-        CreateMap<Lecturer, LecturerDto>().MaxDepth(64);
+        CreateMap<Lecturer, LecturerDto>().MaxDepth(64)
+            .ForMember(d => d.DepartmentId, o => o.MapFrom(s => s.DepartmentId));
         CreateMap<CreateLecturerRequest, Lecturer>().MaxDepth(64)
             .ForMember(d => d.Id, o => o.Ignore())
             .ForMember(d => d.User, o => o.Ignore())

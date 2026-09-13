@@ -28,7 +28,7 @@ import type { Enterprise } from "../../../types/enterprise";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { mapCompanyDtoToEnterprise } from "../../../lib/adminMappers";
 import { adminCompaniesService } from "../../../services/adminCompanies.service";
-import { useSemester, toApiSemesterId } from "../../../contexts/SemesterContext";
+import { useSemester, toApiSemesterId, toApiDepartmentId } from "../../../contexts/SemesterContext";
 import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
 import { ImportCompaniesModal } from "../components/modals/ImportCompaniesModal";
 
@@ -50,7 +50,7 @@ export const CompaniesView = ({
   onShowToast: (msg: string, type?: ToastType) => void;
 }) => {
   const navigate = useNavigate();
-  const { selectedSemester } = useSemester();
+  const { selectedSemester, selectedDepartmentId } = useSemester();
   const { canMutateOps, isSuperAdmin } = useAdminCapabilities();
   const [companies, setCompanies] = useState<Enterprise[]>([]);
   const [isLoadingApi, setIsLoadingApi] = useState(true);
@@ -75,6 +75,7 @@ export const CompaniesView = ({
         0,
         500,
         toApiSemesterId(selectedSemester?.id),
+        toApiDepartmentId(selectedDepartmentId),
       );
       setCompanies(rows.map(mapCompanyDtoToEnterprise));
     } catch (err) {
@@ -84,10 +85,10 @@ export const CompaniesView = ({
     }
   };
 
-  // Load companies for the currently selected term; refetch on term change
+  // Load companies for the currently selected term/department; refetch on change
   useEffect(() => {
     void reloadCompanies();
-  }, [selectedSemester?.id, onShowToast]);
+  }, [selectedSemester?.id, selectedDepartmentId, onShowToast]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();

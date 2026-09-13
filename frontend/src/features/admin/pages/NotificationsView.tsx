@@ -84,8 +84,8 @@ export const NotificationsView = ({
   onShowToast: (msg: string, type?: ToastType) => void;
   onNavigateTab?: (tab: string) => void;
 }) => {
-  const { selectedSemesterId } = useSemester();
-  const { stats: navStats } = useAdminNavStats(true, selectedSemesterId);
+  const { selectedSemesterId, selectedDepartmentId } = useSemester();
+  const { stats: navStats } = useAdminNavStats(true, selectedSemesterId, selectedDepartmentId);
   const { canMutateOps, isSuperAdmin } = useAdminCapabilities();
   const {
     notifications,

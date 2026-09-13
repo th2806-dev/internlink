@@ -10,7 +10,7 @@ public interface ICompanyService
     /// <summary>
     /// Get all companies with optional pagination
     /// </summary>
-    Task<IEnumerable<CompanyDto>> GetAllCompaniesAsync(int skip = 0, int take = 100, Guid? semesterId = null);
+    Task<IEnumerable<CompanyDto>> GetAllCompaniesAsync(int skip = 0, int take = 100, Guid? semesterId = null, Guid? departmentId = null);
 
     /// <summary>
     /// Get companies with filtering and pagination

@@ -2,11 +2,12 @@ import { downloadAuthenticatedFile } from "../lib/apiClient";
 
 export const exportService = {
   /** Downloads the multi-sheet internship list Excel report for the selected semester. */
-  downloadInternshipExcel(semesterId?: string, department?: string, lecturerId?: string) {
+  downloadInternshipExcel(semesterId?: string, department?: string, lecturerId?: string, departmentId?: string) {
     const params = new URLSearchParams();
     if (semesterId) params.append("semesterId", semesterId);
     if (department) params.append("department", department);
     if (lecturerId) params.append("lecturerId", lecturerId);
+    if (departmentId) params.append("departmentId", departmentId);
     const query = params.toString() ? `?${params.toString()}` : "";
     return downloadAuthenticatedFile(
       `/api/Export/internship-excel${query}`,
@@ -15,10 +16,11 @@ export const exportService = {
   },
 
   /** Downloads the academic internship summary report as Excel (.xlsx). */
-  downloadSummaryReport(semesterId?: string, department?: string) {
+  downloadSummaryReport(semesterId?: string, department?: string, departmentId?: string) {
     const params = new URLSearchParams();
     if (semesterId) params.append("semesterId", semesterId);
     if (department) params.append("department", department);
+    if (departmentId) params.append("departmentId", departmentId);
     const query = params.toString() ? `?${params.toString()}` : "";
     return downloadAuthenticatedFile(
       `/api/Export/summary-report${query}`,
@@ -27,10 +29,11 @@ export const exportService = {
   },
 
   /** Downloads the academic internship summary report as Word (.docx). */
-  downloadSummaryReportWord(semesterId?: string, department?: string) {
+  downloadSummaryReportWord(semesterId?: string, department?: string, departmentId?: string) {
     const params = new URLSearchParams();
     if (semesterId) params.append("semesterId", semesterId);
     if (department) params.append("department", department);
+    if (departmentId) params.append("departmentId", departmentId);
     const query = params.toString() ? `?${params.toString()}` : "";
     return downloadAuthenticatedFile(
       `/api/Export/summary-report/word${query}`,

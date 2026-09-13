@@ -12,10 +12,12 @@ namespace InternLink.API.Controllers;
 public class AdminAssignmentsController : ControllerBase
 {
     private readonly IAssignmentService _assignmentService;
+    private readonly IDepartmentScopeService _deptScope;
 
-    public AdminAssignmentsController(IAssignmentService assignmentService)
+    public AdminAssignmentsController(IAssignmentService assignmentService, IDepartmentScopeService deptScope)
     {
         _assignmentService = assignmentService;
+        _deptScope = deptScope;
     }
 
     [HttpPost]
@@ -36,9 +38,10 @@ public class AdminAssignmentsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll([FromQuery] Guid? semesterId = null)
+    public async Task<IActionResult> GetAll([FromQuery] Guid? semesterId = null, [FromQuery] Guid? departmentId = null)
     {
-        var items = await _assignmentService.GetAllAssignmentsAsync(semesterId);
+        var deptId = _deptScope.ResolveEffectiveDepartmentId(User, departmentId);
+        var items = await _assignmentService.GetAllAssignmentsAsync(semesterId, deptId);
         return Ok(ApiResponse<IReadOnlyList<LecturerAssignmentItemDto>>.Ok(items));
     }
 

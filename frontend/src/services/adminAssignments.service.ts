@@ -21,8 +21,11 @@ export const adminAssignmentsService = {
     });
   },
 
-  getAll(semesterId?: string) {
-    const qs = semesterId && semesterId !== "all" ? `?semesterId=${semesterId}` : "";
+  getAll(semesterId?: string, departmentId?: string) {
+    const params = new URLSearchParams();
+    if (semesterId && semesterId !== "all") params.set("semesterId", semesterId);
+    if (departmentId && departmentId !== "all") params.set("departmentId", departmentId);
+    const qs = params.toString() ? `?${params.toString()}` : "";
     return apiRequest<LecturerAssignmentItemDto[]>(
       `/api/Admin/assignments${qs}`,
     );

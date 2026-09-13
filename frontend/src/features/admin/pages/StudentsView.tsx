@@ -45,7 +45,7 @@ import { adminUsersService } from "../../../services/adminUsers.service";
 import { exportService } from "../../../services/export.service";
 import { useAdminStudentsPage } from "../../../hooks/useAdminStudentsPage";
 import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
-import { useSemester, toApiSemesterId } from "../../../contexts/SemesterContext";
+import { useSemester, toApiSemesterId, toApiDepartmentId } from "../../../contexts/SemesterContext";
 import type { ToastType } from "../../../contexts/ToastContext";
 export const StudentsView = ({
   onShowToast,
@@ -54,10 +54,14 @@ export const StudentsView = ({
   onShowToast: (msg: string, type?: ToastType) => void;
   onNavigateTab?: (tab: string) => void;
 }) => {
-  const { selectedSemester } = useSemester();
+  const { selectedSemester, selectedDepartmentId } = useSemester();
   const { canMutateOps, isSuperAdmin } = useAdminCapabilities();
   const [searchParams] = useSearchParams();
-  const apiPage = useAdminStudentsPage(toApiSemesterId(selectedSemester?.id), onShowToast);
+  const apiPage = useAdminStudentsPage(
+    toApiSemesterId(selectedSemester?.id),
+    onShowToast,
+    toApiDepartmentId(selectedDepartmentId),
+  );
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<AdminStudentRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AdminStudentRow | null>(null);
@@ -358,7 +362,13 @@ export const StudentsView = ({
 
   const handleExportInternshipList = async () => {
     try {
-      await exportService.downloadInternshipExcel(toApiSemesterId(selectedSemester?.id));
+      const departmentId = toApiDepartmentId(selectedDepartmentId);
+      await exportService.downloadInternshipExcel(
+        toApiSemesterId(selectedSemester?.id),
+        undefined,
+        undefined,
+        departmentId,
+      );
       onShowToast("Đã tải xuống Danh sách thực tập (.xlsx)");
     } catch (err) {
       onShowToast(getApiErrorMessage(err));

@@ -138,6 +138,7 @@ export function useAdminDashboardStats(
   enabled: boolean,
   semesterId?: string | null,
   onError?: (msg: string) => void,
+  departmentId?: string | null,
 ) {
   const [stats, setStats] = useState<AdminDashboardStats | null>(null);
   const [isLoading, setIsLoading] = useState(enabled);
@@ -148,6 +149,7 @@ export function useAdminDashboardStats(
 
     setIsLoading(true);
     try {
+      const effectiveDepartmentId = departmentId === "all" || !departmentId ? undefined : departmentId;
       const [
         students,
         lecturers,
@@ -156,15 +158,15 @@ export function useAdminDashboardStats(
         notifications,
         allAssignments,
       ] = await Promise.all([
-        adminStudentsService.getAll(0, 500, semesterId ?? undefined),
-        adminLecturersService.getAll(0, 500, semesterId ?? undefined),
-        adminCompaniesService.getAll(0, 500, semesterId ?? undefined),
+        adminStudentsService.getAll(0, 500, semesterId ?? undefined, effectiveDepartmentId),
+        adminLecturersService.getAll(0, 500, semesterId ?? undefined, effectiveDepartmentId),
+        adminCompaniesService.getAll(0, 500, semesterId ?? undefined, effectiveDepartmentId),
         adminDashboardService
-          .getInternshipStats(semesterId ?? undefined)
+          .getInternshipStats(semesterId ?? undefined, effectiveDepartmentId)
           .catch(() => ({ ...EMPTY_INTERNSHIP_STATS })),
         notificationService.getMine().catch(() => []),
         adminAssignmentsService
-          .getAll(semesterId ?? undefined)
+          .getAll(semesterId ?? undefined, effectiveDepartmentId)
           .catch(() => []),
       ]);
 
@@ -239,7 +241,7 @@ export function useAdminDashboardStats(
     } finally {
       setIsLoading(false);
     }
-  }, [enabled, semesterId, onError]);
+  }, [enabled, semesterId, onError, departmentId]);
 
   useEffect(() => {
     void load();

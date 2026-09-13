@@ -38,6 +38,8 @@ public class LecturerDto
     public string? Email { get; set; }
     public string? Phone { get; set; }
     public string? Department { get; set; }
+    /// <summary>Department this lecturer belongs to (null = global/unassigned).</summary>
+    public Guid? DepartmentId { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
 }

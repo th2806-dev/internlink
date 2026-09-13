@@ -23,7 +23,7 @@ public class InternshipReportService : IInternshipReportService
     }
 
     /// <inheritdoc />
-    public async Task<byte[]> ExportC23ExcelAsync(Guid? semesterId = null, string? department = null)
+    public async Task<byte[]> ExportC23ExcelAsync(Guid? semesterId = null, string? department = null, Guid? departmentId = null)
     {
         // ── Load data ──────────────────────────────────────────────────────
         var internshipsQuery = _db.Internships
@@ -41,6 +41,10 @@ public class InternshipReportService : IInternshipReportService
         // whenever a lecturer supervises cross-department internships.
         if (!string.IsNullOrWhiteSpace(department))
             internshipsQuery = internshipsQuery.Where(i => i.Student.Department == department);
+
+        // GUID filter overrides the legacy string filter when provided.
+        if (departmentId.HasValue)
+            internshipsQuery = internshipsQuery.Where(i => i.Student.DepartmentId == departmentId.Value);
 
         var internships = await internshipsQuery
             .OrderBy(i => i.Student.Class)
@@ -61,6 +65,9 @@ public class InternshipReportService : IInternshipReportService
 
         if (!string.IsNullOrWhiteSpace(department))
             studentsQuery = studentsQuery.Where(s => s.Department == department);
+
+        if (departmentId.HasValue)
+            studentsQuery = studentsQuery.Where(s => s.DepartmentId == departmentId.Value);
 
         var studentsWithoutInternship = await studentsQuery
             .AsNoTracking()
@@ -101,7 +108,7 @@ public class InternshipReportService : IInternshipReportService
     }
 
     /// <inheritdoc />
-    public async Task<byte[]> ExportC22ASummaryReportAsync(Guid? semesterId = null, string? department = null)
+    public async Task<byte[]> ExportC22ASummaryReportAsync(Guid? semesterId = null, string? department = null, Guid? departmentId = null)
     {
         // ── Load data ──────────────────────────────────────────────────────
         var internshipsQuery = _db.Internships
@@ -120,6 +127,10 @@ public class InternshipReportService : IInternshipReportService
         if (!string.IsNullOrWhiteSpace(department))
             internshipsQuery = internshipsQuery.Where(i => i.Student.Department == department);
 
+        // GUID filter overrides the legacy string filter when provided.
+        if (departmentId.HasValue)
+            internshipsQuery = internshipsQuery.Where(i => i.Student.DepartmentId == departmentId.Value);
+
         var internships = await internshipsQuery.ToListAsync();
 
         var internshipIds = internships.Select(i => i.Id).ToHashSet();
@@ -131,6 +142,8 @@ public class InternshipReportService : IInternshipReportService
         var studentsCountQuery = _db.Students.Where(s => !s.IsDeleted);
         if (!string.IsNullOrWhiteSpace(department))
             studentsCountQuery = studentsCountQuery.Where(s => s.Department == department);
+        if (departmentId.HasValue)
+            studentsCountQuery = studentsCountQuery.Where(s => s.DepartmentId == departmentId.Value);
         var totalStudents = await studentsCountQuery.CountAsync();
 
         var totalCompanies = internships.Select(i => i.CompanyId).Where(c => c.HasValue).Distinct().Count();
@@ -146,7 +159,7 @@ public class InternshipReportService : IInternshipReportService
     }
 
     /// <inheritdoc />
-    public async Task<byte[]> ExportC22AWordReportAsync(Guid? semesterId = null, string? department = null)
+    public async Task<byte[]> ExportC22AWordReportAsync(Guid? semesterId = null, string? department = null, Guid? departmentId = null)
     {
         // ── Load data ──────────────────────────────────────────────────────
         var internshipsQuery = _db.Internships
@@ -165,6 +178,10 @@ public class InternshipReportService : IInternshipReportService
         if (!string.IsNullOrWhiteSpace(department))
             internshipsQuery = internshipsQuery.Where(i => i.Student.Department == department);
 
+        // GUID filter overrides the legacy string filter when provided.
+        if (departmentId.HasValue)
+            internshipsQuery = internshipsQuery.Where(i => i.Student.DepartmentId == departmentId.Value);
+
         var internships = await internshipsQuery.ToListAsync();
 
         var internshipIds = internships.Select(i => i.Id).ToHashSet();
@@ -176,6 +193,8 @@ public class InternshipReportService : IInternshipReportService
         var studentsCountQuery = _db.Students.Where(s => !s.IsDeleted);
         if (!string.IsNullOrWhiteSpace(department))
             studentsCountQuery = studentsCountQuery.Where(s => s.Department == department);
+        if (departmentId.HasValue)
+            studentsCountQuery = studentsCountQuery.Where(s => s.DepartmentId == departmentId.Value);
         var totalStudents = await studentsCountQuery.CountAsync();
 
         var totalCompanies = internships

@@ -2,11 +2,11 @@ import { apiRequest, downloadAuthenticatedFile } from "../lib/apiClient";
 import type { StudentDto, StudentImportResultDto } from "../types/api";
 
 export const adminStudentsService = {
-  getAll(skip = 0, take = 500, semesterId?: string): Promise<StudentDto[]> {
-    const qs = semesterId && semesterId !== "all" ? `&semesterId=${semesterId}` : "";
-    return apiRequest<StudentDto[]>(
-      `/api/Admin/students?skip=${skip}&take=${take}${qs}`,
-    );
+  getAll(skip = 0, take = 500, semesterId?: string, departmentId?: string): Promise<StudentDto[]> {
+    const params = new URLSearchParams({ skip: String(skip), take: String(take) });
+    if (semesterId && semesterId !== "all") params.set("semesterId", semesterId);
+    if (departmentId && departmentId !== "all") params.set("departmentId", departmentId);
+    return apiRequest<StudentDto[]>(`/api/Admin/students?${params.toString()}`);
   },
 
   getById(id: string): Promise<StudentDto> {
@@ -67,10 +67,13 @@ export const adminStudentsService = {
     });
   },
 
-  importExcel(file: File, semesterId?: string) {
+  importExcel(file: File, semesterId?: string, departmentId?: string) {
     const form = new FormData();
     form.append("file", file);
-    const qs = semesterId && semesterId !== "all" ? `?semesterId=${semesterId}` : "";
+    const params = new URLSearchParams();
+    if (semesterId && semesterId !== "all") params.set("semesterId", semesterId);
+    if (departmentId && departmentId !== "all") params.set("departmentId", departmentId);
+    const qs = params.toString() ? `?${params.toString()}` : "";
     return apiRequest<StudentImportResultDto>(`/api/Admin/students/import${qs}`, {
       method: "POST",
       body: form,

@@ -39,10 +39,18 @@ public class CompanyService : ICompanyService
         _excelService = excelService;
     }
 
-    public async Task<IEnumerable<CompanyDto>> GetAllCompaniesAsync(int skip = 0, int take = 100, Guid? semesterId = null)
+    public async Task<IEnumerable<CompanyDto>> GetAllCompaniesAsync(int skip = 0, int take = 100, Guid? semesterId = null, Guid? departmentId = null)
     {
         var query = _db.Companies
             .Where(c => !c.IsDeleted);
+
+        // Department filter: keep companies that have ever hosted interns of the
+        // requested department (companies are shared master data without their own DepartmentId).
+        if (departmentId.HasValue)
+        {
+            query = query.Where(c =>
+                c.Internships.Any(i => !i.IsDeleted && i.Student != null && i.Student.DepartmentId == departmentId.Value));
+        }
 
         var companies = await query
             .OrderBy(c => c.CompanyName)

@@ -42,7 +42,7 @@ import {
 import { adminAssignmentsService } from "../../../services/adminAssignments.service";
 import { adminLecturersService } from "../../../services/adminLecturers.service";
 import { adminUsersService } from "../../../services/adminUsers.service";
-import { useSemester, toApiSemesterId } from "../../../contexts/SemesterContext";
+import { useSemester, toApiSemesterId, toApiDepartmentId } from "../../../contexts/SemesterContext";
 import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
 import type { ToastType } from "../../../contexts/ToastContext";
 export const LecturersView = ({
@@ -52,7 +52,7 @@ export const LecturersView = ({
   onShowToast: (msg: string, type?: ToastType) => void;
   onNavigateTab?: (tab: string) => void;
 }) => {
-  const { selectedSemester } = useSemester();
+  const { selectedSemester, selectedDepartmentId } = useSemester();
   const { canMutateOps, isSuperAdmin } = useAdminCapabilities();
   const [isLoadingApi, setIsLoadingApi] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -75,9 +75,10 @@ export const LecturersView = ({
 
   const fetchLecturerRows = async () => {
     const semesterId = toApiSemesterId(selectedSemester?.id);
+    const departmentId = toApiDepartmentId(selectedDepartmentId);
     const [dtos, allAssignments] = await Promise.all([
-      adminLecturersService.getAll(0, 500, semesterId),
-      adminAssignmentsService.getAll(semesterId).catch(() => []),
+      adminLecturersService.getAll(0, 500, semesterId, departmentId),
+      adminAssignmentsService.getAll(semesterId, departmentId).catch(() => []),
     ]);
     const { lecturerCounts } = buildAssignmentMaps(dtos, allAssignments);
     return dtos.map((l) =>
@@ -106,7 +107,7 @@ export const LecturersView = ({
     return () => {
       cancelled = true;
     };
-  }, [onShowToast, selectedSemester?.id]);
+  }, [onShowToast, selectedSemester?.id, selectedDepartmentId]);
 
   const handleAddLecturer = async (payload: CreateLecturerFormPayload) => {
 

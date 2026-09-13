@@ -194,9 +194,9 @@ public class AdminStudentsController : ControllerBase
     }
 
     [HttpGet("export")]
-    public async Task<IActionResult> Export([FromQuery] Guid? semesterId = null)
+    public async Task<IActionResult> Export([FromQuery] Guid? semesterId = null, [FromQuery] Guid? departmentId = null)
     {
-        var deptId = _deptScope.GetCurrentDepartmentId(User);
+        var deptId = _deptScope.ResolveEffectiveDepartmentId(User, departmentId);
         var bytes = await _studentService.ExportStudentsExcelAsync(semesterId, departmentId: deptId);
         var fileName = $"Danh-sach-SV-{DateTime.UtcNow:yyyyMMdd-HHmmss}.xlsx";
         return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);

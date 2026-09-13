@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "../../../contexts/AuthContext";
+import { useSemester, toApiSemesterId, toApiDepartmentId } from "../../../contexts/SemesterContext";
 import type { ToastType } from "../../../contexts/ToastContext";
 import {
   LayoutDashboard,
@@ -24,15 +25,6 @@ import {
 import { useAdminDashboardStats } from "../../../hooks/useAdminDashboardStats";
 import { exportAdminDashboardReport } from "../../../lib/adminDashboardExport";
 import { exportService } from "../../../services/export.service";
-import { useSemester, toApiSemesterId } from "../../../contexts/SemesterContext";
-
-const EXPORT_DEPARTMENTS = [
-  { value: "", label: "Tất cả Khoa" },
-  { value: "CNTT", label: "CNTT" },
-  { value: "QTKD", label: "QTKD" },
-  { value: "Du lịch", label: "Du lịch" },
-  { value: "Ngoại ngữ", label: "Ngoại ngữ" },
-];
 
 export const DashboardView = ({
   onShowToast,
@@ -43,16 +35,19 @@ export const DashboardView = ({
 }) => {
   const { user } = useAuth();
   const [isExporting, setIsExporting] = useState(false);
-  const [exportDepartment, setExportDepartment] = useState("");
-  const { semesters, selectedSemester } = useSemester();
+  const { semesters, selectedSemester, selectedDepartmentId, selectedDepartment } = useSemester();
   const { stats, isLoading, updatedAt, reload } = useAdminDashboardStats(
     true,
     toApiSemesterId(selectedSemester?.id),
     onShowToast,
+    toApiDepartmentId(selectedDepartmentId),
   );
 
   const semesterId = toApiSemesterId(selectedSemester?.id);
-  const departmentFilter = exportDepartment || undefined;
+  const departmentIdFilter = toApiDepartmentId(selectedDepartmentId);
+  // Legacy string param kept in sync with the GUID filter so server-side
+  // template placeholders ({{DEPARTMENT}}) still render the faculty name.
+  const departmentNameFilter = departmentIdFilter ? selectedDepartment.name : undefined;
   const isSuperAdmin = user?.backendRole === "SuperAdmin";
 
   const handleRefresh = async () => {
@@ -64,7 +59,7 @@ export const DashboardView = ({
   const handleExportInternshipList = async () => {
     setIsExporting(true);
     try {
-      await exportService.downloadInternshipExcel(semesterId, departmentFilter);
+      await exportService.downloadInternshipExcel(semesterId, departmentNameFilter, undefined, departmentIdFilter);
       onShowToast("Đã tải xuống Danh sách thực tập (.xlsx)");
     } catch (err) {
       onShowToast("Xuất danh sách thực tập thất bại. Đang tải báo cáo tổng quan...");
@@ -77,7 +72,7 @@ export const DashboardView = ({
   const handleExportSummaryReportWord = async () => {
     setIsExporting(true);
     try {
-      await exportService.downloadSummaryReportWord(semesterId, departmentFilter);
+      await exportService.downloadSummaryReportWord(semesterId, departmentNameFilter, departmentIdFilter);
       onShowToast("Đã tải xuống Báo cáo tổng kết thực tập (.docx)");
     } catch (err) {
       onShowToast("Xuất báo cáo tổng kết Word thất bại.");
@@ -89,7 +84,7 @@ export const DashboardView = ({
   const handleExportSummaryReportExcel = async () => {
     setIsExporting(true);
     try {
-      await exportService.downloadSummaryReport(semesterId, departmentFilter);
+      await exportService.downloadSummaryReport(semesterId, departmentNameFilter, departmentIdFilter);
       onShowToast("Đã tải xuống Báo cáo tổng kết thực tập (.xlsx)");
     } catch (err) {
       onShowToast("Xuất báo cáo tổng kết Excel thất bại.");
@@ -167,29 +162,14 @@ export const DashboardView = ({
         ]}
       />
 
-      {isSuperAdmin && (
+      {isSuperAdmin && departmentIdFilter && (
         <div className="il-accent-panel px-4 py-3 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-blue-700">Bộ lọc xuất báo cáo</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-blue-700">Phạm vi xuất báo cáo</p>
             <p className="text-sm font-semibold text-slate-900 mt-0.5">
-              Áp dụng Khoa cho danh sách thực tập và báo cáo tổng kết theo kỳ đang chọn.
+              Đang xuất theo khoa "{selectedDepartment.name}" (đồng bộ bộ lọc Khoa trên header).
             </p>
           </div>
-          <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
-            <span>Khoa</span>
-            <select
-              value={exportDepartment}
-              onChange={(e) => setExportDepartment(e.target.value)}
-              className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-800 outline-none focus:border-blue-500"
-              aria-label="Lọc Khoa khi xuất báo cáo"
-            >
-              {EXPORT_DEPARTMENTS.map((d) => (
-                <option key={d.value || "all"} value={d.value}>
-                  {d.label}
-                </option>
-              ))}
-            </select>
-          </label>
         </div>
       )}
 

@@ -96,6 +96,8 @@ export interface StudentDto {
   preferredIndustry?: string | null;
   skills?: string | null;
   resumeUrl?: string | null;
+  /** Department this student belongs to (null = global/unassigned). */
+  departmentId?: string | null;
   createdAt: string;
   updatedAt?: string | null;
 }
@@ -108,6 +110,8 @@ export interface LecturerDto {
   email?: string | null;
   phone?: string | null;
   department?: string | null;
+  /** Department this lecturer belongs to (null = global/unassigned). */
+  departmentId?: string | null;
   createdAt: string;
   updatedAt?: string | null;
 }

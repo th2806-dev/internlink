@@ -15,21 +15,24 @@ namespace InternLink.API.Controllers;
 public class AdminCompaniesController : ControllerBase
 {
     private readonly ICompanyService _companyService;
+    private readonly IDepartmentScopeService _deptScope;
 
-    public AdminCompaniesController(ICompanyService companyService)
+    public AdminCompaniesController(ICompanyService companyService, IDepartmentScopeService deptScope)
     {
         _companyService = companyService;
+        _deptScope = deptScope;
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll([FromQuery] int skip = 0, [FromQuery] int take = 100, [FromQuery] Guid? semesterId = null)
+    public async Task<IActionResult> GetAll([FromQuery] int skip = 0, [FromQuery] int take = 100, [FromQuery] Guid? semesterId = null, [FromQuery] Guid? departmentId = null)
     {
         if (skip < 0)
             return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Skip must be greater than or equal to 0" }));
         if (take < 1 || take > 1000)
             return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Take must be between 1 and 1000" }));
 
-        var companies = await _companyService.GetAllCompaniesAsync(skip, take, semesterId);
+        var deptId = _deptScope.ResolveEffectiveDepartmentId(User, departmentId);
+        var companies = await _companyService.GetAllCompaniesAsync(skip, take, semesterId, deptId);
         return Ok(ApiResponse<IEnumerable<CompanyDto>>.Ok(companies));
     }
 

@@ -72,8 +72,8 @@ export const AccountView = ({
 }) => {
   const { user } = useAuth();
   const { isSuperAdmin, roleDisplayLabel } = useAdminCapabilities();
-  const { selectedSemesterId } = useSemester();
-  const { stats: navStats } = useAdminNavStats(true, selectedSemesterId);
+  const { selectedSemesterId, selectedDepartmentId } = useSemester();
+  const { stats: navStats } = useAdminNavStats(true, selectedSemesterId, selectedDepartmentId);
 
   const [activeTab, setActiveTab] = useState<"profile" | "security" | "preferences" | "activity">("profile");
 

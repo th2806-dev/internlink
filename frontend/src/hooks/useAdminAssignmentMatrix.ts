@@ -20,6 +20,7 @@ export function useAdminAssignmentMatrix(
   enabled: boolean,
   semesterId?: string | null,
   onError?: (msg: string) => void,
+  departmentId?: string | null,
 ) {
   const [lecturers, setLecturers] = useState<AssignmentLecturerRow[]>([]);
   const [students, setStudents] = useState<AssignmentStudentRow[]>([]);
@@ -33,11 +34,12 @@ export function useAdminAssignmentMatrix(
     setIsLoading(true);
     try {
       const effectiveSemesterId = semesterId === "all" || !semesterId ? undefined : semesterId;
+      const effectiveDepartmentId = departmentId === "all" || !departmentId ? undefined : departmentId;
       const [lecturerDtos, studentDtos, allAssignments] = await Promise.all([
-        adminLecturersService.getAll(0, 500, effectiveSemesterId),
-        adminStudentsService.getAll(0, 500, effectiveSemesterId),
+        adminLecturersService.getAll(0, 500, effectiveSemesterId, effectiveDepartmentId),
+        adminStudentsService.getAll(0, 500, effectiveSemesterId, effectiveDepartmentId),
         adminAssignmentsService
-          .getAll(effectiveSemesterId)
+          .getAll(effectiveSemesterId, effectiveDepartmentId)
           .catch(() => []),
       ]);
 
@@ -65,7 +67,7 @@ export function useAdminAssignmentMatrix(
     } finally {
       setIsLoading(false);
     }
-  }, [enabled, semesterId, onError]);
+  }, [enabled, semesterId, onError, departmentId]);
 
   useEffect(() => {
     load();

@@ -14,6 +14,7 @@ export type AdminStudentRow = ReturnType<typeof mapStudentDtoToRow>;
 export function useAdminStudentsPage(
   semesterId?: string | null,
   onError?: (msg: string) => void,
+  departmentId?: string | null,
 ) {
   const [students, setStudents] = useState<AdminStudentRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -21,13 +22,14 @@ export function useAdminStudentsPage(
   const load = useCallback(async () => {
     setIsLoading(true);
     try {
+      const effectiveDepartmentId = departmentId === "all" || !departmentId ? undefined : departmentId;
       const [studentRows, lecturerRows, usersPage, allAssignments] =
         await Promise.all([
-          adminStudentsService.getAll(0, 500, semesterId ?? undefined),
-          adminLecturersService.getAll(),
+          adminStudentsService.getAll(0, 500, semesterId ?? undefined, effectiveDepartmentId),
+          adminLecturersService.getAll(0, 500, undefined, effectiveDepartmentId),
           adminUsersService.getAll({ take: 500, role: "Student" }),
           adminAssignmentsService
-            .getAll(semesterId ?? undefined)
+            .getAll(semesterId ?? undefined, effectiveDepartmentId)
             .catch(() => []),
         ]);
 
@@ -61,7 +63,7 @@ export function useAdminStudentsPage(
     } finally {
       setIsLoading(false);
     }
-  }, [semesterId, onError]);
+  }, [semesterId, onError, departmentId]);
 
   useEffect(() => {
     void load();

@@ -19,15 +19,18 @@ public class AdminController : ControllerBase
 {
     private readonly IEmailService _emailService;
     private readonly IInternshipService _internshipService;
+    private readonly IDepartmentScopeService _deptScope;
     private readonly AppDbContext _db;
 
     public AdminController(
         IEmailService emailService,
         IInternshipService internshipService,
+        IDepartmentScopeService deptScope,
         AppDbContext db)
     {
         _emailService = emailService;
         _internshipService = internshipService;
+        _deptScope = deptScope;
         _db = db;
     }
 
@@ -35,11 +38,12 @@ public class AdminController : ControllerBase
     /// Internship status counts for admin dashboard KPIs and charts.
     /// </summary>
     [HttpGet("internship-stats")]
-    public async Task<IActionResult> GetInternshipStats([FromQuery] Guid? semesterId = null)
+    public async Task<IActionResult> GetInternshipStats([FromQuery] Guid? semesterId = null, [FromQuery] Guid? departmentId = null)
     {
         try
         {
-            var stats = await _internshipService.GetInternshipStatsAsync(null, semesterId);
+            var deptId = _deptScope.ResolveEffectiveDepartmentId(User, departmentId);
+            var stats = await _internshipService.GetInternshipStatsAsync(null, semesterId, deptId);
             return Ok(ApiResponse<InternshipStatsDto>.Ok(stats));
         }
         catch (Exception ex)

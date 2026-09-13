@@ -6,7 +6,7 @@ public interface IAssignmentService
 {
     Task<BulkAssignResultDto> BulkAssignAsync(BulkAssignRequest request);
     Task<IReadOnlyList<LecturerAssignmentItemDto>> GetByLecturerAsync(Guid lecturerId, Guid? semesterId = null);
-    Task<IReadOnlyList<LecturerAssignmentItemDto>> GetAllAssignmentsAsync(Guid? semesterId = null);
+    Task<IReadOnlyList<LecturerAssignmentItemDto>> GetAllAssignmentsAsync(Guid? semesterId = null, Guid? departmentId = null);
     Task<bool> UnassignAsync(UnassignRequest request);
     Task<IReadOnlyList<AssignmentHistoryItemDto>> GetHistoryAsync(int limit = 50, Guid? semesterId = null);
     Task<byte[]> ExportExcelAsync(Guid? semesterId = null);

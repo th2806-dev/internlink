@@ -35,7 +35,7 @@ import { getApiErrorMessage } from "../../../lib/apiClient";
 import { formatRelativeTimeVi } from "../../../lib/formatRelativeTimeVi";
 import { adminAssignmentsService } from "../../../services/adminAssignments.service";
 import { useAdminAssignmentMatrix } from "../../../hooks/useAdminAssignmentMatrix";
-import { useSemester } from "../../../contexts/SemesterContext";
+import { useSemester, toApiDepartmentId } from "../../../contexts/SemesterContext";
 import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
 import { CompanyAllocationsTab } from "../components/CompanyAllocationsTab";
 import { ImportLecturerAssignmentsModal } from "../components/modals/ImportLecturerAssignmentsModal";
@@ -47,12 +47,12 @@ export const AssignmentsView = ({
   onShowToast: (msg: string, type?: ToastType) => void;
   onNavigateTab?: (tab: string) => void;
 }) => {
-  const { semesters, selectedSemesterId, selectedSemester: currentSemesterObj, selectSemester } = useSemester();
+  const { semesters, selectedSemesterId, selectedSemester: currentSemesterObj, selectSemester, selectedDepartmentId } = useSemester();
   const { canMutateOps, isSuperAdmin } = useAdminCapabilities();
   const selectedSemester = selectedSemesterId;
   const setSelectedSemester = selectSemester;
   const effectiveSemesterId = selectedSemester === "all" ? undefined : selectedSemester;
-  const apiMatrix = useAdminAssignmentMatrix(true, selectedSemesterId, onShowToast);
+  const apiMatrix = useAdminAssignmentMatrix(true, selectedSemesterId, onShowToast, toApiDepartmentId(selectedDepartmentId));
   const [activeTab, setActiveTab] = useState("by-lecturer");
 
   const lecturers = apiMatrix.lecturers;

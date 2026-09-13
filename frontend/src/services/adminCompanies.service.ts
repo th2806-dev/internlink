@@ -8,11 +8,11 @@ import type {
 } from "../types/api";
 
 export const adminCompaniesService = {
-  getAll(skip = 0, take = 500, semesterId?: string): Promise<CompanyDto[]> {
-    const qs = semesterId && semesterId !== "all" ? `&semesterId=${semesterId}` : "";
-    return apiRequest<CompanyDto[]>(
-      `/api/Admin/companies?skip=${skip}&take=${take}${qs}`,
-    );
+  getAll(skip = 0, take = 500, semesterId?: string, departmentId?: string): Promise<CompanyDto[]> {
+    const params = new URLSearchParams({ skip: String(skip), take: String(take) });
+    if (semesterId && semesterId !== "all") params.set("semesterId", semesterId);
+    if (departmentId && departmentId !== "all") params.set("departmentId", departmentId);
+    return apiRequest<CompanyDto[]>(`/api/Admin/companies?${params.toString()}`);
   },
 
   create(body: {

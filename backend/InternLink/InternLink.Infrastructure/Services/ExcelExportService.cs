@@ -26,7 +26,7 @@ public class ExcelExportService : IExcelExportService
     }
 
     /// <inheritdoc />
-    public async Task<InternshipExportDataDto> GetExportDataAsync(Guid? semesterId = null, Guid? lecturerId = null, string? department = null, CancellationToken cancellationToken = default)
+    public async Task<InternshipExportDataDto> GetExportDataAsync(Guid? semesterId = null, Guid? lecturerId = null, string? department = null, Guid? departmentId = null, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Retrieving export datasets from relational tables. SemesterId: {SemesterId}, Department: {Department}", semesterId, department);
 
@@ -48,6 +48,12 @@ public class ExcelExportService : IExcelExportService
         if (!string.IsNullOrWhiteSpace(department))
         {
             studentsQuery = studentsQuery.Where(s => s.Department == department || s.Internships.Any(i => !i.IsDeleted && i.Lecturer != null && i.Lecturer.Department == department));
+        }
+
+        // Department filter (GUID): scope to students belonging to the selected department.
+        if (departmentId.HasValue)
+        {
+            studentsQuery = studentsQuery.Where(s => s.DepartmentId == departmentId.Value);
         }
 
         var students = await studentsQuery
@@ -140,7 +146,7 @@ public class ExcelExportService : IExcelExportService
             .AsNoTracking()
             .Where(c => c.IsActive);
 
-        if (semesterId.HasValue || lecturerId.HasValue || !string.IsNullOrWhiteSpace(department))
+        if (semesterId.HasValue || lecturerId.HasValue || !string.IsNullOrWhiteSpace(department) || departmentId.HasValue)
         {
             companiesQuery = companiesQuery.Where(c => c.Internships.Any(i =>
                 !i.IsDeleted
@@ -148,7 +154,8 @@ public class ExcelExportService : IExcelExportService
                 && (!lecturerId.HasValue || i.LecturerId == lecturerId.Value)
                 && (string.IsNullOrWhiteSpace(department)
                     || i.Student.Department == department
-                    || (i.Lecturer != null && i.Lecturer.Department == department))));
+                    || (i.Lecturer != null && i.Lecturer.Department == department))
+                && (!departmentId.HasValue || i.Student.DepartmentId == departmentId.Value)));
         }
 
         var companies = await companiesQuery
@@ -163,7 +170,8 @@ public class ExcelExportService : IExcelExportService
                     && (!lecturerId.HasValue || i.LecturerId == lecturerId.Value)
                     && (string.IsNullOrWhiteSpace(department)
                         || i.Student.Department == department
-                        || (i.Lecturer != null && i.Lecturer.Department == department))),
+                        || (i.Lecturer != null && i.Lecturer.Department == department))
+                    && (!departmentId.HasValue || i.Student.DepartmentId == departmentId.Value)),
                 ContactInfo = string.IsNullOrWhiteSpace(c.ContactPhone)
                     ? (c.ContactPerson ?? "—")
                     : $"{c.ContactPerson} - {c.ContactPhone}"
@@ -187,6 +195,11 @@ public class ExcelExportService : IExcelExportService
         if (!string.IsNullOrWhiteSpace(department))
         {
             assignmentsQuery = assignmentsQuery.Where(i => i.Student.Department == department || (i.Lecturer != null && i.Lecturer.Department == department));
+        }
+
+        if (departmentId.HasValue)
+        {
+            assignmentsQuery = assignmentsQuery.Where(i => i.Student.DepartmentId == departmentId.Value);
         }
 
         var assignments = await assignmentsQuery
@@ -217,9 +230,9 @@ public class ExcelExportService : IExcelExportService
     }
 
     /// <inheritdoc />
-    public async Task<byte[]> GenerateInternshipExportExcelAsync(Guid? semesterId = null, Guid? lecturerId = null, string? department = null, CancellationToken cancellationToken = default)
+    public async Task<byte[]> GenerateInternshipExportExcelAsync(Guid? semesterId = null, Guid? lecturerId = null, string? department = null, Guid? departmentId = null, CancellationToken cancellationToken = default)
     {
-        var data = await GetExportDataAsync(semesterId, lecturerId, department, cancellationToken);
+        var data = await GetExportDataAsync(semesterId, lecturerId, department, departmentId, cancellationToken);
         return GenerateFromData(data);
     }
 

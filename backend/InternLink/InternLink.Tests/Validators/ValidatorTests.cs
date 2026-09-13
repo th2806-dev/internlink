@@ -18,12 +18,29 @@ public class UserValidatorTests
             Username = "admin-cntt",
             FullName = "Admin Khoa CNTT",
             Email = "admin.cntt@example.com",
-            Role = "DepartmentAdmin"
+            Role = "DepartmentAdmin",
+            DepartmentId = Guid.NewGuid()
         };
 
         var result = _createValidator.Validate(request);
 
         result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public void CreateUserRequestValidator_WithDepartmentAdminRoleAndMissingDepartment_ShouldFail()
+    {
+        var request = new CreateUserRequest
+        {
+            Username = "admin-cntt",
+            FullName = "Admin Khoa CNTT",
+            Email = "admin.cntt@example.com",
+            Role = "DepartmentAdmin"
+        };
+
+        var result = _createValidator.Validate(request);
+
+        result.IsValid.Should().BeFalse();
     }
 }
 
