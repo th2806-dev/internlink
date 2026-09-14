@@ -10,17 +10,14 @@ namespace InternLink.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<string>(name: "ArchiveReason", table: "Documents", type: "nvarchar(1000)", maxLength: 1000, nullable: true);
-            migrationBuilder.AddColumn<DateTime>(name: "ArchivedAt", table: "Documents", type: "datetime2", nullable: true);
-            migrationBuilder.AddColumn<string>(name: "ArchivedBy", table: "Documents", type: "nvarchar(200)", maxLength: 200, nullable: true);
+            // ArchiveReason/ArchivedAt/ArchivedBy are already added by AddDocumentDownloadCount.
+            // Kept empty of column adds to avoid duplicate-column failure on fresh databases.
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropColumn(name: "ArchiveReason", table: "Documents");
-            migrationBuilder.DropColumn(name: "ArchivedAt", table: "Documents");
-            migrationBuilder.DropColumn(name: "ArchivedBy", table: "Documents");
+            // Nothing to revert — columns belong to AddDocumentDownloadCount.
         }
     }
 }
