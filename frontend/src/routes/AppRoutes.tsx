@@ -173,7 +173,13 @@ export function AppRoutes() {
                 />
                 <Route
                   path="companies"
-                  element={<AdminCompaniesView onShowToast={showToast} />}
+                  element={
+                    isSuperAdmin ? (
+                      <Navigate to="/admin/dashboard" replace />
+                    ) : (
+                      <AdminCompaniesView onShowToast={showToast} />
+                    )
+                  }
                 />
                 <Route
                   path="companies/detail"
@@ -181,7 +187,13 @@ export function AppRoutes() {
                 />
                 <Route
                   path="companies/:id"
-                  element={<AdminCompaniesDetailView />}
+                  element={
+                    isSuperAdmin ? (
+                      <Navigate to="/admin/dashboard" replace />
+                    ) : (
+                      <AdminCompaniesDetailView />
+                    )
+                  }
                 />
                 <Route
                   path="users"
@@ -214,19 +226,43 @@ export function AppRoutes() {
                 />
                 <Route
                   path="assignments"
-                  element={<AdminAssignmentsView onShowToast={showToast} />}
+                  element={
+                    isSuperAdmin ? (
+                      <Navigate to="/admin/dashboard" replace />
+                    ) : (
+                      <AdminAssignmentsView onShowToast={showToast} />
+                    )
+                  }
                 />
                 <Route
                   path="lecturers"
-                  element={<AdminLecturersView onShowToast={showToast} />}
+                  element={
+                    isSuperAdmin ? (
+                      <Navigate to="/admin/dashboard" replace />
+                    ) : (
+                      <AdminLecturersView onShowToast={showToast} />
+                    )
+                  }
                 />
                 <Route
                   path="students"
-                  element={<AdminStudentsView onShowToast={showToast} />}
+                  element={
+                    isSuperAdmin ? (
+                      <Navigate to="/admin/dashboard" replace />
+                    ) : (
+                      <AdminStudentsView onShowToast={showToast} />
+                    )
+                  }
                 />
                 <Route
                   path="templates"
-                  element={<AdminTemplatesView onShowToast={showToast} />}
+                  element={
+                    isSuperAdmin ? (
+                      <Navigate to="/admin/dashboard" replace />
+                    ) : (
+                      <AdminTemplatesView onShowToast={showToast} />
+                    )
+                  }
                 />
                 <Route
                   path="account-requests"
@@ -246,12 +282,16 @@ export function AppRoutes() {
                 <Route
                   path="notifications"
                   element={
-                    <AdminNotificationsView
-                      onShowToast={showToast}
-                      onNavigateTab={(t) =>
-                        navigate(`/admin/${t.replace("admin-", "")}`)
-                      }
-                    />
+                    isSuperAdmin ? (
+                      <Navigate to="/admin/dashboard" replace />
+                    ) : (
+                      <AdminNotificationsView
+                        onShowToast={showToast}
+                        onNavigateTab={(t) =>
+                          navigate(`/admin/${t.replace("admin-", "")}`)
+                        }
+                      />
+                    )
                   }
                 />
                 <Route

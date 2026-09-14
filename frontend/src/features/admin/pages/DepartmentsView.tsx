@@ -173,10 +173,6 @@ export function DepartmentsView({ onShowToast }: { onShowToast?: (msg: string, t
   const [isCreatingDepartment, setIsCreatingDepartment] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
 
-  useEffect(() => {
-    load();
-  }, []);
-
   const load = async () => {
     setLoading(true);
     try {
@@ -188,6 +184,10 @@ export function DepartmentsView({ onShowToast }: { onShowToast?: (msg: string, t
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    load();
+  }, []);
 
   const handleCreate = async (body: CreateDepartmentRequest) => {
     await adminDepartmentsService.create(body);

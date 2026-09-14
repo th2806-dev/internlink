@@ -386,14 +386,6 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
         </div>
       </div>
 
-      {isSuperAdmin && (
-        <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-xl text-sm flex items-center justify-between">
-          <span>
-            <strong>Chế độ chỉ xem nghiệp vụ khoa:</strong> Bạn đang đăng nhập tài khoản Quản trị hệ thống. Toàn bộ tính năng nạp, tạo, sửa, lưu hành và xóa biểu mẫu thuộc thẩm quyền quản trị của Quản trị khoa. Bạn vẫn có thể tra cứu, lọc và tải xuống biểu mẫu.
-          </span>
-        </div>
-      )}
-
       {/* KPI Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">

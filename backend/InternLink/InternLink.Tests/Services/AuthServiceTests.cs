@@ -276,4 +276,64 @@ public class AuthServiceTests
 
         attributes.Should().ContainSingle(attr => attr.Policy == "RequireSuperAdmin");
     }
+
+    [Fact]
+    public void OperationalAdminWriteEndpoints_ShouldRequireDepartmentAdminPolicy()
+    {
+        var protectedActions = new[]
+        {
+            (typeof(AdminNotificationsController), nameof(AdminNotificationsController.Broadcast)),
+            (typeof(AdminNotificationsController), nameof(AdminNotificationsController.DeleteCampaign)),
+            (typeof(DocumentController), nameof(DocumentController.CreateTemplate)),
+            (typeof(DocumentController), nameof(DocumentController.UpdateTemplate)),
+            (typeof(DocumentController), nameof(DocumentController.DeleteTemplate)),
+            (typeof(AttendanceController), nameof(AttendanceController.GetAdminAttendanceReport)),
+        };
+
+        foreach (var (controllerType, actionName) in protectedActions)
+        {
+            var policies = controllerType
+                .GetMethod(actionName)!
+                .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+                .Cast<AuthorizeAttribute>()
+                .Select(attribute => attribute.Policy)
+                .ToList();
+
+            policies.Should().Contain("RequireDepartmentAdmin", $"{controllerType.Name}.{actionName} is an operational department action");
+        }
+    }
+
+    [Fact]
+    public void PlatformAdministrationEndpoints_ShouldRequireSuperAdminPolicy()
+    {
+        var protectedActions = new[]
+        {
+            (typeof(AdminDepartmentsController), nameof(AdminDepartmentsController.Create)),
+            (typeof(AdminDepartmentsController), nameof(AdminDepartmentsController.Update)),
+            (typeof(AdminDepartmentsController), nameof(AdminDepartmentsController.Delete)),
+        };
+
+        foreach (var (controllerType, actionName) in protectedActions)
+        {
+            var policies = controllerType
+                .GetMethod(actionName)!
+                .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+                .Cast<AuthorizeAttribute>()
+                .Select(attribute => attribute.Policy)
+                .ToList();
+
+            policies.Should().Contain("RequireSuperAdmin", $"{controllerType.Name}.{actionName} is a platform administration action");
+        }
+
+        foreach (var controllerType in new[] { typeof(AdminSettingsController), typeof(AdminAccountRequestsController) })
+        {
+            var policies = controllerType
+                .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+                .Cast<AuthorizeAttribute>()
+                .Select(attribute => attribute.Policy)
+                .ToList();
+
+            policies.Should().Contain("RequireSuperAdmin", $"{controllerType.Name} is a platform administration controller");
+        }
+    }
 }

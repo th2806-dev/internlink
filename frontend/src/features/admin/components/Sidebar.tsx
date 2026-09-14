@@ -140,10 +140,21 @@ export const Sidebar = ({
   const displayName = user?.name || user?.username || roleDisplayLabel;
   const displayRole = roleDisplayLabel;
 
-  const visibleSections = navSections
+  const filteredSections = navSections
     .map((section) => ({
       ...section,
       items: section.items.filter((item) => {
+        if (isSuperAdmin) {
+          const superAdminItems = new Set([
+            "admin-dashboard",
+            "admin-departments",
+            "admin-semesters",
+            "admin-users",
+            "admin-settings",
+            "admin-account",
+          ]);
+          if (!superAdminItems.has(item.id)) return false;
+        }
         if ((item.id === "admin-departments" || item.id === "admin-settings") && !isSuperAdmin) {
           return false;
         }
@@ -151,6 +162,10 @@ export const Sidebar = ({
       }),
     }))
     .filter((section) => section.items.length > 0);
+
+  const visibleSections = isSuperAdmin
+    ? [{ title: "", items: filteredSections.flatMap((section) => section.items) }]
+    : filteredSections;
 
   return (
     <aside className="il-sidebar w-64 flex flex-col justify-between h-screen sticky top-0 z-40 select-none">
@@ -189,7 +204,11 @@ export const Sidebar = ({
                     key={item.id}
                     type="button"
                     onClick={() => onNavigate(item.id)}
-                    className={`il-sidebar-nav ${isActive ? "is-active" : ""}`}
+                    className={`il-sidebar-nav ${isActive ? "is-active" : ""} ${
+                      isSuperAdmin && item.id === "admin-settings"
+                        ? "border-t border-slate-200 mt-2 pt-3"
+                        : ""
+                    }`}
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <Icon className="w-4 h-4 shrink-0" />

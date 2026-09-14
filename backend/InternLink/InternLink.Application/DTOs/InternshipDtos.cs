@@ -122,6 +122,17 @@ public class InternshipStatsDto
     public int Graded { get; set; }
 }
 
+public class AdminOverviewDto
+{
+    public int LecturerCount { get; set; }
+    public int StudentCount { get; set; }
+    public int ActiveStudents { get; set; }
+    public int CompanyCount { get; set; }
+    public int ActiveCompanies { get; set; }
+    public int InternshipTotal { get; set; }
+    public InternshipStatsDto InternshipStats { get; set; } = new();
+}
+
 /// <summary>
 /// Summary DTO for User (lecturer, supervisor)
 /// </summary>

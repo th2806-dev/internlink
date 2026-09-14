@@ -28,6 +28,7 @@ public class AdminNotificationsController : ControllerBase
     }
 
     [HttpPost("broadcast")]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     public async Task<IActionResult> Broadcast([FromBody] AdminBroadcastNotificationRequest request)
     {
         try
@@ -45,6 +46,7 @@ public class AdminNotificationsController : ControllerBase
     }
 
     [HttpDelete("campaign")]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     public async Task<IActionResult> DeleteCampaign([FromBody] AdminDeleteNotificationCampaignRequest request)
     {
         try

@@ -240,7 +240,7 @@ public class DocumentController : ControllerBase
     }
 
     [HttpPost("templates")]
-    [Authorize(Policy = "RequireAdmin")]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> CreateTemplate([FromForm] CreateTemplateRequest form)
     {
@@ -263,7 +263,7 @@ public class DocumentController : ControllerBase
     }
 
     [HttpPut("templates/{id:guid}")]
-    [Authorize(Policy = "RequireAdmin")]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> UpdateTemplate(Guid id, [FromForm] UpdateTemplateRequest form)
     {
@@ -286,7 +286,7 @@ public class DocumentController : ControllerBase
     }
 
     [HttpDelete("templates/{id:guid}")]
-    [Authorize(Policy = "RequireAdmin")]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     public async Task<IActionResult> DeleteTemplate(Guid id)
     {
         var userId = User.GetUserId();
@@ -305,14 +305,6 @@ public class DocumentController : ControllerBase
         {
             return Forbid();
         }
-    }
-
-    [HttpPost("templates/seed")]
-    [Authorize(Policy = "RequireAdmin")]
-    public async Task<IActionResult> SeedDefaultTemplates()
-    {
-        await _documentService.SeedDefaultTemplatesAsync();
-        return Ok(ApiResponse<object>.Ok(new { message = "Khởi tạo biểu mẫu chuẩn thành công" }));
     }
 
     [HttpGet("{id:guid}/versions")]

@@ -197,15 +197,6 @@ export const CompanyAllocationsTab = ({
 
   return (
     <div className="space-y-4">
-      {isSuperAdmin && (
-        <div className="px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900 flex items-center gap-2.5">
-          <Eye className="w-4 h-4 text-blue-600 shrink-0" />
-          <span>
-            Chế độ chỉ xem nghiệp vụ khoa — Quản trị hệ thống không thể phân bổ hoặc import doanh nghiệp.
-          </span>
-        </div>
-      )}
-
       {/* 1. TOP TOOLBAR & ACTION BUTTONS */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-lg border border-slate-200 shadow-xs">
         {/* KPI Quick Stats */}

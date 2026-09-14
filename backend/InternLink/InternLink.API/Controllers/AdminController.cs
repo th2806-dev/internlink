@@ -52,10 +52,54 @@ public class AdminController : ControllerBase
         }
     }
 
+    [HttpGet("overview")]
+    public async Task<IActionResult> GetOverview([FromQuery] Guid? semesterId = null, [FromQuery] Guid? departmentId = null)
+    {
+        var deptId = _deptScope.ResolveEffectiveDepartmentId(User, departmentId);
+        var students = _db.Students.Where(s => !s.IsDeleted);
+        var lecturers = _db.Lecturers.Where(l => !l.IsDeleted);
+        var companies = _db.Companies.Where(c => !c.IsDeleted);
+
+        if (deptId.HasValue)
+        {
+            students = students.Where(s => s.DepartmentId == deptId);
+            lecturers = lecturers.Where(l => l.DepartmentId == deptId);
+            var departmentCompanyIds = _db.SemesterCompanies
+                .Where(sc => !sc.IsDeleted && sc.Semester.DepartmentId == deptId)
+                .Select(sc => sc.CompanyId)
+                .Union(_db.CompanyPositions
+                    .Where(position => !position.IsDeleted && position.Semester != null && position.Semester.DepartmentId == deptId)
+                    .Select(position => position.CompanyId))
+                .Union(_db.Internships
+                    .Where(internship => !internship.IsDeleted && internship.Semester != null && internship.Semester.DepartmentId == deptId && internship.CompanyId.HasValue)
+                    .Select(internship => internship.CompanyId!.Value));
+            companies = companies.Where(c => departmentCompanyIds.Contains(c.Id));
+        }
+
+        var internshipStats = await _internshipService.GetInternshipStatsAsync(null, semesterId, deptId);
+        var studentCount = await students.CountAsync();
+        var lecturerCount = await lecturers.CountAsync();
+        var companyCount = await companies.CountAsync();
+        var activeStudents = await students.CountAsync(s => s.UserId.HasValue);
+        var activeCompanies = await companies.CountAsync(c => c.IsActive);
+
+        return Ok(ApiResponse<AdminOverviewDto>.Ok(new AdminOverviewDto
+        {
+            LecturerCount = lecturerCount,
+            StudentCount = studentCount,
+            ActiveStudents = activeStudents,
+            CompanyCount = companyCount,
+            ActiveCompanies = activeCompanies,
+            InternshipTotal = internshipStats.Total,
+            InternshipStats = internshipStats,
+        }));
+    }
+
     /// <summary>
     /// Send a sample invitation email (for SMTP / LoggingEmailService verification) and persist audit log.
     /// </summary>
     [HttpPost("email/test")]
+    [Authorize(Policy = "RequireSuperAdmin")]
     public async Task<IActionResult> TestEmail([FromBody] TestEmailRequest request, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid)

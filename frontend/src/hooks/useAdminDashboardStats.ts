@@ -139,6 +139,7 @@ export function useAdminDashboardStats(
   semesterId?: string | null,
   onError?: (msg: string) => void,
   departmentId?: string | null,
+  platformOverview = false,
 ) {
   const [stats, setStats] = useState<AdminDashboardStats | null>(null);
   const [isLoading, setIsLoading] = useState(enabled);
@@ -150,6 +151,31 @@ export function useAdminDashboardStats(
     setIsLoading(true);
     try {
       const effectiveDepartmentId = departmentId === "all" || !departmentId ? undefined : departmentId;
+      if (platformOverview) {
+        const overview = await adminDashboardService.getOverview(semesterId ?? undefined, effectiveDepartmentId);
+        setStats({
+          lecturerCount: overview.lecturerCount,
+          lecturersWithStudents: 0,
+          studentCount: overview.studentCount,
+          activeStudents: overview.activeStudents,
+          pendingStudentAccounts: 0,
+          pendingLecturerAccounts: 0,
+          companyCount: overview.companyCount,
+          activeCompanies: overview.activeCompanies,
+          internshipTotal: overview.internshipTotal,
+          internshipInProgress: overview.internshipStats.inProgress,
+          internshipStats: overview.internshipStats,
+          assignedStudents: 0,
+          unassignedStudents: 0,
+          avgStudentsPerLecturer: 0,
+          workloadBreakdown: [],
+          actionItems: [],
+          recentActivities: [],
+        });
+        setUpdatedAt(new Date());
+        return;
+      }
+
       const [
         students,
         lecturers,
@@ -241,7 +267,7 @@ export function useAdminDashboardStats(
     } finally {
       setIsLoading(false);
     }
-  }, [enabled, semesterId, onError, departmentId]);
+  }, [enabled, semesterId, onError, departmentId, platformOverview]);
 
   useEffect(() => {
     void load();

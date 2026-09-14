@@ -221,7 +221,7 @@ public class AttendanceController : ControllerBase
     /// Admin xem báo cáo chuyên cần toàn diện trong học kỳ
     /// </summary>
     [HttpGet("admin/report")]
-    [Authorize(Policy = "RequireAdmin")]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
     public async Task<IActionResult> GetAdminAttendanceReport([FromQuery] Guid semesterId)
     {
         var deptId = _deptScope.GetCurrentDepartmentId(User);

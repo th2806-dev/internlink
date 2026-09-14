@@ -48,37 +48,6 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          if (!id.includes('node_modules')) {
-            return undefined;
-          }
-
-          if (id.includes('react-pdf') || id.includes('pdfjs-dist')) {
-            return 'pdf-vendor';
-          }
-
-          if (id.includes('recharts')) {
-            return 'charts-vendor';
-          }
-
-          if (id.includes('@microsoft/signalr')) {
-            return 'signalr-vendor';
-          }
-
-          if (id.includes('react-router-dom') || id.includes('react-dom') || id.includes('react')) {
-            return 'react-vendor';
-          }
-
-          if (id.includes('lucide-react') || id.includes('motion')) {
-            return 'ui-vendor';
-          }
-
-          return 'vendor';
-        },
-      },
-    },
   },
   test: {
     globals: true,

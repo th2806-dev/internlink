@@ -1,15 +1,10 @@
-import { useState } from "react";
-import { useAuth } from "../../../contexts/AuthContext";
 import { useSemester, toApiSemesterId, toApiDepartmentId } from "../../../contexts/SemesterContext";
 import type { ToastType } from "../../../contexts/ToastContext";
 import {
   LayoutDashboard,
   RefreshCw,
-  Download,
   ArrowUpRight,
   AlertTriangle,
-  FileSpreadsheet,
-  FileText,
 } from "lucide-react";
 import { PageHeader } from "../../../components/common/PageHeader";
 import { Panel } from "../../../components/common/Panel";
@@ -23,8 +18,7 @@ import {
   DashboardTrendChart,
 } from "../../../components/common/DashboardCharts";
 import { useAdminDashboardStats } from "../../../hooks/useAdminDashboardStats";
-import { exportAdminDashboardReport } from "../../../lib/adminDashboardExport";
-import { exportService } from "../../../services/export.service";
+import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
 
 export const DashboardView = ({
   onShowToast,
@@ -33,64 +27,21 @@ export const DashboardView = ({
   onShowToast: (msg: string, type?: ToastType) => void;
   onNavigateTab: (tab: string) => void;
 }) => {
-  const { user } = useAuth();
-  const [isExporting, setIsExporting] = useState(false);
+  const { isSuperAdmin } = useAdminCapabilities();
   const { semesters, selectedSemester, selectedDepartmentId, selectedDepartment } = useSemester();
   const { stats, isLoading, updatedAt, reload } = useAdminDashboardStats(
     true,
     toApiSemesterId(selectedSemester?.id),
     onShowToast,
     toApiDepartmentId(selectedDepartmentId),
+    isSuperAdmin,
   );
 
-  const semesterId = toApiSemesterId(selectedSemester?.id);
   const departmentIdFilter = toApiDepartmentId(selectedDepartmentId);
-  // Legacy string param kept in sync with the GUID filter so server-side
-  // template placeholders ({{DEPARTMENT}}) still render the faculty name.
-  const departmentNameFilter = departmentIdFilter ? selectedDepartment.name : undefined;
-  const isSuperAdmin = user?.backendRole === "SuperAdmin";
-
   const handleRefresh = async () => {
     if (isLoading) return;
     await reload();
     onShowToast("Đã làm mới dữ liệu tổng quan!");
-  };
-
-  const handleExportInternshipList = async () => {
-    setIsExporting(true);
-    try {
-      await exportService.downloadInternshipExcel(semesterId, departmentNameFilter, undefined, departmentIdFilter);
-      onShowToast("Đã tải xuống Danh sách thực tập (.xlsx)");
-    } catch (err) {
-      onShowToast("Xuất danh sách thực tập thất bại. Đang tải báo cáo tổng quan...");
-      if (stats) exportAdminDashboardReport(stats);
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
-  const handleExportSummaryReportWord = async () => {
-    setIsExporting(true);
-    try {
-      await exportService.downloadSummaryReportWord(semesterId, departmentNameFilter, departmentIdFilter);
-      onShowToast("Đã tải xuống Báo cáo tổng kết thực tập (.docx)");
-    } catch (err) {
-      onShowToast("Xuất báo cáo tổng kết Word thất bại.");
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
-  const handleExportSummaryReportExcel = async () => {
-    setIsExporting(true);
-    try {
-      await exportService.downloadSummaryReport(semesterId, departmentNameFilter, departmentIdFilter);
-      onShowToast("Đã tải xuống Báo cáo tổng kết thực tập (.xlsx)");
-    } catch (err) {
-      onShowToast("Xuất báo cáo tổng kết Excel thất bại.");
-    } finally {
-      setIsExporting(false);
-    }
   };
 
   const subtitle = updatedAt
@@ -141,30 +92,6 @@ export const DashboardView = ({
             disabled: isLoading,
             loading: isLoading,
           },
-          {
-            label: isExporting ? "Đang xuất…" : "Xuất danh sách thực tập",
-            icon: FileSpreadsheet,
-            onClick: () => void handleExportInternshipList(),
-            variant: "secondary",
-            disabled: isExporting || isLoading,
-            loading: isExporting,
-          },
-          {
-            label: isExporting ? "Đang xuất…" : "Xuất báo cáo tổng kết (.docx)",
-            icon: FileText,
-            onClick: () => void handleExportSummaryReportWord(),
-            variant: "secondary",
-            disabled: isExporting || isLoading,
-            loading: isExporting,
-          },
-          {
-            label: isExporting ? "Đang xuất…" : "Xuất báo cáo tổng kết (.xlsx)",
-            icon: Download,
-            onClick: () => void handleExportSummaryReportExcel(),
-            variant: "secondary",
-            disabled: isExporting || isLoading,
-            loading: isExporting,
-          },
         ]}
       />
 
@@ -182,24 +109,36 @@ export const DashboardView = ({
       <AdminKpiSection
         stats={stats}
         isLoading={isLoading}
-        onCardClick={(metric) => {
-          if (metric === "lecturers") onNavigateTab("admin-lecturers");
-          else if (metric === "students") onNavigateTab("admin-students");
-          else if (metric === "companies") onNavigateTab("admin-companies");
-          else if (metric === "semesters") onNavigateTab("admin-assignments");
-        }}
+        onCardClick={
+          isSuperAdmin
+            ? undefined
+            : (metric) => {
+                if (metric === "lecturers") onNavigateTab("admin-lecturers");
+                else if (metric === "students") onNavigateTab("admin-students");
+                else if (metric === "companies") onNavigateTab("admin-companies");
+                else if (metric === "semesters") onNavigateTab("admin-assignments");
+              }
+        }
       />
 
       <div className="il-accent-panel px-4 py-3 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-blue-700">Bức tranh vận hành</p>
-          <p className="text-sm font-semibold text-slate-900 mt-0.5">Theo dõi nhanh nguồn lực, tiến độ và các điểm cần can thiệp.</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-blue-700">
+            {isSuperAdmin ? "Phạm vi giám sát" : "Bức tranh vận hành"}
+          </p>
+          <p className="text-sm font-semibold text-slate-900 mt-0.5">
+            {isSuperAdmin
+              ? departmentIdFilter
+                ? `Tổng hợp số liệu của ${selectedDepartment.name}.`
+                : "Tổng hợp số liệu toàn hệ thống theo kỳ đang chọn."
+              : "Theo dõi nhanh nguồn lực, tiến độ và các điểm cần can thiệp."}
+          </p>
         </div>
         <span className="text-[11px] font-semibold text-slate-500">Dữ liệu theo kỳ đang chọn</span>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        <Panel className="lg:col-span-8">
+        <Panel className={isSuperAdmin ? "lg:col-span-12" : "lg:col-span-8"}>
           <DashboardTrendChart
             title="Phân bổ sinh viên theo trạng thái"
             subtitle="Số lượng sinh viên trong đợt thực tập đang chọn"
@@ -208,7 +147,7 @@ export const DashboardView = ({
             variant="bar"
           />
         </Panel>
-        <Panel className="lg:col-span-4">
+        {!isSuperAdmin && <Panel className="lg:col-span-4">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <div>
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
@@ -250,7 +189,7 @@ export const DashboardView = ({
               ))}
             </ul>
           )}
-        </Panel>
+        </Panel>}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
@@ -270,18 +209,20 @@ export const DashboardView = ({
         </Panel>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        <Panel className="lg:col-span-7">
-          <WorkloadOverviewCard stats={stats} isLoading={isLoading} />
-        </Panel>
-        <Panel className="lg:col-span-5">
-          <AdminActivityTimeline
-            activities={stats?.recentActivities}
-            isLoading={isLoading}
-            onViewAllHistory={() => onNavigateTab("admin-notifications")}
-          />
-        </Panel>
-      </div>
+      {!isSuperAdmin && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+          <Panel className="lg:col-span-7">
+            <WorkloadOverviewCard stats={stats} isLoading={isLoading} />
+          </Panel>
+          <Panel className="lg:col-span-5">
+            <AdminActivityTimeline
+              activities={stats?.recentActivities}
+              isLoading={isLoading}
+              onViewAllHistory={() => onNavigateTab("admin-notifications")}
+            />
+          </Panel>
+        </div>
+      )}
     </div>
   );
 };

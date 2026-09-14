@@ -9,6 +9,7 @@ import type {
 import type { Enterprise } from "../types/enterprise";
 import type { AdminUser } from "../types/user";
 import { mapBackendRoleToAdminUserRole } from "./roleMap";
+import { formatDateTimeVi } from "./formatDateTimeVi";
 
 function mapInternshipStatusFromApi(status?: string | null): string {
   switch (status) {
@@ -206,7 +207,7 @@ export function mapUserDtoToAdminUser(u: UserDto): AdminUser {
         ? `GV ${u.linkedStaffCode}`
         : "—",
     lastLogin: u.lastLoginAt
-      ? new Date(u.lastLoginAt).toLocaleString("vi-VN")
+      ? formatDateTimeVi(u.lastLoginAt)
       : "—",
     mustChangePassword: u.mustChangePassword,
   };

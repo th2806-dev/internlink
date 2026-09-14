@@ -47,17 +47,7 @@ export const SettingsView = ({
   onShowToast: (msg: string, type?: ToastType) => void;
   onNavigateTab?: (tab: string) => void;
 }) => {
-  const [settings, setSettings] = useState<FacultySettings>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        return { ...DEFAULT_FACULTY_SETTINGS, ...JSON.parse(saved) };
-      }
-      return DEFAULT_FACULTY_SETTINGS;
-    } catch {
-      return DEFAULT_FACULTY_SETTINGS;
-    }
-  });
+  const [settings, setSettings] = useState<FacultySettings>(DEFAULT_FACULTY_SETTINGS);
 
   const [isSaving, setIsSaving] = useState(false);
   const [isTestingEmail, setIsTestingEmail] = useState(false);
@@ -182,8 +172,8 @@ export const SettingsView = ({
       {/* 1. PAGE HEADER */}
       <PageHeader
         icon={Sliders}
-        title="Cài đặt & Thông tin Khoa (Faculty Settings)"
-        subtitle="Quản lý thông tin liên hệ chính thức của Khoa và các tham số quy định thực tập nội bộ."
+        title="Cài đặt hệ thống"
+        subtitle="Quản lý thông tin liên hệ và các tham số dùng chung cho nghiệp vụ thực tập."
         actions={[
           {
             label: "Khôi phục mặc định",
@@ -283,6 +273,7 @@ export const SettingsView = ({
 
       {/* 3. SETTINGS FORM */}
       <form onSubmit={handleSave} className="space-y-6">
+        <fieldset disabled={isLoadingSettings || isSaving} className="space-y-6 disabled:opacity-70">
         {/* SECTION 1: FACULTY CONTACT INFORMATION */}
         <div className="bg-white rounded-lg border border-slate-200/80 shadow-xs p-5 md:p-6 space-y-4">
           <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
@@ -559,6 +550,7 @@ export const SettingsView = ({
             </button>
           </div>
         </div>
+        </fieldset>
       </form>
 
       {/* CONFIRM RESET DIALOG */}

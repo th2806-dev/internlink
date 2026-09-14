@@ -100,11 +100,6 @@ public interface IDocumentService
     Task IncrementDownloadCountAsync(Guid id);
 
     /// <summary>
-    /// Seed default system templates if not already present
-    /// </summary>
-    Task SeedDefaultTemplatesAsync();
-
-    /// <summary>
     /// Get version history for a document
     /// </summary>
     Task<IReadOnlyList<DocumentVersionDto>> GetDocumentVersionsAsync(Guid documentId);

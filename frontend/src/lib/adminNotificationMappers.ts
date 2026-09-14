@@ -1,12 +1,5 @@
 import type { AdminNotificationCampaignDto } from "../services/adminNotifications.service";
-
-function formatViDate(iso: string) {
-  try {
-    return new Date(iso).toLocaleString("vi-VN");
-  } catch {
-    return iso;
-  }
-}
+import { formatDateTimeVi } from "./formatDateTimeVi";
 
 const AUDIENCE_LABEL: Record<string, string> = {
   all: "Toàn bộ hệ thống",
@@ -18,7 +11,7 @@ export function mapCampaignToAdminRow(
   c: AdminNotificationCampaignDto,
   index: number,
 ) {
-  const sentLabel = formatViDate(c.sentAt);
+  const sentLabel = formatDateTimeVi(c.sentAt);
   return {
     id: `TB-${c.sentAt}-${index}`,
     title: c.title,

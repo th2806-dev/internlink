@@ -43,8 +43,6 @@ public static class ApplicationBuilderExtensions
                 logger.LogInformation("Seeded default SuperAdmin account 'admin'.");
             }
 
-            var documentService = services.GetRequiredService<IDocumentService>();
-            await documentService.SeedDefaultTemplatesAsync();
             logger.LogInformation("Database migration completed successfully.");
         }
         catch (Exception ex)
