@@ -26,10 +26,12 @@ import {
   UserMinus,
   ArrowLeftRight,
   Mail,
+  ClipboardList,
 } from "lucide-react";
 import { PageHeader } from "../../../components/common/PageHeader";
 import { Toolbar } from "../../../components/common/Toolbar";
 import { Panel } from "../../../components/common/Panel";
+import { EmptyState } from "../../../components/common/EmptyState";
 import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { formatRelativeTimeVi } from "../../../lib/formatRelativeTimeVi";
@@ -1288,9 +1290,16 @@ export const AssignmentsView = ({
                     </div>
                   ))}
                   {lecturersByAssignedCount.length === 0 && (
-                    <p className="py-8 text-center text-slate-400 text-sm">
-                      Chưa có dữ liệu phân công.
-                    </p>
+                    <EmptyState
+                      icon={ClipboardList}
+                      title="Chưa có dữ liệu phân công"
+                      description="Chưa có giảng viên hoặc sinh viên phù hợp trong phạm vi kỳ đang chọn."
+                      action={{
+                        label: "Xem tất cả học kỳ",
+                        onClick: () => setSelectedSemester("all"),
+                        variant: "outline",
+                      }}
+                    />
                   )}
                 </div>
               </Panel>

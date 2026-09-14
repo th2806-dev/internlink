@@ -31,6 +31,7 @@ import { adminCompaniesService } from "../../../services/adminCompanies.service"
 import { useSemester, toApiSemesterId, toApiDepartmentId } from "../../../contexts/SemesterContext";
 import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
 import { ImportCompaniesModal } from "../components/modals/ImportCompaniesModal";
+import { EmptyState } from "../../../components/common/EmptyState";
 
 const emptyForm = {
   name: "",
@@ -461,10 +462,21 @@ export const CompaniesView = ({
               {filtered.length === 0 && (
                 <tr>
                   <td
-                    colSpan={6}
-                    className="py-10 text-center text-slate-400 font-medium"
+                    colSpan={7}
+                    className="p-4"
                   >
-                    Không có doanh nghiệp khớp bộ lọc
+                    <EmptyState
+                      icon={Building2}
+                      title="Không tìm thấy doanh nghiệp phù hợp"
+                      description="Hãy thử đổi trạng thái hoặc từ khóa tìm kiếm."
+                      action={{
+                        label: "Xóa bộ lọc tìm kiếm",
+                        onClick: () => {
+                          setSearch("");
+                          setStatusFilter("all");
+                        },
+                      }}
+                    />
                   </td>
                 </tr>
               )}

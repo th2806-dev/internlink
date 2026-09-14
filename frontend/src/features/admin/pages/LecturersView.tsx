@@ -20,6 +20,7 @@ import {
   GraduationCap,
   FileUp,
   Check,
+  UserSearch,
 } from "lucide-react";
 import { CreateLecturerModal } from "../components/modals/CreateLecturerModal";
 import type { CreateLecturerFormPayload } from "../components/modals/CreateLecturerModal";
@@ -33,6 +34,7 @@ import { PageHeader } from "../../../components/common/PageHeader";
 import { ConfirmDialog } from "../../../components/common/ConfirmDialog";
 import { Panel } from "../../../components/common/Panel";
 import { Toolbar } from "../../../components/common/Toolbar";
+import { EmptyState } from "../../../components/common/EmptyState";
 import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import {
@@ -471,9 +473,20 @@ export const LecturersView = ({
                 <tr>
                   <td
                     colSpan={canMutateOps ? 8 : 7}
-                    className="py-8 text-center text-slate-400 font-medium"
+                    className="p-4"
                   >
-                    Không tìm thấy giảng viên nào khớp với bộ lọc.
+                    <EmptyState
+                      icon={UserSearch}
+                      title="Không tìm thấy giảng viên phù hợp"
+                      description="Hãy thử đổi trạng thái tài khoản hoặc từ khóa tìm kiếm."
+                      action={{
+                        label: "Xóa bộ lọc tìm kiếm",
+                        onClick: () => {
+                          setSearchQuery("");
+                          setAccountStatusFilter("all");
+                        },
+                      }}
+                    />
                   </td>
                 </tr>
               ) : (

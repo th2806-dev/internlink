@@ -22,6 +22,7 @@ import { documentService } from "../../../services/document.service";
 import { adminSemestersService, type BackendSemesterDto } from "../../../services/adminSemesters.service";
 import type { DocumentListItemDto, TemplateStatsDto } from "../../../types/api";
 import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
+import { EmptyState } from "../../../components/common/EmptyState";
 
 import type { ToastType } from "../../../contexts/ToastContext";
 
@@ -540,12 +541,26 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
             <p className="text-sm">Đang tải danh sách biểu mẫu...</p>
           </div>
         ) : filteredTemplates.length === 0 ? (
-          <div className="p-12 text-center text-slate-400 flex flex-col items-center gap-3">
-            <AlertCircle className="w-12 h-12 text-slate-300 stroke-1" />
-            <div className="text-base font-medium text-slate-600">Không tìm thấy biểu mẫu nào</div>
-            <p className="text-xs text-slate-400 max-w-md">
-              Chưa có biểu mẫu phù hợp với tiêu chí lọc hoặc chưa có biểu mẫu nào được tạo. Hãy bấm "Thêm biểu mẫu mới" hoặc "Nạp mẫu chuẩn" để bắt đầu.
-            </p>
+          <div className="p-4">
+            <EmptyState
+              icon={FileText}
+              title="Không tìm thấy biểu mẫu phù hợp"
+              description="Chưa có biểu mẫu phù hợp với tiêu chí lọc hoặc chưa có biểu mẫu nào được tạo."
+              action={canMutateOps ? {
+                label: "Thêm biểu mẫu mới",
+                onClick: () => setShowCreateModal(true),
+              } : undefined}
+              secondaryAction={{
+                label: "Xóa bộ lọc tìm kiếm",
+                onClick: () => {
+                  setSearchTerm("");
+                  setSelectedSemester("");
+                  setSelectedDept("");
+                  setSelectedCategory("");
+                  setSelectedStatus("all");
+                },
+              }}
+            />
           </div>
         ) : (
           <div className="overflow-x-auto">
