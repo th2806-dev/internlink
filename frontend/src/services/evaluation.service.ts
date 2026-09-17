@@ -82,9 +82,9 @@ export const evaluationService = {
   },
 
   getByInternship(internshipId: string): Promise<EvaluationDetailDto | null> {
-    return apiRequestRaw<EvaluationDetailDto>(
+    return apiRequestRaw<EvaluationDetailDto | null>(
       `/api/Evaluation/internship/${internshipId}`,
-    ).then(normalizeEvaluationDetail).catch((error) => {
+    ).then((evaluation) => evaluation ? normalizeEvaluationDetail(evaluation) : null).catch((error) => {
       if (error instanceof ApiClientError && error.status === 404) return null;
       throw error;
     });

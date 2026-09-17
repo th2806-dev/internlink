@@ -27,12 +27,12 @@ public interface IInternshipService
     /// <summary>
     /// Get internships for a specific student
     /// </summary>
-    Task<IEnumerable<InternshipListItemDto>> GetInternshipsByStudentAsync(Guid studentId, int skip = 0, int take = 100, Guid? lecturerId = null);
+    Task<IEnumerable<InternshipListItemDto>> GetInternshipsByStudentAsync(Guid studentId, int skip = 0, int take = 100, Guid? lecturerId = null, Guid? departmentId = null);
 
     /// <summary>
     /// Get internships for a specific company
     /// </summary>
-    Task<IEnumerable<InternshipListItemDto>> GetInternshipsByCompanyAsync(Guid companyId, int skip = 0, int take = 100, Guid? lecturerId = null);
+    Task<IEnumerable<InternshipListItemDto>> GetInternshipsByCompanyAsync(Guid companyId, int skip = 0, int take = 100, Guid? lecturerId = null, Guid? departmentId = null);
 
     /// <summary>
     /// Create a new internship
@@ -72,5 +72,5 @@ public interface IInternshipService
     /// <summary>
     /// Get internships by status
     /// </summary>
-    Task<IEnumerable<InternshipListItemDto>> GetInternshipsByStatusAsync(string status, int skip = 0, int take = 100, Guid? lecturerId = null);
+    Task<IEnumerable<InternshipListItemDto>> GetInternshipsByStatusAsync(string status, int skip = 0, int take = 100, Guid? lecturerId = null, Guid? departmentId = null);
 }

@@ -397,8 +397,8 @@ public class AssignmentService : IAssignmentService
     public async Task<AutoAssignResultDto> AutoAssignAsync(AutoAssignRequest request, Guid? departmentId = null)
     {
         var strategy = (request.Strategy ?? "even").Trim().ToLowerInvariant();
-        if (strategy is not ("department" or "even"))
-            throw new InvalidOperationException("Strategy must be 'department' or 'even'");
+        if (strategy is not ("department" or "even" or "random"))
+            throw new InvalidOperationException("Strategy must be 'department', 'even', or 'random'");
 
         var lecturersQuery = _db.Lecturers
             .AsNoTracking()
@@ -457,13 +457,21 @@ public class AssignmentService : IAssignmentService
         var batches = new Dictionary<Guid, List<Guid>>();
         var note = strategy == "department"
             ? $"{AutoAssignNotePrefix} — ghép theo bộ môn"
-            : $"{AutoAssignNotePrefix} — chia đều";
+            : strategy == "random"
+                ? $"{AutoAssignNotePrefix} — ngẫu nhiên"
+                : $"{AutoAssignNotePrefix} — chia đều";
+
+        var randomLecturers = strategy == "random"
+            ? lecturers.OrderBy(_ => Random.Shared.Next()).ToList()
+            : lecturers;
 
         foreach (var student in unassigned)
         {
             var lecturerId = strategy == "department"
                 ? PickLecturerByDepartment(student, lecturers, lecturerCounts)
-                : null;
+                : strategy == "random"
+                    ? PickLecturerRandom(randomLecturers, lecturerCounts)
+                    : null;
             lecturerId ??= PickLecturerEven(lecturers, lecturerCounts);
             if (lecturerId == null)
                 break;
@@ -514,6 +522,16 @@ public class AssignmentService : IAssignmentService
             .ThenBy(x => x.Id)
             .Select(x => (Guid?)x.Id)
             .FirstOrDefault();
+    }
+
+    private static Guid? PickLecturerRandom(
+        IReadOnlyList<Lecturer> lecturers,
+        Dictionary<Guid, int> lecturerCounts)
+    {
+        var available = lecturers
+            .Where(l => lecturerCounts.GetValueOrDefault(l.Id) < DefaultMaxCapacity)
+            .ToList();
+        return available.Count == 0 ? null : available[Random.Shared.Next(available.Count)].Id;
     }
 
     private static Guid? PickLecturerByDepartment(
@@ -598,28 +616,49 @@ public class AssignmentService : IAssignmentService
             var sheet = workbook.Worksheets.Add("PhanBoDoanhNghiep");
 
             sheet.Cell(1, 1).Value = "STT";
-            sheet.Cell(1, 2).Value = "HỌ TÊN";
-            sheet.Cell(1, 3).Value = "LỚP";
-            sheet.Cell(1, 4).Value = "CÔNG TY THỰC TẬP";
-            sheet.Cell(1, 5).Value = "MSSV";
+            sheet.Cell(1, 2).Value = "MSSV";
+            sheet.Cell(1, 3).Value = "HỌ TÊN";
+            sheet.Cell(1, 4).Value = "LỚP";
+            sheet.Cell(1, 5).Value = "MÃ DOANH NGHIỆP";
+            sheet.Cell(1, 6).Value = "CÔNG TY THỰC TẬP";
+            sheet.Cell(1, 7).Value = "MÃ VỊ TRÍ";
+            sheet.Cell(1, 8).Value = "VỊ TRÍ THỰC TẬP";
 
             sheet.Cell(2, 1).Value = 1;
-            sheet.Cell(2, 2).Value = "Phạm Duy Văn";
-            sheet.Cell(2, 3).Value = "C23A.TH2";
-            sheet.Cell(2, 4).Value = "Công ty Cổ phần Công nghệ RADA360";
-            sheet.Cell(2, 5).Value = "2300001";
+            sheet.Cell(2, 2).Value = "2421160001";
+            sheet.Cell(2, 3).Value = "Phạm Thị Hồng Anh";
+            sheet.Cell(2, 4).Value = "C23A.TH1";
+            sheet.Cell(2, 5).Value = "DN_FPT";
+            sheet.Cell(2, 6).Value = "Công ty TNHH FPT Software";
+            sheet.Cell(2, 7).Value = "VT_FPT_01";
+            sheet.Cell(2, 8).Value = "Backend Developer";
 
             sheet.Cell(3, 1).Value = 2;
-            sheet.Cell(3, 2).Value = "Lê Văn Thành Đạt";
-            sheet.Cell(3, 3).Value = "C23A.TH1";
-            sheet.Cell(3, 4).Value = "Công ty cổ phần EZTEC";
-            sheet.Cell(3, 5).Value = "2300002";
+            sheet.Cell(3, 2).Value = "2421160002";
+            sheet.Cell(3, 3).Value = "Trần Văn Bảo";
+            sheet.Cell(3, 4).Value = "C23A.TH1";
+            sheet.Cell(3, 5).Value = "DN_FPT";
+            sheet.Cell(3, 6).Value = "Công ty TNHH FPT Software";
+            sheet.Cell(3, 7).Value = "VT_FPT_02";
+            sheet.Cell(3, 8).Value = "Frontend Developer";
 
             sheet.Cell(4, 1).Value = 3;
-            sheet.Cell(4, 2).Value = "Nguyễn Đoàn Thanh Vũ";
-            sheet.Cell(4, 3).Value = "C23A.TH2";
-            sheet.Cell(4, 4).Value = "Công ty cổ phần EZTEC";
-            sheet.Cell(4, 5).Value = "2300003";
+            sheet.Cell(4, 2).Value = "2421160003";
+            sheet.Cell(4, 3).Value = "Lê Hoàng Cường";
+            sheet.Cell(4, 4).Value = "C23A.TH1";
+            sheet.Cell(4, 5).Value = "DN_TMA";
+            sheet.Cell(4, 6).Value = "Tập đoàn Công nghệ TMA";
+            sheet.Cell(4, 7).Value = "VT_TMA_01";
+            sheet.Cell(4, 8).Value = "Fullstack Developer";
+
+            sheet.Cell(5, 1).Value = 4;
+            sheet.Cell(5, 2).Value = "2421160004";
+            sheet.Cell(5, 3).Value = "Nguyễn Thị Dung";
+            sheet.Cell(5, 4).Value = "C23A.TH1";
+            sheet.Cell(5, 5).Value = "DN_VNG";
+            sheet.Cell(5, 6).Value = "Công ty Cổ phần VNG";
+            sheet.Cell(5, 7).Value = "VT_VNG_01";
+            sheet.Cell(5, 8).Value = "Data Analyst";
 
             sheet.Row(1).Style.Font.Bold = true;
             sheet.Row(1).Style.Fill.BackgroundColor = XLColor.FromHtml("#E8F0FE");
@@ -667,6 +706,12 @@ public class AssignmentService : IAssignmentService
             studentsQuery = studentsQuery.Where(s => s.DepartmentId == departmentId.Value);
         var allStudents = await studentsQuery.ToListAsync();
         var allCompanies = await _db.Companies.Where(c => !c.IsDeleted).ToListAsync();
+        var companyIds = allCompanies.Select(c => c.Id).ToList();
+        var allCompanyPositions = (await _db.CompanyPositions
+            .Where(p => !p.IsDeleted && companyIds.Contains(p.CompanyId))
+            .ToListAsync())
+            .GroupBy(p => p.CompanyId)
+            .ToDictionary(g => g.Key, g => g.ToList());
         var existingInternships = await _db.Internships
             .Where(i => i.SemesterId == targetSemesterId && !i.IsDeleted)
             .Include(i => i.Company)
@@ -689,8 +734,11 @@ public class AssignmentService : IAssignmentService
             var fullName = TemplateHelper.CombineFullName(ho, ten, hoTen);
             var className = GetCellText(row, colMap, CompanyAllocCol.Class);
             var companyName = GetCellText(row, colMap, CompanyAllocCol.CompanyName);
+            var companyCode = GetCellText(row, colMap, CompanyAllocCol.CompanyCode);
+            var positionCode = GetCellText(row, colMap, CompanyAllocCol.PositionCode);
+            var positionTitle = GetCellText(row, colMap, CompanyAllocCol.PositionTitle);
 
-            if (string.IsNullOrWhiteSpace(studentCode) && string.IsNullOrWhiteSpace(fullName) && string.IsNullOrWhiteSpace(companyName))
+            if (string.IsNullOrWhiteSpace(studentCode) && string.IsNullOrWhiteSpace(fullName) && string.IsNullOrWhiteSpace(companyName) && string.IsNullOrWhiteSpace(companyCode))
                 continue;
 
             result.TotalRows++;
@@ -721,13 +769,25 @@ public class AssignmentService : IAssignmentService
                 continue;
             }
 
-            // 1. Resolve Company
-            var normCompany = NormalizeText(companyName);
-            var matchedCompany = allCompanies.FirstOrDefault(c =>
-                c.CompanyName.Equals(companyName.Trim(), StringComparison.OrdinalIgnoreCase) ||
-                NormalizeText(c.CompanyName) == normCompany ||
-                NormalizeText(c.CompanyName).Contains(normCompany) ||
-                normCompany.Contains(NormalizeText(c.CompanyName)));
+            // 1. Resolve Company — prefer the exact business key (Mã DN) when provided,
+            // falling back to normalized name so legacy files keep working.
+            Company? matchedCompany = null;
+            if (!string.IsNullOrWhiteSpace(companyCode))
+            {
+                matchedCompany = allCompanies.FirstOrDefault(c =>
+                    c.CompanyCode != null &&
+                    c.CompanyCode.Equals(companyCode.Trim(), StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (matchedCompany == null)
+            {
+                var normCompany = NormalizeText(companyName);
+                matchedCompany = allCompanies.FirstOrDefault(c =>
+                    c.CompanyName.Equals(companyName.Trim(), StringComparison.OrdinalIgnoreCase) ||
+                    NormalizeText(c.CompanyName) == normCompany ||
+                    NormalizeText(c.CompanyName).Contains(normCompany) ||
+                    normCompany.Contains(NormalizeText(c.CompanyName)));
+            }
 
             if (matchedCompany == null)
             {
@@ -798,7 +858,44 @@ public class AssignmentService : IAssignmentService
                 continue;
             }
 
-            // 3. Match or Create Internship for (Student, Semester)
+            // 3. Resolve recruitment position (optional column): by Mã Vị Trí first, then title.
+            CompanyPosition? matchedPosition = null;
+            if (!string.IsNullOrWhiteSpace(positionCode) || !string.IsNullOrWhiteSpace(positionTitle))
+            {
+                var companyPositions = allCompanyPositions.GetValueOrDefault(matchedCompany.Id)
+                    ?? new List<CompanyPosition>();
+
+                if (!string.IsNullOrWhiteSpace(positionCode))
+                {
+                    matchedPosition = companyPositions.FirstOrDefault(p =>
+                        p.PositionCode != null &&
+                        p.PositionCode.Equals(positionCode.Trim(), StringComparison.OrdinalIgnoreCase));
+                }
+
+                if (matchedPosition == null && !string.IsNullOrWhiteSpace(positionTitle))
+                {
+                    var normPos = NormalizeText(positionTitle);
+                    matchedPosition = companyPositions.FirstOrDefault(p =>
+                        NormalizeText(p.Title) == normPos ||
+                        NormalizeText(p.Title).Contains(normPos) ||
+                        normPos.Contains(NormalizeText(p.Title)));
+                }
+
+                if (matchedPosition == null)
+                {
+                    // Position columns present but no match in the company's roster — report but continue.
+                    result.Warnings.Add(new CompanyAllocationImportErrorDto
+                    {
+                        RowNumber = rowNum,
+                        StudentCode = studentCode,
+                        StudentName = fullName,
+                        CompanyName = matchedCompany.CompanyName,
+                        Message = $"Không tìm thấy vị trí '{positionTitle ?? positionCode}' tại '{matchedCompany.CompanyName}' — chỉ gán doanh nghiệp, không gán vị trí"
+                    });
+                }
+            }
+
+            // 4. Match or Create Internship for (Student, Semester)
             var internship = existingInternships.FirstOrDefault(i => i.StudentId == matchedStudent.Id);
             if (internship == null)
             {
@@ -808,8 +905,10 @@ public class AssignmentService : IAssignmentService
                     StudentId = matchedStudent.Id,
                     SemesterId = targetSemesterId,
                     CompanyId = matchedCompany.Id,
+                    Position = matchedPosition?.Title,
                     Status = targetSemesterIsActive ? InternshipStatus.InProgress : InternshipStatus.NotStarted,
-                    Notes = $"Phân bổ doanh nghiệp: {matchedCompany.CompanyName}",
+                    Notes = $"Phân bổ doanh nghiệp: {matchedCompany.CompanyName}" +
+                            (matchedPosition != null ? $" — vị trí {matchedPosition.Title}" : ""),
                     CreatedAt = DateTime.UtcNow
                 };
                 await _db.Internships.AddAsync(internship);
@@ -818,6 +917,8 @@ public class AssignmentService : IAssignmentService
             else
             {
                 internship.CompanyId = matchedCompany.Id;
+                if (matchedPosition != null)
+                    internship.Position = matchedPosition.Title;
                 internship.UpdatedAt = DateTime.UtcNow;
             }
 
@@ -850,11 +951,14 @@ public class AssignmentService : IAssignmentService
 
     public async Task<IReadOnlyList<CompanyAllocationItemDto>> GetCompanyAllocationsAsync(Guid? semesterId = null, Guid? departmentId = null)
     {
-        var targetSemesterId = await ResolveTargetSemesterIdAsync(semesterId, departmentId);
-
         var internshipsQuery = _db.Internships
             .AsNoTracking()
-            .Where(i => !i.IsDeleted && i.SemesterId == targetSemesterId);
+            .Where(i => !i.IsDeleted);
+
+        if (semesterId.HasValue && semesterId.Value != Guid.Empty)
+        {
+            internshipsQuery = internshipsQuery.Where(i => i.SemesterId == semesterId.Value);
+        }
 
         if (departmentId.HasValue)
         {
@@ -1165,7 +1269,7 @@ public class AssignmentService : IAssignmentService
         return activeSemester.Id;
     }
 
-    private enum CompanyAllocCol { StudentCode, FullName, Ho, Ten, Class, CompanyName, CompanyCode }
+    private enum CompanyAllocCol { StudentCode, FullName, Ho, Ten, Class, CompanyName, CompanyCode, PositionCode, PositionTitle }
     private enum LecAssignCol { StudentCode, FullName, Ho, Ten, Class, StaffCode, LecturerName }
 
     private static Dictionary<CompanyAllocCol, int> BuildCompanyAllocationColumnMap(IXLRangeRow headerRow)
@@ -1186,6 +1290,17 @@ public class AssignmentService : IAssignmentService
                 h.Contains("doanh nghiep") || h.Contains("ten doanh nghiep") || h.Contains("company") || h == "dn"))
             {
                 map[CompanyAllocCol.CompanyName] = cell.Address.ColumnNumber;
+            }
+            else if (!map.ContainsKey(CompanyAllocCol.PositionCode) && (
+                h == "ma vi tri" || h == "mavt" || h == "ma vt" || h == "positioncode" || h == "position code" || h == "ma vi tri tuyen dung"))
+            {
+                map[CompanyAllocCol.PositionCode] = cell.Address.ColumnNumber;
+            }
+            else if (!map.ContainsKey(CompanyAllocCol.PositionTitle) && (
+                h.Contains("vi tri thuc tap") || h.Contains("vi tri tuyen dung") || h == "vi tri" ||
+                h.Contains("position title") || h.Contains("position name")))
+            {
+                map[CompanyAllocCol.PositionTitle] = cell.Address.ColumnNumber;
             }
             else if (!map.ContainsKey(CompanyAllocCol.StudentCode) && (
                 h == "mssv" || h == "ma sv" || h == "masv" || h == "studentcode" || h == "student code" || h == "ma sinh vien"))

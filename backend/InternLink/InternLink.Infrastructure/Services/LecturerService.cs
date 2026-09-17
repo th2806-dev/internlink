@@ -264,6 +264,7 @@ public class LecturerService : ILecturerService
                 WeeklyReportCount = weeklyCount,
                 PendingReportCount = pendingReportCount,
                 SubmissionCount = submissionCount,
+                Notes = i.Notes,
                 FinalGrade = eval?.FinalGrade,
                 HasEvaluation = eval != null,
                 IsEvaluationFinalized = eval?.IsFinalized ?? false,
@@ -847,19 +848,23 @@ public class LecturerService : ILecturerService
         var query = _db.Internships
             .Where(i => i.LecturerId == lecturerId.Value && !i.IsDeleted)
             .Include(i => i.WeeklyReports)
+            .Include(i => i.Semester)
             .AsQueryable();
 
         if (semesterId.HasValue)
             query = query.Where(i => i.SemesterId == semesterId.Value);
         var internships = await query.ToListAsync();
         var totalStudents = internships.Count;
+        var totalWeeks = internships
+            .Select(i => i.Semester?.TotalWeeks ?? 0)
+            .Where(weeks => weeks > 0)
+            .DefaultIfEmpty(6)
+            .Max();
 
         // Group weekly reports by week number
         var allReports = internships.SelectMany(i => i.WeeklyReports.Where(wr => !wr.IsDeleted)).ToList();
-        const int internshipWeeks = 6;
-
         var trend = new List<WeeklyTrendDto>();
-        for (var week = 1; week <= internshipWeeks; week++)
+        for (var week = 1; week <= totalWeeks; week++)
         {
             var weekReports = allReports.Where(r => r.WeekNumber == week).ToList();
             var onTime = weekReports.Count(r => r.Status == WeeklyReportStatus.Approved || r.Status == WeeklyReportStatus.Submitted);
@@ -955,7 +960,11 @@ public class LecturerService : ILecturerService
                     StudentCount = g.Count(),
                     Positions = positions.Any() ? string.Join(", ", positions) : "—",
                     AverageGrade = grades.Any() ? Math.Round(grades.Average(), 1) : 0,
-                    PartnershipLevel = g.Count() >= 5 ? "Hợp tác Xuất sắc" : g.Count() >= 3 ? "Hợp tác Tốt" : "Hợp tác"
+                    PartnershipLevel = (g.Count() >= 5 && grades.Any() && grades.Average() >= 8.0m)
+                        ? "Hợp tác Xuất sắc"
+                        : (g.Count() >= 3 && grades.Any() && grades.Average() >= 6.5m)
+                            ? "Hợp tác Tốt"
+                            : "Hợp tác"
                 };
             })
             .OrderByDescending(c => c.StudentCount)
@@ -988,13 +997,24 @@ public class LecturerService : ILecturerService
 
         var totalCompliance = totalStudents > 0 ? Math.Round((decimal)(totalStudents - overdueReports) / totalStudents * 100, 1) : 100;
 
+        // Calculate average response days from actual review timestamps
+        var reviewedWithTimestamps = allReports
+            .Where(r => (r.Status == WeeklyReportStatus.Approved || r.Status == WeeklyReportStatus.RevisionRequested)
+                && r.SubmittedAt.HasValue && r.UpdatedAt.HasValue)
+            .Select(r => (r.UpdatedAt!.Value - r.SubmittedAt!.Value).TotalDays)
+            .Where(d => d >= 0)
+            .ToList();
+        var avgResponseDays = reviewedWithTimestamps.Any()
+            ? Math.Round((decimal)reviewedWithTimestamps.Average(), 1)
+            : 0m;
+
         return new LecturerActivityStatsDto
         {
             ReviewedReportsCount = reviewedReports,
             PendingReportsCount = pendingReports,
             CompletedStudentsCount = completedStudents,
             TotalStudentsCount = totalStudents,
-            AverageResponseDays = 1.2m,
+            AverageResponseDays = avgResponseDays,
             ComplianceRate = totalCompliance
         };
     }
@@ -1003,6 +1023,16 @@ public class LecturerService : ILecturerService
     {
         var lecturerId = await ResolveLecturerIdAsync(userId);
         if (lecturerId == null)
+            return null;
+
+        // Authorize the company from the lecturer's full assignment history,
+        // then scope the displayed internships to the selected semester.
+        var company = await _db.Internships
+            .Where(i => i.LecturerId == lecturerId.Value && !i.IsDeleted && i.CompanyId == companyId)
+            .Select(i => i.Company)
+            .FirstOrDefaultAsync();
+
+        if (company == null || company.IsDeleted)
             return null;
 
         var internships = _db.Internships
@@ -1019,12 +1049,22 @@ public class LecturerService : ILecturerService
             .Include(i => i.WeeklyReports);
 
         var list = await internships.ToListAsync();
-        if (list.Count == 0)
-            return null;
 
-        var company = list.First().Company;
-        if (company == null || company.IsDeleted)
-            return null;
+        var positionsQuery = _db.CompanyPositions
+            .Where(p => p.CompanyId == companyId && !p.IsDeleted);
+        if (semesterId.HasValue)
+            positionsQuery = positionsQuery.Where(p => p.SemesterId == null || p.SemesterId == semesterId.Value);
+
+        var positions = await positionsQuery
+            .OrderByDescending(p => p.IsOpen)
+            .ThenByDescending(p => p.CreatedAt)
+            .ToListAsync();
+        var filledByTitle = await _db.Internships
+            .Where(i => !i.IsDeleted && i.CompanyId == companyId && i.Position != null &&
+                (!semesterId.HasValue || i.SemesterId == semesterId.Value))
+            .GroupBy(i => i.Position!.Trim().ToLower())
+            .Select(g => new { Title = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.Title, x => x.Count);
 
         var internshipIds = list.Select(i => i.Id).ToList();
         var totalSubmissions = list.Sum(i => i.Submissions.Count(s => !s.IsDeleted));
@@ -1066,6 +1106,24 @@ public class LecturerService : ILecturerService
             TotalSubmissions = totalSubmissions,
             TotalWeeklyReports = totalWeeklyReports,
             PendingReviewsCount = pendingReviews,
+            Positions = positions.Select(p => new CompanyPositionDto
+            {
+                Id = p.Id,
+                CompanyId = p.CompanyId,
+                CompanyName = company.CompanyName,
+                SemesterId = p.SemesterId,
+                PositionCode = p.PositionCode,
+                Title = p.Title,
+                Description = p.Description,
+                RequiredMajor = p.RequiredMajor,
+                RequiredSkills = p.RequiredSkills,
+                Location = p.Location,
+                Slots = p.Slots,
+                FilledSlots = filledByTitle.GetValueOrDefault(p.Title.Trim().ToLower()),
+                Stipend = p.Stipend,
+                IsOpen = p.IsOpen,
+                CreatedAt = p.CreatedAt,
+            }),
             Internships = items
         };
     }
@@ -1085,6 +1143,63 @@ public class LecturerService : ILecturerService
         internship.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
         return true;
+    }
+
+    public async Task<LecturerSemesterSummaryDto?> GetSemesterSummaryAsync(Guid userId, Guid semesterId)
+    {
+        var lecturerId = await ResolveLecturerIdAsync(userId);
+        if (lecturerId == null) return null;
+
+        return await _db.LecturerSemesterSummaries
+            .AsNoTracking()
+            .Where(x => x.SemesterId == semesterId && x.LecturerId == lecturerId.Value)
+            .Select(x => new LecturerSemesterSummaryDto
+            {
+                SemesterId = x.SemesterId,
+                Results = x.Results,
+                Difficulties = x.Difficulties,
+                Recommendations = x.Recommendations,
+                Conclusion = x.Conclusion,
+                UpdatedAt = x.UpdatedAt,
+            })
+            .FirstOrDefaultAsync();
+    }
+
+    public async Task<LecturerSemesterSummaryDto?> SaveSemesterSummaryAsync(Guid userId, Guid semesterId, SaveLecturerSemesterSummaryRequest request)
+    {
+        var lecturerId = await ResolveLecturerIdAsync(userId);
+        if (lecturerId == null || !await _db.Semesters.AnyAsync(x => x.Id == semesterId && !x.IsDeleted)) return null;
+
+        var summary = await _db.LecturerSemesterSummaries
+            .FirstOrDefaultAsync(x => x.SemesterId == semesterId && x.LecturerId == lecturerId.Value);
+        if (summary == null)
+        {
+            summary = new LecturerSemesterSummary
+            {
+                Id = Guid.NewGuid(),
+                SemesterId = semesterId,
+                LecturerId = lecturerId.Value,
+                CreatedAt = DateTime.UtcNow,
+            };
+            _db.LecturerSemesterSummaries.Add(summary);
+        }
+
+        summary.Results = request.Results?.Trim() ?? string.Empty;
+        summary.Difficulties = request.Difficulties?.Trim() ?? string.Empty;
+        summary.Recommendations = request.Recommendations?.Trim() ?? string.Empty;
+        summary.Conclusion = request.Conclusion?.Trim() ?? string.Empty;
+        summary.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        return new LecturerSemesterSummaryDto
+        {
+            SemesterId = semesterId,
+            Results = summary.Results,
+            Difficulties = summary.Difficulties,
+            Recommendations = summary.Recommendations,
+            Conclusion = summary.Conclusion,
+            UpdatedAt = summary.UpdatedAt,
+        };
     }
 
     public async Task<int> NotifyAssignedStudentsAsync(Guid userId, string title, string message)

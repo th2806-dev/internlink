@@ -22,7 +22,7 @@ import { adminCompaniesService } from "../../../services/adminCompanies.service"
 import { apiRequest, getApiErrorMessage } from "../../../lib/apiClient";
 import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
 import { ImportCompanyAllocationsModal } from "./modals/ImportCompanyAllocationsModal";
-import type { CompanyAllocationItemDto, CompanyDto, CompanySuggestionDto } from "../../../types/api";
+import type { CompanyAllocationItemDto, CompanyDto, CompanyPositionDto, CompanySuggestionDto } from "../../../types/api";
 
 interface Props {
   selectedSemesterId?: string | null;
@@ -53,6 +53,9 @@ export const CompanyAllocationsTab = ({
   // Quick Assign Modal
   const [assignTarget, setAssignTarget] = useState<CompanyAllocationItemDto | null>(null);
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
+  const [positionsByCompany, setPositionsByCompany] = useState<Record<string, CompanyPositionDto[]>>({});
+  const [isLoadingPositions, setIsLoadingPositions] = useState(false);
+  const [selectedPositionId, setSelectedPositionId] = useState("");
   const [isSavingAssign, setIsSavingAssign] = useState(false);
   const [suggestions, setSuggestions] = useState<CompanySuggestionDto[]>([]);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
@@ -77,6 +80,24 @@ export const CompanyAllocationsTab = ({
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Recruitment positions per company (for the assign modal dropdown)
+  useEffect(() => {
+    if (!assignTarget) return;
+    const companyId = selectedCompanyId;
+    if (!companyId) return;
+    if (positionsByCompany[companyId]) return;
+    setIsLoadingPositions(true);
+    adminCompaniesService
+      .getPositions(companyId)
+      .then((positions) =>
+        setPositionsByCompany((prev) => ({ ...prev, [companyId]: positions }))
+      )
+      .catch(() =>
+        setPositionsByCompany((prev) => ({ ...prev, [companyId]: [] }))
+      )
+      .finally(() => setIsLoadingPositions(false));
+  }, [assignTarget, selectedCompanyId, positionsByCompany]);
 
   // Derived lists for filters
   const uniqueClasses = useMemo(() => {
@@ -157,6 +178,7 @@ export const CompanyAllocationsTab = ({
   const handleOpenAssign = (item: CompanyAllocationItemDto) => {
     setAssignTarget(item);
     setSelectedCompanyId(item.companyId || "");
+    setSelectedPositionId("");
     setSuggestions([]);
     const semId = selectedSemesterId === "all" || !selectedSemesterId ? undefined : selectedSemesterId;
     if (semId) {
@@ -181,9 +203,15 @@ export const CompanyAllocationsTab = ({
         onShowToast("Vui lòng chọn doanh nghiệp");
         return;
       }
+      const selectedPosition = (positionsByCompany[selectedCompanyId] ?? []).find(
+        (p) => p.id === selectedPositionId
+      );
       await apiRequest(`/api/Internship/${assignTarget.internshipId}/company`, {
         method: "PUT",
-        body: { companyId: selectedCompanyId },
+        body: {
+          companyId: selectedCompanyId,
+          ...(selectedPosition ? { position: selectedPosition.title } : {}),
+        },
       });
       onShowToast(`Đã gán doanh nghiệp thành công cho ${assignTarget.studentName}!`);
       setAssignTarget(null);
@@ -621,7 +649,10 @@ export const CompanyAllocationsTab = ({
               </label>
               <select
                 value={selectedCompanyId}
-                onChange={(e) => setSelectedCompanyId(e.target.value)}
+                onChange={(e) => {
+                  setSelectedCompanyId(e.target.value);
+                  setSelectedPositionId("");
+                }}
                 className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md outline-none font-medium cursor-pointer text-xs"
               >
                 <option value="">— Chọn doanh nghiệp trong danh mục —</option>
@@ -631,6 +662,42 @@ export const CompanyAllocationsTab = ({
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Vị trí thực tập <span className="font-normal text-slate-400">(tùy chọn)</span>
+              </label>
+              {!selectedCompanyId ? (
+                <div className="p-2 bg-slate-50 rounded-md border border-dashed border-slate-200 text-center text-[10px] text-slate-400">
+                  Chọn doanh nghiệp trước để xem các vị trí tuyển dụng
+                </div>
+              ) : isLoadingPositions && !positionsByCompany[selectedCompanyId] ? (
+                <div className="p-2 bg-slate-50 rounded-md border border-slate-200 text-center text-[10px] text-slate-400 animate-pulse">
+                  Đang tải vị trí tuyển dụng...
+                </div>
+              ) : (positionsByCompany[selectedCompanyId] ?? []).length === 0 ? (
+                <div className="p-2 bg-slate-50 rounded-md border border-dashed border-slate-200 text-center text-[10px] text-slate-400">
+                  Doanh nghiệp này chưa có vị trí tuyển dụng nào
+                </div>
+              ) : (
+                <select
+                  value={selectedPositionId}
+                  onChange={(e) => setSelectedPositionId(e.target.value)}
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md outline-none font-medium cursor-pointer text-xs"
+                >
+                  <option value="">— Không chọn vị trí —</option>
+                  {(positionsByCompany[selectedCompanyId] ?? []).map((p) => {
+                    const available = p.slots - p.filledSlots;
+                    return (
+                      <option key={p.id} value={p.id}>
+                        {p.positionCode ? `[${p.positionCode}] ` : ""}
+                        {p.title} — còn {available}/{p.slots} suất
+                      </option>
+                    );
+                  })}
+                </select>
+              )}
             </div>
 
             <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">

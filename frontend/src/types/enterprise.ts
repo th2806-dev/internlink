@@ -38,6 +38,23 @@ export interface EnterpriseDetail {
   totalSubmissions: number;
   totalWeeklyReports: number;
   pendingReviewsCount: number;
+  positions: {
+    id: string;
+    companyId: string;
+    companyName?: string | null;
+    semesterId?: string | null;
+    positionCode?: string | null;
+    title: string;
+    description?: string | null;
+    requiredMajor?: string | null;
+    requiredSkills?: string | null;
+    location?: string | null;
+    slots: number;
+    filledSlots: number;
+    stipend?: number | null;
+    isOpen: boolean;
+    createdAt: string;
+  }[];
   internships: {
     id: string;
     studentId: string;

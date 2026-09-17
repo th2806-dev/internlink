@@ -15,6 +15,8 @@ public interface ILecturerService
     Task<PaginatedResponse<WeeklyReportDto>> GetAssignedWeeklyReportsAsync(Guid userId, WeeklyReportFilterRequest filter);
     Task<FeedbackDto?> AddFeedbackAsync(Guid submissionId, Guid authorId, CreateFeedbackRequest request);
     Task<byte[]> ExportEndOfTermExcelAsync(Guid userId);
+    Task<LecturerSemesterSummaryDto?> GetSemesterSummaryAsync(Guid userId, Guid semesterId);
+    Task<LecturerSemesterSummaryDto?> SaveSemesterSummaryAsync(Guid userId, Guid semesterId, SaveLecturerSemesterSummaryRequest request);
 
     // Student notes
     Task<bool> UpdateStudentNotesAsync(Guid userId, Guid internshipId, string notes);

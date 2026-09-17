@@ -254,7 +254,7 @@ public class StudentService : IStudentService
         if (request.GrantAccount || !string.IsNullOrWhiteSpace(request.Username))
         {
             createdUsername = (request.Username ?? normalizedStudentCode).Trim();
-            var ensure = await EnsureStudentUserAsync(createdUsername, request.FullName, request.Email);
+            var ensure = await EnsureStudentUserAsync(createdUsername, request.FullName, request.Email, departmentId);
             userId = ensure.UserId;
             createdNewUser = ensure.CreatedNew;
             createdTemporaryPassword = ensure.TemporaryPassword;
@@ -327,7 +327,7 @@ public class StudentService : IStudentService
 
             var username = (request.Username ?? student.StudentCode).Trim();
             var email = NullIfWhiteSpace(request.Email) ?? student.Email;
-            var ensure = await EnsureStudentUserAsync(username, request.FullName, email);
+            var ensure = await EnsureStudentUserAsync(username, request.FullName, email, student.DepartmentId);
             student.UserId = ensure.UserId;
 
             if (ensure.CreatedNew && ensure.TemporaryPassword != null)
@@ -414,7 +414,7 @@ public class StudentService : IStudentService
         return await query.AnyAsync();
     }
 
-    public async Task<StudentImportResultDto> ImportStudentsFromExcelAsync(Stream excelStream, Guid? semesterId = null, Guid? departmentId = null)
+    public async Task<StudentImportResultDto> ImportStudentsFromExcelAsync(Stream excelStream, Guid? semesterId = null, Guid? departmentId = null, bool grantAccount = false)
     {
         if (excelStream == null || !excelStream.CanRead)
             throw new ArgumentException("Excel file stream is required");
@@ -559,7 +559,7 @@ public class StudentService : IStudentService
                         existingStudent.User.Email = email.Trim();
                     existingStudent.User.UpdatedAt = DateTime.UtcNow;
                 }
-                else if (!string.IsNullOrWhiteSpace(username) || !string.IsNullOrWhiteSpace(email))
+                else if (grantAccount && (!string.IsNullOrWhiteSpace(username) || !string.IsNullOrWhiteSpace(email)))
                 {
                     if (string.IsNullOrWhiteSpace(username))
                         username = studentCode;
@@ -568,7 +568,7 @@ public class StudentService : IStudentService
                     {
                         try
                         {
-                            var ensure = await EnsureStudentUserAsync(username, fullName, email);
+                            var ensure = await EnsureStudentUserAsync(username, fullName, email, departmentId);
                             existingStudent.UserId = ensure.UserId;
                             if (ensure.CreatedNew && ensure.TemporaryPassword != null)
                             {
@@ -591,7 +591,7 @@ public class StudentService : IStudentService
                 username = studentCode;
 
             Guid? userId = null;
-            if (!string.IsNullOrWhiteSpace(username))
+            if (grantAccount && !string.IsNullOrWhiteSpace(username))
             {
                 username = username.Trim();
                 if (!seenUsernames.Add(username))
@@ -608,7 +608,7 @@ public class StudentService : IStudentService
 
                 try
                 {
-                    var ensure = await EnsureStudentUserAsync(username, fullName, email);
+                    var ensure = await EnsureStudentUserAsync(username, fullName, email, departmentId);
                     userId = ensure.UserId;
                     if (ensure.CreatedNew && ensure.TemporaryPassword != null)
                     {
@@ -829,7 +829,7 @@ public class StudentService : IStudentService
             mappings);
     }
 
-    private async Task<(Guid UserId, bool CreatedNew, string? TemporaryPassword)> EnsureStudentUserAsync(string username, string fullName, string? email)
+    private async Task<(Guid UserId, bool CreatedNew, string? TemporaryPassword)> EnsureStudentUserAsync(string username, string fullName, string? email, Guid? departmentId = null)
     {
         var existing = await _db.Users.FirstOrDefaultAsync(u => u.Username == username && !u.IsDeleted);
         if (existing != null)
@@ -859,6 +859,7 @@ public class StudentService : IStudentService
             FullName = fullName,
             Email = NullIfWhiteSpace(email),
             Role = Role.Student,
+            DepartmentId = departmentId, // Scoped to the importing/creating admin's department so /admin/users lists it
             IsActive = true,
             MustChangePassword = true,
             CreatedAt = DateTime.UtcNow

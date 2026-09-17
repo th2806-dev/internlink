@@ -3,6 +3,7 @@ import type { AdminUser, AdminUserStatus } from "../types/user";
 import { adminUsersService } from "../services/adminUsers.service";
 import { mapUserDtoToAdminUser } from "../lib/adminMappers";
 import { getApiErrorMessage } from "../lib/apiClient";
+import { useAuth } from "../contexts/AuthContext";
 
 export interface UseAdminUsersState {
   users: AdminUser[];
@@ -29,6 +30,8 @@ export interface UseAdminUsersState {
 }
 
 export const useAdminUsers = (): UseAdminUsersState => {
+  const { user } = useAuth();
+  const backendRole = user?.backendRole;
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<Error | null>(null);
@@ -37,14 +40,14 @@ export const useAdminUsers = (): UseAdminUsersState => {
     setLoading(true);
     setError(null);
     try {
-      const res = await adminUsersService.getAll({ take: 500 });
+      const res = await adminUsersService.getAll({ take: 500 }, backendRole);
       setUsers(res.items.map(mapUserDtoToAdminUser));
     } catch (err) {
       setError(err instanceof Error ? err : new Error(getApiErrorMessage(err)));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [backendRole]);
 
   useEffect(() => {
     fetchUsers();
@@ -58,7 +61,7 @@ export const useAdminUsers = (): UseAdminUsersState => {
     studentCode?: string;
     staffCode?: string;
   }): Promise<AdminUser> => {
-    const createdDto = await adminUsersService.create(payload);
+    const createdDto = await adminUsersService.create(payload, backendRole);
     const mapped = mapUserDtoToAdminUser(createdDto);
     setUsers((prev) => [mapped, ...prev]);
     return mapped;
@@ -68,7 +71,7 @@ export const useAdminUsers = (): UseAdminUsersState => {
     id: string,
     payload: { fullName: string; email?: string; isActive: boolean },
   ): Promise<AdminUser> => {
-    const updatedDto = await adminUsersService.update(id, payload);
+    const updatedDto = await adminUsersService.update(id, payload, backendRole);
     const mapped = mapUserDtoToAdminUser(updatedDto);
     setUsers((prev) => prev.map((u) => (u.id === id ? mapped : u)));
     return mapped;
@@ -80,7 +83,7 @@ export const useAdminUsers = (): UseAdminUsersState => {
       fullName: user.fullName,
       email: user.email !== "—" ? user.email : undefined,
       isActive: next === "active",
-    });
+    }, backendRole);
     setUsers((prev) =>
       prev.map((x) => (x.id === user.id ? { ...x, status: next } : x)),
     );
@@ -92,7 +95,7 @@ export const useAdminUsers = (): UseAdminUsersState => {
   const resetPassword = async (
     id: string,
   ): Promise<{ userId: string; username: string; emailSent: boolean }> => {
-    const res = await adminUsersService.resetPassword(id);
+    const res = await adminUsersService.resetPassword(id, backendRole);
     setUsers((prev) =>
       prev.map((x) =>
         x.id === id ? { ...x, mustChangePassword: true, status: "active" } : x,
@@ -102,7 +105,7 @@ export const useAdminUsers = (): UseAdminUsersState => {
   };
 
   const deleteUser = async (id: string): Promise<void> => {
-    await adminUsersService.delete(id);
+    await adminUsersService.delete(id, backendRole);
     setUsers((prev) => prev.filter((x) => x.id !== id));
   };
 

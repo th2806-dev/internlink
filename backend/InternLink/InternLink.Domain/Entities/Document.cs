@@ -58,6 +58,8 @@ public class Document : BaseEntity
     /// </summary>
     public string FilePath { get; set; } = null!;
 
+    public string? GoogleDriveFileId { get; set; }
+
     /// <summary>
     /// File size in bytes
     /// </summary>

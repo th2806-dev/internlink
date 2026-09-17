@@ -39,7 +39,7 @@ public class InternshipProgressCalculatorTests
     }
 
     [Fact]
-    public void Calculate_UserLoggedIn_ShouldHaveAccount10Percent()
+    public void Calculate_UserLoggedIn_ShouldNotAdvanceProgress()
     {
         // Arrange
         var user = new User
@@ -60,13 +60,13 @@ public class InternshipProgressCalculatorTests
         var result = InternshipProgressCalculator.Calculate(user, student, null, null, null, 6);
 
         // Assert
-        result.AccountPercent.Should().Be(10);
+        result.AccountPercent.Should().Be(0);
         result.ProfilePercent.Should().Be(0);
-        result.TotalPercent.Should().Be(10);
+        result.TotalPercent.Should().Be(0);
     }
 
     [Fact]
-    public void Calculate_ProfileCompleted_ShouldAdd15Percent()
+    public void Calculate_ProfileCompleted_ShouldNotAdvanceProgress()
     {
         // Arrange
         var user = new User
@@ -89,14 +89,14 @@ public class InternshipProgressCalculatorTests
         var result = InternshipProgressCalculator.Calculate(user, student, null, null, null, 6);
 
         // Assert
-        result.AccountPercent.Should().Be(10);
-        result.ProfilePercent.Should().Be(15);
+        result.AccountPercent.Should().Be(0);
+        result.ProfilePercent.Should().Be(0);
         result.CompanyPercent.Should().Be(0);
-        result.TotalPercent.Should().Be(25);
+        result.TotalPercent.Should().Be(0);
     }
 
     [Fact]
-    public void Calculate_AssignedCompany_ShouldAdd20Percent()
+    public void Calculate_AssignedCompany_ShouldNotAdvanceProgress()
     {
         // Arrange
         var user = new User { MustChangePassword = false, LastLoginAt = DateTime.UtcNow };
@@ -110,7 +110,6 @@ public class InternshipProgressCalculatorTests
         var internship = new Internship
         {
             Id = Guid.NewGuid(),
-            StudentId = student.Id,
             CompanyId = Guid.NewGuid(),
             Status = InternshipStatus.InProgress
         };
@@ -119,11 +118,11 @@ public class InternshipProgressCalculatorTests
         var result = InternshipProgressCalculator.Calculate(user, student, internship, null, null, 6);
 
         // Assert
-        result.AccountPercent.Should().Be(10);
-        result.ProfilePercent.Should().Be(15);
-        result.CompanyPercent.Should().Be(20);
+        result.AccountPercent.Should().Be(0);
+        result.ProfilePercent.Should().Be(0);
+        result.CompanyPercent.Should().Be(0);
         result.ReportPercent.Should().Be(0);
-        result.TotalPercent.Should().Be(45);
+        result.TotalPercent.Should().Be(0);
     }
 
     [Fact]
@@ -145,7 +144,7 @@ public class InternshipProgressCalculatorTests
         // Assert
         result.ReportPercent.Should().Be(0);
         result.SubmittedReportsCount.Should().Be(0);
-        result.TotalPercent.Should().Be(45);
+        result.TotalPercent.Should().Be(0);
     }
 
     [Fact]
@@ -155,7 +154,7 @@ public class InternshipProgressCalculatorTests
         var user = new User { MustChangePassword = false, LastLoginAt = DateTime.UtcNow };
         var student = new Student { Id = Guid.NewGuid(), FullName = "A", Phone = "0901", DesiredPosition = "Dev" };
         var internship = new Internship { Id = Guid.NewGuid(), StudentId = student.Id, CompanyId = Guid.NewGuid() };
-        // 3 out of 6 weeks submitted: 3/6 * 35 = 17.5 ~ 18%
+        // 3 out of 6 weeks submitted: 3/6 * 80 = 40%
         var reports = new List<WeeklyReport>
         {
             new() { Id = Guid.NewGuid(), InternshipId = internship.Id, WeekNumber = 1, Status = WeeklyReportStatus.Approved },
@@ -170,8 +169,8 @@ public class InternshipProgressCalculatorTests
         // Assert
         result.SubmittedReportsCount.Should().Be(3);
         result.RequiredWeeksCount.Should().Be(6);
-        result.ReportPercent.Should().Be(18); // Round(3/6 * 35) = 18
-        result.TotalPercent.Should().Be(45 + 18); // 63%
+        result.ReportPercent.Should().Be(40);
+        result.TotalPercent.Should().Be(40);
     }
 
     [Fact]
@@ -206,10 +205,10 @@ public class InternshipProgressCalculatorTests
         var result = InternshipProgressCalculator.Calculate(user, student, internship, reports, eval, 6);
 
         // Assert
-        result.AccountPercent.Should().Be(10);
-        result.ProfilePercent.Should().Be(15);
-        result.CompanyPercent.Should().Be(20);
-        result.ReportPercent.Should().Be(35);
+        result.AccountPercent.Should().Be(0);
+        result.ProfilePercent.Should().Be(0);
+        result.CompanyPercent.Should().Be(0);
+        result.ReportPercent.Should().Be(80);
         result.EvaluationPercent.Should().Be(20);
         result.TotalPercent.Should().Be(100);
     }

@@ -34,7 +34,7 @@ public class InternshipController : ControllerBase
 
     private async Task<(bool isLecturer, Guid? lecturerId)> ResolveLecturerScopeAsync()
     {
-        if (User.IsSuperAdmin())
+        if (User.IsSuperAdmin() || User.IsDepartmentAdmin())
             return (false, null);
 
         var userId = User.GetUserId();
@@ -156,7 +156,8 @@ public class InternshipController : ControllerBase
             if (isLecturer && lecturerId == Guid.Empty)
                 return Ok(ApiResponse<IEnumerable<InternshipListItemDto>>.Ok(Array.Empty<InternshipListItemDto>()));
 
-            var internships = await _internshipService.GetInternshipsByStudentAsync(studentId, skip, take, lecturerId);
+            var deptId = _deptScope.GetCurrentDepartmentId(User);
+            var internships = await _internshipService.GetInternshipsByStudentAsync(studentId, skip, take, lecturerId, deptId);
             return Ok(ApiResponse<IEnumerable<InternshipListItemDto>>.Ok(internships));
         }
         catch (Exception ex)
@@ -180,7 +181,8 @@ public class InternshipController : ControllerBase
             if (isLecturer && lecturerId == Guid.Empty)
                 return Ok(ApiResponse<IEnumerable<InternshipListItemDto>>.Ok(Array.Empty<InternshipListItemDto>()));
 
-            var internships = await _internshipService.GetInternshipsByCompanyAsync(companyId, skip, take, lecturerId);
+            var deptId = _deptScope.GetCurrentDepartmentId(User);
+            var internships = await _internshipService.GetInternshipsByCompanyAsync(companyId, skip, take, lecturerId, deptId);
             return Ok(ApiResponse<IEnumerable<InternshipListItemDto>>.Ok(internships));
         }
         catch (Exception ex)
@@ -204,7 +206,8 @@ public class InternshipController : ControllerBase
             if (isLecturer && lecturerId == Guid.Empty)
                 return Ok(ApiResponse<IEnumerable<InternshipListItemDto>>.Ok(Array.Empty<InternshipListItemDto>()));
 
-            var internships = await _internshipService.GetInternshipsByStatusAsync(status, skip, take, lecturerId);
+            var deptId = _deptScope.GetCurrentDepartmentId(User);
+            var internships = await _internshipService.GetInternshipsByStatusAsync(status, skip, take, lecturerId, deptId);
             return Ok(ApiResponse<IEnumerable<InternshipListItemDto>>.Ok(internships));
         }
         catch (Exception ex)
@@ -365,7 +368,8 @@ public class InternshipController : ControllerBase
                 return Ok(ApiResponse<InternshipStatsDto>.Ok(new InternshipStatsDto()));
             }
 
-            var stats = await _internshipService.GetInternshipStatsAsync(lecturerId);
+            var deptId = _deptScope.GetCurrentDepartmentId(User);
+            var stats = await _internshipService.GetInternshipStatsAsync(lecturerId, departmentId: deptId);
             return Ok(ApiResponse<InternshipStatsDto>.Ok(stats));
         }
         catch (Exception ex)

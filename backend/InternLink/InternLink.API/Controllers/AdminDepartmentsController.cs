@@ -1,5 +1,6 @@
 using InternLink.Application.DTOs;
 using InternLink.Application.Interfaces;
+using InternLink.Shared.Authorization;
 using InternLink.Shared.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -12,7 +13,8 @@ namespace InternLink.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/Admin/departments")]
-[Authorize(Policy = "RequireAdmin")]
+[Route(AdminApiRoutes.SuperAdminPrefix + "/departments")]
+[Authorize(Policy = AdminPolicies.SuperAdmin)]
 public class AdminDepartmentsController : ControllerBase
 {
     private readonly IDepartmentService _departmentService;
@@ -32,16 +34,14 @@ public class AdminDepartmentsController : ControllerBase
         if (take < 1 || take > 1000)
             return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Take must be between 1 and 1000" }));
 
-        var deptId = _deptScope.GetCurrentDepartmentId(User);
-        var departments = await _departmentService.GetAllAsync(departmentId: deptId);
+        var departments = await _departmentService.GetAllAsync();
         return Ok(ApiResponse<IEnumerable<DepartmentDto>>.Ok(departments));
     }
 
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById(Guid id)
     {
-        var deptId = _deptScope.GetCurrentDepartmentId(User);
-        var department = await _departmentService.GetByIdAsync(id, requesterDepartmentId: deptId);
+        var department = await _departmentService.GetByIdAsync(id);
         if (department == null)
             return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Department not found" }));
 

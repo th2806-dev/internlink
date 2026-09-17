@@ -8,6 +8,7 @@ public class SubmissionAsset : BaseEntity
     public string? Label { get; set; }
     public string? FileName { get; set; }
     public string? FileUrl { get; set; }
+    public string? GoogleDriveFileId { get; set; }
     public string AssetType { get; set; } = "file";
     public long? FileSize { get; set; }
     public string? MimeType { get; set; }

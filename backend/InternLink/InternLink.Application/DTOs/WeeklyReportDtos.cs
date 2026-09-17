@@ -12,6 +12,7 @@ public sealed class WeeklyReportDto
     public string Content { get; set; } = null!;
     public string? FileName { get; set; }
     public string? FileUrl { get; set; }
+    public string? GoogleDriveFileId { get; set; }
     public long? FileSize { get; set; }
     public string? MimeType { get; set; }
     public string Status { get; set; } = null!;
@@ -31,6 +32,7 @@ public sealed class WeeklyReportVersionDto
     public string FileName { get; set; } = null!;
     public long FileSize { get; set; }
     public string MimeType { get; set; } = null!;
+    public string? GoogleDriveFileId { get; set; }
     public DateTime UploadedAt { get; set; }
 }
 

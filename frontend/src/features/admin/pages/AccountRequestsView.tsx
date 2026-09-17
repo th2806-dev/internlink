@@ -40,6 +40,7 @@ import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
 import { CompanyAvatar } from "../../../components/common/CompanyAvatar";
 import { KpiCard, KpiGrid } from "../../../components/common/KpiCard";
 import { Panel } from "../../../components/common/Panel";
+import { useAuth } from "../../../hooks/useAuth";
 export const AccountRequestsView = ({
   onShowToast,
   onNavigateTab,
@@ -47,6 +48,8 @@ export const AccountRequestsView = ({
   onShowToast: (msg: string, type?: ToastType) => void;
   onNavigateTab?: (tab: string) => void;
 }) => {
+  const { user } = useAuth();
+  const backendRole = user?.backendRole;
   const [activeMainTab, setActiveMainTab] = useState("requests");
   const [requests, setRequests] = useState<any[]>([]);
   const [userAccounts, setUserAccounts] = useState<any[]>([]);
@@ -315,7 +318,10 @@ export const AccountRequestsView = ({
     }
     setIsLoading(true);
     try {
-      const response = await fetch("/api/Admin/users", {
+      const usersPrefix = backendRole === "SuperAdmin"
+        ? "/api/SuperAdmin/users"
+        : "/api/DepartmentAdmin/users";
+      const response = await fetch(usersPrefix, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -381,7 +387,7 @@ export const AccountRequestsView = ({
         fullName: account.fullName,
         email: account.email,
         isActive: newIsActive,
-      });
+      }, backendRole);
       setUserAccounts((prev) =>
         prev.map((a) =>
           a.id === account.id

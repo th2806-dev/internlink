@@ -10,6 +10,7 @@ public sealed class CreateSubmissionRequest
     public string? Description { get; set; }
     public string? FileName { get; set; }
     public string? FileUrl { get; set; }
+    public string? GoogleDriveFileId { get; set; }
 }
 
 public sealed class UpdateSubmissionStatusRequest
@@ -23,6 +24,7 @@ public sealed class ResubmitRequest
     public string? Description { get; set; }
     public string? FileName { get; set; }
     public string? FileUrl { get; set; }
+    public string? GoogleDriveFileId { get; set; }
 }
 
 public sealed class UpdateFeedbackRequest

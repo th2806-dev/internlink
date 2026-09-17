@@ -55,11 +55,12 @@ export const ImportLecturersModal = ({
       const res = await adminLecturersService.importExcel(
         selectedFile,
         currentSemesterId ?? undefined,
+        false,
       );
       setResult(res);
       if (res.successCount > 0) {
         onShowToast(
-          `Import thành công ${res.successCount}/${res.totalRows} giảng viên · Đã cấp tài khoản: ${res.emailSentCount || res.successCount}`,
+          `Import thành công ${res.successCount}/${res.totalRows} giảng viên · Có thể cấp tài khoản sau trong danh sách`,
         );
         onSuccess();
       } else {
@@ -145,7 +146,7 @@ export const ImportLecturersModal = ({
                   : "Bấm để chọn file Excel hoặc kéo thả file vào đây"}
               </p>
               <p className="text-[10px] text-slate-500 font-medium mt-0.5">
-                Định dạng hỗ trợ: .xlsx, .xls • Tự động tạo hồ sơ giảng viên và cấp tài khoản đăng nhập
+                Định dạng hỗ trợ: .xlsx, .xls • Tạo hồ sơ giảng viên từ file Excel
               </p>
             </div>
           </div>

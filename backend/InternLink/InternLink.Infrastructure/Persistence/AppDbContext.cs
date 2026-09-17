@@ -38,6 +38,7 @@ public class AppDbContext : DbContext
     public DbSet<AttendanceSession> AttendanceSessions { get; set; } = null!;
     public DbSet<AttendanceRecord> AttendanceRecords { get; set; } = null!;
     public DbSet<DocumentVersion> DocumentVersions { get; set; } = null!;
+    public DbSet<LecturerSemesterSummary> LecturerSemesterSummaries { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -135,6 +136,7 @@ public class AppDbContext : DbContext
             b.Property(x => x.IsActive).HasDefaultValue(true);
             b.Property(x => x.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
             b.HasIndex(x => x.CompanyCode).IsUnique().HasFilter("[CompanyCode] IS NOT NULL");
+            b.HasOne(x => x.Department).WithMany().HasForeignKey(x => x.DepartmentId).OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<Semester>(b =>
@@ -184,6 +186,7 @@ public class AppDbContext : DbContext
             b.Property(x => x.Description).HasMaxLength(1000);
             b.Property(x => x.FileName).HasMaxLength(250);
             b.Property(x => x.FileUrl).HasMaxLength(1000);
+            b.Property(x => x.GoogleDriveFileId).HasMaxLength(200);
             b.Property(x => x.SubmittedAt).HasDefaultValueSql("GETUTCDATE()");
             b.Property(x => x.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
             b.HasOne(x => x.Internship).WithMany(x => x.Submissions).HasForeignKey(x => x.InternshipId);
@@ -198,6 +201,7 @@ public class AppDbContext : DbContext
             b.Property(x => x.Label).HasMaxLength(250);
             b.Property(x => x.FileName).HasMaxLength(250);
             b.Property(x => x.FileUrl).HasMaxLength(1000);
+            b.Property(x => x.GoogleDriveFileId).HasMaxLength(200);
             b.Property(x => x.AssetType).IsRequired().HasMaxLength(30);
             b.Property(x => x.MimeType).HasMaxLength(150);
             b.Property(x => x.UploadedAt).HasDefaultValueSql("GETUTCDATE()");
@@ -229,6 +233,7 @@ public class AppDbContext : DbContext
             b.Property(x => x.Description).HasMaxLength(2000);
             b.Property(x => x.FileName).IsRequired().HasMaxLength(250);
             b.Property(x => x.FilePath).IsRequired().HasMaxLength(500);
+            b.Property(x => x.GoogleDriveFileId).HasMaxLength(200);
             b.Property(x => x.DownloadCount).HasDefaultValue(0);
             b.Property(x => x.MimeType).IsRequired().HasMaxLength(100);
             b.Property(x => x.UploadedAt).HasDefaultValueSql("GETUTCDATE()");
@@ -280,6 +285,7 @@ public class AppDbContext : DbContext
             b.Property(x => x.Content).IsRequired().HasMaxLength(8000);
             b.Property(x => x.FileName).HasMaxLength(250);
             b.Property(x => x.FileUrl).HasMaxLength(1000);
+            b.Property(x => x.GoogleDriveFileId).HasMaxLength(200);
             b.Property(x => x.MimeType).HasMaxLength(100);
             b.Property(x => x.Version).HasDefaultValue(1);
             b.Property(x => x.Status).HasDefaultValue(WeeklyReportStatus.Draft);
@@ -311,12 +317,28 @@ public class AppDbContext : DbContext
             b.Property(x => x.Id).HasColumnName("DocumentVersionId");
             b.Property(x => x.FileName).IsRequired().HasMaxLength(250);
             b.Property(x => x.FilePath).IsRequired().HasMaxLength(1000);
+            b.Property(x => x.GoogleDriveFileId).HasMaxLength(200);
             b.Property(x => x.MimeType).IsRequired().HasMaxLength(100);
             b.Property(x => x.ChangeNote).HasMaxLength(500);
             b.Property(x => x.UploadedAt).HasDefaultValueSql("GETUTCDATE()");
             b.HasOne(x => x.Document).WithMany(x => x.Versions)
                 .HasForeignKey(x => x.DocumentId).OnDelete(DeleteBehavior.Cascade);
             b.HasIndex(x => new { x.DocumentId, x.VersionNumber }).IsUnique();
+        });
+
+        modelBuilder.Entity<LecturerSemesterSummary>(b =>
+        {
+            b.ToTable("LecturerSemesterSummaries");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).HasColumnName("LecturerSemesterSummaryId");
+            b.Property(x => x.Results).IsRequired().HasMaxLength(10000);
+            b.Property(x => x.Difficulties).IsRequired().HasMaxLength(10000);
+            b.Property(x => x.Recommendations).IsRequired().HasMaxLength(10000);
+            b.Property(x => x.Conclusion).IsRequired().HasMaxLength(10000);
+            b.Property(x => x.UpdatedAt).HasDefaultValueSql("GETUTCDATE()");
+            b.HasOne(x => x.Semester).WithMany().HasForeignKey(x => x.SemesterId).OnDelete(DeleteBehavior.Cascade);
+            b.HasOne(x => x.Lecturer).WithMany().HasForeignKey(x => x.LecturerId).OnDelete(DeleteBehavior.Cascade);
+            b.HasIndex(x => new { x.SemesterId, x.LecturerId }).IsUnique();
         });
 
         modelBuilder.Entity<Notification>(b =>
@@ -454,6 +476,7 @@ public class AppDbContext : DbContext
             b.HasKey(x => x.Id);
             b.Property(x => x.Id).HasColumnName("CompanyPositionId");
             b.Property(x => x.Title).IsRequired().HasMaxLength(200);
+            b.Property(x => x.PositionCode).HasMaxLength(50);
             b.Property(x => x.Description).HasMaxLength(2000);
             b.Property(x => x.RequiredMajor).HasMaxLength(200);
             b.Property(x => x.RequiredSkills).HasMaxLength(1000);
@@ -465,6 +488,7 @@ public class AppDbContext : DbContext
             b.HasOne(x => x.Company).WithMany(c => c.Positions).HasForeignKey(x => x.CompanyId).OnDelete(DeleteBehavior.Cascade);
             b.HasOne(x => x.Semester).WithMany().HasForeignKey(x => x.SemesterId).OnDelete(DeleteBehavior.SetNull);
             b.HasIndex(x => new { x.CompanyId, x.SemesterId });
+            b.HasIndex(x => x.PositionCode).IsUnique().HasFilter("[PositionCode] IS NOT NULL");
         });
 
         modelBuilder.Entity<SemesterReportSchedule>(b =>
@@ -505,6 +529,7 @@ public class AppDbContext : DbContext
             b.Property(x => x.Description).HasMaxLength(1000);
             b.Property(x => x.Location).HasMaxLength(500);
             b.Property(x => x.Status).HasConversion<string>().HasMaxLength(50).HasDefaultValue(AttendanceSessionStatus.Scheduled);
+            b.Property(x => x.IsLecturerOnly).HasDefaultValue(false);
             b.Property(x => x.DurationMinutes).HasDefaultValue(60);
             b.Property(x => x.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
 

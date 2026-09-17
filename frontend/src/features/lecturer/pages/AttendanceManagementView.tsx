@@ -27,6 +27,7 @@ import { Panel } from "../../../components/common/Panel";
 import { KpiCard, KpiGrid } from "../../../components/common/KpiCard";
 import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
 import { getApiErrorMessage } from "../../../lib/apiClient";
+import { parseBackendDate } from "../../../lib/formatDateTimeVi";
 import type {
   AttendanceSessionDto,
   AttendanceSessionDetailDto,
@@ -36,16 +37,25 @@ import type {
   LecturerStudentListItemDto,
 } from "../../../types/api";
 
+function toDateTimeLocalValue(date: Date) {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
+}
+
 export const AttendanceManagementView: React.FC<{
   onShowToast?: (msg: string, type?: string) => void;
 }> = ({ onShowToast }) => {
   const { activeSemesterId, selectedSemester } = useSemester();
+  const attendanceSemesterId = selectedSemester?.id && selectedSemester.id !== "all"
+    ? selectedSemester.id
+    : activeSemesterId;
   const [sessions, setSessions] = useState<AttendanceSessionDto[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Assigned students for creating sessions
   const [assignedStudents, setAssignedStudents] = useState<LecturerStudentListItemDto[]>([]);
+  const [isLoadingAssignedStudents, setIsLoadingAssignedStudents] = useState(false);
 
   // Modals state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -82,11 +92,11 @@ export const AttendanceManagementView: React.FC<{
   const [markSearchQuery, setMarkSearchQuery] = useState("");
 
   const loadSessions = useCallback(async () => {
-    if (!activeSemesterId) return;
+    if (!attendanceSemesterId) return;
     setIsLoading(true);
     setError(null);
     try {
-      const data = await attendanceService.getLecturerSessions(activeSemesterId);
+      const data = await attendanceService.getLecturerSessions(attendanceSemesterId);
       setSessions(data);
     } catch (err) {
       const msg = getApiErrorMessage(err);
@@ -95,17 +105,23 @@ export const AttendanceManagementView: React.FC<{
     } finally {
       setIsLoading(false);
     }
-  }, [activeSemesterId, onShowToast]);
+  }, [attendanceSemesterId, onShowToast]);
 
-  const loadAssignedStudents = useCallback(async () => {
-    if (!activeSemesterId) return;
+  const loadAssignedStudents = useCallback(async (): Promise<LecturerStudentListItemDto[]> => {
+    if (!attendanceSemesterId) return [];
+    setIsLoadingAssignedStudents(true);
     try {
-      const students = await lecturerInternshipsService.getStudents(activeSemesterId);
-      setAssignedStudents(students || []);
+      const students = await lecturerInternshipsService.getStudents(attendanceSemesterId);
+      const loadedStudents = students || [];
+      setAssignedStudents(loadedStudents);
+      return loadedStudents;
     } catch {
-      // Ignored if failed
+      setAssignedStudents([]);
+      return [];
+    } finally {
+      setIsLoadingAssignedStudents(false);
     }
-  }, [activeSemesterId]);
+  }, [attendanceSemesterId]);
 
   useEffect(() => {
     loadSessions();
@@ -113,8 +129,14 @@ export const AttendanceManagementView: React.FC<{
   }, [loadSessions, loadAssignedStudents]);
 
   // Handle open create modal
-  const handleOpenCreateModal = () => {
-    const nextWeek = sessions.length > 0 ? Math.min(Math.max(...sessions.map((s) => s.weekNumber)) + 1, totalWeeks) : 1;
+  const handleOpenCreateModal = async () => {
+    const students = await loadAssignedStudents();
+    const nextWeek = Array.from({ length: totalWeeks }, (_, index) => index + 1)
+      .find((week) => !sessions.some((session) => session.weekNumber === week));
+    if (!nextWeek) {
+      onShowToast?.("Mỗi tuần chỉ được lên lịch một buổi gặp trong kỳ này.", "error");
+      return;
+    }
     setCreateWeek(nextWeek);
     setCreateTitle(`Buổi gặp hướng dẫn tuần ${nextWeek}`);
     setCreateDescription("");
@@ -122,17 +144,17 @@ export const AttendanceManagementView: React.FC<{
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     tomorrow.setHours(9, 0, 0, 0);
-    setCreateDate(tomorrow.toISOString().slice(0, 16));
+    setCreateDate(toDateTimeLocalValue(tomorrow));
     setCreateDuration(60);
     setCreateLocation("Phòng làm việc bộ môn");
-    setSelectedStudentIds(assignedStudents.map((s) => s.studentId));
+    setSelectedStudentIds(students.map((s) => s.studentId));
     setIsCreateModalOpen(true);
   };
 
   // Submit create session
   const handleSubmitCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeSemesterId) return;
+    if (!attendanceSemesterId) return;
     if (!createTitle.trim()) {
       onShowToast?.("Vui lòng nhập tiêu đề buổi gặp", "error");
       return;
@@ -145,7 +167,7 @@ export const AttendanceManagementView: React.FC<{
     setIsSubmittingCreate(true);
     try {
       const dto: CreateAttendanceSessionDto = {
-        semesterId: activeSemesterId,
+        semesterId: attendanceSemesterId,
         weekNumber: createWeek,
         title: createTitle.trim(),
         description: createDescription.trim() || undefined,
@@ -224,7 +246,7 @@ export const AttendanceManagementView: React.FC<{
     setEditingSession(session);
     setEditTitle(session.title);
     setEditDescription(session.description || "");
-    setEditDate(new Date(session.meetingDate).toISOString().slice(0, 16));
+    setEditDate(toDateTimeLocalValue(parseBackendDate(session.meetingDate)));
     setEditDuration(session.durationMinutes || 60);
     setEditLocation(session.location || "");
     setEditStatus(session.status);
@@ -278,6 +300,7 @@ export const AttendanceManagementView: React.FC<{
   const completedSessionsCount = sessions.filter((s) => s.status === "Completed").length;
   const totalRecordsCount = sessions.reduce((acc, s) => acc + s.totalStudents, 0);
   const totalPresentCount = sessions.reduce((acc, s) => acc + s.presentCount, 0);
+  const totalAbsentCount = sessions.reduce((acc, s) => acc + s.absentCount, 0);
   const overallRate = totalRecordsCount > 0 ? Math.round((totalPresentCount / totalRecordsCount) * 100) : 100;
 
   // Filtered records for mark modal
@@ -311,10 +334,11 @@ export const AttendanceManagementView: React.FC<{
           </button>
           <button
             onClick={handleOpenCreateModal}
+            disabled={isLoadingAssignedStudents || !attendanceSemesterId}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg flex items-center gap-1.5 transition-colors shadow-sm"
           >
             <Plus className="w-4 h-4" />
-            Tạo buổi gặp mới
+            {isLoadingAssignedStudents ? "Đang tải sinh viên..." : "Tạo buổi gặp mới"}
           </button>
         </div>
       </PageHeader>
@@ -343,6 +367,14 @@ export const AttendanceManagementView: React.FC<{
           unit="sinh viên"
           icon={Users}
           footer={`${totalWeeks} tuần thực tập trong kỳ`}
+        />
+        <KpiCard
+          tone={totalAbsentCount > 0 ? "rose" : "sky"}
+          title="Tổng lượt vắng"
+          value={totalAbsentCount}
+          unit="lượt"
+          icon={XCircle}
+          footer={totalAbsentCount > 0 ? "Cần theo dõi và nhắc nhở" : "Chưa ghi nhận lượt vắng"}
         />
       </KpiGrid>
 
@@ -390,7 +422,7 @@ export const AttendanceManagementView: React.FC<{
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {sessions.map((session) => {
-              const meetingDateObj = new Date(session.meetingDate);
+              const meetingDateObj = parseBackendDate(session.meetingDate);
               const isPast = meetingDateObj < new Date();
               const isMeetLink =
                 session.location &&
@@ -662,7 +694,11 @@ export const AttendanceManagementView: React.FC<{
                   </button>
                 </div>
                 <div className="max-h-36 overflow-y-auto border border-slate-200 rounded-lg p-2 space-y-1 bg-slate-50">
-                  {assignedStudents.map((st) => {
+                  {isLoadingAssignedStudents ? (
+                    <p className="py-3 text-center text-slate-500">Đang tải danh sách sinh viên...</p>
+                  ) : assignedStudents.length === 0 ? (
+                    <p className="py-3 text-center text-slate-500">Chưa có sinh viên được phân công trong kỳ này.</p>
+                  ) : assignedStudents.map((st) => {
                     const isChecked = selectedStudentIds.includes(st.studentId);
                     return (
                       <label
@@ -729,7 +765,7 @@ export const AttendanceManagementView: React.FC<{
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  {new Date(activeMarkSession.meetingDate).toLocaleString("vi-VN")} •{" "}
+                  {parseBackendDate(activeMarkSession.meetingDate).toLocaleString("vi-VN")} •{" "}
                   {activeMarkSession.location || "Chưa có địa điểm"}
                 </p>
               </div>

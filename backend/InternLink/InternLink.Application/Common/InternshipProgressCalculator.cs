@@ -6,19 +6,18 @@ namespace InternLink.Application.Common;
 
 public static class InternshipProgressCalculator
 {
-    public const int MaxAccountPercent = 10;
-    public const int MaxProfilePercent = 15;
-    public const int MaxCompanyPercent = 20;
-    public const int MaxReportPercent = 35;
+    // Account, profile, and company assignment are prerequisites, not progress.
+    public const int MaxAccountPercent = 0;
+    public const int MaxProfilePercent = 0;
+    public const int MaxCompanyPercent = 0;
+    public const int MaxReportPercent = 80;
     public const int MaxEvaluationPercent = 20;
 
     /// <summary>
     /// Tính toán chi tiết tiến độ thực tập dựa trên 5 nguồn dữ liệu thực tế:
-    /// 1. Account (10%): Đã kích hoạt và đăng nhập / đổi mật khẩu
-    /// 2. Profile (15%): Đã cập nhật đầy đủ hồ sơ (SĐT, Khoa, Nguyện vọng / Kỹ năng / CV)
-    /// 3. Company (20%): Đã được phân bổ vào doanh nghiệp
-    /// 4. Report (35%): Tỷ lệ báo cáo tuần đã nộp (Submitted, Approved, RevisionSubmitted) / số tuần yêu cầu
-    /// 5. Evaluation (20%): Đã hoàn tất đánh giá cuối kỳ (IsFinalized == true hoặc có FinalGrade)
+    /// 1-3. Account, profile, and company assignment are procedural prerequisites and contribute 0%.
+    /// 4. Report (80%): Tỷ lệ báo cáo tuần đã nộp / số tuần yêu cầu.
+    /// 5. Evaluation (20%): Đã hoàn tất đánh giá cuối kỳ.
     /// </summary>
     public static ProgressBreakdownDto Calculate(
         User? user,
@@ -28,44 +27,16 @@ public static class InternshipProgressCalculator
         Evaluation? evaluation,
         int? semesterTotalWeeks)
     {
-        // 1. Account Progress (10%)
-        // Chỉ tính điểm khi tài khoản đã được kích hoạt và người dùng đã thực sự đăng nhập hoặc đổi pass.
-        // Nếu user == null hoặc (user.LastLoginAt == null && user.MustChangePassword), sinh viên chưa từng đăng nhập -> 0%.
+        // Account activation is a prerequisite only; it does not advance internship progress.
         int accountPercent = 0;
-        if (user != null && (user.LastLoginAt.HasValue || !user.MustChangePassword))
-        {
-            accountPercent = MaxAccountPercent;
-        }
 
-        // 2. Profile Progress (15%)
-        // Cần có SĐT liên lạc và ít nhất 1 thông tin chuyên môn / nguyện vọng nâng cao.
+        // Profile completion is a prerequisite only; it does not advance internship progress.
         int profilePercent = 0;
-        bool hasPhone = !string.IsNullOrWhiteSpace(student.Phone) && student.Phone != "—";
-        bool hasSkillsOrPreferences = !string.IsNullOrWhiteSpace(student.DesiredPosition)
-            || !string.IsNullOrWhiteSpace(student.Skills)
-            || !string.IsNullOrWhiteSpace(student.ResumeUrl)
-            || !string.IsNullOrWhiteSpace(student.Department)
-            || !string.IsNullOrWhiteSpace(student.DesiredLocation);
 
-        if (hasPhone && hasSkillsOrPreferences)
-        {
-            profilePercent = MaxProfilePercent;
-        }
-        else if (hasPhone || hasSkillsOrPreferences)
-        {
-            // Điền một phần hồ sơ
-            profilePercent = 8;
-        }
-
-        // 3. Company Progress (20%)
-        // Đã được phân bổ vào doanh nghiệp tiếp nhận thực tập
+        // Company assignment is a prerequisite only; it does not advance internship progress.
         int companyPercent = 0;
-        if (internship != null && internship.CompanyId.HasValue)
-        {
-            companyPercent = MaxCompanyPercent;
-        }
 
-        // 4. Report Progress (35%)
+        // Report Progress (80%)
         // Chỉ tính các báo cáo tuần không bị xóa và đã nộp (Status: Submitted, Approved, RevisionSubmitted).
         // Báo cáo Draft tuyệt đối không tính.
         int reportPercent = 0;
@@ -115,21 +86,9 @@ public static class InternshipProgressCalculator
         {
             summaryText = $"Đã nộp {submittedReportsCount}/{requiredWeeks} tuần báo cáo";
         }
-        else if (companyPercent > 0)
-        {
-            summaryText = "Đã phân bổ doanh nghiệp thực tập";
-        }
-        else if (profilePercent > 0)
-        {
-            summaryText = "Đã hoàn thiện hồ sơ & nguyện vọng";
-        }
-        else if (accountPercent > 0)
-        {
-            summaryText = "Tài khoản đã kích hoạt";
-        }
         else
         {
-            summaryText = "Chưa kích hoạt tài khoản";
+            summaryText = "Chưa có báo cáo tuần";
         }
 
         return new ProgressBreakdownDto

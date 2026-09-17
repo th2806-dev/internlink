@@ -7,6 +7,7 @@ bin/
 build/
 dist/
 out/
+tmp-api-build/
 obj/
 
 # IDE / VS
@@ -22,6 +23,7 @@ obj/
 backend/**/appsettings.Development.json
 backend/**/appsettings.*.local.json
 backend/**/appsettings.local.json
+backend/InternLink/InternLink.Infrastructure/google-credentials.json
 
 # Logs
 npm-debug.log*
@@ -55,3 +57,5 @@ metadata.json
 
 # Bun lockfile (project uses npm)
 bun.lock
+
+backend/InternLink/InternLink.Infrastructure/*-*.json

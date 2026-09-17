@@ -43,7 +43,9 @@ export const Header = ({
       case "enterprises":
         return "Doanh nghiệp";
       case "export":
-        return "Export cuối kỳ";
+        return "Tổng kết";
+      case "summary":
+        return "Tổng kết";
       case "templates":
         return "Biểu mẫu";
       case "evaluations":

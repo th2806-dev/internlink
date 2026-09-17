@@ -1,6 +1,6 @@
 const BACKEND_TIMEZONE = "Asia/Ho_Chi_Minh";
 
-function parseBackendDate(value: string | Date): Date {
+export function parseBackendDate(value: string | Date): Date {
   if (value instanceof Date) return value;
 
   // API DateTime values are UTC but may be serialized without a timezone suffix.

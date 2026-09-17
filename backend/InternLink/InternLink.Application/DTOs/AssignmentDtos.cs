@@ -51,7 +51,7 @@ public class LecturerAssignmentItemDto
 
 public class AutoAssignRequest
 {
-    /// <summary>"department" or "even".</summary>
+    /// <summary>"department", "even", or "random".</summary>
     public string Strategy { get; set; } = "even";
     public Guid? SemesterId { get; set; }
 }
@@ -79,6 +79,8 @@ public class CompanyAllocationImportResultDto
     public int SuccessCount { get; set; }
     public int FailedCount { get; set; }
     public IList<CompanyAllocationImportErrorDto> Errors { get; set; } = new List<CompanyAllocationImportErrorDto>();
+    /// <summary>Non-fatal issues, e.g. a position code that matched no recruitment position (company still assigned).</summary>
+    public IList<CompanyAllocationImportErrorDto> Warnings { get; set; } = new List<CompanyAllocationImportErrorDto>();
     public IList<CompanyAllocationItemDto> UpdatedAllocations { get; set; } = new List<CompanyAllocationItemDto>();
 }
 

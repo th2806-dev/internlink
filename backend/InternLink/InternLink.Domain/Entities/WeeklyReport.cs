@@ -13,6 +13,7 @@ public class WeeklyReport : BaseEntity
     public string Content { get; set; } = null!;
     public string? FileName { get; set; }
     public string? FileUrl { get; set; }
+    public string? GoogleDriveFileId { get; set; }
     public long? FileSize { get; set; }
     public string? MimeType { get; set; }
     public WeeklyReportStatus Status { get; set; } = WeeklyReportStatus.Draft;

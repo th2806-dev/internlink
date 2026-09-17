@@ -1,6 +1,8 @@
+using InternLink.Domain.Common;
+
 namespace InternLink.Domain.Entities;
 
-public class Company : BaseEntity
+public class Company : BaseEntity, IDepartmentScoped
 {
     /// <summary>External company code from the official "DANH SÁCH DOANH NGHIỆP LIÊN KẾT" list (like MSSV/MaGV).</summary>
     public string? CompanyCode { get; set; }
@@ -13,6 +15,13 @@ public class Company : BaseEntity
     public string? ContactPhone { get; set; }
     public int? Capacity { get; set; }
     public bool IsActive { get; set; } = true;
+
+    /// <summary>
+    /// Owning department (khoa) — set from the creating/importing admin's department.
+    /// Null = global/shared master data, visible to every department.
+    /// </summary>
+    public Guid? DepartmentId { get; set; }
+    public Department? Department { get; set; }
 
     public ICollection<Internship> Internships { get; set; } = new List<Internship>();
 

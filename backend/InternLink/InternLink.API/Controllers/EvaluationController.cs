@@ -177,8 +177,7 @@ public class EvaluationController : ControllerBase
     /// </summary>
     [HttpGet("internship/{internshipId}")]
     [ProducesResponseType(typeof(EvaluationDetailDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<EvaluationDetailDto>> GetEvaluationByInternship(Guid internshipId)
+    public async Task<ActionResult<EvaluationDetailDto?>> GetEvaluationByInternship(Guid internshipId)
     {
         try
         {
@@ -189,7 +188,7 @@ public class EvaluationController : ControllerBase
             var isLecturerOrAdmin = User.IsInRole("Lecturer") || User.IsInRole("SuperAdmin");
             var evaluation = await _evaluationService.GetEvaluationByInternshipAsync(internshipId, userId.Value, isLecturerOrAdmin);
             if (evaluation == null)
-                return NotFound(new { message = "Evaluation not found for this internship" });
+                return Ok((EvaluationDetailDto?)null);
 
             return Ok(evaluation);
         }

@@ -8,6 +8,20 @@ import type {
 } from "../types/api";
 
 export const lecturerInternshipsService = {
+  getSemesterSummary(semesterId: string) {
+    return apiRequest<LecturerSemesterSummaryDto>(`/api/Lecturer/semester-summary/${semesterId}`, {
+      skipCache: true,
+    });
+  },
+
+  saveSemesterSummary(semesterId: string, body: SaveLecturerSemesterSummaryRequest) {
+    return apiRequest<LecturerSemesterSummaryDto>(`/api/Lecturer/semester-summary/${semesterId}`, {
+      method: "PUT",
+      body,
+      skipCache: true,
+    });
+  },
+
   getAll(semesterId?: string): Promise<InternshipDto[]> {
     const params = semesterId && semesterId !== "all" ? `?semesterId=${semesterId}` : "";
     return apiRequest<InternshipDto[]>(`/api/Lecturer/internships${params}`);
@@ -81,3 +95,19 @@ export const lecturerInternshipsService = {
     });
   },
 };
+
+export interface LecturerSemesterSummaryDto {
+  semesterId: string;
+  results: string;
+  difficulties: string;
+  recommendations: string;
+  conclusion: string;
+  updatedAt?: string | null;
+}
+
+export interface SaveLecturerSemesterSummaryRequest {
+  results: string;
+  difficulties: string;
+  recommendations: string;
+  conclusion: string;
+}

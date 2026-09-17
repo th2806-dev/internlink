@@ -1,5 +1,6 @@
 using InternLink.Application.DTOs;
 using InternLink.Application.Interfaces;
+using InternLink.Shared.Authorization;
 using InternLink.Shared.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -8,7 +9,8 @@ namespace InternLink.API.Controllers;
 
 [ApiController]
 [Route("api/Admin/assignments")]
-[Authorize(Policy = "RequireAdmin")]
+[Route(AdminApiRoutes.DepartmentAdminPrefix + "/assignments")]
+[Authorize(Policy = AdminPolicies.DepartmentAdmin)]
 public class AdminAssignmentsController : ControllerBase
 {
     private readonly IAssignmentService _assignmentService;

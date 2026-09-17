@@ -122,7 +122,7 @@ export const DashboardView = ({
         <Panel className="lg:col-span-8">
           <DashboardTrendChart
             title="Báo cáo tuần — nhóm của bạn"
-            subtitle="Theo dõi 6 tuần thực tập: đúng hạn, trễ và chưa nộp"
+            subtitle={`Theo dõi ${selectedSemester?.totalWeeks ?? 6} tuần thực tập: đúng hạn, trễ và chưa nộp`}
             data={weeklyTrendData}
             valueLabel="Đúng hạn / đã nộp"
             variant="bar"

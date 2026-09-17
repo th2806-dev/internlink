@@ -1,5 +1,6 @@
 using System.Text.Json;
 using InternLink.API.Extensions;
+using InternLink.Application.Common;
 using InternLink.Application.DTOs;
 using InternLink.Application.Interfaces;
 using InternLink.Domain.Entities;
@@ -41,14 +42,13 @@ public class LecturerRubricController : ControllerBase
     /// </summary>
     [HttpGet("rubric")]
     [ProducesResponseType(typeof(RubricDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<RubricDto>> GetApprovedRubric([FromQuery] Guid semesterId)
+    public async Task<ActionResult<RubricDto?>> GetApprovedRubric([FromQuery] Guid semesterId)
     {
         try
         {
             var rubric = await _rubricService.GetApprovedRubricAsync(semesterId);
             if (rubric == null)
-                return NotFound(new { message = "Chưa có rubric đã phê duyệt cho kỳ này." });
+                return Ok((RubricDto?)null);
 
             return Ok(rubric);
         }
@@ -325,6 +325,10 @@ public class LecturerRubricController : ControllerBase
             var result = internships.Select(i =>
             {
                 evaluations.TryGetValue(i.Id, out var ev);
+                var breakdown = i.Student != null
+                    ? InternshipProgressCalculator.Calculate(
+                        i.Student.User, i.Student, i, i.WeeklyReports, ev, i.Semester?.TotalWeeks)
+                    : null;
                 return new LecturerEvaluationStudentDto
                 {
                     StudentId = i.StudentId,
@@ -355,7 +359,8 @@ public class LecturerRubricController : ControllerBase
                     EvaluatedAt = ev?.EvaluatedAt,
                     HasEvaluation = ev != null,
                     IsEvaluationFinalized = ev?.IsFinalized ?? false,
-                    ProgressPercent = CalculateProgress(i)
+                    ProgressBreakdown = breakdown,
+                    ProgressPercent = breakdown?.TotalPercent ?? 0
                 };
             }).ToList();
 
@@ -368,25 +373,7 @@ public class LecturerRubricController : ControllerBase
         }
     }
 
-    private static int CalculateProgress(Internship internship)
-    {
-        var activityProgress = Math.Min(95, Math.Max(10,
-            internship.WeeklyReports.Count * 8 + internship.Submissions.Count * 2));
 
-        return internship.Status switch
-        {
-            InternLink.Domain.Enums.InternshipStatus.Completed or
-            InternLink.Domain.Enums.InternshipStatus.Graded => 100,
-            InternLink.Domain.Enums.InternshipStatus.InProgress or
-            InternLink.Domain.Enums.InternshipStatus.BehindSchedule or
-            InternLink.Domain.Enums.InternshipStatus.AwaitingFeedback or
-            InternLink.Domain.Enums.InternshipStatus.RequiresRevision => activityProgress,
-            _ when internship.CompanyId.HasValue ||
-                internship.WeeklyReports.Count > 0 ||
-                internship.Submissions.Count > 0 => activityProgress,
-            _ => 0,
-        };
-    }
 }
 
 /// <summary>
@@ -420,4 +407,5 @@ public class LecturerEvaluationStudentDto
     public bool HasEvaluation { get; set; }
     public bool IsEvaluationFinalized { get; set; }
     public int ProgressPercent { get; set; }
+    public ProgressBreakdownDto? ProgressBreakdown { get; set; }
 }

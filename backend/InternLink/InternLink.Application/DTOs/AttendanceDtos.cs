@@ -31,6 +31,7 @@ public class AttendanceSessionDto
     public int? DurationMinutes { get; set; }
     public string? Location { get; set; }
     public string Status { get; set; } = "Scheduled";
+    public bool IsLecturerOnly { get; set; }
     public int TotalStudents { get; set; }
     public int PresentCount { get; set; }
     public int AbsentCount { get; set; }
@@ -53,6 +54,7 @@ public class CreateAttendanceSessionDto
     public int? DurationMinutes { get; set; } = 60;
     public string? Location { get; set; }
     public List<Guid>? StudentIds { get; set; }
+    public bool IsLecturerOnly { get; set; }
 }
 
 public class UpdateAttendanceSessionDto

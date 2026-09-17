@@ -38,5 +38,12 @@ export const lecturerExportService = {
       `LichHuongDanTTTN_C23_${new Date().toISOString().slice(0, 10)}.xlsx`,
     );
   },
+
+  async downloadSummaryReportWord(semesterId: string): Promise<{ blob: Blob; filename: string }> {
+    return downloadAuthenticatedFile(
+      `/api/Export/summary-report/word?semesterId=${semesterId}`,
+      `BaoCaoTongKetCongTac_${new Date().toISOString().slice(0, 10)}.docx`,
+    );
+  },
 };
 

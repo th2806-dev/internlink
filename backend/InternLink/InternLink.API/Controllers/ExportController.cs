@@ -130,7 +130,14 @@ public class ExportController : ControllerBase
         {
             var deptId = _deptScope.ResolveEffectiveDepartmentId(User, departmentId);
             _logger.LogInformation("Admin initiated Word summary report export for semester: {SemesterId}, Department: {Department}, DepartmentId: {DepartmentId}", semesterId, department, deptId);
-            var fileBytes = await _reportService.ExportC22AWordReportAsync(semesterId, department, deptId);
+            Guid? lecturerId = null;
+            if (User.IsInRole("Lecturer"))
+            {
+                var userId = User.GetUserId();
+                if (userId == null) return Unauthorized();
+                lecturerId = await _lecturerAccessService.ResolveLecturerIdAsync(userId.Value);
+            }
+            var fileBytes = await _reportService.ExportC22AWordReportAsync(semesterId, department, deptId, lecturerId);
             var fileName = $"Bao-cao-tong-ket-thuc-tap-{DateTime.Now:yyyyMMdd_HHmmss}.docx";
 
             return File(

@@ -45,9 +45,10 @@ export interface UpdateSemesterRequest {
 }
 
 export const adminSemestersService = {
-  getAll(departmentId?: string): Promise<BackendSemesterDto[]> {
+  getAll(departmentId?: string, backendRole?: string | null): Promise<BackendSemesterDto[]> {
     const qs = departmentId && departmentId !== "all" ? `?departmentId=${departmentId}` : "";
-    return apiRequest<BackendSemesterDto[]>(`/api/Admin/semesters${qs}`);
+    const route = backendRole === "SuperAdmin" ? "/api/SuperAdmin/semesters" : "/api/Admin/semesters";
+    return apiRequest<BackendSemesterDto[]>(`${route}${qs}`);
   },
 
   getById(id: string): Promise<BackendSemesterDto> {

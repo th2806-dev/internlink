@@ -75,6 +75,21 @@ public class AttendanceService : IAttendanceService
             throw new KeyNotFoundException("Không tìm thấy thông tin giảng viên.");
         }
 
+        if (dto.WeekNumber < 1 || dto.WeekNumber > semester.TotalWeeks)
+        {
+            throw new InvalidOperationException($"Tuần thực tập phải nằm trong khoảng 1 đến {semester.TotalWeeks}.");
+        }
+
+        var alreadyScheduled = await _context.AttendanceSessions
+            .AnyAsync(s => s.SemesterId == dto.SemesterId
+                && s.LecturerId == lecturerId
+                && s.WeekNumber == dto.WeekNumber
+                && !s.IsDeleted);
+        if (alreadyScheduled)
+        {
+            throw new InvalidOperationException($"Tuần {dto.WeekNumber} đã có buổi gặp được lên lịch.");
+        }
+
         var session = new AttendanceSession
         {
             SemesterId = dto.SemesterId,
@@ -86,11 +101,16 @@ public class AttendanceService : IAttendanceService
             DurationMinutes = dto.DurationMinutes ?? 60,
             Location = dto.Location?.Trim(),
             Status = AttendanceSessionStatus.Scheduled,
+            IsLecturerOnly = dto.IsLecturerOnly,
         };
 
         // Determine students to populate
         List<Internship> targetInternships;
-        if (dto.StudentIds != null && dto.StudentIds.Any())
+        if (dto.IsLecturerOnly)
+        {
+            targetInternships = new List<Internship>();
+        }
+        else if (dto.StudentIds != null && dto.StudentIds.Any())
         {
             targetInternships = await _context.Internships
                 .Where(i => i.SemesterId == dto.SemesterId && i.LecturerId == lecturerId && dto.StudentIds.Contains(i.StudentId))
@@ -240,7 +260,7 @@ public class AttendanceService : IAttendanceService
                 WeekNumber = r.AttendanceSession.WeekNumber,
                 Title = r.AttendanceSession.Title,
                 Description = r.AttendanceSession.Description,
-                MeetingDate = r.AttendanceSession.MeetingDate,
+                MeetingDate = ToUtc(r.AttendanceSession.MeetingDate),
                 DurationMinutes = r.AttendanceSession.DurationMinutes,
                 Location = r.AttendanceSession.Location,
                 LecturerName = r.AttendanceSession.Lecturer?.FullName ?? "Giảng viên",
@@ -357,10 +377,11 @@ public class AttendanceService : IAttendanceService
             WeekNumber = s.WeekNumber,
             Title = s.Title,
             Description = s.Description,
-            MeetingDate = s.MeetingDate,
+            MeetingDate = ToUtc(s.MeetingDate),
             DurationMinutes = s.DurationMinutes,
             Location = s.Location,
             Status = s.Status.ToString(),
+            IsLecturerOnly = s.IsLecturerOnly,
             TotalStudents = total,
             PresentCount = present,
             AbsentCount = absent,
@@ -386,6 +407,7 @@ public class AttendanceService : IAttendanceService
             DurationMinutes = baseDto.DurationMinutes,
             Location = baseDto.Location,
             Status = baseDto.Status,
+            IsLecturerOnly = baseDto.IsLecturerOnly,
             TotalStudents = baseDto.TotalStudents,
             PresentCount = baseDto.PresentCount,
             AbsentCount = baseDto.AbsentCount,
@@ -393,6 +415,12 @@ public class AttendanceService : IAttendanceService
             CreatedAt = baseDto.CreatedAt,
             Records = s.Records.Select(r => MapToRecordDto(r)).ToList(),
         };
+    }
+
+    private static DateTime ToUtc(DateTime value)
+    {
+        // SQL Server DateTime has no timezone metadata; attendance dates are stored as UTC.
+        return DateTime.SpecifyKind(value, DateTimeKind.Utc);
     }
 
     private static AttendanceRecordDto MapToRecordDto(AttendanceRecord r)

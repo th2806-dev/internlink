@@ -51,6 +51,7 @@ import { EvaluationsView as LecturerEvaluationsView } from "../features/lecturer
 import { NotificationsView as LecturerNotificationsView } from "../features/lecturer/pages/NotificationsView";
 import { AccountView as LecturerAccountView } from "../features/lecturer/pages/AccountView";
 import { AttendanceManagementView as LecturerAttendanceView } from "../features/lecturer/pages/AttendanceManagementView";
+import { SummaryView as LecturerSummaryView } from "../features/lecturer/pages/SummaryView";
 import { StudentWorkspace as LecturerStudentWorkspace } from "../features/lecturer/components/StudentWorkspace";
 
 // Student Pages
@@ -396,7 +397,8 @@ export function AppRoutes() {
                   path="evaluations/:internshipId"
                   element={<LecturerEvaluationsView onShowToast={showToast} />}
                 />
-                <Route path="export" element={<Navigate to="/lecturer/evaluations" replace />} />
+                <Route path="summary" element={<LecturerSummaryView onShowToast={showToast} />} />
+                <Route path="export" element={<Navigate to="/lecturer/summary" replace />} />
                 <Route
                   path="reports"
                   element={

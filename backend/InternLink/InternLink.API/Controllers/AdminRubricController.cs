@@ -1,6 +1,7 @@
 using InternLink.API.Extensions;
 using InternLink.Application.DTOs;
 using InternLink.Application.Interfaces;
+using InternLink.Shared.Authorization;
 using InternLink.Shared.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -13,7 +14,8 @@ namespace InternLink.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/Admin/semesters/{semesterId}/rubric")]
-[Authorize(Policy = "RequireAdmin")]
+[Route(AdminApiRoutes.DepartmentAdminPrefix + "/semesters/{semesterId}/rubric")]
+[Authorize(Policy = AdminPolicies.DepartmentAdmin)]
 public class AdminRubricController : ControllerBase
 {
     private readonly IRubricService _rubricService;
@@ -31,17 +33,16 @@ public class AdminRubricController : ControllerBase
     /// Get rubric for a semester
     /// </summary>
     [HttpGet]
-    [ProducesResponseType(typeof(RubricDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<RubricDto>> GetRubric(Guid semesterId)
+    [ProducesResponseType(typeof(ApiResponse<RubricDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<ApiResponse<RubricDto?>>> GetRubric(Guid semesterId)
     {
         try
         {
             var rubric = await _rubricService.GetBySemesterAsync(semesterId);
             if (rubric == null)
-                return NotFound(new { message = "Chưa có rubric cho kỳ thực tập này." });
+                return Ok(ApiResponse<RubricDto?>.Ok(null));
 
-            return Ok(rubric);
+            return Ok(ApiResponse<RubricDto?>.Ok(rubric));
         }
         catch (Exception ex)
         {

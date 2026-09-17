@@ -303,6 +303,9 @@ namespace InternLink.Infrastructure.Migrations
                     b.Property<string>("CreatedBy")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<Guid?>("DepartmentId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("Industry")
                         .HasMaxLength(150)
                         .HasColumnType("nvarchar(150)");
@@ -330,6 +333,8 @@ namespace InternLink.Infrastructure.Migrations
                     b.HasIndex("CompanyCode")
                         .IsUnique()
                         .HasFilter("[CompanyCode] IS NOT NULL");
+
+                    b.HasIndex("DepartmentId");
 
                     b.ToTable("Companies", (string)null);
                 });
@@ -368,6 +373,10 @@ namespace InternLink.Infrastructure.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
+                    b.Property<string>("PositionCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<string>("RequiredMajor")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
@@ -400,6 +409,10 @@ namespace InternLink.Infrastructure.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("PositionCode")
+                        .IsUnique()
+                        .HasFilter("[PositionCode] IS NOT NULL");
 
                     b.HasIndex("SemesterId");
 
@@ -515,6 +528,10 @@ namespace InternLink.Infrastructure.Migrations
                     b.Property<long>("FileSize")
                         .HasColumnType("bigint");
 
+                    b.Property<string>("GoogleDriveFileId")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<Guid?>("InternshipId")
                         .HasColumnType("uniqueidentifier");
 
@@ -611,6 +628,10 @@ namespace InternLink.Infrastructure.Migrations
 
                     b.Property<long>("FileSize")
                         .HasColumnType("bigint");
+
+                    b.Property<string>("GoogleDriveFileId")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
@@ -1072,6 +1093,128 @@ namespace InternLink.Infrastructure.Migrations
                         .HasFilter("[UserId] IS NOT NULL");
 
                     b.ToTable("Lecturers", (string)null);
+                });
+
+            modelBuilder.Entity("InternLink.Domain.Entities.LecturerGuidanceScheduleItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("LecturerGuidanceScheduleItemId");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("Hours")
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("LecturerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<Guid>("SemesterId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("WeekNumber")
+                        .HasColumnType("int");
+
+                    b.Property<string>("WorkContent")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime>("WorkDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("WorkType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LecturerId");
+
+                    b.HasIndex("SemesterId", "LecturerId", "WeekNumber");
+
+                    b.ToTable("LecturerGuidanceScheduleItems", (string)null);
+                });
+
+            modelBuilder.Entity("InternLink.Domain.Entities.LecturerSemesterSummary", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("LecturerSemesterSummaryId");
+
+                    b.Property<string>("Conclusion")
+                        .IsRequired()
+                        .HasMaxLength(10000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Difficulties")
+                        .IsRequired()
+                        .HasMaxLength(10000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("LecturerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Recommendations")
+                        .IsRequired()
+                        .HasMaxLength(10000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Results")
+                        .IsRequired()
+                        .HasMaxLength(10000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("SemesterId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LecturerId");
+
+                    b.HasIndex("SemesterId", "LecturerId")
+                        .IsUnique();
+
+                    b.ToTable("LecturerSemesterSummaries", (string)null);
                 });
 
             modelBuilder.Entity("InternLink.Domain.Entities.Notification", b =>
@@ -1605,6 +1748,10 @@ namespace InternLink.Infrastructure.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
 
+                    b.Property<string>("GoogleDriveFileId")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<Guid>("InternshipId")
                         .HasColumnType("uniqueidentifier");
 
@@ -1676,6 +1823,10 @@ namespace InternLink.Infrastructure.Migrations
                     b.Property<string>("FileUrl")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("GoogleDriveFileId")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
@@ -1860,6 +2011,10 @@ namespace InternLink.Infrastructure.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
 
+                    b.Property<string>("GoogleDriveFileId")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<Guid>("InternshipId")
                         .HasColumnType("uniqueidentifier");
 
@@ -1935,6 +2090,9 @@ namespace InternLink.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("GoogleDriveFileId")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
@@ -2025,6 +2183,16 @@ namespace InternLink.Infrastructure.Migrations
                     b.Navigation("Lecturer");
 
                     b.Navigation("Semester");
+                });
+
+            modelBuilder.Entity("InternLink.Domain.Entities.Company", b =>
+                {
+                    b.HasOne("InternLink.Domain.Entities.Department", "Department")
+                        .WithMany()
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Department");
                 });
 
             modelBuilder.Entity("InternLink.Domain.Entities.CompanyPosition", b =>
@@ -2211,6 +2379,44 @@ namespace InternLink.Infrastructure.Migrations
                     b.Navigation("DepartmentRef");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("InternLink.Domain.Entities.LecturerGuidanceScheduleItem", b =>
+                {
+                    b.HasOne("InternLink.Domain.Entities.Lecturer", "Lecturer")
+                        .WithMany()
+                        .HasForeignKey("LecturerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("InternLink.Domain.Entities.Semester", "Semester")
+                        .WithMany()
+                        .HasForeignKey("SemesterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Lecturer");
+
+                    b.Navigation("Semester");
+                });
+
+            modelBuilder.Entity("InternLink.Domain.Entities.LecturerSemesterSummary", b =>
+                {
+                    b.HasOne("InternLink.Domain.Entities.Lecturer", "Lecturer")
+                        .WithMany()
+                        .HasForeignKey("LecturerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("InternLink.Domain.Entities.Semester", "Semester")
+                        .WithMany()
+                        .HasForeignKey("SemesterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Lecturer");
+
+                    b.Navigation("Semester");
                 });
 
             modelBuilder.Entity("InternLink.Domain.Entities.Notification", b =>

@@ -106,7 +106,7 @@ export const LecturerAnalytics = () => {
           value={totalStudents}
           unit="sinh viên"
           icon={Users}
-          footer="100% Đã phân công giảng viên"
+          footer={`${totalStudents > 0 ? 100 : 0}% Đã phân công giảng viên`}
         />
         <KpiCard
           tone="emerald"

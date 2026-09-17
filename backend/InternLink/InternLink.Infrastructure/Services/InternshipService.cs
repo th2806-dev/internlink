@@ -227,11 +227,12 @@ public class InternshipService : IInternshipService
         return MapToDetailFullDto(internship);
     }
 
-    public async Task<IEnumerable<InternshipListItemDto>> GetInternshipsByStudentAsync(Guid studentId, int skip = 0, int take = 100, Guid? lecturerId = null)
+    public async Task<IEnumerable<InternshipListItemDto>> GetInternshipsByStudentAsync(Guid studentId, int skip = 0, int take = 100, Guid? lecturerId = null, Guid? departmentId = null)
     {
         var query = _db.Internships
             .Where(i => i.StudentId == studentId && !i.IsDeleted);
         query = ApplyLecturerScope(query, lecturerId);
+        query = ApplyDepartmentScope(query, departmentId);
 
         var internships = await query
             .Include(i => i.Company)
@@ -257,11 +258,12 @@ public class InternshipService : IInternshipService
         });
     }
 
-    public async Task<IEnumerable<InternshipListItemDto>> GetInternshipsByCompanyAsync(Guid companyId, int skip = 0, int take = 100, Guid? lecturerId = null)
+    public async Task<IEnumerable<InternshipListItemDto>> GetInternshipsByCompanyAsync(Guid companyId, int skip = 0, int take = 100, Guid? lecturerId = null, Guid? departmentId = null)
     {
         var query = _db.Internships
             .Where(i => i.CompanyId == companyId && !i.IsDeleted);
         query = ApplyLecturerScope(query, lecturerId);
+        query = ApplyDepartmentScope(query, departmentId);
 
         var internships = await query
             .Include(i => i.Student)
@@ -516,7 +518,7 @@ public class InternshipService : IInternshipService
                 (i.Status == InternshipStatus.InProgress || i.Status == InternshipStatus.NotStarted));
     }
 
-    public async Task<IEnumerable<InternshipListItemDto>> GetInternshipsByStatusAsync(string status, int skip = 0, int take = 100, Guid? lecturerId = null)
+    public async Task<IEnumerable<InternshipListItemDto>> GetInternshipsByStatusAsync(string status, int skip = 0, int take = 100, Guid? lecturerId = null, Guid? departmentId = null)
     {
         if (!Enum.TryParse<InternshipStatus>(status, out var internshipStatus))
             return Enumerable.Empty<InternshipListItemDto>();
@@ -524,6 +526,7 @@ public class InternshipService : IInternshipService
         var query = _db.Internships
             .Where(i => i.Status == internshipStatus && !i.IsDeleted);
         query = ApplyLecturerScope(query, lecturerId);
+        query = ApplyDepartmentScope(query, departmentId);
 
         var internships = await query
             .Include(i => i.Student)

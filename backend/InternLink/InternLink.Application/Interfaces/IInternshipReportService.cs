@@ -20,5 +20,5 @@ public interface IInternshipReportService
     /// Export "Báo cáo tổng kết công tác thực tập tốt nghiệp" as Word (.docx)
     /// using the C22A template with placeholder replacement and dynamic table population.
     /// </summary>
-    Task<byte[]> ExportC22AWordReportAsync(Guid? semesterId = null, string? department = null, Guid? departmentId = null);
+    Task<byte[]> ExportC22AWordReportAsync(Guid? semesterId = null, string? department = null, Guid? departmentId = null, Guid? lecturerId = null);
 }

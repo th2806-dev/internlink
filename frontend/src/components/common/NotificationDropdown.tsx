@@ -37,6 +37,7 @@ export interface AppNotification {
 
 interface NotificationDropdownProps {
   role: UserRole;
+  backendRole?: string | null;
   onNavigate?: (tab: string) => void;
   onShowToast?: (msg: string) => void;
 }
@@ -84,6 +85,7 @@ function saveDeletedNotifId(id: string) {
 
 export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
   role,
+  backendRole,
   onNavigate,
   onShowToast,
 }) => {
@@ -104,7 +106,9 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
         // For Admin, fetch personal notifications and broadcast campaigns
         const [mineRows, campaigns] = await Promise.all([
           notificationService.getMine().catch(() => []),
-          adminNotificationsService.getCampaigns(20).catch(() => []),
+          backendRole === "SuperAdmin"
+            ? Promise.resolve([])
+            : adminNotificationsService.getCampaigns(20).catch(() => []),
         ]);
 
         const personalNotifs: AppNotification[] = (mineRows || []).map((dto) => {

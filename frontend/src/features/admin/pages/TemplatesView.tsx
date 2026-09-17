@@ -20,9 +20,13 @@ import {
 } from "lucide-react";
 import { documentService } from "../../../services/document.service";
 import { adminSemestersService, type BackendSemesterDto } from "../../../services/adminSemesters.service";
+import { adminDepartmentsService, type DepartmentDto } from "../../../services/adminDepartments.service";
+import { useAuth } from "../../../contexts/AuthContext";
 import type { DocumentListItemDto, TemplateStatsDto } from "../../../types/api";
 import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
 import { EmptyState } from "../../../components/common/EmptyState";
+import { PageHeader } from "../../../components/common/PageHeader";
+import { KpiCard, KpiGrid } from "../../../components/common/KpiCard";
 
 import type { ToastType } from "../../../contexts/ToastContext";
 
@@ -40,19 +44,13 @@ const CATEGORIES = [
   { value: "Other", label: "Biểu mẫu khác" },
 ];
 
-const DEPARTMENTS = [
-  { value: "", label: "Tất cả Khoa / Bộ môn" },
-  { value: "CNTT", label: "Công nghệ thông tin (CNTT)" },
-  { value: "QTKD", label: "Quản trị kinh doanh (QTKD)" },
-  { value: "Du lịch", label: "Du lịch & Khách sạn" },
-  { value: "Ngoại ngữ", label: "Ngoại ngữ" },
-];
-
 export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => {
   const { canMutateOps, isSuperAdmin } = useAdminCapabilities();
+  const { user } = useAuth();
   const [templates, setTemplates] = useState<DocumentListItemDto[]>([]);
   const [stats, setStats] = useState<TemplateStatsDto | null>(null);
   const [semesters, setSemesters] = useState<BackendSemesterDto[]>([]);
+  const [departments, setDepartments] = useState<DepartmentDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -99,14 +97,16 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
   const loadData = async () => {
     try {
       setRefreshing(true);
-      const [tpls, st, sems] = await Promise.all([
+      const [tpls, st, sems, depts] = await Promise.all([
         documentService.getTemplates(),
         documentService.getTemplateStats().catch(() => null),
         adminSemestersService.getAll().catch(() => []),
+        adminDepartmentsService.getAll(user?.backendRole).catch(() => []),
       ]);
       setTemplates(tpls);
       setStats(st);
       setSemesters(sems);
+      setDepartments(depts.filter((department) => department.isActive));
     } catch (err: any) {
       onShowToast?.(err?.message || "Không thể tải danh sách biểu mẫu", "danger");
     } finally {
@@ -114,6 +114,14 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
       setRefreshing(false);
     }
   };
+
+  const departmentOptions = [
+    { value: "", label: "Tất cả Khoa / Bộ môn" },
+    ...departments.map((department) => ({
+      value: department.code,
+      label: `${department.name} (${department.code})`,
+    })),
+  ];
 
   useEffect(() => {
     loadData();
@@ -175,7 +183,10 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
       });
       await loadData();
     } catch (err: any) {
-      onShowToast?.(err?.message || "Thêm biểu mẫu thất bại", "danger");
+      onShowToast?.(
+        err?.message || "Thêm biểu mẫu thất bại. Kiểm tra cấu hình Google Drive trên backend.",
+        "danger",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -298,6 +309,9 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
     return found ? found.label : category || "Chung";
   };
 
+  const normalizeFilterValue = (value?: string | null) =>
+    (value || "").trim().toLocaleLowerCase("vi-VN");
+
   const formatFileSize = (bytes: number) => {
     if (!bytes || bytes === 0) return "0 KB";
     const k = 1024;
@@ -317,17 +331,29 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
         const matchDesc = tpl.description?.toLowerCase().includes(term) ?? false;
         if (!matchTitle && !matchFileName && !matchDesc) return false;
       }
-      // Semester
+      // Semester: filter by the DTO id used by the option value.
       if (selectedSemester && tpl.semesterId !== selectedSemester) {
         return false;
       }
-      // Dept
-      if (selectedDept && tpl.department !== selectedDept && tpl.department !== null) {
+      // Department: match the raw code shown in the table; global templates do not
+      // appear as department-specific results.
+      if (
+        selectedDept &&
+        !normalizeFilterValue(tpl.department).includes(normalizeFilterValue(selectedDept))
+      ) {
         return false;
       }
-      // Category
-      if (selectedCategory && tpl.category !== selectedCategory) {
-        return false;
+      // Category: compare raw enum values; "Other" also catches legacy values.
+      if (selectedCategory) {
+        const knownCategories = CATEGORIES
+          .map((category) => category.value)
+          .filter(Boolean)
+          .map(normalizeFilterValue);
+        const normalizedCategory = normalizeFilterValue(tpl.category);
+        const categoryMatches = selectedCategory === "Other"
+          ? !knownCategories.includes(normalizedCategory)
+          : normalizedCategory === normalizeFilterValue(selectedCategory);
+        if (!categoryMatches) return false;
       }
       // Status
       if (selectedStatus === "published" && !tpl.isPublished) return false;
@@ -338,106 +364,28 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
   }, [templates, searchTerm, selectedSemester, selectedDept, selectedCategory, selectedStatus]);
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6 animate-fadeIn">
-      {/* Page Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="p-2 rounded-xl bg-blue-50 text-blue-600">
-              <FileText className="w-6 h-6" />
-            </span>
-            <h1 className="text-2xl font-bold text-slate-800">Biểu mẫu & Tài liệu chính thức</h1>
-          </div>
-          <p className="mt-1 text-sm text-slate-500">
-            Quản lý, ban hành và đồng bộ các biểu mẫu chuẩn thực tập theo từng Khoa và Học kỳ.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {canMutateOps && (
-            <button
-              onClick={handleSeedDefaults}
-              disabled={isSubmitting}
-              className="px-4 py-2.5 rounded-xl border border-indigo-200 bg-indigo-50/50 text-indigo-700 hover:bg-indigo-100/70 font-medium text-sm transition flex items-center gap-1.5 shadow-sm"
-              title="Nạp nhanh các biểu mẫu chuẩn thực tế"
-            >
-              <Sparkles className="w-4 h-4" />
-              <span>Nạp mẫu chuẩn</span>
-            </button>
-          )}
-
-          <button
-            onClick={() => loadData()}
-            disabled={refreshing}
-            className="p-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 transition"
-            title="Làm mới dữ liệu"
-          >
-            <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin text-blue-600" : ""}`} />
-          </button>
-
-          {canMutateOps && (
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm transition flex items-center gap-1.5 shadow-sm shadow-blue-200"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Thêm biểu mẫu mới</span>
-            </button>
-          )}
-        </div>
-      </div>
+    <div className="space-y-5 max-w-[1500px] mx-auto animate-in fade-in duration-200 pb-16 font-sans">
+      <PageHeader
+        icon={FileText}
+        title="Biểu mẫu & Tài liệu chính thức"
+        subtitle="Quản lý, ban hành và đồng bộ biểu mẫu chuẩn thực tập theo từng khoa và học kỳ."
+        actions={[
+          ...(canMutateOps ? [{ label: "Nạp mẫu chuẩn", icon: Sparkles, onClick: handleSeedDefaults, variant: "secondary" as const, disabled: isSubmitting }] : []),
+          { label: "Làm mới", icon: RefreshCw, onClick: () => void loadData(), variant: "secondary" as const, loading: refreshing, disabled: refreshing },
+          ...(canMutateOps ? [{ label: "Thêm biểu mẫu", icon: Plus, onClick: () => setShowCreateModal(true), variant: "primary" as const }] : []),
+        ]}
+      />
 
       {/* KPI Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
-            <FileText className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="text-xs font-medium text-slate-400 uppercase tracking-wider">Tổng số biểu mẫu</div>
-            <div className="text-2xl font-bold text-slate-800">{stats?.totalTemplates ?? templates.length}</div>
-          </div>
-        </div>
-
-        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
-            <CheckCircle2 className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="text-xs font-medium text-slate-400 uppercase tracking-wider">Đang ban hành</div>
-            <div className="text-2xl font-bold text-emerald-600">
-              {stats?.publishedCount ?? templates.filter((t) => t.isPublished).length}
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600">
-            <Archive className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="text-xs font-medium text-slate-400 uppercase tracking-wider">Đã lưu trữ / Tạm ẩn</div>
-            <div className="text-2xl font-bold text-amber-600">
-              {stats?.archivedCount ?? templates.filter((t) => !t.isPublished).length}
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600">
-            <Download className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="text-xs font-medium text-slate-400 uppercase tracking-wider">Lượt tải xuống</div>
-            <div className="text-2xl font-bold text-purple-600">
-              {stats?.totalDownloads ?? templates.reduce((acc, cur) => acc + cur.downloadCount, 0)}
-            </div>
-          </div>
-        </div>
-      </div>
+      <KpiGrid>
+        <KpiCard tone="blue" title="Tổng số biểu mẫu" value={stats?.totalTemplates ?? templates.length} icon={FileText} footer="Tất cả biểu mẫu trong thư viện" />
+        <KpiCard tone="emerald" title="Đang ban hành" value={stats?.publishedCount ?? templates.filter((t) => t.isPublished).length} icon={CheckCircle2} footer="Đang sẵn sàng sử dụng" />
+        <KpiCard tone="amber" title="Đã lưu trữ / Tạm ẩn" value={stats?.archivedCount ?? templates.filter((t) => !t.isPublished).length} icon={Archive} footer="Không hiển thị cho người dùng" />
+        <KpiCard tone="sky" title="Lượt tải xuống" value={stats?.totalDownloads ?? templates.reduce((acc, cur) => acc + cur.downloadCount, 0)} icon={Download} footer="Tổng lượt sử dụng biểu mẫu" />
+      </KpiGrid>
 
       {/* Filter Bar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm space-y-3">
+      <div className="bg-white p-4 rounded-lg border border-slate-200/80 shadow-xs space-y-3">
         <div className="flex flex-col md:flex-row items-center gap-3">
           {/* Search */}
           <div className="relative flex-1 w-full">
@@ -447,7 +395,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
               placeholder="Tìm kiếm biểu mẫu theo tên, nội dung hoặc tệp..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
+              className="w-full pl-9 pr-4 py-2 bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
             />
             {searchTerm && (
               <button
@@ -463,9 +411,9 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
           <select
             value={selectedDept}
             onChange={(e) => setSelectedDept(e.target.value)}
-            className="w-full md:w-48 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+            className="w-full md:w-48 px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
           >
-            {DEPARTMENTS.map((d) => (
+            {departmentOptions.map((d) => (
               <option key={d.value} value={d.value}>
                 {d.label}
               </option>
@@ -476,7 +424,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
           <select
             value={selectedSemester}
             onChange={(e) => setSelectedSemester(e.target.value)}
-            className="w-full md:w-52 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+            className="w-full md:w-52 px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
           >
             <option value="">Tất cả học kỳ</option>
             {semesters.map((s) => (
@@ -490,7 +438,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
-            className="w-full md:w-48 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+            className="w-full md:w-48 px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
           >
             {CATEGORIES.map((c) => (
               <option key={c.value} value={c.value}>
@@ -500,7 +448,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
           </select>
 
           {/* Status Segmented Control */}
-          <div className="flex bg-slate-100 p-1 rounded-xl w-full md:w-auto">
+          <div className="flex bg-slate-100 p-1 rounded-md w-full md:w-auto">
             <button
               onClick={() => setSelectedStatus("all")}
               className={`flex-1 md:flex-none px-3 py-1.5 rounded-lg text-xs font-medium transition ${
@@ -534,7 +482,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
       </div>
 
       {/* Templates List Table */}
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-lg border border-slate-200/80 shadow-xs overflow-hidden">
         {loading ? (
           <div className="p-12 text-center text-slate-400 flex flex-col items-center gap-3">
             <RefreshCw className="w-8 h-8 animate-spin text-blue-500" />
@@ -566,7 +514,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-slate-100 bg-slate-50/50 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                <tr className="bg-slate-50/80 border-b border-slate-200/80 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                   <th className="py-3.5 px-4">Tên biểu mẫu & Tệp</th>
                   <th className="py-3.5 px-4">Khoa & Học kỳ</th>
                   <th className="py-3.5 px-4">Danh mục</th>
@@ -806,7 +754,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
                     onChange={(e) => setCreateForm({ ...createForm, department: e.target.value })}
                     className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                   >
-                    {DEPARTMENTS.map((d) => (
+                    {departmentOptions.filter((d) => d.value).map((d) => (
                       <option key={d.value} value={d.value}>
                         {d.label}
                       </option>
@@ -994,7 +942,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
                     onChange={(e) => setEditForm({ ...editForm, department: e.target.value })}
                     className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                   >
-                    {DEPARTMENTS.map((d) => (
+                    {departmentOptions.filter((d) => d.value).map((d) => (
                       <option key={d.value} value={d.value}>
                         {d.label}
                       </option>

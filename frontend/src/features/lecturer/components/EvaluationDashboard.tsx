@@ -8,13 +8,11 @@ import { DynamicRubricEvaluation } from "./DynamicRubricEvaluation";
 import { EvaluationDetail } from "./EvaluationDetail";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { rubricService } from "../../../services/rubric.service";
-import { lecturerExportService } from "../../../services/lecturerExport.service";
 import { evaluationService } from "../../../services/evaluation.service";
 import { useSemester } from "../../../contexts/SemesterContext";
 import {
   Award,
   Search,
-  Download,
   CheckCircle2,
   Clock,
   FileText,
@@ -30,7 +28,6 @@ import {
   AlertTriangle,
   X,
   RefreshCw,
-  CalendarDays,
 } from "lucide-react";
 import type {
   LecturerEvaluationStudentDto,
@@ -65,7 +62,6 @@ export const EvaluationDashboard = () => {
   const [semesterFilter, setSemesterFilter] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("Tất cả");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [isExporting, setIsExporting] = useState(false);
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
@@ -170,35 +166,6 @@ export const EvaluationDashboard = () => {
     return { label: "Không đạt", color: "text-rose-700" };
   };
 
-  const handleExportExcel = async () => {
-    setIsExporting(true);
-    try {
-      await lecturerExportService.downloadInternshipExcel(semesterFilter ?? undefined);
-      showToast("Đã tải xuống DanhSachThucTap (.xlsx) của nhóm hướng dẫn");
-    } catch (err) {
-      showToast(getApiErrorMessage(err));
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
-  const handleExportGuidanceSchedule = async () => {
-    const semesterId = semesterFilter && semesterFilter !== "all" ? semesterFilter : activeSemesterId;
-    if (!semesterId) {
-      showToast("Vui lòng chọn học kỳ để xuất lịch hướng dẫn.");
-      return;
-    }
-    setIsExporting(true);
-    try {
-      await lecturerExportService.downloadGuidanceSchedule(semesterId);
-      showToast("Đã tải xuống Lịch hướng dẫn thực tập (.xlsx)");
-    } catch (err) {
-      showToast(getApiErrorMessage(err));
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
   if (rubricStudent) {
     const gradingStudent = mapStudentToGrading(rubricStudent);
     const semesterId =
@@ -262,24 +229,7 @@ export const EvaluationDashboard = () => {
         subtitle="Quản lý kết quả chấm điểm theo tiêu chí rubric cho sinh viên thực tập."
         badge={semesterFilter ?? "Tất cả kỳ"}
         badgeColor="bg-blue-100 text-blue-800 border-blue-200"
-        actions={[
-          {
-            label: "Xuất lịch hướng dẫn",
-            icon: CalendarDays,
-            onClick: () => void handleExportGuidanceSchedule(),
-            variant: "secondary",
-            disabled: isExporting || isLoadingApi,
-            loading: isExporting,
-          },
-          {
-            label: "Xuất bảng điểm",
-            icon: Download,
-            onClick: () => void handleExportExcel(),
-            variant: "primary",
-            disabled: isExporting || isLoadingApi,
-            loading: isExporting,
-          },
-        ]}
+        actions={[]}
       />
 
       <Toolbar

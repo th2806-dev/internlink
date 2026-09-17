@@ -60,7 +60,7 @@ public interface IStudentService
     /// <summary>
     /// Import students from an Excel (.xlsx) stream. Row 1 = headers.
     /// </summary>
-    Task<StudentImportResultDto> ImportStudentsFromExcelAsync(Stream excelStream, Guid? semesterId = null, Guid? departmentId = null);
+    Task<StudentImportResultDto> ImportStudentsFromExcelAsync(Stream excelStream, Guid? semesterId = null, Guid? departmentId = null, bool grantAccount = false);
 
     /// <summary>
     /// Build a blank Excel template for student import.

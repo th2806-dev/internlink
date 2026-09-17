@@ -33,8 +33,10 @@ export interface StudentWorkspaceData {
 }
 
 export function useStudentWorkspace(internshipId: string | undefined): StudentWorkspaceData {
-  const { activeSemesterId } = useSemester();
-  const semesterId = activeSemesterId || undefined;
+  const { activeSemesterId, selectedSemester } = useSemester();
+  const semesterId = selectedSemester?.id && selectedSemester.id !== "all"
+    ? selectedSemester.id
+    : activeSemesterId || undefined;
 
   const [detail, setDetail] = useState<InternshipDetailDto | null>(null);
   const [assignment, setAssignment] = useState<LecturerStudentListItemDto | null>(null);

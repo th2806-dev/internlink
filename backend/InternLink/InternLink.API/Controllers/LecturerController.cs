@@ -754,6 +754,26 @@ public class LecturerController : ControllerBase
     // 7. EXPORT
     // ==========================================
 
+    [HttpGet("semester-summary/{semesterId:guid}")]
+    public async Task<IActionResult> GetSemesterSummary(Guid semesterId)
+    {
+        var userId = User.GetUserId();
+        if (userId == null) return Unauthorized();
+        var summary = await _lecturerService.GetSemesterSummaryAsync(userId.Value, semesterId);
+        return Ok(ApiResponse<LecturerSemesterSummaryDto>.Ok(summary ?? new LecturerSemesterSummaryDto { SemesterId = semesterId }));
+    }
+
+    [HttpPut("semester-summary/{semesterId:guid}")]
+    public async Task<IActionResult> SaveSemesterSummary(Guid semesterId, [FromBody] SaveLecturerSemesterSummaryRequest request)
+    {
+        var userId = User.GetUserId();
+        if (userId == null) return Unauthorized();
+        var summary = await _lecturerService.SaveSemesterSummaryAsync(userId.Value, semesterId, request);
+        return summary == null
+            ? NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Không tìm thấy học kỳ hoặc giảng viên" }))
+            : Ok(ApiResponse<LecturerSemesterSummaryDto>.Ok(summary));
+    }
+
     /// <summary>
     /// Export end-of-term summary for all internships assigned to the current lecturer (Excel format).
     /// </summary>

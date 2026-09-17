@@ -17,6 +17,9 @@ public static class ClaimsPrincipalExtensions
     public static bool IsSuperAdmin(this ClaimsPrincipal user) =>
         user.IsInRole("SuperAdmin");
 
+    public static bool IsDepartmentAdmin(this ClaimsPrincipal user) =>
+        user.IsInRole("DepartmentAdmin");
+
     public static bool IsLecturer(this ClaimsPrincipal user) =>
         user.IsInRole("Lecturer");
 

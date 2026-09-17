@@ -308,7 +308,7 @@ export const DashboardView = ({
               title="Tiến độ thực tập"
               value={`${profile.overallProgress}%`}
               icon={Target}
-              footer={`${approvedCount} / ${totalWeeks} tuần hoàn thành`}
+              footer={`${profile.progressBreakdown?.submittedReportsCount ?? 0} / ${totalWeeks} báo cáo đã nộp`}
             />
             <KpiCard
               tone="emerald"
@@ -343,7 +343,7 @@ export const DashboardView = ({
             />
           </KpiGrid>
 
-          {/* PROGRESS BREAKDOWN 5-MILESTONE CARD */}
+          {/* PROGRESS BREAKDOWN: operational progress only */}
           {profile.progressBreakdown && (
             <Panel className="p-4 bg-gradient-to-r from-slate-50 via-blue-50/20 to-slate-50 border border-slate-200/80 rounded-xl shadow-xs">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-200/60">
@@ -353,7 +353,7 @@ export const DashboardView = ({
                   </div>
                   <div>
                     <h3 className="text-sm font-bold text-slate-900">
-                      Chi tiết tiến độ thực tập (5 tiêu chí)
+                      Chi tiết tiến độ thực tập
                     </h3>
                     <p className="text-[11px] text-slate-500 font-medium">
                       {profile.progressBreakdown.summaryText || "Đo lường minh bạch từ hoạt động thực tế"}
@@ -367,104 +367,26 @@ export const DashboardView = ({
                 </div>
               </div>
 
-              {/* Multi-segment progress bar */}
+              {/* Reports account for 80%; final evaluation accounts for 20%. */}
               <div className="w-full bg-slate-200 rounded-full h-2.5 my-3 flex overflow-hidden">
-                <div
-                  style={{ width: `${profile.progressBreakdown.accountPercent}%` }}
-                  className="bg-sky-500 h-full transition-all duration-300"
-                  title={`Tài khoản: ${profile.progressBreakdown.accountPercent}%`}
-                />
-                <div
-                  style={{ width: `${profile.progressBreakdown.profilePercent}%` }}
-                  className="bg-indigo-500 h-full transition-all duration-300"
-                  title={`Hồ sơ: ${profile.progressBreakdown.profilePercent}%`}
-                />
-                <div
-                  style={{ width: `${profile.progressBreakdown.companyPercent}%` }}
-                  className="bg-teal-500 h-full transition-all duration-300"
-                  title={`Doanh nghiệp: ${profile.progressBreakdown.companyPercent}%`}
-                />
                 <div
                   style={{ width: `${profile.progressBreakdown.reportPercent}%` }}
                   className="bg-blue-600 h-full transition-all duration-300"
-                  title={`Báo cáo tuần: ${profile.progressBreakdown.reportPercent}%`}
+                  title={`Báo cáo tuần: ${profile.progressBreakdown.reportPercent}% / 80%`}
                 />
                 <div
                   style={{ width: `${profile.progressBreakdown.evaluationPercent}%` }}
                   className="bg-emerald-500 h-full transition-all duration-300"
-                  title={`Đánh giá: ${profile.progressBreakdown.evaluationPercent}%`}
+                  title={`Đánh giá cuối kỳ: ${profile.progressBreakdown.evaluationPercent}% / 20%`}
                 />
               </div>
 
-              {/* 5 Milestones */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 pt-1 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1 text-xs">
                 <div className="p-2.5 rounded-lg border bg-white shadow-2xs border-slate-100 flex flex-col justify-between">
                   <div className="flex items-center justify-between text-[11px] font-bold">
-                    <span className="text-slate-600">1. Tài khoản</span>
-                    <span className={profile.progressBreakdown.accountPercent > 0 ? "text-sky-600" : "text-slate-400"}>
-                      {profile.progressBreakdown.accountPercent}/10%
-                    </span>
-                  </div>
-                  <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-1">
-                    {profile.progressBreakdown.accountPercent > 0 ? (
-                      <span className="text-sky-600 font-semibold flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3" /> Đã kích hoạt
-                      </span>
-                    ) : (
-                      <span className="text-slate-400 flex items-center gap-1">
-                        <Circle className="w-3 h-3" /> Chưa đăng nhập
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="p-2.5 rounded-lg border bg-white shadow-2xs border-slate-100 flex flex-col justify-between">
-                  <div className="flex items-center justify-between text-[11px] font-bold">
-                    <span className="text-slate-600">2. Hồ sơ cá nhân</span>
-                    <span className={profile.progressBreakdown.profilePercent > 0 ? "text-indigo-600" : "text-slate-400"}>
-                      {profile.progressBreakdown.profilePercent}/15%
-                    </span>
-                  </div>
-                  <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-1">
-                    {profile.progressBreakdown.profilePercent >= 15 ? (
-                      <span className="text-indigo-600 font-semibold flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3" /> Đầy đủ thông tin
-                      </span>
-                    ) : profile.progressBreakdown.profilePercent > 0 ? (
-                      <span className="text-amber-600 font-semibold">Cơ bản</span>
-                    ) : (
-                      <span className="text-slate-400 flex items-center gap-1">
-                        <Circle className="w-3 h-3" /> Chưa cập nhật
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="p-2.5 rounded-lg border bg-white shadow-2xs border-slate-100 flex flex-col justify-between">
-                  <div className="flex items-center justify-between text-[11px] font-bold">
-                    <span className="text-slate-600">3. Doanh nghiệp</span>
-                    <span className={profile.progressBreakdown.companyPercent > 0 ? "text-teal-600" : "text-slate-400"}>
-                      {profile.progressBreakdown.companyPercent}/20%
-                    </span>
-                  </div>
-                  <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-1">
-                    {profile.progressBreakdown.companyPercent > 0 ? (
-                      <span className="text-teal-600 font-semibold flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3" /> Đã phân bổ
-                      </span>
-                    ) : (
-                      <span className="text-slate-400 flex items-center gap-1">
-                        <Circle className="w-3 h-3" /> Chờ phân bổ
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="p-2.5 rounded-lg border bg-white shadow-2xs border-slate-100 flex flex-col justify-between">
-                  <div className="flex items-center justify-between text-[11px] font-bold">
-                    <span className="text-slate-600">4. Báo cáo tuần</span>
+                    <span className="text-slate-600">1. Báo cáo tuần</span>
                     <span className={profile.progressBreakdown.reportPercent > 0 ? "text-blue-600" : "text-slate-400"}>
-                      {profile.progressBreakdown.reportPercent}/35%
+                      {profile.progressBreakdown.reportPercent}/80%
                     </span>
                   </div>
                   <div className="text-[10px] text-slate-500 mt-1">
@@ -476,7 +398,7 @@ export const DashboardView = ({
 
                 <div className="p-2.5 rounded-lg border bg-white shadow-2xs border-slate-100 flex flex-col justify-between">
                   <div className="flex items-center justify-between text-[11px] font-bold">
-                    <span className="text-slate-600">5. Đánh giá cuối kỳ</span>
+                    <span className="text-slate-600">2. Đánh giá cuối kỳ</span>
                     <span className={profile.progressBreakdown.evaluationPercent > 0 ? "text-emerald-600" : "text-slate-400"}>
                       {profile.progressBreakdown.evaluationPercent}/20%
                     </span>

@@ -18,9 +18,10 @@ public class WeeklyReportService : IWeeklyReportService
     private readonly IMapper _mapper;
     private readonly INotificationService _notificationService;
     private readonly IWebHostEnvironment? _env;
+    private readonly IGoogleDriveService? _googleDrive;
 
     public WeeklyReportService(AppDbContext db, IMapper mapper, INotificationService notificationService)
-        : this(db, mapper, notificationService, null)
+        : this(db, mapper, notificationService, (IWebHostEnvironment?)null)
     {
     }
 
@@ -34,6 +35,17 @@ public class WeeklyReportService : IWeeklyReportService
         _mapper = mapper;
         _notificationService = notificationService;
         _env = env;
+    }
+
+    public WeeklyReportService(
+        AppDbContext db,
+        IMapper mapper,
+        INotificationService notificationService,
+        IWebHostEnvironment? env,
+        IGoogleDriveService googleDrive)
+        : this(db, mapper, notificationService, env)
+    {
+        _googleDrive = googleDrive;
     }
 
     public async Task<WeeklyReportDto?> GetByIdAsync(Guid id)
@@ -186,7 +198,7 @@ public class WeeklyReportService : IWeeklyReportService
         if (duplicate)
             throw new InvalidOperationException($"A weekly report for week {request.WeekNumber} already exists");
 
-        var (relativePath, savedFileName) = await SaveFileAsync(fileStream, originalFileName, request.InternshipId);
+        var (relativePath, savedFileName, fileId) = await StoreFileAsync(fileStream, originalFileName, request.InternshipId, mimeType);
         var report = new WeeklyReport
         {
             Id = Guid.NewGuid(),
@@ -196,6 +208,7 @@ public class WeeklyReportService : IWeeklyReportService
             Content = savedFileName,
             FileName = originalFileName,
             FileUrl = relativePath,
+            GoogleDriveFileId = fileId,
             FileSize = fileSize,
             MimeType = mimeType,
             Status = WeeklyReportStatus.Draft,
@@ -211,6 +224,7 @@ public class WeeklyReportService : IWeeklyReportService
             Version = report.Version,
             FileName = originalFileName,
             FileUrl = relativePath,
+            GoogleDriveFileId = fileId,
             FileSize = fileSize,
             MimeType = mimeType,
             UploadedById = userId,
@@ -259,12 +273,13 @@ public class WeeklyReportService : IWeeklyReportService
             throw new InvalidOperationException("Only draft or revision-requested reports can be updated");
 
         var oldFileUrl = report.FileUrl;
-        var (relativePath, savedFileName) = await SaveFileAsync(fileStream, originalFileName, report.InternshipId);
+        var (relativePath, savedFileName, fileId) = await StoreFileAsync(fileStream, originalFileName, report.InternshipId, mimeType);
         if (!string.IsNullOrWhiteSpace(request.Title))
             report.Title = request.Title;
         report.Content = savedFileName;
         report.FileName = originalFileName;
         report.FileUrl = relativePath;
+        report.GoogleDriveFileId = fileId;
         report.FileSize = fileSize;
         report.MimeType = mimeType;
         report.Version++;
@@ -277,6 +292,7 @@ public class WeeklyReportService : IWeeklyReportService
             Version = report.Version,
             FileName = originalFileName,
             FileUrl = relativePath,
+            GoogleDriveFileId = fileId,
             FileSize = fileSize,
             MimeType = mimeType,
             UploadedById = userId,
@@ -308,6 +324,16 @@ public class WeeklyReportService : IWeeklyReportService
             var isSuperAdmin = await _db.Users.AnyAsync(u => u.Id == userId && u.Role == Role.SuperAdmin && !u.IsDeleted);
             if (!isSuperAdmin)
                 throw new UnauthorizedAccessException("You do not have access to this file");
+        }
+
+        if (_googleDrive != null && report.FileUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+        {
+            return new WeeklyReportFileDownloadDto
+            {
+                FileContent = await _googleDrive.DownloadAsync(report.FileUrl),
+                FileName = report.FileName ?? "weekly-report.pdf",
+                MimeType = report.MimeType ?? "application/pdf"
+            };
         }
 
         var fullPath = Path.Combine(GetUploadRoot(), report.FileUrl.Replace("/", Path.DirectorySeparatorChar.ToString()));
@@ -694,6 +720,18 @@ public class WeeklyReportService : IWeeklyReportService
         return (
             Path.Combine(UploadFolder, internshipId.ToString(), savedFileName).Replace("\\", "/"),
             savedFileName);
+    }
+
+    private async Task<(string RelativePath, string SavedFileName, string? FileId)> StoreFileAsync(
+        Stream fileStream, string originalFileName, Guid internshipId, string mimeType)
+    {
+        if (_googleDrive == null)
+        {
+            var local = await SaveFileAsync(fileStream, originalFileName, internshipId);
+            return (local.RelativePath, local.SavedFileName, null);
+        }
+        var uploaded = await _googleDrive.UploadAsync(fileStream, originalFileName, mimeType);
+        return (uploaded.WebViewLink, uploaded.FileName, uploaded.FileId);
     }
 
     private void DeleteStoredFile(string? relativePath)

@@ -1,5 +1,6 @@
 using InternLink.Application.DTOs;
 using InternLink.Application.Interfaces;
+using InternLink.Shared.Authorization;
 using InternLink.Shared.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -42,7 +43,7 @@ public class LecturerProfileController : ControllerBase
     }
 
     [HttpGet("{id:guid}/overview")]
-    [Authorize(Policy = "RequireAdmin")]
+    [Authorize(Policy = AdminPolicies.DepartmentAdmin)]
     public async Task<IActionResult> GetOverview(Guid id)
     {
         var lecturer = await _service.GetByIdAsync(id);
@@ -126,7 +127,7 @@ public class LecturerProfileController : ControllerBase
     [Authorize(Policy = "RequireDepartmentAdmin")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(10 * 1024 * 1024)]
-    public async Task<IActionResult> Import(IFormFile file, [FromQuery] Guid? semesterId = null)
+    public async Task<IActionResult> Import(IFormFile file, [FromQuery] Guid? semesterId = null, [FromQuery] bool grantAccount = false)
     {
         try
         {
@@ -138,7 +139,7 @@ public class LecturerProfileController : ControllerBase
 
             await using var stream = file.OpenReadStream();
             var deptId = _deptScope.GetCurrentDepartmentId(User);
-            var result = await _service.ImportFromExcelAsync(stream, semesterId, deptId);
+            var result = await _service.ImportFromExcelAsync(stream, semesterId, deptId, grantAccount);
             return Ok(ApiResponse<LecturerImportResultDto>.Ok(result));
         }
         catch (InvalidOperationException ex)

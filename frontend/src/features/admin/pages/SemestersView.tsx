@@ -60,12 +60,24 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
     selectedSemesterId,
     selectSemester,
     createSemester,
+    updateSemester,
     closeSemester,
     startSemester,
     duplicateSemester,
     refreshApiCounts,
   } = useSemester();
   const [showCreateModal, setShowCreateModal] = useState(false);
+  // null = create mode; a semester object = edit mode for that term.
+  const [editingSemester, setEditingSemester] = useState<null | {
+    id: string;
+    name: string;
+    term: string;
+    academicYear: string;
+    startDate: string;
+    endDate: string;
+    totalWeeks?: number;
+    description?: string;
+  }>(null);
   const [importType, setImportType] = useState(null);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [tableFilterStatus, setTableFilterStatus] = useState("all");
@@ -181,7 +193,10 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
                 {
                   label: "Tạo kỳ thực tập mới",
                   icon: Plus,
-                  onClick: () => setShowCreateModal(true),
+                  onClick: () => {
+                    setEditingSemester(null);
+                    setShowCreateModal(true);
+                  },
                   variant: "primary",
                 },
               ]
@@ -262,8 +277,21 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
                 {canMutateSemesters && (
                   <>
                     <button
-                      onClick={() => setShowCreateModal(true)}
-                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-md border border-slate-200/80 transition-colors flex items-center gap-1.5 cursor-pointer"
+                      onClick={() => {
+                        setEditingSemester({
+                          id: currentActiveSem.id,
+                          name: currentActiveSem.name,
+                          term: currentActiveSem.term,
+                          academicYear: currentActiveSem.academicYear,
+                          startDate: currentActiveSem.startDate,
+                          endDate: currentActiveSem.endDate,
+                          totalWeeks: "totalWeeks" in currentActiveSem ? currentActiveSem.totalWeeks : undefined,
+                          description: currentActiveSem.description,
+                        });
+                        setShowCreateModal(true);
+                      }}
+                      disabled={!currentActiveSem.id}
+                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-md border border-slate-200/80 transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
                     >
                       <Edit3 className="w-3.5 h-3.5" />
                       <span>Chỉnh sửa</span>
@@ -377,7 +405,7 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
           </Panel>
 
           {/* RUBRIC EDITOR — Tiêu chí chấm điểm */}
-          {currentActiveSem.id && (
+          {currentActiveSem.id && isDepartmentAdmin && (
             <RubricEditor
               semesterId={currentActiveSem.id}
               semesterName={currentActiveSem.name}
@@ -519,6 +547,25 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
                           {canMutateSemesters && (
                             <>
                               <button
+                                onClick={() => {
+                                  setEditingSemester({
+                                    id: sem.id,
+                                    name: sem.name,
+                                    term: sem.term,
+                                    academicYear: sem.academicYear,
+                                    startDate: sem.startDate,
+                                    endDate: sem.endDate,
+                                    totalWeeks: sem.totalWeeks,
+                                    description: sem.description,
+                                  });
+                                  setShowCreateModal(true);
+                                }}
+                                className="p-1.5 hover:bg-amber-50 text-slate-600 hover:text-amber-600 rounded-lg transition-colors cursor-pointer"
+                                title="Chỉnh sửa kỳ này"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
                                 onClick={() => handleDuplicateSemester(sem)}
                                 className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-slate-900 rounded-lg transition-colors cursor-pointer"
                                 title="Sao chép"
@@ -641,8 +688,12 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
       {/* MODALS */}
       <CreateSemesterModal
         isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
+        onClose={() => {
+          setShowCreateModal(false);
+          setEditingSemester(null);
+        }}
         onShowToast={onShowToast}
+        editing={editingSemester}
         onCreate={(data) => {
           createSemester({
             name: data.name,
@@ -655,6 +706,21 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
             status: "upcoming",
             description: `Đợt thực tập ${data.term} ${data.academicYear}`,
           });
+        }}
+        onUpdate={(id, data) => {
+          void updateSemester(
+            id,
+            {
+              name: data.name,
+              term: data.term,
+              academicYear: data.academicYear,
+              startDate: data.startDate,
+              endDate: data.endDate,
+              totalWeeks: data.totalWeeks,
+              description: data.description,
+            },
+            onShowToast,
+          );
         }}
       />
 

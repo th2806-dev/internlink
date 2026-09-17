@@ -89,6 +89,10 @@ public class CompanyImportResultDto
     public int UpdatedCount { get; set; }
     public int FailedCount { get; set; }
     public int SkippedDuplicateCount { get; set; }
+    /// <summary>Recruitment positions created from Mã Vị Trí/Tên vị trí columns.</summary>
+    public int PositionsCreatedCount { get; set; }
+    /// <summary>Recruitment positions refreshed from Mã Vị Trí/Tên vị trí columns.</summary>
+    public int PositionsUpdatedCount { get; set; }
     public IReadOnlyList<CompanyDto> CreatedCompanies { get; set; } = Array.Empty<CompanyDto>();
     public IReadOnlyList<CompanyDto> UpdatedCompanies { get; set; } = Array.Empty<CompanyDto>();
     public IReadOnlyList<CompanyImportErrorDto> Errors { get; set; } = Array.Empty<CompanyImportErrorDto>();
@@ -111,6 +115,8 @@ public class CompanyPositionDto
     public Guid CompanyId { get; set; }
     public string? CompanyName { get; set; }
     public Guid? SemesterId { get; set; }
+    /// <summary>External position code from the import Excel, e.g. "VT_FPT_01".</summary>
+    public string? PositionCode { get; set; }
     public string Title { get; set; } = null!;
     public string? Description { get; set; }
     public string? RequiredMajor { get; set; }
@@ -129,6 +135,8 @@ public class CompanyPositionDto
 public class CreateCompanyPositionRequest
 {
     public Guid? SemesterId { get; set; }
+    /// <summary>External position code from the import Excel, e.g. "VT_FPT_01".</summary>
+    public string? PositionCode { get; set; }
     public string Title { get; set; } = null!;
     public string? Description { get; set; }
     public string? RequiredMajor { get; set; }

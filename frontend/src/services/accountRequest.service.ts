@@ -51,20 +51,20 @@ export const accountRequestService = {
     if (params?.take) qs.set("take", String(params.take));
     const query = qs.toString();
     return apiRequestRaw<AccountRequestDto[]>(
-      `/api/Admin/account-requests${query ? `?${query}` : ""}`,
+      `/api/SuperAdmin/account-requests${query ? `?${query}` : ""}`,
     );
   },
 
   async getById(id: string): Promise<AccountRequestDto> {
     return apiRequestRaw<AccountRequestDto>(
-      `/api/Admin/account-requests/${id}`,
+      `/api/SuperAdmin/account-requests/${id}`,
     );
   },
 
   async create(
     payload: CreateAccountRequestPayload,
   ): Promise<AccountRequestDto> {
-    return apiRequestRaw<AccountRequestDto>("/api/Admin/account-requests", {
+    return apiRequestRaw<AccountRequestDto>("/api/SuperAdmin/account-requests", {
       method: "POST",
       body: payload,
     });
@@ -79,7 +79,7 @@ export const accountRequestService = {
     },
   ): Promise<AccountRequestDto> {
     return apiRequestRaw<AccountRequestDto>(
-      `/api/Admin/account-requests/${id}/process`,
+      `/api/SuperAdmin/account-requests/${id}/process`,
       {
         method: "POST",
         body: payload,
@@ -89,7 +89,7 @@ export const accountRequestService = {
 
   async getPendingCount(): Promise<number> {
     return apiRequestRaw<number>(
-      "/api/Admin/account-requests/pending-count",
+      "/api/SuperAdmin/account-requests/pending-count",
     );
   },
 };

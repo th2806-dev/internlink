@@ -14,6 +14,7 @@ import {
 import type { Student } from "../../../types/student";
 import type { WeeklyReportDto } from "../../../types/api";
 import { weeklyReportService } from "../../../services/weeklyReport.service";
+import { useSemester } from "../../../contexts/SemesterContext";
 
 interface StudentProgressWorkspaceProps {
   student: Student;
@@ -26,6 +27,8 @@ export const StudentProgressWorkspace = ({
   onBack,
   onSendReminder,
 }: StudentProgressWorkspaceProps) => {
+  const { selectedSemester } = useSemester();
+  const totalWeeks = selectedSemester?.totalWeeks || 6;
   const [activeTab, setActiveTab] = useState<
     "timeline" | "logbook" | "history"
   >("timeline");
@@ -51,8 +54,8 @@ export const StudentProgressWorkspace = ({
     };
   }, [student.id]);
 
-  // Derive timeline from real reports if available, else generated standard 8-week schedule
-  const weeksTimeline = Array.from({ length: 8 }, (_, i) => {
+  // Derive timeline from real reports and the selected semester's configured duration.
+  const weeksTimeline = Array.from({ length: totalWeeks }, (_, i) => {
     const weekNum = i + 1;
     const rep = reports.find((r) => r.weekNumber === weekNum);
     const isSubmitted = rep && (rep.status === "SUBMITTED" || rep.status === "REVIEWED" || rep.status === "APPROVED");
@@ -139,7 +142,7 @@ export const StudentProgressWorkspace = ({
             <span className="text-2xl font-bold text-blue-900">
               {student.progress}%
             </span>
-            <span className="text-xs font-bold text-blue-600">Tuần 6 / 8</span>
+              <span className="text-xs font-bold text-blue-600">Tối đa {totalWeeks} tuần</span>
           </div>
           <div className="w-full bg-blue-200 h-2 rounded-full mt-2 overflow-hidden">
             <div
@@ -197,7 +200,7 @@ export const StudentProgressWorkspace = ({
           onClick={() => setActiveTab("timeline")}
           className={`px-4 py-2 text-xs font-bold rounded-md transition-all cursor-pointer ${activeTab === "timeline" ? "bg-blue-600 text-white shadow-xs" : "text-slate-600 hover:bg-slate-100"}`}
         >
-          Lộ trình Mốc thời gian (8 Tuần)
+          Lộ trình Mốc thời gian ({totalWeeks} Tuần)
         </button>
         <button
           onClick={() => setActiveTab("logbook")}
@@ -207,7 +210,7 @@ export const StudentProgressWorkspace = ({
         </button>
       </div>
 
-      {/* Tab 1: Timeline 8 Weeks */}
+      {/* Tab 1: Timeline */}
       {activeTab === "timeline" && (
         <div className="bg-white rounded-lg p-5 border border-slate-200/80 shadow-xs space-y-4">
           <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">

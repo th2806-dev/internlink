@@ -49,10 +49,13 @@ export const adminLecturersService = {
     });
   },
 
-  importExcel(file: File, semesterId?: string) {
+  importExcel(file: File, semesterId?: string, grantAccount = false) {
     const form = new FormData();
     form.append("file", file);
-    const qs = semesterId && semesterId !== "all" ? `?semesterId=${semesterId}` : "";
+    const params = new URLSearchParams();
+    if (semesterId && semesterId !== "all") params.set("semesterId", semesterId);
+    params.set("grantAccount", String(grantAccount));
+    const qs = `?${params.toString()}`;
     return apiRequest<LecturerImportResultDto>(
       `/api/LecturerProfile/import${qs}`,
       {

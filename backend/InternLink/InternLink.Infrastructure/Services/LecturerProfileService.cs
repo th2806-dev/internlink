@@ -107,7 +107,7 @@ public class LecturerProfileService : ILecturerProfileService
         if (request.GrantAccount || !string.IsNullOrWhiteSpace(request.Username))
         {
             createdUsername = (request.Username ?? request.StaffCode).Trim();
-            var ensure = await EnsureLecturerUserAsync(createdUsername, request.FullName, request.Email);
+            var ensure = await EnsureLecturerUserAsync(createdUsername, request.FullName, request.Email, departmentId);
             userId = ensure.UserId;
             createdNewUser = ensure.CreatedNew;
             createdTemporaryPassword = ensure.TemporaryPassword;
@@ -169,7 +169,7 @@ public class LecturerProfileService : ILecturerProfileService
 
             var username = (request.Username ?? lecturer.StaffCode).Trim();
             var email = NullIfWhiteSpace(request.Email) ?? lecturer.Email;
-            var ensure = await EnsureLecturerUserAsync(username, request.FullName, email);
+            var ensure = await EnsureLecturerUserAsync(username, request.FullName, email, lecturer.DepartmentId);
             lecturer.UserId = ensure.UserId;
 
             if (ensure.CreatedNew && ensure.TemporaryPassword != null)
@@ -252,7 +252,7 @@ public class LecturerProfileService : ILecturerProfileService
         };
     }
 
-    public async Task<LecturerImportResultDto> ImportFromExcelAsync(Stream excelStream, Guid? semesterId = null, Guid? departmentId = null)
+    public async Task<LecturerImportResultDto> ImportFromExcelAsync(Stream excelStream, Guid? semesterId = null, Guid? departmentId = null, bool grantAccount = false)
     {
         if (excelStream == null || !excelStream.CanRead)
             throw new ArgumentException("Excel file stream is required");
@@ -364,7 +364,7 @@ public class LecturerProfileService : ILecturerProfileService
                 if (existingLecturer.User != null)
                 {
                     // Revive the login account that was soft-deleted together with the lecturer.
-                    if (existingLecturer.User.IsDeleted)
+                    if (grantAccount && existingLecturer.User.IsDeleted)
                     {
                         existingLecturer.User.IsDeleted = false;
                         existingLecturer.User.IsActive = true;
@@ -374,7 +374,7 @@ public class LecturerProfileService : ILecturerProfileService
                         existingLecturer.User.Email = email.Trim();
                     existingLecturer.User.UpdatedAt = DateTime.UtcNow;
                 }
-                else if (!string.IsNullOrWhiteSpace(username) || !string.IsNullOrWhiteSpace(email))
+                else if (grantAccount && (!string.IsNullOrWhiteSpace(username) || !string.IsNullOrWhiteSpace(email)))
                 {
                     if (string.IsNullOrWhiteSpace(username))
                         username = staffCode;
@@ -383,7 +383,7 @@ public class LecturerProfileService : ILecturerProfileService
                     {
                         try
                         {
-                            var ensure = await EnsureLecturerUserAsync(username, fullName, email);
+                            var ensure = await EnsureLecturerUserAsync(username, fullName, email, departmentId);
                             existingLecturer.UserId = ensure.UserId;
                             if (ensure.CreatedNew && ensure.TemporaryPassword != null)
                             {
@@ -406,7 +406,7 @@ public class LecturerProfileService : ILecturerProfileService
                 username = staffCode;
 
             Guid? userId = null;
-            if (!string.IsNullOrWhiteSpace(username))
+            if (grantAccount && !string.IsNullOrWhiteSpace(username))
             {
                 username = username.Trim();
                 if (!seenUsernames.Add(username))
@@ -417,7 +417,7 @@ public class LecturerProfileService : ILecturerProfileService
 
                 try
                 {
-                    var ensure = await EnsureLecturerUserAsync(username, fullName, email);
+                    var ensure = await EnsureLecturerUserAsync(username, fullName, email, departmentId);
                     userId = ensure.UserId;
                     if (ensure.CreatedNew && ensure.TemporaryPassword != null)
                     {
@@ -598,7 +598,7 @@ public class LecturerProfileService : ILecturerProfileService
             mappings);
     }
 
-    private async Task<(Guid UserId, bool CreatedNew, string? TemporaryPassword)> EnsureLecturerUserAsync(string username, string fullName, string? email)
+    private async Task<(Guid UserId, bool CreatedNew, string? TemporaryPassword)> EnsureLecturerUserAsync(string username, string fullName, string? email, Guid? departmentId = null)
     {
         var existing = await _db.Users.FirstOrDefaultAsync(u => u.Username == username);
         if (existing != null)
@@ -638,6 +638,7 @@ public class LecturerProfileService : ILecturerProfileService
             FullName = fullName,
             Email = NullIfWhiteSpace(email),
             Role = Role.Lecturer,
+            DepartmentId = departmentId, // Scoped to the importing/creating admin's department so /admin/users lists it
             IsActive = true,
             MustChangePassword = true,
             CreatedAt = DateTime.UtcNow

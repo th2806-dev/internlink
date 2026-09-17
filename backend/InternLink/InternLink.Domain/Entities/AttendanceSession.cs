@@ -17,6 +17,7 @@ public class AttendanceSession : BaseEntity
     public int? DurationMinutes { get; set; } = 60;
     public string? Location { get; set; }
     public AttendanceSessionStatus Status { get; set; } = AttendanceSessionStatus.Scheduled;
+    public bool IsLecturerOnly { get; set; }
 
     public ICollection<AttendanceRecord> Records { get; set; } = new List<AttendanceRecord>();
 }

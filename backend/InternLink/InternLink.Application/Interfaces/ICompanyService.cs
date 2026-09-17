@@ -40,9 +40,9 @@ public interface ICompanyService
     Task SetCompanySemesterStatusAsync(Guid companyId, Guid semesterId, bool isLinked);
 
     /// <summary>
-    /// Create a new company
+    /// Create a new company. departmentId scopes the company to the creating admin's khoa.
     /// </summary>
-    Task<CompanyDto> CreateCompanyAsync(CreateCompanyRequest request);
+    Task<CompanyDto> CreateCompanyAsync(CreateCompanyRequest request, Guid? departmentId = null);
 
     /// <summary>
     /// Update an existing company
@@ -66,8 +66,9 @@ public interface ICompanyService
 
     /// <summary>
     /// Import companies from an Excel (.xlsx) stream. Row 1 = headers.
+    /// departmentId scopes imported companies to the importing admin's khoa.
     /// </summary>
-    Task<CompanyImportResultDto> ImportCompaniesFromExcelAsync(Stream excelStream);
+    Task<CompanyImportResultDto> ImportCompaniesFromExcelAsync(Stream excelStream, Guid? departmentId = null);
 
     /// <summary>
     /// Build a blank Excel template for company import.

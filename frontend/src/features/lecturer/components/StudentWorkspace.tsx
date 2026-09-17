@@ -40,7 +40,7 @@ type TabId = "overview" | "progress" | "reports" | "evaluation" | "attendance";
 
 const TABS: { id: TabId; label: string; icon: typeof Target }[] = [
   { id: "overview", label: "Tổng quan", icon: Target },
-  { id: "progress", label: "Tiến độ 6 tuần", icon: Clock },
+  { id: "progress", label: "Tiến độ", icon: Clock },
   { id: "reports", label: "Báo cáo & Bài nộp", icon: FileText },
   { id: "evaluation", label: "Đánh giá", icon: Star },
 ];

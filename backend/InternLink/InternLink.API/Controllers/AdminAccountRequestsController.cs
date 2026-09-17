@@ -1,5 +1,6 @@
 using InternLink.Application.DTOs;
 using InternLink.Application.Interfaces;
+using InternLink.Shared.Authorization;
 using InternLink.Shared.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -13,7 +14,8 @@ namespace InternLink.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/Admin/account-requests")]
-[Authorize(Policy = "RequireSuperAdmin")]
+[Route(AdminApiRoutes.SuperAdminPrefix + "/account-requests")]
+[Authorize(Policy = AdminPolicies.SuperAdmin)]
 public class AdminAccountRequestsController : ControllerBase
 {
     private readonly IAccountRequestService _service;

@@ -9,6 +9,7 @@ import {
   Bell,
   User,
   CalendarCheck,
+  ClipboardList,
 } from "lucide-react";
 import { FEATURES } from "../../../config/featureFlags";
 import { useAuth } from "../../../hooks/useAuth";
@@ -82,6 +83,11 @@ export const Sidebar = ({
           label: "Đánh giá & Chấm điểm",
           icon: Award,
           badge: stats.evaluatedCount > 0 ? String(stats.evaluatedCount) : undefined,
+        },
+        {
+          id: "summary",
+          label: "Tổng kết",
+          icon: ClipboardList,
         },
         {
           id: "analytics",

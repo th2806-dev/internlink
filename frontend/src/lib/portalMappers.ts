@@ -243,6 +243,7 @@ export function mapCompanyDetailDtoToEnterpriseDetail(detail: CompanyDetailDto):
     totalSubmissions: detail.totalSubmissions,
     totalWeeklyReports: detail.totalWeeklyReports,
     pendingReviewsCount: detail.pendingReviewsCount,
+    positions: detail.positions ?? [],
     internships: detail.internships.map((i) => ({
       id: i.id,
       studentId: i.studentId,

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using InternLink.Application.DTOs;
 using InternLink.Application.Interfaces;
+using InternLink.Shared.Authorization;
 using InternLink.Shared.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -19,7 +20,7 @@ namespace InternLink.API.Controllers;
 [ApiController]
 [Route("api/Admin/semesters")]
 [Route("api/Semesters")]
-[Authorize(Policy = "RequireAdmin")]
+[Authorize(Policy = AdminPolicies.DepartmentAdmin)]
 public class AdminSemestersController : ControllerBase
 {
     private readonly ISemesterService _semesterService;
@@ -34,8 +35,8 @@ public class AdminSemestersController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetAll([FromQuery] Guid? departmentId = null)
     {
-        var deptId = _deptScope.ResolveEffectiveDepartmentId(User, departmentId);
-        var semesters = await _semesterService.GetAllSemestersAsync(departmentId: deptId);
+        var departmentIdForQuery = _deptScope.GetCurrentDepartmentId(User);
+        var semesters = await _semesterService.GetAllSemestersAsync(departmentId: departmentIdForQuery);
         return Ok(ApiResponse<IEnumerable<SemesterDto>>.Ok(semesters));
     }
 

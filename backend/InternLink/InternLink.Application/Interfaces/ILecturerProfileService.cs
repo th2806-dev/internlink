@@ -10,7 +10,7 @@ public interface ILecturerProfileService
     Task<LecturerDto> CreateAsync(CreateLecturerRequest request, Guid? departmentId = null);
     Task<LecturerDto?> UpdateAsync(Guid id, UpdateLecturerRequest request);
     Task<bool> DeleteAsync(Guid id);
-    Task<LecturerImportResultDto> ImportFromExcelAsync(Stream excelStream, Guid? semesterId = null, Guid? departmentId = null);
+    Task<LecturerImportResultDto> ImportFromExcelAsync(Stream excelStream, Guid? semesterId = null, Guid? departmentId = null, bool grantAccount = false);
     byte[] GetImportTemplate();
     Task<byte[]> ExportLecturersExcelAsync(Guid? departmentId = null);
     Task<LecturerOverviewDto?> GetOverviewAsync(Guid lecturerId);

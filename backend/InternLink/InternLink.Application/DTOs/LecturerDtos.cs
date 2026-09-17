@@ -92,6 +92,7 @@ public sealed class SubmissionDto
     public string? FileName { get; set; }
 
     public string? FileUrl { get; set; }
+    public string? GoogleDriveFileId { get; set; }
 
     public DateTime SubmittedAt { get; set; }
 
@@ -107,6 +108,7 @@ public sealed class SubmissionAssetDto
     public string? Label { get; set; }
     public string? FileName { get; set; }
     public string? FileUrl { get; set; }
+    public string? GoogleDriveFileId { get; set; }
     public string AssetType { get; set; } = "file";
     public long? FileSize { get; set; }
     public string? MimeType { get; set; }
@@ -202,6 +204,7 @@ public sealed class LecturerStudentListItemDto
     public int WeeklyReportCount { get; set; }
     public int PendingReportCount { get; set; }
     public int SubmissionCount { get; set; }
+    public string? Notes { get; set; }
     public decimal? FinalGrade { get; set; }
     public bool HasEvaluation { get; set; }
     public bool IsEvaluationFinalized { get; set; }
@@ -305,6 +308,7 @@ public sealed class CompanyDetailDto
     public int TotalSubmissions { get; set; }
     public int TotalWeeklyReports { get; set; }
     public int PendingReviewsCount { get; set; }
+    public IEnumerable<CompanyPositionDto> Positions { get; set; } = Array.Empty<CompanyPositionDto>();
     public IEnumerable<InternshipListItemDto> Internships { get; set; } = Array.Empty<InternshipListItemDto>();
 }
 

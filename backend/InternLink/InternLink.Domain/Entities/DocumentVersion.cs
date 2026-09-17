@@ -16,6 +16,7 @@ public class DocumentVersion : BaseEntity
 
     public string FileName { get; set; } = null!;
     public string FilePath { get; set; } = null!;
+    public string? GoogleDriveFileId { get; set; }
     public long FileSize { get; set; }
     public string MimeType { get; set; } = "application/octet-stream";
 

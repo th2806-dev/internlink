@@ -373,6 +373,30 @@ export const AssignmentsView = ({
     void loadAssignmentHistory();
   };
 
+  const handleRandomAssign = async () => {
+    if (!effectiveSemesterId) {
+      onShowToast("Vui lòng chọn một học kỳ cụ thể để phân bổ ngẫu nhiên.");
+      return;
+    }
+
+    if (!window.confirm("Phân bổ ngẫu nhiên toàn bộ sinh viên chưa có GVHD trong học kỳ này?")) {
+      return;
+    }
+
+    try {
+      const result = await adminAssignmentsService.autoAssign({
+        strategy: "random",
+        semesterId: effectiveSemesterId,
+      });
+      onShowToast(
+        `Đã phân bổ ngẫu nhiên ${result.totalAssigned} sinh viên cho ${result.lecturersUsed} giảng viên.`,
+      );
+      await apiMatrix.reload();
+    } catch (err) {
+      onShowToast(getApiErrorMessage(err));
+    }
+  };
+
   return (
     <div className="space-y-5 max-w-[1500px] mx-auto">
       <PageHeader
@@ -384,10 +408,16 @@ export const AssignmentsView = ({
             : `${apiMatrix.lecturers.length} GV · ${apiMatrix.students.length} SV`
         }
         actions={[
-          ...(canMutateOps
+          ...(canMutateOps && activeTab === "by-lecturer"
             ? [
                 {
-                  label: "Import PC Giảng viên",
+                  label: "Phân bổ ngẫu nhiên",
+                  icon: Sparkles,
+                  onClick: () => void handleRandomAssign(),
+                  variant: "primary" as const,
+                },
+                {
+                  label: "Import Excel GVHD",
                   icon: FileUp,
                   onClick: () => setShowImportLecturerModal(true),
                   variant: "secondary" as const,

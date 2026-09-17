@@ -19,7 +19,7 @@ export interface AdminBroadcastResultDto {
 export const adminNotificationsService = {
   getCampaigns(take = 100): Promise<AdminNotificationCampaignDto[]> {
     return apiRequest<AdminNotificationCampaignDto[]>(
-      `/api/Admin/notifications?take=${take}`,
+      `/api/DepartmentAdmin/notifications?take=${take}`,
     );
   },
 
@@ -30,7 +30,7 @@ export const adminNotificationsService = {
     audience: "all" | "student" | "lecturer";
   }): Promise<AdminBroadcastResultDto> {
     return apiRequest<AdminBroadcastResultDto>(
-      "/api/Admin/notifications/broadcast",
+      "/api/DepartmentAdmin/notifications/broadcast",
       { method: "POST", body },
     );
   },
@@ -40,7 +40,7 @@ export const adminNotificationsService = {
     content: string;
     sentAt: string;
   }): Promise<void> {
-    return apiRequest<void>("/api/Admin/notifications/campaign", {
+    return apiRequest<void>("/api/DepartmentAdmin/notifications/campaign", {
       method: "DELETE",
       body,
     });

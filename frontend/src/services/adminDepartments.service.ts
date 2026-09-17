@@ -29,30 +29,36 @@ export interface UpdateDepartmentRequest {
 }
 
 export const adminDepartmentsService = {
-  getAll(): Promise<DepartmentDto[]> {
-    return apiRequest<DepartmentDto[]>('/api/Admin/departments');
+  getAll(backendRole?: string | null): Promise<DepartmentDto[]> {
+    const route = backendRole === "DepartmentAdmin"
+      ? "/api/DepartmentAdmin/departments"
+      : "/api/SuperAdmin/departments";
+    return apiRequest<DepartmentDto[]>(route);
   },
 
-  getById(id: string): Promise<DepartmentDto> {
-    return apiRequest<DepartmentDto>(`/api/Admin/departments/${id}`);
+  getById(id: string, backendRole?: string | null): Promise<DepartmentDto> {
+    const route = backendRole === "DepartmentAdmin"
+      ? "/api/DepartmentAdmin/departments"
+      : "/api/SuperAdmin/departments";
+    return apiRequest<DepartmentDto>(`${route}/${id}`);
   },
 
   create(body: CreateDepartmentRequest): Promise<DepartmentDto> {
-    return apiRequest<DepartmentDto>('/api/Admin/departments', {
+    return apiRequest<DepartmentDto>('/api/SuperAdmin/departments', {
       method: 'POST',
       body,
     });
   },
 
   update(id: string, body: UpdateDepartmentRequest): Promise<DepartmentDto> {
-    return apiRequest<DepartmentDto>(`/api/Admin/departments/${id}`, {
+    return apiRequest<DepartmentDto>(`/api/SuperAdmin/departments/${id}`, {
       method: 'PUT',
       body,
     });
   },
 
   delete(id: string): Promise<void> {
-    return apiRequest<void>(`/api/Admin/departments/${id}`, {
+    return apiRequest<void>(`/api/SuperAdmin/departments/${id}`, {
       method: 'DELETE',
     });
   },

@@ -656,6 +656,63 @@ public class CompanyServiceTests
         company.Capacity.Should().Be(10);
     }
 
+    [Fact]
+    public async Task ImportCompaniesFromExcelAsync_RowPerPosition_ShouldCreateCompanyOnceAndUpsertPositions()
+    {
+        var db = GetInMemoryDbContext();
+        var service = new CompanyService(db, _mapper, Mock.Of<IExcelService>());
+
+        // Row-per-position layout: the same company (code DN_FPT) repeats on 2 rows,
+        // each row introducing a distinct recruitment position.
+        using var workbook = new ClosedXML.Excel.XLWorkbook();
+        var sheet = workbook.Worksheets.Add("Companies");
+        sheet.Cell(1, 1).Value = "DANH SÁCH DOANH NGHIỆP LIÊN KẾT";
+        sheet.Cell(2, 1).Value = "STT";
+        sheet.Cell(2, 2).Value = "Mã DN";
+        sheet.Cell(2, 3).Value = "Tên công ty";
+        sheet.Cell(2, 4).Value = "Ngành";
+        sheet.Cell(2, 10).Value = "Mã Vị Trí";
+        sheet.Cell(2, 11).Value = "Tên vị trí tuyển dụng";
+        sheet.Cell(2, 12).Value = "Chuyên ngành yêu cầu";
+        sheet.Cell(2, 13).Value = "Số lượng tiếp nhận";
+
+        sheet.Cell(3, 2).Value = "DN_FPT";
+        sheet.Cell(3, 3).Value = "Công ty TNHH FPT Software";
+        sheet.Cell(3, 4).Value = "CNTT";
+        sheet.Cell(3, 10).Value = "VT_FPT_01";
+        sheet.Cell(3, 11).Value = "Backend Developer";
+        sheet.Cell(3, 12).Value = "Cong nghe phan mem";
+        sheet.Cell(3, 13).Value = 4;
+
+        sheet.Cell(4, 2).Value = "DN_FPT";
+        sheet.Cell(4, 3).Value = "Công ty TNHH FPT Software";
+        sheet.Cell(4, 4).Value = "CNTT";
+        sheet.Cell(4, 10).Value = "VT_FPT_02";
+        sheet.Cell(4, 11).Value = "Frontend Developer";
+        sheet.Cell(4, 12).Value = "Cong nghe phan mem";
+        sheet.Cell(4, 13).Value = 3;
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        stream.Position = 0;
+
+        var result = await service.ImportCompaniesFromExcelAsync(stream);
+
+        result.FailedCount.Should().Be(0);
+        result.Errors.Should().BeEmpty();
+        result.CreatedCount.Should().Be(1);
+        result.PositionsCreatedCount.Should().Be(2);
+
+        (await db.Companies.CountAsync(c => !c.IsDeleted)).Should().Be(1);
+        var positions = await db.CompanyPositions.OrderBy(p => p.PositionCode).ToListAsync();
+        positions.Should().HaveCount(2);
+        positions[0].PositionCode.Should().Be("VT_FPT_01");
+        positions[0].Title.Should().Be("Backend Developer");
+        positions[0].Slots.Should().Be(4);
+        positions[1].PositionCode.Should().Be("VT_FPT_02");
+        positions[1].Slots.Should().Be(3);
+    }
+
     private static MemoryStream CreateCompanyExcel(
         params (string? Code, string Name, string? Industry, string? Contact, string? Email, string? Phone, string? Address, string? Website, string? Capacity)[] rows)
     {

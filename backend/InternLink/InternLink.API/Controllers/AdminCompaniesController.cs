@@ -1,5 +1,6 @@
 using InternLink.Application.DTOs;
 using InternLink.Application.Interfaces;
+using InternLink.Shared.Authorization;
 using InternLink.Shared.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -11,7 +12,8 @@ namespace InternLink.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/Admin/companies")]
-[Authorize(Policy = "RequireAdmin")]
+[Route(AdminApiRoutes.DepartmentAdminPrefix + "/companies")]
+[Authorize(Policy = AdminPolicies.DepartmentAdmin)]
 public class AdminCompaniesController : ControllerBase
 {
     private readonly ICompanyService _companyService;
@@ -132,7 +134,7 @@ public class AdminCompaniesController : ControllerBase
             if (!ModelState.IsValid)
                 return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Invalid input" }));
 
-            var company = await _companyService.CreateCompanyAsync(request);
+            var company = await _companyService.CreateCompanyAsync(request, _deptScope.GetCurrentDepartmentId(User));
             return CreatedAtAction(nameof(GetById), new { id = company.Id }, ApiResponse<CompanyDto>.Ok(company));
         }
         catch (InvalidOperationException ex)
@@ -202,7 +204,7 @@ public class AdminCompaniesController : ControllerBase
                 return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Only .xlsx files are supported" }));
 
             await using var stream = file.OpenReadStream();
-            var result = await _companyService.ImportCompaniesFromExcelAsync(stream);
+            var result = await _companyService.ImportCompaniesFromExcelAsync(stream, _deptScope.GetCurrentDepartmentId(User));
             return Ok(ApiResponse<CompanyImportResultDto>.Ok(result));
         }
         catch (InvalidOperationException ex)

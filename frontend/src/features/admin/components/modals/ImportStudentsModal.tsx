@@ -55,11 +55,13 @@ export const ImportStudentsModal = ({
       const res = await adminStudentsService.importExcel(
         selectedFile,
         currentSemesterId ?? undefined,
+        undefined,
+        false,
       );
       setResult(res);
       if (res.successCount > 0) {
         onShowToast(
-          `Import thành công ${res.successCount}/${res.totalRows} sinh viên · Đã tạo tài khoản: ${res.emailSentCount || res.successCount}`,
+          `Import thành công ${res.successCount}/${res.totalRows} sinh viên · Có thể cấp tài khoản sau trong danh sách`,
         );
         onSuccess();
       } else {
@@ -145,7 +147,7 @@ export const ImportStudentsModal = ({
                   : "Bấm để chọn file Excel hoặc kéo thả file vào đây"}
               </p>
               <p className="text-[10px] text-slate-500 font-medium mt-0.5">
-                Định dạng hỗ trợ: .xlsx, .xls • Tự động tạo hồ sơ sinh viên và cấp tài khoản đăng nhập
+                Định dạng hỗ trợ: .xlsx, .xls • Tạo hồ sơ sinh viên từ file Excel
               </p>
             </div>
           </div>

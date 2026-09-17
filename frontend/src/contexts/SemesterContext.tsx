@@ -81,6 +81,7 @@ interface SemesterContextType {
   selectSemester: (id: string) => void;
   selectDepartment: (id: string) => void;
   createSemester: (data: Partial<Semester> & { name: string; term: string; academicYear: string }) => Promise<void>;
+  updateSemester: (id: string, data: Partial<Semester> & { name: string; term: string; academicYear: string }, onShowToast?: (msg: string) => void) => Promise<void>;
   startSemester: (id: string, onShowToast?: (msg: string) => void) => Promise<void>;
   closeSemester: (id: string, onShowToast?: (msg: string) => void) => Promise<void>;
   duplicateSemester: (sem: Semester, onShowToast?: (msg: string) => void) => void;
@@ -120,17 +121,20 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         // SuperAdmin picks a department -> only that department's terms show up.
         const backendSemesters = await adminSemestersService.getAll(
           selectedDepartmentId && selectedDepartmentId !== "all" ? selectedDepartmentId : undefined,
+          user?.backendRole,
         );
         setSemesters(backendSemesters.map(mapBackendToFrontend));
         return;
       }
 
       const currentSemester = await semesterPortalService.getCurrent().catch(() => null);
-      setSemesters(currentSemester ? [mapBackendToFrontend(currentSemester)] : []);
+      const mappedSemester = currentSemester ? mapBackendToFrontend(currentSemester) : null;
+      setSemesters(mappedSemester ? [mappedSemester] : []);
+      setSelectedSemesterId(mappedSemester?.id ?? "");
     } catch (err) {
       console.warn("Error refreshing semester API counts:", err);
     }
-  }, [role, selectedDepartmentId]);
+  }, [role, selectedDepartmentId, user?.backendRole]);
 
   useEffect(() => {
     refreshApiCounts();
@@ -147,13 +151,13 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [semesters]);
 
   useEffect(() => {
-    if (semesters.length > 0 && !selectedSemesterId) {
+    if (semesters.length > 0 && (selectedSemesterId === "all" || !selectedSemesterId || !semesters.some((s) => s.id === selectedSemesterId))) {
       const active = semesters.find((s) => s.status === "active");
       const withStudents = semesters.find((s) => s.studentsCount > 0);
       const best = active || withStudents || semesters[0];
-      if (best) setSelectedSemesterId("all");
+      if (best) setSelectedSemesterId(role === "admin" ? "all" : best.id);
     }
-  }, [semesters, selectedSemesterId]);
+  }, [semesters, selectedSemesterId, role]);
 
   useEffect(() => {
     try {
@@ -181,7 +185,7 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       try {
         if (user?.backendRole === "DepartmentAdmin" && user.departmentId) {
-          const dept = await adminDepartmentsService.getById(user.departmentId);
+          const dept = await adminDepartmentsService.getById(user.departmentId, user.backendRole);
           if (!cancelled) {
             setDepartments([
               {
@@ -197,7 +201,7 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           return;
         }
 
-        const backendDepartments = await adminDepartmentsService.getAll();
+        const backendDepartments = await adminDepartmentsService.getAll(user?.backendRole);
         if (!cancelled) {
           const visibleDepartments = backendDepartments
             .filter((d) => d.isActive)
@@ -340,6 +344,30 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setSelectedSemesterId(newSem.id);
   };
 
+  const updateSemester = async (
+    id: string,
+    data: Partial<Semester> & { name: string; term: string; academicYear: string },
+    onShowToast?: (msg: string) => void,
+  ) => {
+    try {
+      const updated = await adminSemestersService.update(id, {
+        name: data.name,
+        term: data.term,
+        academicYear: data.academicYear,
+        startDate: data.startDate || null,
+        endDate: data.endDate || null,
+        description: data.description,
+        totalWeeks: data.totalWeeks || 6,
+      });
+      const mapped = mapBackendToFrontend(updated);
+      setSemesters((prev) => prev.map((semester) => (semester.id === id ? mapped : semester)));
+      onShowToast?.(`Đã cập nhật kỳ thực tập: "${mapped.name}".`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Không thể cập nhật kỳ thực tập.";
+      onShowToast?.(message);
+    }
+  };
+
   const closeSemester = async (id: string, onShowToast?: (msg: string) => void) => {
     let closedName = "";
 
@@ -424,6 +452,7 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         selectSemester,
         selectDepartment,
         createSemester,
+        updateSemester,
         startSemester,
         closeSemester,
         duplicateSemester,

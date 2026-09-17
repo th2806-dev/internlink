@@ -141,6 +141,7 @@ export interface CompanyPositionDto {
   companyId: string;
   companyName?: string | null;
   semesterId?: string | null;
+  positionCode?: string | null;
   title: string;
   description?: string | null;
   requiredMajor?: string | null;
@@ -266,7 +267,7 @@ export interface AssignmentHistoryItemDto {
 }
 
 export interface AutoAssignRequestDto {
-  strategy: "department" | "even";
+  strategy: "department" | "even" | "random";
   semesterId?: string;
 }
 
@@ -384,6 +385,7 @@ export interface LecturerStudentListItemDto {
   weeklyReportCount: number;
   pendingReportCount: number;
   submissionCount: number;
+  notes?: string | null;
   finalGrade?: number | null;
   hasEvaluation: boolean;
   isEvaluationFinalized: boolean;
@@ -403,6 +405,7 @@ export interface CompanyDetailDto {
   totalSubmissions: number;
   totalWeeklyReports: number;
   pendingReviewsCount: number;
+  positions?: CompanyPositionDto[];
   internships: InternshipListItemDto[];
 }
 
@@ -823,6 +826,8 @@ export interface CompanyImportResultDto {
   updatedCount: number;
   failedCount: number;
   skippedDuplicateCount: number;
+  positionsCreatedCount?: number;
+  positionsUpdatedCount?: number;
   createdCompanies: CompanyDto[];
   updatedCompanies: CompanyDto[];
   errors?: CompanyImportErrorDto[];
@@ -888,6 +893,7 @@ export interface AttendanceSessionDto {
   durationMinutes?: number | null;
   location?: string | null;
   status: AttendanceSessionStatus;
+  isLecturerOnly: boolean;
   totalStudents: number;
   presentCount: number;
   absentCount: number;
@@ -908,6 +914,7 @@ export interface CreateAttendanceSessionDto {
   durationMinutes?: number;
   location?: string | null;
   studentIds?: string[] | null;
+  isLecturerOnly?: boolean;
 }
 
 export interface UpdateAttendanceSessionDto {

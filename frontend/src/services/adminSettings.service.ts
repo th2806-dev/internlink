@@ -15,18 +15,18 @@ export interface AdminFacultySettings {
 
 export const adminSettingsService = {
   getSettings(): Promise<AdminFacultySettings> {
-    return apiRequest<AdminFacultySettings>("/api/Admin/settings");
+    return apiRequest<AdminFacultySettings>("/api/SuperAdmin/settings");
   },
 
   updateSettings(body: AdminFacultySettings): Promise<AdminFacultySettings> {
-    return apiRequest<AdminFacultySettings>("/api/Admin/settings", {
+    return apiRequest<AdminFacultySettings>("/api/SuperAdmin/settings", {
       method: "PUT",
       body,
     });
   },
 
   resetSettings(): Promise<AdminFacultySettings> {
-    return apiRequest<AdminFacultySettings>("/api/Admin/settings/reset", {
+    return apiRequest<AdminFacultySettings>("/api/SuperAdmin/settings/reset", {
       method: "POST",
     });
   },

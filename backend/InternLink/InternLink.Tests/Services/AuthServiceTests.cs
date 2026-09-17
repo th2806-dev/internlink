@@ -9,6 +9,7 @@ using InternLink.Infrastructure.Identity;
 using InternLink.Infrastructure.Persistence;
 using InternLink.Infrastructure.Services;
 using InternLink.Shared.Interfaces;
+using InternLink.Shared.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -187,14 +188,25 @@ public class AuthServiceTests
     }
 
     [Fact]
-    public void AdminSemestersController_ShouldRequireAdminPolicyAtControllerLevel()
+    public void AdminSemestersController_ShouldRequireDepartmentAdminPolicyAtControllerLevel()
     {
         var attributes = typeof(AdminSemestersController)
             .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
             .Cast<AuthorizeAttribute>()
             .ToList();
 
-        attributes.Should().ContainSingle(attr => attr.Policy == "RequireAdmin");
+        attributes.Should().ContainSingle(attr => attr.Policy == AdminPolicies.DepartmentAdmin);
+    }
+
+    [Fact]
+    public void SuperAdminSemestersController_ShouldRequireSuperAdminPolicyAtControllerLevel()
+    {
+        var attributes = typeof(SuperAdminSemestersController)
+            .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>()
+            .ToList();
+
+        attributes.Should().ContainSingle(attr => attr.Policy == AdminPolicies.SuperAdmin);
     }
 
     [Fact]
@@ -245,14 +257,37 @@ public class AuthServiceTests
     }
 
     [Fact]
-    public void AdminUsersController_ShouldRequireAdminPolicyAtControllerLevel()
+    public void AdminUsersController_ShouldRequireDepartmentAdminPolicyAtControllerLevel()
     {
         var attributes = typeof(AdminUsersController)
             .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
             .Cast<AuthorizeAttribute>()
             .ToList();
 
-        attributes.Should().ContainSingle(attr => attr.Policy == "RequireAdmin");
+        attributes.Should().ContainSingle(attr => attr.Policy == AdminPolicies.DepartmentAdmin);
+    }
+
+    [Fact]
+    public void DepartmentNotificationsController_ShouldRequireDepartmentAdminAtControllerLevel()
+    {
+        var attributes = typeof(AdminNotificationsController)
+            .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>()
+            .ToList();
+
+        attributes.Should().ContainSingle(attr => attr.Policy == AdminPolicies.DepartmentAdmin);
+    }
+
+    [Fact]
+    public void LecturerOverview_ShouldRequireDepartmentAdminPolicy()
+    {
+        var overviewAttr = typeof(LecturerProfileController)
+            .GetMethod(nameof(LecturerProfileController.GetOverview))!
+            .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>()
+            .Single();
+
+        overviewAttr.Policy.Should().Be(AdminPolicies.DepartmentAdmin);
     }
 
     [Fact]
@@ -278,6 +313,59 @@ public class AuthServiceTests
     }
 
     [Fact]
+    public void PlatformControllers_ShouldRequireSuperAdminAtControllerLevel()
+    {
+        foreach (var controllerType in new[]
+        {
+            typeof(AdminDepartmentsController),
+            typeof(AdminSettingsController),
+            typeof(AdminAccountRequestsController),
+            typeof(SuperAdminUsersController),
+        })
+        {
+            var attributes = controllerType
+                .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+                .Cast<AuthorizeAttribute>()
+                .ToList();
+
+            attributes.Should().ContainSingle(attr => attr.Policy == AdminPolicies.SuperAdmin);
+        }
+    }
+
+    [Fact]
+    public void DepartmentAdminDepartmentsController_ShouldRequireDepartmentAdminPolicy()
+    {
+        var attributes = typeof(DepartmentAdminDepartmentsController)
+            .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>()
+            .ToList();
+
+        attributes.Should().ContainSingle(attr => attr.Policy == AdminPolicies.DepartmentAdmin);
+    }
+
+    [Fact]
+    public void DashboardAndEmailControllers_ShouldUseSeparateAdminPolicies()
+    {
+        var departmentDashboard = typeof(AdminController)
+            .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>()
+            .ToList();
+        departmentDashboard.Should().ContainSingle(attr => attr.Policy == AdminPolicies.DepartmentAdmin);
+
+        var superAdminDashboard = typeof(SuperAdminDashboardController)
+            .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>()
+            .ToList();
+        superAdminDashboard.Should().ContainSingle(attr => attr.Policy == AdminPolicies.SuperAdmin);
+
+        var email = typeof(SuperAdminEmailController)
+            .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>()
+            .ToList();
+        email.Should().ContainSingle(attr => attr.Policy == AdminPolicies.SuperAdmin);
+    }
+
+    [Fact]
     public void OperationalAdminWriteEndpoints_ShouldRequireDepartmentAdminPolicy()
     {
         var protectedActions = new[]
@@ -300,6 +388,25 @@ public class AuthServiceTests
                 .ToList();
 
             policies.Should().Contain("RequireDepartmentAdmin", $"{controllerType.Name}.{actionName} is an operational department action");
+        }
+    }
+
+    [Fact]
+    public void DepartmentOperationalControllers_ShouldRequireDepartmentAdminAtControllerLevel()
+    {
+        foreach (var controllerType in new[]
+        {
+            typeof(AdminAssignmentsController),
+            typeof(AdminCompaniesController),
+            typeof(AdminStudentsController),
+        })
+        {
+            var attributes = controllerType
+                .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+                .Cast<AuthorizeAttribute>()
+                .ToList();
+
+            attributes.Should().ContainSingle(attr => attr.Policy == AdminPolicies.DepartmentAdmin);
         }
     }
 

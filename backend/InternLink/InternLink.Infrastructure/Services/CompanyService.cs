@@ -30,6 +30,10 @@ public class CompanyService : ICompanyService
         [nameof(CompanyColumn.Address)] = new("dia chi", "diachi", "address", "dia chi tru so", "dia chi chi nhanh", "dia diem", "dia chi cong ty"),
         [nameof(CompanyColumn.Website)] = new("website", "web", "trang web", "trang chu", "url", "homepage", "website cong ty"),
         [nameof(CompanyColumn.Capacity)] = new("so luong tiep nhan", "so luong tiep nhan sv", "suc chua", "succhua", "capacity", "so luong", "so luong sv", "chi tieu", "so luong tuyen", "slsv", "so luong tiep nhan thuc tap"),
+        // Recruitment-position columns (optional): one row = one position of the company.
+        [nameof(CompanyColumn.PositionCode)] = new("ma vi tri", "ma vt", "mavt tri", "positioncode", "position code", "ma vi tri tuyen dung", "ma vi tri tuyen"),
+        [nameof(CompanyColumn.PositionTitle)] = new("ten vi tri tuyen dung", "ten vi tri", "vi tri tuyen dung", "vi tri thuc tap", "position title", "position name", "vi tri"),
+        [nameof(CompanyColumn.PositionMajor)] = new("chuyen nganh yeu cau", "chuyen nganh", "required major", "chuyen nganh yeu cau tuyendung", "nganh yeu cau"),
     };
 
     public CompanyService(AppDbContext db, IMapper mapper, IExcelService excelService)
@@ -44,11 +48,12 @@ public class CompanyService : ICompanyService
         var query = _db.Companies
             .Where(c => !c.IsDeleted);
 
-        // Department filter: keep companies that have ever hosted interns of the
-        // requested department (companies are shared master data without their own DepartmentId).
+        // Department filter: a company belongs to the khoa that created/imported it.
+        // Null DepartmentId = shared master data, visible to every department.
         if (departmentId.HasValue)
         {
             query = query.Where(c =>
+                c.DepartmentId == null || c.DepartmentId == departmentId.Value ||
                 c.Internships.Any(i => !i.IsDeleted && i.Student != null && i.Student.DepartmentId == departmentId.Value));
         }
 
@@ -283,7 +288,7 @@ public class CompanyService : ICompanyService
         await _db.SaveChangesAsync();
     }
 
-    public async Task<CompanyDto> CreateCompanyAsync(CreateCompanyRequest request)
+    public async Task<CompanyDto> CreateCompanyAsync(CreateCompanyRequest request, Guid? departmentId = null)
     {
         var companyCode = NullIfWhiteSpace(request.CompanyCode);
         var existingCompany = await _db.Companies
@@ -308,6 +313,7 @@ public class CompanyService : ICompanyService
             ContactPhone = NullIfWhiteSpace(request.ContactPhone),
             Capacity = request.Capacity,
             IsActive = true,
+            DepartmentId = departmentId, // Scoped to the creating admin's department (null for SuperAdmin)
             CreatedAt = DateTime.UtcNow
         };
 
@@ -413,7 +419,7 @@ public class CompanyService : ICompanyService
         return _mapper.Map<List<CompanyDto>>(companies);
     }
 
-    public async Task<CompanyImportResultDto> ImportCompaniesFromExcelAsync(Stream excelStream)
+    public async Task<CompanyImportResultDto> ImportCompaniesFromExcelAsync(Stream excelStream, Guid? departmentId = null)
     {
         if (excelStream == null || !excelStream.CanRead)
             throw new ArgumentException("Excel file stream is required");
@@ -442,9 +448,19 @@ public class CompanyService : ICompanyService
         var errors = new List<CompanyImportErrorDto>();
         var created = new List<Company>();
         var updated = new List<Company>();
+        // Companies already persisted in the DB that this file refreshed (UpdateRange would
+        // otherwise clobber the Added state of in-file duplicates of the same code — the
+        // row-per-position layout repeats one company across many rows).
+        var updatedExisting = new HashSet<Company>(ReferenceEqualityComparer.Instance);
+        // Companies created by THIS file (repeat rows must refresh them, never UpdateRange them).
+        var createdInFile = new HashSet<Company>(ReferenceEqualityComparer.Instance);
+        var seenPositionCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var seenCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var totalRows = 0;
+        var createdPositionCount = 0;
+        var updatedPositionCount = 0;
+        var hasPositionColumns = columnMap.ContainsKey(CompanyColumn.PositionCode) || columnMap.ContainsKey(CompanyColumn.PositionTitle);
 
         // Cache existing (non-deleted) companies so repeated imports update the same row instead of
         // failing: matched by CompanyCode first (like MSSV/MaGV), falling back to normalized name so
@@ -479,10 +495,13 @@ public class CompanyService : ICompanyService
             var address = GetCell(row, columnMap, CompanyColumn.Address);
             var website = GetCell(row, columnMap, CompanyColumn.Website);
             var capacityText = GetCell(row, columnMap, CompanyColumn.Capacity);
+            var positionCode = GetCell(row, columnMap, CompanyColumn.PositionCode);
+            var positionTitle = GetCell(row, columnMap, CompanyColumn.PositionTitle);
+            var positionMajor = GetCell(row, columnMap, CompanyColumn.PositionMajor);
 
             (contactEmail, contactPhone) = TemplateHelper.SanitizeEmailAndPhone(contactEmail, contactPhone);
 
-            if (IsBlankRow(companyCode, companyName, industry, contactPerson, contactEmail, contactPhone, address, website, capacityText))
+            if (IsBlankRow(companyCode, companyName, industry, contactPerson, contactEmail, contactPhone, address, website, capacityText, positionCode, positionTitle, positionMajor))
                 continue;
 
             totalRows++;
@@ -529,23 +548,33 @@ public class CompanyService : ICompanyService
             int? capacity = null;
             if (!string.IsNullOrWhiteSpace(capacityText))
             {
-                if (!int.TryParse(capacityText, out var parsed) || parsed <= 0)
+                if (!int.TryParse(capacityText, out var parsedSlots) || parsedSlots <= 0)
                 {
                     errors.Add(new CompanyImportErrorDto { RowNumber = rowNumber, CompanyCode = companyCode, CompanyName = companyName, Message = "Capacity must be a positive integer" });
                     continue;
                 }
 
-                capacity = parsed;
+                // Legacy row-per-company layout: the column IS the company capacity.
+                // Row-per-position layout: it's the position's quota (mapped to Slots).
+                if (!hasPositionColumns)
+                    capacity = parsedSlots;
             }
 
-            if (!seenCodes.Add(companyCode))
+            // Position codes carry a unique index — reject in-file duplicates early.
+            if (!string.IsNullOrWhiteSpace(positionCode) && !seenPositionCodes.Add(positionCode.Trim()))
+            {
+                errors.Add(new CompanyImportErrorDto { RowNumber = rowNumber, CompanyCode = companyCode, CompanyName = companyName, Message = $"Duplicate position code '{positionCode.Trim()}' in file" });
+                continue;
+            }
+
+            if (!seenCodes.Add(companyCode) && !hasPositionColumns)
             {
                 errors.Add(new CompanyImportErrorDto { RowNumber = rowNumber, CompanyCode = companyCode, CompanyName = companyName, Message = "Duplicate company code in file" });
                 continue;
             }
 
             var normalizedName = NormalizeName(companyName);
-            if (!seenNames.Add(normalizedName))
+            if (!seenNames.Add(normalizedName) && !hasPositionColumns)
             {
                 errors.Add(new CompanyImportErrorDto { RowNumber = rowNumber, CompanyCode = companyCode, CompanyName = companyName, Message = "Duplicate company name in file" });
                 continue;
@@ -603,11 +632,18 @@ public class CompanyService : ICompanyService
                     existingCompany.Address = address.Trim();
                 if (!string.IsNullOrWhiteSpace(website))
                     existingCompany.Website = website.Trim();
-                if (capacity.HasValue)
+                if (!hasPositionColumns && capacity.HasValue)
                     existingCompany.Capacity = capacity;
                 existingCompany.IsActive = true;
                 existingCompany.UpdatedAt = DateTime.UtcNow;
-                updated.Add(existingCompany);
+                // Only queue an UPDATE for companies that actually exist in the store.
+                // In-file repeats (row-per-position) are still in Added state.
+                if (!createdInFile.Contains(existingCompany) && updatedExisting.Add(existingCompany))
+                    updated.Add(existingCompany);
+
+                (var posCreated, var posUpdated) = await UpsertImportedPositionAsync(existingCompany, rowNumber, positionCode, positionTitle, positionMajor, capacityText, errors);
+                createdPositionCount += posCreated;
+                updatedPositionCount += posUpdated;
                 continue;
             }
 
@@ -621,26 +657,58 @@ public class CompanyService : ICompanyService
                 ContactEmail = NullIfWhiteSpace(contactEmail),
                 ContactPhone = NullIfWhiteSpace(contactPhone),
                 Address = NullIfWhiteSpace(address),
-                Website = NullIfWhiteSpace(website),
-                Capacity = capacity,
+            Website = NullIfWhiteSpace(website),
+            // Row-per-position layout: capacity is derived from position slots (see below).
+            // Legacy row-per-company layout: the column IS the company capacity.
+            Capacity = hasPositionColumns ? null : capacity,
                 IsActive = true,
+                DepartmentId = departmentId, // Scoped to the importing admin's department (null for SuperAdmin)
                 CreatedAt = DateTime.UtcNow
             };
             created.Add(company);
+            createdInFile.Add(company);
             existingByCode[companyCode] = company;
             existingByName[normalizedName] = company;
+
+            (var newPosCreated, var newPosUpdated) = await UpsertImportedPositionAsync(company, rowNumber, positionCode, positionTitle, positionMajor, capacityText, errors);
+            createdPositionCount += newPosCreated;
+            updatedPositionCount += newPosUpdated;
         }
 
-        if (created.Count > 0)
-        {
-            await _db.Companies.AddRangeAsync(created);
-        }
+        // Persist existing-row updates BEFORE adding new companies: UpdateRange must not
+        // run after AddRangeAsync in the same batch, or EF flips the Added state of
+        // in-file repeats (row-per-position layout) into Modified → UPDATE on a row
+        // that was never INSERTed → "affected 0 rows".
         if (updated.Count > 0)
         {
             _db.Companies.UpdateRange(updated);
+            await _db.SaveChangesAsync();
         }
-        if (created.Count > 0 || updated.Count > 0)
+        if (created.Count > 0)
         {
+            await _db.Companies.AddRangeAsync(created);
+            await _db.SaveChangesAsync();
+        }
+
+        // Row-per-position layout: derive company capacity as the sum of its positions'
+        // quotas (e.g. VT_FPT_01=4 + VT_FPT_02=3 + VT_FPT_03=3 → Capacity=10). The
+        // assignment check then blocks only when ALL positions are full.
+        if (hasPositionColumns && created.Count + updated.Count > 0)
+        {
+            var touchedIds = created.Select(c => c.Id)
+                .Concat(updated.Select(c => c.Id))
+                .Distinct()
+                .ToList();
+            var companiesToSync = await _db.Companies
+                .Where(c => touchedIds.Contains(c.Id))
+                .ToListAsync();
+            foreach (var companyToSync in companiesToSync)
+            {
+                var totalSlots = await _db.CompanyPositions
+                    .Where(p => p.CompanyId == companyToSync.Id && !p.IsDeleted)
+                    .SumAsync(p => (int?)p.Slots) ?? 0;
+                companyToSync.Capacity = totalSlots > 0 ? totalSlots : null;
+            }
             await _db.SaveChangesAsync();
         }
 
@@ -654,8 +722,93 @@ public class CompanyService : ICompanyService
             SkippedDuplicateCount = 0,
             CreatedCompanies = _mapper.Map<List<CompanyDto>>(created),
             UpdatedCompanies = _mapper.Map<List<CompanyDto>>(updated),
+            PositionsCreatedCount = createdPositionCount,
+            PositionsUpdatedCount = updatedPositionCount,
             Errors = errors
         };
+    }
+
+    /// <summary>
+    /// Upsert one recruitment position from an imported company row (keyed by PositionCode,
+    /// falling back to normalized title). Slots default to the row's "Số lượng tiếp nhận".
+    /// Returns (created, updated) counters to fold into the import result.
+    /// </summary>
+    private async Task<(int Created, int Updated)> UpsertImportedPositionAsync(
+        Company company,
+        int rowNumber,
+        string? positionCode,
+        string? positionTitle,
+        string? positionMajor,
+        string? capacityText,
+        List<CompanyImportErrorDto> errors)
+    {
+        var createdPositionCount = 0;
+        var updatedPositionCount = 0;
+
+        if (string.IsNullOrWhiteSpace(positionCode) && string.IsNullOrWhiteSpace(positionTitle))
+            return (0, 0);
+
+        positionCode = NullIfWhiteSpace(positionCode);
+        positionTitle = NullIfWhiteSpace(positionTitle);
+
+        if (positionCode?.Length > 50)
+        {
+            errors.Add(new CompanyImportErrorDto { RowNumber = rowNumber, CompanyCode = company.CompanyCode, CompanyName = company.CompanyName, Message = $"Position code '{positionCode}' must not exceed 50 characters" });
+            return (0, 0);
+        }
+
+        if (positionTitle?.Length > 200)
+        {
+            errors.Add(new CompanyImportErrorDto { RowNumber = rowNumber, CompanyCode = company.CompanyCode, CompanyName = company.CompanyName, Message = $"Position title '{positionTitle}' must not exceed 200 characters" });
+            return (0, 0);
+        }
+
+        CompanyPosition? position = null;
+        if (positionCode != null)
+        {
+            position = await _db.CompanyPositions.FirstOrDefaultAsync(p =>
+                p.PositionCode == positionCode && p.CompanyId == company.Id && !p.IsDeleted);
+        }
+
+        if (position == null && positionTitle != null)
+        {
+            var normTitle = NormalizeName(positionTitle);
+            var companyPositions = await _db.CompanyPositions
+                .Where(p => p.CompanyId == company.Id && !p.IsDeleted)
+                .ToListAsync();
+            position = companyPositions.FirstOrDefault(p => NormalizeName(p.Title) == normTitle);
+        }
+
+        int? slots = null;
+        if (!string.IsNullOrWhiteSpace(capacityText) && int.TryParse(capacityText, out var parsedSlots) && parsedSlots > 0)
+            slots = parsedSlots;
+
+        if (position != null)
+        {
+            position.PositionCode = positionCode ?? position.PositionCode;
+            position.Title = positionTitle ?? position.Title;
+            if (!string.IsNullOrWhiteSpace(positionMajor))
+                position.RequiredMajor = positionMajor.Trim();
+            if (slots.HasValue)
+                position.Slots = slots.Value;
+            position.UpdatedAt = DateTime.UtcNow;
+            updatedPositionCount++;
+            return (0, 1);
+        }
+
+        _db.CompanyPositions.Add(new CompanyPosition
+        {
+            Id = Guid.NewGuid(),
+            CompanyId = company.Id,
+            PositionCode = positionCode,
+            Title = positionTitle ?? positionCode ?? "Vị trí thực tập",
+            RequiredMajor = NullIfWhiteSpace(positionMajor),
+            Slots = slots ?? 1,
+            IsOpen = true,
+            CreatedAt = DateTime.UtcNow
+        });
+        createdPositionCount++;
+        return (1, 0);
     }
 
     public byte[] GetCompanyImportTemplate()
@@ -666,9 +819,10 @@ public class CompanyService : ICompanyService
             var sheet = workbook.Worksheets.Add("Companies");
 
             sheet.Cell(1, 1).Value = "DANH SÁCH DOANH NGHIỆP LIÊN KẾT";
-            sheet.Range(1, 1, 1, 10).Merge();
+            sheet.Range(1, 1, 1, 13).Merge();
 
-            // Row 2 = headers, row 3 = example (mirrors the physical Mau-danh-sach-doanh-nghiep.xlsx).
+            // Row 2 = headers, row 3 = example. One row = one recruitment position;
+            // repeat the company info (Mã DN, Tên công ty…) on every position row.
             sheet.Cell(2, 1).Value = "STT";
             sheet.Cell(2, 2).Value = "Mã doanh nghiệp";
             sheet.Cell(2, 3).Value = "Tên công ty";
@@ -678,10 +832,13 @@ public class CompanyService : ICompanyService
             sheet.Cell(2, 7).Value = "SĐT";
             sheet.Cell(2, 8).Value = "Địa chỉ";
             sheet.Cell(2, 9).Value = "Website";
-            sheet.Cell(2, 10).Value = "Số lượng tiếp nhận";
+            sheet.Cell(2, 10).Value = "Mã Vị Trí";
+            sheet.Cell(2, 11).Value = "Tên vị trí tuyển dụng";
+            sheet.Cell(2, 12).Value = "Chuyên ngành yêu cầu";
+            sheet.Cell(2, 13).Value = "Số lượng tiếp nhận";
 
             sheet.Cell(3, 1).Value = 1;
-            sheet.Cell(3, 2).Value = 12;
+            sheet.Cell(3, 2).Value = "DN_FPT";
             sheet.Cell(3, 3).Value = "FPT Software";
             sheet.Cell(3, 4).Value = "Cong nghe thong tin";
             sheet.Cell(3, 5).Value = "Ms. Linh Tran";
@@ -689,7 +846,10 @@ public class CompanyService : ICompanyService
             sheet.Cell(3, 7).Value = "0909123456";
             sheet.Cell(3, 8).Value = "Phu My Hung, Q7, TP.HCM";
             sheet.Cell(3, 9).Value = "https://fptsoftware.com";
-            sheet.Cell(3, 10).Value = 10;
+            sheet.Cell(3, 10).Value = "VT_FPT_01";
+            sheet.Cell(3, 11).Value = "Backend Developer";
+            sheet.Cell(3, 12).Value = "Cong nghe phan mem";
+            sheet.Cell(3, 13).Value = 4;
 
             sheet.Row(1).Style.Font.Bold = true;
             sheet.Row(2).Style.Font.Bold = true;
@@ -742,7 +902,10 @@ public class CompanyService : ICompanyService
         ContactPhone,
         Address,
         Website,
-        Capacity
+        Capacity,
+        PositionCode,
+        PositionTitle,
+        PositionMajor
     }
 
     private static Dictionary<CompanyColumn, int> BuildColumnMap(IXLRangeRow headerRow)
@@ -844,6 +1007,7 @@ public class CompanyService : ICompanyService
                 CompanyId = p.CompanyId,
                 CompanyName = p.Company?.CompanyName,
                 SemesterId = p.SemesterId,
+                PositionCode = p.PositionCode,
                 Title = p.Title,
                 Description = p.Description,
                 RequiredMajor = p.RequiredMajor,
@@ -877,6 +1041,7 @@ public class CompanyService : ICompanyService
             CompanyId = p.CompanyId,
             CompanyName = p.Company?.CompanyName,
             SemesterId = p.SemesterId,
+            PositionCode = p.PositionCode,
             Title = p.Title,
             Description = p.Description,
             RequiredMajor = p.RequiredMajor,
@@ -899,6 +1064,7 @@ public class CompanyService : ICompanyService
         {
             CompanyId = companyId,
             SemesterId = request.SemesterId,
+            PositionCode = NullIfWhiteSpace(request.PositionCode),
             Title = request.Title.Trim(),
             Description = NullIfWhiteSpace(request.Description),
             RequiredMajor = NullIfWhiteSpace(request.RequiredMajor),
@@ -918,6 +1084,7 @@ public class CompanyService : ICompanyService
             CompanyId = position.CompanyId,
             CompanyName = company.CompanyName,
             SemesterId = position.SemesterId,
+            PositionCode = position.PositionCode,
             Title = position.Title,
             Description = position.Description,
             RequiredMajor = position.RequiredMajor,

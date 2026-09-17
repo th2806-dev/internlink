@@ -1,5 +1,6 @@
 using InternLink.Application.DTOs;
 using InternLink.Application.Interfaces;
+using InternLink.Shared.Authorization;
 using InternLink.Shared.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -12,7 +13,8 @@ namespace InternLink.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/Admin/students")]
-[Authorize(Policy = "RequireAdmin")]
+[Route(AdminApiRoutes.DepartmentAdminPrefix + "/students")]
+[Authorize(Policy = AdminPolicies.DepartmentAdmin)]
 public class AdminStudentsController : ControllerBase
 {
     private readonly IStudentService _studentService;
@@ -174,7 +176,7 @@ public class AdminStudentsController : ControllerBase
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(10 * 1024 * 1024)]
     [Authorize(Policy = "RequireDepartmentAdmin")]
-    public async Task<IActionResult> Import(IFormFile file, [FromQuery] Guid? semesterId = null)
+    public async Task<IActionResult> Import(IFormFile file, [FromQuery] Guid? semesterId = null, [FromQuery] bool grantAccount = false)
     {
         try
         {
@@ -186,7 +188,7 @@ public class AdminStudentsController : ControllerBase
 
             var deptId = _deptScope.GetCurrentDepartmentId(User);
             await using var stream = file.OpenReadStream();
-            var result = await _studentService.ImportStudentsFromExcelAsync(stream, semesterId, deptId);
+            var result = await _studentService.ImportStudentsFromExcelAsync(stream, semesterId, deptId, grantAccount);
             return Ok(ApiResponse<StudentImportResultDto>.Ok(result));
         }
         catch (InvalidOperationException ex)

@@ -67,12 +67,13 @@ export const adminStudentsService = {
     });
   },
 
-  importExcel(file: File, semesterId?: string, departmentId?: string) {
+  importExcel(file: File, semesterId?: string, departmentId?: string, grantAccount = false) {
     const form = new FormData();
     form.append("file", file);
     const params = new URLSearchParams();
     if (semesterId && semesterId !== "all") params.set("semesterId", semesterId);
     if (departmentId && departmentId !== "all") params.set("departmentId", departmentId);
+    params.set("grantAccount", String(grantAccount));
     const qs = params.toString() ? `?${params.toString()}` : "";
     return apiRequest<StudentImportResultDto>(`/api/Admin/students/import${qs}`, {
       method: "POST",

@@ -2,6 +2,7 @@ using ClosedXML.Excel;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
+using InternLink.Domain.Entities;
 using InternLink.Application.Interfaces;
 using InternLink.Domain.Enums;
 using InternLink.Infrastructure.Persistence;
@@ -30,6 +31,7 @@ public class InternshipReportService : IInternshipReportService
             .Include(i => i.Student)
             .Include(i => i.Company)
             .Include(i => i.Lecturer)
+            .Include(i => i.Semester)
             .Include(i => i.WeeklyReports)
             .AsNoTracking();
 
@@ -88,7 +90,12 @@ public class InternshipReportService : IInternshipReportService
         // Sheet 1: DANH SÁCH – Full tracking & grading table
         // ═══════════════════════════════════════════════════════════════════
         var ws1 = workbook.Worksheets.Add("DANH SÁCH");
-        BuildDanhSachSheet(ws1, internships, evaluations, studentsWithoutInternship);
+        var totalWeeks = internships
+            .Select(i => i.Semester?.TotalWeeks ?? 0)
+            .Where(weeks => weeks > 0)
+            .DefaultIfEmpty(6)
+            .Max();
+        BuildDanhSachSheet(ws1, internships, evaluations, studentsWithoutInternship, totalWeeks);
 
         // ═══════════════════════════════════════════════════════════════════
         // Sheet 2: DATABASE – Student-Company mapping
@@ -159,7 +166,7 @@ public class InternshipReportService : IInternshipReportService
     }
 
     /// <inheritdoc />
-    public async Task<byte[]> ExportC22AWordReportAsync(Guid? semesterId = null, string? department = null, Guid? departmentId = null)
+    public async Task<byte[]> ExportC22AWordReportAsync(Guid? semesterId = null, string? department = null, Guid? departmentId = null, Guid? lecturerId = null)
     {
         // ── Load data ──────────────────────────────────────────────────────
         var internshipsQuery = _db.Internships
@@ -200,6 +207,12 @@ public class InternshipReportService : IInternshipReportService
         var totalCompanies = internships
             .Select(i => i.CompanyId)
             .Where(c => c.HasValue).Distinct().Count();
+
+        var lecturerSummary = semesterId.HasValue && lecturerId.HasValue
+            ? await _db.Set<LecturerSemesterSummary>()
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.SemesterId == semesterId.Value && x.LecturerId == lecturerId.Value)
+            : null;
 
         var semester = semesterId.HasValue
             ? await _db.Semesters.FirstOrDefaultAsync(s => s.Id == semesterId.Value)
@@ -259,6 +272,14 @@ public class InternshipReportService : IInternshipReportService
             ["{{START_DATE}}"] = startDateStr,
             ["{{END_DATE}}"] = endDateStr,
             ["{{DEPARTMENT}}"] = !string.IsNullOrWhiteSpace(department) ? department : "TOÀN HỆ THỐNG",
+            ["{{RESULTS}}"] = lecturerSummary?.Results ?? string.Empty,
+            ["{{DIFFICULTIES}}"] = lecturerSummary?.Difficulties ?? string.Empty,
+            ["{{RECOMMENDATIONS}}"] = lecturerSummary?.Recommendations ?? string.Empty,
+            ["{{CONCLUSION}}"] = lecturerSummary?.Conclusion ?? string.Empty,
+            ["{{SUMMARY_RESULTS}}"] = lecturerSummary?.Results ?? string.Empty,
+            ["{{SUMMARY_DIFFICULTIES}}"] = lecturerSummary?.Difficulties ?? string.Empty,
+            ["{{SUMMARY_RECOMMENDATIONS}}"] = lecturerSummary?.Recommendations ?? string.Empty,
+            ["{{SUMMARY_CONCLUSION}}"] = lecturerSummary?.Conclusion ?? string.Empty,
         };
 
         // Grade stats placeholders
@@ -640,10 +661,9 @@ public class InternshipReportService : IInternshipReportService
         IXLWorksheet ws,
         List<Domain.Entities.Internship> internships,
         Dictionary<Guid, Domain.Entities.Evaluation> evaluations,
-        List<Domain.Entities.Student> studentsWithoutInternship)
+        List<Domain.Entities.Student> studentsWithoutInternship,
+        int totalWeeks)
     {
-        const int totalWeeks = 6;
-
         // ── Title rows ─────────────────────────────────────────────────────
         ws.Range(1, 1, 1, 18 + totalWeeks).Merge();
         var titleCell = ws.Cell(1, 1);

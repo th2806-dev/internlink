@@ -1,6 +1,7 @@
 using InternLink.API.Extensions;
 using InternLink.Application.DTOs;
 using InternLink.Application.Interfaces;
+using InternLink.Shared.Authorization;
 using InternLink.Shared.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -13,10 +14,12 @@ namespace InternLink.API.Controllers;
 public class DocumentController : ControllerBase
 {
     private readonly IDocumentService _documentService;
+    private readonly ILogger<DocumentController> _logger;
 
-    public DocumentController(IDocumentService documentService)
+    public DocumentController(IDocumentService documentService, ILogger<DocumentController> logger)
     {
         _documentService = documentService;
+        _logger = logger;
     }
 
     [HttpGet]
@@ -232,7 +235,7 @@ public class DocumentController : ControllerBase
     }
 
     [HttpGet("templates/stats")]
-    [Authorize(Policy = "RequireAdmin")]
+    [Authorize(Policy = AdminPolicies.DepartmentAdmin)]
     public async Task<IActionResult> GetTemplateStats()
     {
         var stats = await _documentService.GetTemplateStatsAsync();
@@ -259,6 +262,18 @@ public class DocumentController : ControllerBase
         catch (InvalidOperationException ex)
         {
             return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = ex.Message }));
+        }
+        catch (FileNotFoundException ex)
+        {
+            _logger.LogError(ex, "Google Drive credentials are not configured for template upload");
+            return StatusCode(StatusCodes.Status503ServiceUnavailable,
+                ApiResponse<object>.Fail(new ApiError { Title = "Google Drive chưa được cấu hình", Detail = "Đặt google-credentials.json cạnh file chạy API và share folder Drive cho Service Account." }));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Template upload failed");
+            return StatusCode(StatusCodes.Status502BadGateway,
+                ApiResponse<object>.Fail(new ApiError { Title = "Không thể tải file lên Google Drive", Detail = ex.Message }));
         }
     }
 

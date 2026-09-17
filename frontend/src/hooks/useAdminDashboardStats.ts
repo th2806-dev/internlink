@@ -6,6 +6,7 @@ import { adminDashboardService } from "../services/adminDashboard.service";
 import { adminLecturersService } from "../services/adminLecturers.service";
 import { adminStudentsService } from "../services/adminStudents.service";
 import { notificationService } from "../services/notification.service";
+import { useAuth } from "../contexts/AuthContext";
 
 const EMPTY_INTERNSHIP_STATS: InternshipStatsDto = {
   total: 0,
@@ -141,6 +142,7 @@ export function useAdminDashboardStats(
   departmentId?: string | null,
   platformOverview = false,
 ) {
+  const { user } = useAuth();
   const [stats, setStats] = useState<AdminDashboardStats | null>(null);
   const [isLoading, setIsLoading] = useState(enabled);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
@@ -152,7 +154,7 @@ export function useAdminDashboardStats(
     try {
       const effectiveDepartmentId = departmentId === "all" || !departmentId ? undefined : departmentId;
       if (platformOverview) {
-        const overview = await adminDashboardService.getOverview(semesterId ?? undefined, effectiveDepartmentId);
+        const overview = await adminDashboardService.getOverview(semesterId ?? undefined, effectiveDepartmentId, user?.backendRole);
         setStats({
           lecturerCount: overview.lecturerCount,
           lecturersWithStudents: 0,
@@ -188,7 +190,7 @@ export function useAdminDashboardStats(
         adminLecturersService.getAll(0, 500, semesterId ?? undefined, effectiveDepartmentId),
         adminCompaniesService.getAll(0, 500, semesterId ?? undefined, effectiveDepartmentId),
         adminDashboardService
-          .getInternshipStats(semesterId ?? undefined, effectiveDepartmentId)
+          .getInternshipStats(semesterId ?? undefined, effectiveDepartmentId, user?.backendRole)
           .catch(() => ({ ...EMPTY_INTERNSHIP_STATS })),
         notificationService.getMine().catch(() => []),
         adminAssignmentsService
@@ -267,7 +269,7 @@ export function useAdminDashboardStats(
     } finally {
       setIsLoading(false);
     }
-  }, [enabled, semesterId, onError, departmentId, platformOverview]);
+  }, [enabled, semesterId, onError, departmentId, platformOverview, user?.backendRole]);
 
   useEffect(() => {
     void load();

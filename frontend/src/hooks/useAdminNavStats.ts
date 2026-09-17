@@ -5,6 +5,7 @@ import { adminLecturersService } from "../services/adminLecturers.service";
 import { adminNotificationsService } from "../services/adminNotifications.service";
 import { adminStudentsService } from "../services/adminStudents.service";
 import { notificationService } from "../services/notification.service";
+import { useAuth } from "../contexts/AuthContext";
 import type { NotificationDto } from "../types/api";
 
 export interface AdminNavStats {
@@ -86,6 +87,8 @@ export function useAdminNavStats(
   semesterId?: string | null,
   departmentId?: string | null,
 ) {
+  const { user } = useAuth();
+  const isSuperAdmin = user?.backendRole === "SuperAdmin";
   const [stats, setStats] = useState<AdminNavStats>(DEFAULT_NAV_STATS);
   const [recentNotifications, setRecentNotifications] = useState<
     NotificationDto[]
@@ -93,7 +96,12 @@ export function useAdminNavStats(
   const [isLoading, setIsLoading] = useState(enabled);
 
   const load = useCallback(async (force = false) => {
-    if (!enabled) return;
+    if (!enabled || isSuperAdmin) {
+      setStats(DEFAULT_NAV_STATS);
+      setRecentNotifications([]);
+      setIsLoading(false);
+      return;
+    }
 
     setIsLoading(true);
     try {
@@ -105,7 +113,7 @@ export function useAdminNavStats(
     } finally {
       setIsLoading(false);
     }
-  }, [enabled, semesterId, departmentId]);
+  }, [enabled, semesterId, departmentId, isSuperAdmin]);
 
   useEffect(() => {
     void load();

@@ -8,7 +8,7 @@ export interface SendEmailResultDto {
 
 export const adminEmailService = {
   testEmail(body: TestEmailRequestDto): Promise<SendEmailResultDto> {
-    return apiRequest<SendEmailResultDto>("/api/Admin/email/test", {
+    return apiRequest<SendEmailResultDto>("/api/SuperAdmin/email/test", {
       method: "POST",
       body,
     });

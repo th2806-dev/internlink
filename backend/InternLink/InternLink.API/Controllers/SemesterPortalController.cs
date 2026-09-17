@@ -44,7 +44,8 @@ public class SemesterPortalController : ControllerBase
                     EndDate = s.EndDate,
                     Status = s.Status,
                     Description = s.Description,
-                    MaxStudentsPerLecturer = s.MaxStudentsPerLecturer
+                    MaxStudentsPerLecturer = s.MaxStudentsPerLecturer,
+                    TotalWeeks = s.TotalWeeks
                 })
                 .FirstOrDefaultAsync();
         }

@@ -19,22 +19,26 @@ import { PageHeader } from "../../../components/common/PageHeader";
 import { Panel } from "../../../components/common/Panel";
 import { KpiCard, KpiGrid } from "../../../components/common/KpiCard";
 import { getApiErrorMessage } from "../../../lib/apiClient";
+import { parseBackendDate } from "../../../lib/formatDateTimeVi";
 import type { StudentAttendanceOverviewDto, StudentAttendanceItemDto } from "../../../types/api";
 
 export const StudentAttendanceView: React.FC<{
   onShowToast?: (msg: string, type?: string) => void;
 }> = ({ onShowToast }) => {
   const { activeSemesterId, selectedSemester } = useSemester();
+  const attendanceSemesterId = selectedSemester?.id && selectedSemester.id !== "all"
+    ? selectedSemester.id
+    : activeSemesterId;
   const [data, setData] = useState<StudentAttendanceOverviewDto | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
-    if (!activeSemesterId) return;
+    if (!attendanceSemesterId) return;
     setIsLoading(true);
     setError(null);
     try {
-      const res = await attendanceService.getStudentAttendance(activeSemesterId);
+      const res = await attendanceService.getStudentAttendance(attendanceSemesterId);
       setData(res);
     } catch (err) {
       const msg = getApiErrorMessage(err);
@@ -43,7 +47,7 @@ export const StudentAttendanceView: React.FC<{
     } finally {
       setIsLoading(false);
     }
-  }, [activeSemesterId, onShowToast]);
+  }, [attendanceSemesterId, onShowToast]);
 
   useEffect(() => {
     loadData();
@@ -57,7 +61,7 @@ export const StudentAttendanceView: React.FC<{
   // Next upcoming session
   const now = new Date();
   const upcomingSession = data?.sessions.find(
-    (s) => new Date(s.meetingDate) >= now
+    (s) => parseBackendDate(s.meetingDate) >= now
   );
 
   return (
@@ -102,6 +106,17 @@ export const StudentAttendanceView: React.FC<{
           icon={XCircle}
           footer={absentCount === 0 ? "Không có buổi vắng" : "Vui lòng liên hệ giảng viên"}
         />
+        <KpiCard
+          tone="sky"
+          title="Buổi gặp sắp tới"
+          value={upcomingSession ? `Tuần ${upcomingSession.weekNumber}` : "—"}
+          icon={Calendar}
+          footer={
+            upcomingSession
+              ? parseBackendDate(upcomingSession.meetingDate).toLocaleDateString("vi-VN")
+              : "Chưa có lịch sắp tới"
+          }
+        />
       </KpiGrid>
 
       {/* Upcoming Session Banner (if any) */}
@@ -112,7 +127,7 @@ export const StudentAttendanceView: React.FC<{
               Buổi gặp kế tiếp • Tuần {upcomingSession.weekNumber}
             </span>
             <span className="text-xs font-bold text-blue-700">
-              {new Date(upcomingSession.meetingDate).toLocaleDateString("vi-VN", {
+              {parseBackendDate(upcomingSession.meetingDate).toLocaleDateString("vi-VN", {
                 weekday: "long",
                 day: "2-digit",
                 month: "2-digit",
@@ -132,7 +147,7 @@ export const StudentAttendanceView: React.FC<{
             <div className="flex items-center gap-1.5">
               <Clock className="w-4 h-4 text-blue-600" />
               <span>
-                {new Date(upcomingSession.meetingDate).toLocaleTimeString("vi-VN", {
+                {parseBackendDate(upcomingSession.meetingDate).toLocaleTimeString("vi-VN", {
                   hour: "2-digit",
                   minute: "2-digit",
                 })}
@@ -202,16 +217,16 @@ export const StudentAttendanceView: React.FC<{
             </p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {data.sessions.map((session) => {
-              const meetingDateObj = new Date(session.meetingDate);
+              const meetingDateObj = parseBackendDate(session.meetingDate);
               const isPast = meetingDateObj < now;
               const isPresent = session.status === "Present";
 
               return (
                 <div
                   key={session.sessionId}
-                  className={`p-4 rounded-xl border transition-all ${
+                  className={`p-4 rounded-xl border transition-all flex flex-col justify-between ${
                     isPast
                       ? isPresent
                         ? "bg-white border-slate-200 hover:border-emerald-300"
@@ -219,8 +234,8 @@ export const StudentAttendanceView: React.FC<{
                       : "bg-blue-50/30 border-blue-200"
                   }`}
                 >
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-                    <div className="space-y-1 flex-1">
+                  <div className="space-y-3">
+                    <div className="space-y-2">
                       <div className="flex items-center gap-2">
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
                           Tuần {session.weekNumber}
@@ -242,6 +257,7 @@ export const StudentAttendanceView: React.FC<{
                             year: "numeric",
                           })}{" "}
                           • {meetingDateObj.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}
+                          {session.durationMinutes ? ` (${session.durationMinutes}p)` : ""}
                         </span>
 
                         {session.location && (
@@ -273,7 +289,7 @@ export const StudentAttendanceView: React.FC<{
                     </div>
 
                     {/* Attendance Status Badge (Only Có mặt / Vắng) */}
-                    <div className="shrink-0 flex items-center gap-3">
+                    <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-100">
                       {isPast ? (
                         <span
                           className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 border ${

@@ -111,6 +111,10 @@ public class AttendanceController : ControllerBase
         {
             return NotFound(ApiResponse<object>.Fail(new ApiError { Title = ex.Message }));
         }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = ex.Message }));
+        }
     }
 
     /// <summary>

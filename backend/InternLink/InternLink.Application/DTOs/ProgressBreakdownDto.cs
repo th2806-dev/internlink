@@ -3,22 +3,22 @@ namespace InternLink.Application.DTOs;
 public sealed class ProgressBreakdownDto
 {
     /// <summary>
-    /// Tiêu chí 1: Tài khoản đã kích hoạt và đăng nhập thành công (tối đa 10%)
+    /// Thủ tục tài khoản; không cộng vào tiến độ (0%).
     /// </summary>
     public int AccountPercent { get; set; }
 
     /// <summary>
-    /// Tiêu chí 2: Hồ sơ cá nhân và nguyện vọng thực tập đã hoàn thiện (tối đa 15%)
+    /// Thủ tục hồ sơ; không cộng vào tiến độ (0%).
     /// </summary>
     public int ProfilePercent { get; set; }
 
     /// <summary>
-    /// Tiêu chí 3: Đã được phân bổ/tiếp nhận vào doanh nghiệp thực tập (tối đa 20%)
+    /// Điều kiện phân bổ doanh nghiệp; không cộng vào tiến độ (0%).
     /// </summary>
     public int CompanyPercent { get; set; }
 
     /// <summary>
-    /// Tiêu chí 4: Tiến độ nộp báo cáo tuần theo thời khóa biểu học kỳ (tối đa 35%)
+    /// Tiến độ nộp báo cáo tuần theo thời khóa biểu học kỳ (tối đa 80%).
     /// </summary>
     public int ReportPercent { get; set; }
 

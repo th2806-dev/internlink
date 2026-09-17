@@ -97,7 +97,7 @@ export const rubricService = {
   async getBySemester(semesterId: string): Promise<EvaluationRubricDto | null> {
     try {
       const raw = await apiRequest<RubricApiDto>(
-        `/api/Admin/semesters/${semesterId}/rubric`,
+        `/api/DepartmentAdmin/semesters/${semesterId}/rubric`,
       );
       if (!raw || typeof raw !== "object" || !("criteria" in raw) || !("id" in raw)) {
         return null;
@@ -113,10 +113,10 @@ export const rubricService = {
    */
   async getApproved(semesterId: string): Promise<EvaluationRubricDto | null> {
     try {
-      const raw = await apiRequestRaw<RubricApiDto>(
+      const raw = await apiRequestRaw<RubricApiDto | null>(
         `/api/Lecturer/rubric?semesterId=${semesterId}`,
       );
-      return mapFromApi(raw);
+      return raw ? mapFromApi(raw) : null;
     } catch (error) {
       if (error instanceof ApiClientError && error.status === 404) return null;
       throw error;
@@ -144,7 +144,7 @@ export const rubricService = {
     request: CreateRubricRequest,
   ): Promise<EvaluationRubricDto> {
     const raw = await apiRequest<RubricApiDto>(
-      `/api/Admin/semesters/${semesterId}/rubric`,
+      `/api/DepartmentAdmin/semesters/${semesterId}/rubric`,
       {
         method: "POST",
         body: request,
@@ -164,7 +164,7 @@ export const rubricService = {
     request: UpdateRubricRequest,
   ): Promise<EvaluationRubricDto> {
     const raw = await apiRequest<RubricApiDto>(
-      `/api/Admin/semesters/${semesterId}/rubric`,
+      `/api/DepartmentAdmin/semesters/${semesterId}/rubric`,
       {
         method: "PUT",
         body: request,
@@ -180,7 +180,7 @@ export const rubricService = {
    * Delete rubric
    */
   async delete(semesterId: string): Promise<void> {
-    await apiRequest(`/api/Admin/semesters/${semesterId}/rubric`, {
+    await apiRequest(`/api/DepartmentAdmin/semesters/${semesterId}/rubric`, {
       method: "DELETE",
     });
     return;

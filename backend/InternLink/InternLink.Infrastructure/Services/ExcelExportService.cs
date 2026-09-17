@@ -271,7 +271,6 @@ public class ExcelExportService : IExcelExportService
     public async Task<byte[]> GenerateGuidanceScheduleExcelAsync(Guid semesterId, Guid lecturerId, CancellationToken cancellationToken = default)
     {
         var semester = await _db.Semesters
-            .Include(s => s.ReportSchedules)
             .FirstOrDefaultAsync(s => s.Id == semesterId, cancellationToken);
 
         if (semester == null)
@@ -292,8 +291,16 @@ public class ExcelExportService : IExcelExportService
             .ThenBy(i => i.Student.FullName)
             .ToListAsync(cancellationToken);
 
-        var templatePath = TemplateHelper.FindTemplatePath("Lich huong dan TTTN-C23-Cuong.xlsx")
-            ?? TemplateHelper.FindTemplatePath("Lich huong dan TTTN.xlsx");
+        var attendanceSessions = await _db.AttendanceSessions
+            .AsNoTracking()
+            .Where(s => s.SemesterId == semesterId && s.LecturerId == lecturerId && !s.IsDeleted)
+            .OrderBy(s => s.WeekNumber)
+            .ThenBy(s => s.MeetingDate)
+            .ToListAsync(cancellationToken);
+
+        // The workbook is a layout template only; all semester and student data below
+        // comes from the selected semester and current lecturer assignment.
+        var templatePath = TemplateHelper.FindTemplatePath("Lich huong dan TTTN.xlsx");
 
         XLWorkbook workbook;
         MemoryStream? workbookSourceStream = null;
@@ -323,7 +330,7 @@ public class ExcelExportService : IExcelExportService
                 .ToList();
             var distinctClasses = distinctClassesList.Count > 0
                 ? string.Join(", ", distinctClassesList)
-                : "C23A.TH1, C23A.TH2";
+                : "Chưa cập nhật";
 
             var academicYear = semester.AcademicYear ?? $"{DateTime.Now.Year}-{DateTime.Now.Year + 1}";
             var semesterNumber = semester.Name.Contains("2") ? "2" : (semester.Name.Contains("3") ? "Hè" : "1");
@@ -350,19 +357,25 @@ public class ExcelExportService : IExcelExportService
                 ws1.Cell("G22").Value = $"Khoa {lecturer.Department.ToUpperInvariant()}";
             }
 
-            // Sync report schedules if configured in semester
-            if (semester.ReportSchedules != null && semester.ReportSchedules.Count > 0)
+            // Sync the same attendance sessions shown in the lecturer's schedule tab.
+            if (attendanceSessions.Count > 0)
             {
-                var schedules = semester.ReportSchedules.OrderBy(s => s.WeekNumber).ToList();
-                for (int i = 0; i < schedules.Count && i < 10; i++)
+                for (int i = 0; i < attendanceSessions.Count && i < 10; i++)
                 {
                     int r = 9 + i;
-                    var sched = schedules[i];
-                    ws1.Cell(r, 2).Value = sched.DueDate.ToString("dd/MM/yyyy");
-                    ws1.Cell(r, 3).Value = sched.WeekNumber;
-                    if (!string.IsNullOrWhiteSpace(sched.Title))
+                    var session = attendanceSessions[i];
+                    ws1.Cell(r, 2).Value = session.MeetingDate.ToString("dd/MM/yyyy");
+                    ws1.Cell(r, 3).Value = session.WeekNumber;
+                    ws1.Cell(r, 4).Value = session.DurationMinutes.HasValue
+                        ? session.DurationMinutes.Value / 60m
+                        : 0m;
+                    if (!string.IsNullOrWhiteSpace(session.Title))
                     {
-                        ws1.Cell(r, 5).Value = sched.Title;
+                        ws1.Cell(r, 5).Value = session.Title;
+                    }
+                    if (!string.IsNullOrWhiteSpace(session.Location))
+                    {
+                        ws1.Cell(r, 10).Value = session.Location;
                     }
                 }
             }

@@ -1,7 +1,9 @@
 using System.Text;
 using InternLink.Application.Interfaces;
+using InternLink.Shared.Authorization;
 using InternLink.Infrastructure.Email;
 using InternLink.Infrastructure.Identity;
+using InternLink.Infrastructure.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -166,9 +168,9 @@ public static class DependencyInjection
         // RequireAdmin = SuperAdmin or DepartmentAdmin. Kept as a compatibility helper for shared department-scoped admin endpoints.
         services.AddAuthorization(options =>
         {
-            options.AddPolicy("RequireSuperAdmin", p => p.RequireRole("SuperAdmin"));
-            options.AddPolicy("RequireDepartmentAdmin", p => p.RequireRole("DepartmentAdmin"));
-            options.AddPolicy("RequireAdmin", p => p.RequireRole("SuperAdmin", "DepartmentAdmin"));
+            options.AddPolicy(AdminPolicies.SuperAdmin, p => p.RequireRole("SuperAdmin"));
+            options.AddPolicy(AdminPolicies.DepartmentAdmin, p => p.RequireRole("DepartmentAdmin"));
+            options.AddPolicy(AdminPolicies.LegacyAdmin, p => p.RequireRole("SuperAdmin", "DepartmentAdmin"));
             options.AddPolicy("RequireLecturer", p => p.RequireRole("Lecturer"));
             options.AddPolicy("RequireStudent", p => p.RequireRole("Student"));
             options.AddPolicy("RequireLecturerOrAdmin", p => p.RequireRole("Lecturer", "SuperAdmin", "DepartmentAdmin"));

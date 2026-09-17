@@ -1,6 +1,10 @@
 import { apiRequest } from "../lib/apiClient";
 import type { PaginatedResponse, UserDto } from "../types/api";
 
+function getUsersPrefix(backendRole?: string | null) {
+  return backendRole === "SuperAdmin" ? "/api/SuperAdmin/users" : "/api/DepartmentAdmin/users";
+}
+
 export const adminUsersService = {
   getAll(params?: {
     skip?: number;
@@ -8,7 +12,7 @@ export const adminUsersService = {
     role?: string;
     isActive?: boolean;
     searchTerm?: string;
-  }): Promise<PaginatedResponse<UserDto>> {
+  }, backendRole?: string | null): Promise<PaginatedResponse<UserDto>> {
     const q = new URLSearchParams();
     q.set("skip", String(params?.skip ?? 0));
     q.set("take", String(params?.take ?? 200));
@@ -16,13 +20,13 @@ export const adminUsersService = {
     if (params?.isActive != null) q.set("isActive", String(params.isActive));
     if (params?.searchTerm) q.set("searchTerm", params.searchTerm);
     return apiRequest<PaginatedResponse<UserDto>>(
-      `/api/Admin/users?${q.toString()}`,
+      `${getUsersPrefix(backendRole)}?${q.toString()}`,
     );
   },
 
-  resetPassword(id: string) {
+  resetPassword(id: string, backendRole?: string | null) {
     return apiRequest<{ userId: string; username: string; emailSent: boolean }>(
-      `/api/Admin/users/${id}/reset-password`,
+      `${getUsersPrefix(backendRole)}/${id}/reset-password`,
       { method: "POST" },
     );
   },
@@ -35,8 +39,8 @@ export const adminUsersService = {
     departmentId?: string;
     studentCode?: string;
     staffCode?: string;
-  }): Promise<UserDto> {
-    return apiRequest<UserDto>("/api/Admin/users", {
+  }, backendRole?: string | null): Promise<UserDto> {
+    return apiRequest<UserDto>(getUsersPrefix(backendRole), {
       method: "POST",
       body,
     });
@@ -45,14 +49,15 @@ export const adminUsersService = {
   update(
     id: string,
     body: { fullName: string; email?: string; isActive: boolean },
+    backendRole?: string | null,
   ): Promise<UserDto> {
-    return apiRequest<UserDto>(`/api/Admin/users/${id}`, {
+    return apiRequest<UserDto>(`${getUsersPrefix(backendRole)}/${id}`, {
       method: "PUT",
       body,
     });
   },
 
-  delete(id: string): Promise<void> {
-    return apiRequest<void>(`/api/Admin/users/${id}`, { method: "DELETE" });
+  delete(id: string, backendRole?: string | null): Promise<void> {
+    return apiRequest<void>(`${getUsersPrefix(backendRole)}/${id}`, { method: "DELETE" });
   },
 };

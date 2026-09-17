@@ -13,6 +13,9 @@ public class CompanyPosition : BaseEntity
     public Guid? SemesterId { get; set; }
     public Semester? Semester { get; set; }
 
+    /// <summary>External position code from the import Excel (like CompanyCode/MSSV), e.g. "VT_FPT_01".</summary>
+    public string? PositionCode { get; set; }
+
     /// <summary>Position title, e.g. "Backend Developer Intern".</summary>
     public string Title { get; set; } = null!;
 

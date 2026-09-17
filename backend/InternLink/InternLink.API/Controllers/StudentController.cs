@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using InternLink.API.Extensions;
 using InternLink.Application.DTOs;
 using InternLink.Application.Interfaces;
+using InternLink.Shared.Authorization;
 using InternLink.Shared.Responses;
 
 namespace InternLink.API.Controllers;
@@ -157,7 +158,7 @@ public class StudentController : ControllerBase
     /// Check if a student number already exists (Admin only).
     /// </summary>
     [HttpGet("check/{studentCode}")]
-    [Authorize(Policy = "RequireAdmin")]
+    [Authorize(Policy = AdminPolicies.DepartmentAdmin)]
     public async Task<IActionResult> CheckStudentNumberExists(string studentCode)
     {
         try
