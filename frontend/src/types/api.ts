@@ -924,6 +924,7 @@ export interface UpdateAttendanceSessionDto {
   durationMinutes?: number;
   location?: string | null;
   status?: AttendanceSessionStatus;
+  isLecturerOnly?: boolean;
 }
 
 export interface MarkStudentAttendanceItemDto {

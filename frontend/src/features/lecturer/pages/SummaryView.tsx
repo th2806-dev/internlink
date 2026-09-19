@@ -19,7 +19,7 @@ import { lecturerExportService } from "../../../services/lecturerExport.service"
 import { lecturerInternshipsService } from "../../../services/lecturerInternships.service";
 import { attendanceService } from "../../../services/attendance.service";
 import { toApiSemesterId, useSemester } from "../../../contexts/SemesterContext";
-import type { AttendanceSessionDto, AttendanceSessionStatus, LecturerStudentListItemDto } from "../../../types/api";
+import type { AttendanceSessionDto, LecturerStudentListItemDto } from "../../../types/api";
 
 type ExportKind = "grades" | "report" | "schedule";
 
@@ -60,14 +60,6 @@ export const SummaryView = ({ onShowToast }: { onShowToast?: (msg: string) => vo
   const [reportSavedAt, setReportSavedAt] = useState<string | null>(null);
   const [activeModule, setActiveModule] = useState<ExportKind>("grades");
   const [attendanceSessions, setAttendanceSessions] = useState<AttendanceSessionDto[]>([]);
-  const [isAddingSchedule, setIsAddingSchedule] = useState(false);
-  const [scheduleForm, setScheduleForm] = useState({ weekNumber: 1, title: "", description: "", meetingDate: "", durationMinutes: 60, location: "", isLecturerOnly: false });
-  const [savingScheduleId, setSavingScheduleId] = useState<string | null>(null);
-
-  const schedules = attendanceSessions.map((session) => ({
-    ...session,
-    dueDate: session.meetingDate,
-  }));
 
   useEffect(() => {
     let cancelled = false;
@@ -93,21 +85,13 @@ export const SummaryView = ({ onShowToast }: { onShowToast?: (msg: string) => vo
     return () => { cancelled = true; };
   }, [onShowToast, semesterId]);
 
-  const loadAttendanceSessions = async () => {
+  useEffect(() => {
     if (!semesterId) {
       setAttendanceSessions([]);
       return;
     }
-    try {
-      setAttendanceSessions(await attendanceService.getLecturerSessions(semesterId));
-    } catch (error) {
-      onShowToast?.(getApiErrorMessage(error));
-    }
-  };
-
-  useEffect(() => {
-    void loadAttendanceSessions();
-  }, [onShowToast, semesterId]);
+    void attendanceService.getLecturerSessions(semesterId).then(setAttendanceSessions).catch(() => setAttendanceSessions([]));
+  }, [semesterId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -201,69 +185,6 @@ export const SummaryView = ({ onShowToast }: { onShowToast?: (msg: string) => vo
     }
   };
 
-  const createSchedule = async () => {
-    if (!semesterId) return;
-    if (!scheduleForm.title.trim() || !scheduleForm.meetingDate) {
-      onShowToast?.("Vui lòng nhập nội dung và ngày hướng dẫn.");
-      return;
-    }
-    try {
-      await attendanceService.createSession({
-        semesterId,
-        weekNumber: scheduleForm.weekNumber,
-        title: scheduleForm.title.trim(),
-        description: scheduleForm.description.trim() || undefined,
-        meetingDate: new Date(scheduleForm.meetingDate).toISOString(),
-        durationMinutes: scheduleForm.durationMinutes,
-        location: scheduleForm.location.trim() || undefined,
-        isLecturerOnly: scheduleForm.isLecturerOnly,
-      });
-      setIsAddingSchedule(false);
-      await loadAttendanceSessions();
-      onShowToast?.("Đã thêm lịch hướng dẫn vào dữ liệu Điểm danh & Buổi gặp.");
-    } catch (error) {
-      onShowToast?.(getApiErrorMessage(error));
-    }
-  };
-
-  const openScheduleForm = () => {
-    const maxWeek = Math.max(0, ...attendanceSessions.map((session) => session.weekNumber));
-    const nextWeek = Array.from({ length: Math.max(selectedSemester?.totalWeeks ?? 6, maxWeek + 1) }, (_, index) => index + 1)
-      .find((week) => !attendanceSessions.some((session) => session.weekNumber === week)) ?? maxWeek + 1;
-    const defaultDate = new Date();
-    defaultDate.setHours(9, 0, 0, 0);
-    setScheduleForm({ weekNumber: nextWeek, title: `Buổi gặp hướng dẫn tuần ${nextWeek}`, description: "", meetingDate: `${defaultDate.getFullYear()}-${String(defaultDate.getMonth() + 1).padStart(2, "0")}-${String(defaultDate.getDate()).padStart(2, "0")}T09:00`, durationMinutes: 60, location: "Phòng làm việc bộ môn", isLecturerOnly: false });
-    setIsAddingSchedule(true);
-  };
-
-  const updateSchedule = async (session: AttendanceSessionDto, patch: { title?: string; description?: string; dueDate?: string; meetingDate?: string; durationMinutes?: number; location?: string; status?: AttendanceSessionStatus }) => {
-    setSavingScheduleId(session.id);
-    try {
-      const { dueDate, ...attendancePatch } = patch;
-      await attendanceService.updateSession(session.id, {
-        ...attendancePatch,
-        meetingDate: dueDate ? new Date(dueDate).toISOString() : attendancePatch.meetingDate,
-      });
-      await loadAttendanceSessions();
-      onShowToast?.(`Đã lưu lịch tuần ${session.weekNumber}.`);
-    } catch (error) {
-      onShowToast?.(getApiErrorMessage(error));
-    } finally {
-      setSavingScheduleId(null);
-    }
-  };
-
-  const deleteSchedule = async (session: AttendanceSessionDto) => {
-    if (!window.confirm(`Xóa lịch hướng dẫn tuần ${session.weekNumber}?`)) return;
-    try {
-      await attendanceService.deleteSession(session.id);
-      setAttendanceSessions((current) => current.filter((item) => item.id !== session.id));
-      onShowToast?.("Đã xóa lịch hướng dẫn.");
-    } catch (error) {
-      onShowToast?.(getApiErrorMessage(error));
-    }
-  };
-
   return (
     <div className="space-y-5 max-w-[1400px] mx-auto animate-in fade-in duration-200">
       <PageHeader icon={ClipboardList} title="Tổng kết" subtitle="Rà soát, bổ sung nội dung và chuẩn bị hồ sơ cuối kỳ của nhóm sinh viên đang hướng dẫn." badge={selectedSemester?.name || "Chưa chọn học kỳ"} badgeColor="bg-blue-50 text-blue-800 border-blue-200" />
@@ -275,8 +196,6 @@ export const SummaryView = ({ onShowToast }: { onShowToast?: (msg: string) => vo
           return <button key={option.kind} type="button" onClick={() => setActiveModule(option.kind)} className={`text-left p-3 rounded-md border transition-colors ${active ? "border-blue-300 bg-blue-50 text-blue-900" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}><span className="flex items-center gap-2"><Icon className="w-4 h-4" /><span className="text-xs font-bold">{option.title}</span></span><span className="block text-[10px] mt-1 ml-6 opacity-75">Chỉnh sửa mẫu {option.format}</span></button>;
         })}
       </nav>
-
-      {activeModule === "schedule" && <div className="rounded-md border border-amber-100 bg-amber-50/50 p-3 text-xs text-amber-900"><label className="flex items-center gap-2 font-semibold"><input type="checkbox" checked={scheduleForm.isLecturerOnly} onChange={(event) => setScheduleForm((current) => ({ ...current, isLecturerOnly: event.target.checked }))} /> Công tác riêng của giảng viên</label><p className="mt-1 ml-6 text-[11px] text-amber-800">Dùng cho chuẩn bị hồ sơ, tổng hợp, đánh giá sau thực tập và các nhiệm vụ nội bộ; không tạo dòng điểm danh sinh viên.</p></div>}
 
       {activeModule === "grades" && <section className="grid grid-cols-2 lg:grid-cols-4 il-panel overflow-hidden">
         <div className="p-4 border-r border-b lg:border-b-0 border-slate-100"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Sinh viên</p><p className="text-2xl font-bold text-slate-900 mt-1">{students.length}</p><p className="text-[11px] text-slate-500 mt-1">Trong nhóm hướng dẫn</p></div>
@@ -334,7 +253,55 @@ export const SummaryView = ({ onShowToast }: { onShowToast?: (msg: string) => vo
         </div>
       </Panel>}
 
-      {activeModule === "schedule" && <Panel className="space-y-4"><div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3"><div><div className="flex items-center gap-2"><CalendarDays className="w-4 h-4 text-amber-700" /><h2 className="text-sm font-bold text-slate-900">Chỉnh sửa lịch của kỳ hiện hành</h2></div><p className="text-xs text-slate-500 mt-1">Rà soát các mốc hướng dẫn theo dữ liệu học kỳ đang chọn trước khi xuất gửi Ban Giám hiệu.</p></div><div className="flex gap-2"><button type="button" className="il-btn il-btn-secondary" onClick={openScheduleForm}><CalendarDays className="w-4 h-4" /> Thêm lịch thủ công</button><button type="button" className="il-btn il-btn-primary" disabled={Boolean(exporting) || !semesterId} onClick={() => void handleExport("schedule")}>{exporting === "schedule" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} Xuất lịch theo mẫu kỳ này</button></div></div>{isAddingSchedule && <div className="grid gap-3 md:grid-cols-5 rounded-md border border-blue-100 bg-blue-50/40 p-3"><label><span className="text-[10px] font-bold text-slate-500">Tuần</span><input type="number" min={1} value={scheduleForm.weekNumber} onChange={(event) => setScheduleForm((current) => ({ ...current, weekNumber: Number(event.target.value) }))} className="mt-1 w-full px-2.5 py-2 text-xs border border-slate-200 rounded-md" /></label><label><span className="text-[10px] font-bold text-slate-500">Ngày</span><input type="datetime-local" value={scheduleForm.meetingDate} onChange={(event) => setScheduleForm((current) => ({ ...current, meetingDate: event.target.value }))} className="mt-1 w-full px-2.5 py-2 text-xs border border-slate-200 rounded-md" /></label><label className="md:col-span-2"><span className="text-[10px] font-bold text-slate-500">Nội dung làm việc</span><input value={scheduleForm.title} onChange={(event) => setScheduleForm((current) => ({ ...current, title: event.target.value }))} placeholder="Ví dụ: Kiểm tra sinh viên thực tập" className="mt-1 w-full px-2.5 py-2 text-xs border border-slate-200 rounded-md" /></label><label><span className="text-[10px] font-bold text-slate-500">Số tiết</span><input type="number" min={1} value={scheduleForm.durationMinutes} onChange={(event) => setScheduleForm((current) => ({ ...current, durationMinutes: Number(event.target.value) }))} className="mt-1 w-full px-2.5 py-2 text-xs border border-slate-200 rounded-md" /></label><label className="md:col-span-2"><span className="text-[10px] font-bold text-slate-500">Ghi chú / địa điểm</span><input value={scheduleForm.location} onChange={(event) => setScheduleForm((current) => ({ ...current, location: event.target.value }))} placeholder="Phòng học / Văn phòng Khoa" className="mt-1 w-full px-2.5 py-2 text-xs border border-slate-200 rounded-md" /></label><label className="md:col-span-2"><span className="text-[10px] font-bold text-slate-500">Mô tả</span><input value={scheduleForm.description} onChange={(event) => setScheduleForm((current) => ({ ...current, description: event.target.value }))} className="mt-1 w-full px-2.5 py-2 text-xs border border-slate-200 rounded-md" /></label><div className="flex items-end"><button type="button" onClick={() => void createSchedule()} className="il-btn il-btn-primary w-full justify-center"><Save className="w-4 h-4" /> Lưu lịch</button></div></div>}{schedules.length === 0 ? <div className="rounded-md border border-slate-200 bg-slate-50 p-6 text-center text-xs text-slate-500">Chưa có buổi hướng dẫn trong dữ liệu Điểm danh & Buổi gặp.</div> : <div className="overflow-x-auto"><table className="w-full min-w-[900px] text-left text-xs"><thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500"><tr><th className="px-3 py-3">STT</th><th className="px-3 py-3">Ngày</th><th className="px-3 py-3">Tuần</th><th className="px-3 py-3">Số tiết</th><th className="px-3 py-3">Nội dung làm việc</th><th className="px-3 py-3">Ghi chú</th><th className="px-3 py-3">Thao tác</th></tr></thead><tbody>{schedules.map((schedule, index) => <tr key={schedule.id} className="border-t border-slate-100 align-top"><td className="px-3 py-3">{index + 1}</td><td className="px-3 py-3 whitespace-nowrap">{new Date(schedule.dueDate).toLocaleDateString("vi-VN")}</td><td className="px-3 py-3">{schedule.weekNumber}</td><td className="px-3 py-3">{((schedule.durationMinutes ?? 60) / 60).toFixed(1)}</td><td className="px-3 py-3 min-w-[320px]"><input defaultValue={schedule.title} onBlur={(event) => { if (event.target.value !== schedule.title) void updateSchedule(schedule, { title: event.target.value }); }} className="w-full px-2 py-1.5 border border-transparent hover:border-slate-200 focus:border-blue-500 rounded" /></td><td className="px-3 py-3 min-w-[180px]"><input defaultValue={schedule.location ?? schedule.description ?? ""} onBlur={(event) => { if (event.target.value !== (schedule.location ?? schedule.description ?? "")) void updateSchedule(schedule, { location: event.target.value }); }} className="w-full px-2 py-1.5 border border-transparent hover:border-slate-200 focus:border-blue-500 rounded" /></td><td className="px-3 py-3 whitespace-nowrap"><span className="text-[10px] text-emerald-700 mr-2">{savingScheduleId === schedule.id ? "Đang lưu" : "Đã đồng bộ"}</span><button type="button" onClick={() => void deleteSchedule(schedule)} className="text-rose-700 hover:text-rose-900" title="Xóa lịch"><XCircle className="w-4 h-4" /></button></td></tr>)}</tbody></table></div>}</Panel>}
+      {activeModule === "schedule" && <Panel className="space-y-4">
+        <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
+          <div>
+            <div className="flex items-center gap-2"><CalendarDays className="w-4 h-4 text-amber-700" /><h2 className="text-sm font-bold text-slate-900">Lịch hướng dẫn thực tập</h2></div>
+            <p className="text-xs text-slate-500 mt-1">Chỉ xem lịch công tác riêng (không có điểm danh SV). Quản lý lịch chung vui lòng qua trang <strong>Điểm danh &amp; Buổi gặp hướng dẫn</strong>.</p>
+          </div>
+          <button type="button" className="il-btn il-btn-primary" disabled={Boolean(exporting) || !semesterId} onClick={() => void handleExport("schedule")}>{exporting === "schedule" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} Xuất lịch theo mẫu kỳ này</button>
+        </div>
+
+        {(() => {
+          const personalSessions = attendanceSessions
+            .filter((s) => s.isLecturerOnly)
+            .slice()
+            .sort((a, b) => a.weekNumber - b.weekNumber);
+
+          return personalSessions.length === 0 ? (
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-6 text-center text-xs text-slate-500">
+              Chưa có lịch công tác riêng nào. Hãy tạo tại trang <strong>Điểm danh &amp; Buổi gặp hướng dẫn</strong> (tick "Công tác riêng của giảng viên").
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[700px] text-left text-xs">
+                <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500">
+                  <tr>
+                    <th className="px-3 py-3">STT</th>
+                    <th className="px-3 py-3">Ngày</th>
+                    <th className="px-3 py-3">Tuần</th>
+                    <th className="px-3 py-3">Số tiết</th>
+                    <th className="px-3 py-3">Nội dung làm việc</th>
+                    <th className="px-3 py-3">Địa điểm / Ghi chú</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {personalSessions.map((session, index) => (
+                    <tr key={session.id} className="border-t border-slate-100 align-top">
+                      <td className="px-3 py-3">{index + 1}</td>
+                      <td className="px-3 py-3 whitespace-nowrap">{new Date(session.meetingDate).toLocaleDateString("vi-VN")}</td>
+                      <td className="px-3 py-3">{session.weekNumber}</td>
+                      <td className="px-3 py-3">{((session.durationMinutes ?? 45) / 45).toFixed(1).replace(/\.0$/, "")} tiết</td>
+                      <td className="px-3 py-3 min-w-[260px]">{session.title}</td>
+                      <td className="px-3 py-3 min-w-[180px]">{session.location || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        })()}
+      </Panel>}
 
       {activeModule === "grades" && <Panel className="space-y-4"><div className="flex items-center justify-between gap-3"><div><div className="flex items-center gap-2"><FileSpreadsheet className="w-4 h-4 text-emerald-700" /><h2 className="text-sm font-bold text-slate-900">Xuất mẫu bảng điểm</h2></div><p className="text-xs text-slate-500 mt-1">Xuất bảng điểm sau khi đã rà soát từng sinh viên.</p></div><button type="button" className="il-btn il-btn-primary" disabled={Boolean(exporting) || !semesterId} onClick={() => void handleExport("grades")}>{exporting === "grades" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} Xuất bảng điểm</button></div></Panel>}
 

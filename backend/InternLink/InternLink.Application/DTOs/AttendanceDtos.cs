@@ -65,6 +65,7 @@ public class UpdateAttendanceSessionDto
     public int? DurationMinutes { get; set; }
     public string? Location { get; set; }
     public string? Status { get; set; }
+    public bool? IsLecturerOnly { get; set; }
 }
 
 public class MarkAttendanceDto

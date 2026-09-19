@@ -48,6 +48,7 @@ public class AttendanceServiceTests
             MeetingDate = DateTime.UtcNow.AddDays(1),
             DurationMinutes = 60,
             Location = "Phòng 302",
+            StudentIds = new List<Guid> { student1.Id, student2.Id },
         };
 
         var result = await service.CreateSessionAsync(lecturer.Id, dto);
@@ -122,6 +123,7 @@ public class AttendanceServiceTests
             WeekNumber = 3,
             Title = "Buổi gặp tuần 3",
             MeetingDate = DateTime.UtcNow,
+            StudentIds = new List<Guid> { student1.Id, student2.Id },
         });
 
         var markDto = new MarkAttendanceDto
@@ -205,6 +207,7 @@ public class AttendanceServiceTests
             WeekNumber = 1,
             Title = "Buổi gặp cần xóa",
             MeetingDate = DateTime.UtcNow,
+            StudentIds = new List<Guid> { student.Id },
         });
 
         db.AttendanceSessions.Count().Should().Be(1);

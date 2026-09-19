@@ -278,6 +278,7 @@ public class ExcelExportService : IExcelExportService
 
         var lecturer = await _db.Lecturers
             .Include(l => l.User)
+            .Include(l => l.DepartmentRef)
             .FirstOrDefaultAsync(l => l.Id == lecturerId, cancellationToken);
 
         if (lecturer == null)
@@ -333,51 +334,122 @@ public class ExcelExportService : IExcelExportService
                 : "Chưa cập nhật";
 
             var academicYear = semester.AcademicYear ?? $"{DateTime.Now.Year}-{DateTime.Now.Year + 1}";
-            var semesterNumber = semester.Name.Contains("2") ? "2" : (semester.Name.Contains("3") ? "Hè" : "1");
+            var semesterNumber = !string.IsNullOrWhiteSpace(semester.Term)
+                ? semester.Term
+                : (semester.Name.Contains("2") ? "HK2" : (semester.Name.Contains("3") ? "HK Hè" : "HK1"));
 
-            // Header & metadata
-            ws1.Cell("E5").Value = "HỌC KỲ:";
-            ws1.Cell("F5").Value = semesterNumber;
-            ws1.Cell("G5").Value = $"NĂM HỌC: {academicYear}";
-            ws1.Cell("A6").Value = $"Tên Giảng Viên: {lecturer.FullName}";
-            ws1.Cell("A7").Value = $"Tên học phần: Thực tập tốt nghiệp, Lớp {distinctClasses}";
-            ws1.Cell("G7").Value = $"Số SV: {studentCount:D2}";
-            ws1.Cell("I7").Value = $" Số tiết qui đổi:  2x{studentCount:D2} = {2 * studentCount} tiết";
+            var departmentNameRaw = lecturer.DepartmentRef?.Name ?? lecturer.Department;
+            // Template already has "KHOA" before {{TEN_KHOA}}, so use name WITHOUT "Khoa" prefix
+            var departmentNameForTemplate = !string.IsNullOrWhiteSpace(departmentNameRaw)
+                ? (departmentNameRaw.StartsWith("Khoa", StringComparison.OrdinalIgnoreCase)
+                    ? departmentNameRaw.Substring(4).TrimStart()
+                    : departmentNameRaw)
+                : string.Empty;
+            // Full name with prefix (for other uses)
+            var fullDepartmentName = !string.IsNullOrWhiteSpace(departmentNameRaw)
+                ? (departmentNameRaw.StartsWith("Khoa", StringComparison.OrdinalIgnoreCase) ? departmentNameRaw : $"Khoa {departmentNameRaw}")
+                : string.Empty;
 
-            if (ws1.Cell("D19").IsEmpty() || ws1.Cell("A19").GetString().Contains("Tổng", StringComparison.OrdinalIgnoreCase))
+            var soTietQuyDoi = $"2x{studentCount:D2} = {2 * studentCount} tiết";
+
+            // ── 1. Find the template row that contains {{item.stt}} ──
+            int itemTemplateRow = 0;
+            foreach (var cell in ws1.CellsUsed())
             {
-                ws1.Cell("D19").Value = 2 * studentCount;
-            }
-
-            ws1.Cell("H20").Value = $"TP. Hồ Chí Minh, ngày {DateTime.Now:dd} tháng {DateTime.Now:MM} năm {DateTime.Now:yyyy}";
-            ws1.Cell("J26").Value = lecturer.FullName;
-
-            if (!string.IsNullOrWhiteSpace(lecturer.Department))
-            {
-                ws1.Cell("G22").Value = $"Khoa {lecturer.Department.ToUpperInvariant()}";
-            }
-
-            // Sync the same attendance sessions shown in the lecturer's schedule tab.
-            if (attendanceSessions.Count > 0)
-            {
-                for (int i = 0; i < attendanceSessions.Count && i < 10; i++)
+                if (cell.GetString().Contains("{{item.stt}}", StringComparison.Ordinal))
                 {
-                    int r = 9 + i;
-                    var session = attendanceSessions[i];
-                    ws1.Cell(r, 2).Value = session.MeetingDate.ToString("dd/MM/yyyy");
-                    ws1.Cell(r, 3).Value = session.WeekNumber;
-                    ws1.Cell(r, 4).Value = session.DurationMinutes.HasValue
-                        ? session.DurationMinutes.Value / 60m
-                        : 0m;
-                    if (!string.IsNullOrWhiteSpace(session.Title))
-                    {
-                        ws1.Cell(r, 5).Value = session.Title;
-                    }
-                    if (!string.IsNullOrWhiteSpace(session.Location))
-                    {
-                        ws1.Cell(r, 10).Value = session.Location;
-                    }
+                    itemTemplateRow = cell.Address.RowNumber;
+                    break;
                 }
+            }
+
+            // ── 2. Insert session rows (shift rows down if needed) ──
+            int sessionCount = attendanceSessions.Count;
+            if (itemTemplateRow > 0 && sessionCount > 0)
+            {
+                // Insert extra rows if template only has 1 placeholder row but we have more sessions
+                if (sessionCount > 1)
+                {
+                    ws1.Row(itemTemplateRow + 1).InsertRowsAbove(sessionCount - 1);
+                }
+
+                for (int i = 0; i < sessionCount; i++)
+                {
+                    int r = itemTemplateRow + i;
+                    var session = attendanceSessions[i];
+                    ws1.Cell(r, 1).Value = i + 1;                                    // {{item.stt}}
+                    ws1.Cell(r, 2).Value = session.MeetingDate.ToString("dd/MM/yyyy"); // {{item.ngay}}
+                    ws1.Cell(r, 3).Value = session.WeekNumber;                        // {{item.tuan}}
+                    // 1 tiết = 45 phút
+                    var soTiet = session.DurationMinutes.HasValue
+                        ? Math.Round((decimal)session.DurationMinutes.Value / 45m, 2, MidpointRounding.AwayFromZero)
+                        : 0m;
+                    ws1.Cell(r, 4).Value = soTiet;
+                    ws1.Cell(r, 4).Style.NumberFormat.Format = "0.##";              // {{item.so_tiet}} - hide trailing zeros
+                    ws1.Cell(r, 5).Value = session.Title ?? string.Empty;             // {{item.noi_dung}}
+                    ws1.Cell(r, 11).Value = session.Location ?? string.Empty;          // {{item.ghi_chu}}
+                }
+            }
+            else if (itemTemplateRow > 0)
+            {
+                // No sessions — clear the template row
+                for (int c = 1; c <= 10; c++) ws1.Cell(itemTemplateRow, c).Value = string.Empty;
+            }
+
+            // ── 2b. Update "Tổng cộng" row with actual sum of so_tiet ──
+            // 1 tiết = 45 phút
+            decimal totalSoTiet = 0;
+            for (int i = 0; i < sessionCount; i++)
+            {
+                var s = attendanceSessions[i];
+                totalSoTiet += s.DurationMinutes.HasValue
+                    ? Math.Round((decimal)s.DurationMinutes.Value / 45m, 2, MidpointRounding.AwayFromZero)
+                    : 0m;
+            }
+            // Find the "Tổng cộng" row and update the total cell (column D = so_tiet)
+            foreach (var cell in ws1.CellsUsed())
+            {
+                if (cell.GetString().Contains("Tổng cộng", StringComparison.OrdinalIgnoreCase))
+                {
+                    ws1.Cell(cell.Address.RowNumber, 4).Value = totalSoTiet;
+                    ws1.Cell(cell.Address.RowNumber, 4).Style.NumberFormat.Format = "0.##";
+                    break;
+                }
+            }
+
+            // ── 3. Global placeholder replacement across ALL cells in Sheet 1 ──
+            var replacementMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["{{TEN_KHOA}}"] = departmentNameForTemplate,
+                ["{{KHOA}}"] = departmentNameForTemplate,
+                ["{{TEN_GIANG_VIEN}}"] = lecturer.FullName,
+                ["{{GIANG_VIEN}}"] = lecturer.FullName,
+                ["{{TEN_HOC_KY}}"] = semester.Name,
+                ["{{HOC_KY}}"] = semesterNumber,
+                ["{{NAM_HOC}}"] = academicYear,
+                ["{{SO_SV}}"] = studentCount.ToString("D2"),
+                ["{{DANH_SACH_LOP}}"] = distinctClasses,
+                ["{{LOP}}"] = distinctClasses,
+                ["{{TEN_HOC_PHAN}}"] = semester.Name,
+                ["{{SO_TIET_QUI_DOI}}"] = soTietQuyDoi,
+                ["{{NGAY}}"] = DateTime.Now.Day.ToString(),
+                ["{{THANG}}"] = DateTime.Now.Month.ToString("D2"),
+                ["{{NAM}}"] = DateTime.Now.Year.ToString(),
+            };
+
+            foreach (var cell in ws1.CellsUsed())
+            {
+                var text = cell.GetString();
+                if (string.IsNullOrEmpty(text) || !text.Contains("{{", StringComparison.Ordinal)) continue;
+
+                foreach (var kv in replacementMap)
+                {
+                    text = text.Replace(kv.Key, kv.Value, StringComparison.OrdinalIgnoreCase);
+                }
+                // Clear any leftover {{…}} / {{item.…}} placeholders
+                text = System.Text.RegularExpressions.Regex.Replace(text, @"\{\{item\.[^}]*\}\}", string.Empty);
+                text = System.Text.RegularExpressions.Regex.Replace(text, @"\{\{[^}]*\}\}", string.Empty);
+                cell.Value = text.Trim();
             }
 
             // Sheet 2: Danh sách sinh viên thực tập của giảng viên

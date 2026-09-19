@@ -70,18 +70,20 @@ export const AttendanceManagementView: React.FC<{
   const [createTitle, setCreateTitle] = useState("");
   const [createDescription, setCreateDescription] = useState("");
   const [createDate, setCreateDate] = useState("");
-  const [createDuration, setCreateDuration] = useState(60);
+  const [createSoTiet, setCreateSoTiet] = useState(1);
   const [createLocation, setCreateLocation] = useState("");
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+  const [createIsLecturerOnly, setCreateIsLecturerOnly] = useState(false);
   const [isSubmittingCreate, setIsSubmittingCreate] = useState(false);
 
   // Form states for editing session
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editDate, setEditDate] = useState("");
-  const [editDuration, setEditDuration] = useState(60);
+  const [editSoTiet, setEditSoTiet] = useState(1);
   const [editLocation, setEditLocation] = useState("");
   const [editStatus, setEditStatus] = useState<"Scheduled" | "Completed" | "Cancelled">("Scheduled");
+  const [editIsLecturerOnly, setEditIsLecturerOnly] = useState(false);
   const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
 
   // In-memory mark states
@@ -145,8 +147,9 @@ export const AttendanceManagementView: React.FC<{
     tomorrow.setDate(tomorrow.getDate() + 1);
     tomorrow.setHours(9, 0, 0, 0);
     setCreateDate(toDateTimeLocalValue(tomorrow));
-    setCreateDuration(60);
+    setCreateSoTiet(1);
     setCreateLocation("Phòng làm việc bộ môn");
+    setCreateIsLecturerOnly(false);
     setSelectedStudentIds(students.map((s) => s.studentId));
     setIsCreateModalOpen(true);
   };
@@ -172,9 +175,10 @@ export const AttendanceManagementView: React.FC<{
         title: createTitle.trim(),
         description: createDescription.trim() || undefined,
         meetingDate: new Date(createDate).toISOString(),
-        durationMinutes: createDuration,
+        durationMinutes: Math.round(createSoTiet * 45),
         location: createLocation.trim() || undefined,
-        studentIds: selectedStudentIds.length === assignedStudents.length ? undefined : selectedStudentIds,
+        isLecturerOnly: createIsLecturerOnly,
+        studentIds: createIsLecturerOnly ? [] : (selectedStudentIds.length === assignedStudents.length ? undefined : selectedStudentIds),
       };
 
       await attendanceService.createSession(dto);
@@ -247,9 +251,10 @@ export const AttendanceManagementView: React.FC<{
     setEditTitle(session.title);
     setEditDescription(session.description || "");
     setEditDate(toDateTimeLocalValue(parseBackendDate(session.meetingDate)));
-    setEditDuration(session.durationMinutes || 60);
+    setEditSoTiet((session.durationMinutes || 45) / 45);
     setEditLocation(session.location || "");
     setEditStatus(session.status);
+    setEditIsLecturerOnly(session.isLecturerOnly);
     setIsEditModalOpen(true);
   };
 
@@ -264,9 +269,10 @@ export const AttendanceManagementView: React.FC<{
         title: editTitle.trim(),
         description: editDescription.trim() || undefined,
         meetingDate: editDate ? new Date(editDate).toISOString() : undefined,
-        durationMinutes: editDuration,
+        durationMinutes: Math.round(editSoTiet * 45),
         location: editLocation.trim() || undefined,
         status: editStatus,
+        isLecturerOnly: editIsLecturerOnly,
       };
 
       await attendanceService.updateSession(editingSession.id, dto);
@@ -295,13 +301,15 @@ export const AttendanceManagementView: React.FC<{
     }
   };
 
-  // KPI Calculations
+  // KPI Calculations — exclude lecturer-only sessions from attendance stats
+  const attendanceSessions = sessions.filter((s) => !s.isLecturerOnly);
   const totalSessionsCount = sessions.length;
-  const completedSessionsCount = sessions.filter((s) => s.status === "Completed").length;
-  const totalRecordsCount = sessions.reduce((acc, s) => acc + s.totalStudents, 0);
-  const totalPresentCount = sessions.reduce((acc, s) => acc + s.presentCount, 0);
-  const totalAbsentCount = sessions.reduce((acc, s) => acc + s.absentCount, 0);
+  const completedSessionsCount = attendanceSessions.filter((s) => s.status === "Completed").length;
+  const totalRecordsCount = attendanceSessions.reduce((acc, s) => acc + s.totalStudents, 0);
+  const totalPresentCount = attendanceSessions.reduce((acc, s) => acc + s.presentCount, 0);
+  const totalAbsentCount = attendanceSessions.reduce((acc, s) => acc + s.absentCount, 0);
   const overallRate = totalRecordsCount > 0 ? Math.round((totalPresentCount / totalRecordsCount) * 100) : 100;
+  const lecturerOnlyCount = sessions.filter((s) => s.isLecturerOnly).length;
 
   // Filtered records for mark modal
   const filteredMarkRecords = useMemo(() => {
@@ -351,14 +359,14 @@ export const AttendanceManagementView: React.FC<{
           value={totalSessionsCount}
           unit="buổi"
           icon={CalendarCheck}
-          footer={`${completedSessionsCount} buổi đã hoàn thành điểm danh`}
+          footer={`${completedSessionsCount} buổi đã hoàn thành điểm danh${lecturerOnlyCount > 0 ? ` · ${lecturerOnlyCount} buổi công tác riêng` : ''}`}
         />
         <KpiCard
           tone="emerald"
           title="Tỷ lệ chuyên cần trung bình"
           value={`${overallRate}%`}
           icon={CheckCircle2}
-          footer={`${totalPresentCount} / ${totalRecordsCount} lượt có mặt`}
+          footer={`${totalPresentCount} / ${totalRecordsCount} lượt có mặt (chỉ buổi có SV)`}
         />
         <KpiCard
           tone="amber"
@@ -374,7 +382,7 @@ export const AttendanceManagementView: React.FC<{
           value={totalAbsentCount}
           unit="lượt"
           icon={XCircle}
-          footer={totalAbsentCount > 0 ? "Cần theo dõi và nhắc nhở" : "Chưa ghi nhận lượt vắng"}
+          footer={totalAbsentCount > 0 ? `Cần theo dõi (${totalAbsentCount} lượt)` : "Chưa ghi nhận lượt vắng"}
         />
       </KpiGrid>
 
@@ -440,11 +448,18 @@ export const AttendanceManagementView: React.FC<{
                   }`}
                 >
                   <div className="space-y-2.5">
-                    {/* Header: Week badge + Status badge */}
+                    {/* Header: Week badge + Type badge + Status badge */}
                     <div className="flex items-center justify-between gap-2">
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                        Tuần {session.weekNumber}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                          Tuần {session.weekNumber}
+                        </span>
+                        {session.isLecturerOnly && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                            Công tác riêng
+                          </span>
+                        )}
+                      </div>
                       <span
                         className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
                           session.status === "Completed"
@@ -490,7 +505,7 @@ export const AttendanceManagementView: React.FC<{
                             year: "numeric",
                           })}{" "}
                           • {meetingDateObj.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}
-                          {session.durationMinutes ? ` (${session.durationMinutes}p)` : ""}
+                          {session.durationMinutes ? ` (${(session.durationMinutes / 45).toFixed(1).replace(/\.0$/, "")} tiết)` : ""}
                         </span>
                       </div>
 
@@ -523,7 +538,11 @@ export const AttendanceManagementView: React.FC<{
                   <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
                     {/* Attendance stats badge */}
                     <div className="text-[11px] font-medium">
-                      {session.status === "Completed" ? (
+                      {session.isLecturerOnly ? (
+                        <span className="text-amber-600 italic">
+                          Công tác riêng — không có điểm danh
+                        </span>
+                      ) : session.status === "Completed" ? (
                         <span className="text-emerald-700 font-bold">
                           {session.presentCount}/{session.totalStudents} có mặt ({session.attendanceRate}%)
                         </span>
@@ -535,6 +554,7 @@ export const AttendanceManagementView: React.FC<{
                     </div>
 
                     {/* Action buttons */}
+                    {!session.isLecturerOnly && (
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => handleOpenMarkModal(session)}
@@ -559,6 +579,7 @@ export const AttendanceManagementView: React.FC<{
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
+                    )}
                   </div>
                 </div>
               );
@@ -610,13 +631,13 @@ export const AttendanceManagementView: React.FC<{
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Thời lượng (phút)</label>
+                  <label className="block font-bold text-slate-700 mb-1">Số tiết</label>
                   <input
                     type="number"
-                    min={15}
-                    step={15}
-                    value={createDuration}
-                    onChange={(e) => setCreateDuration(Number(e.target.value))}
+                    min={0.5}
+                    step={0.5}
+                    value={createSoTiet}
+                    onChange={(e) => setCreateSoTiet(Number(e.target.value))}
                     className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 focus:border-blue-500 font-medium outline-none"
                   />
                 </div>
@@ -673,8 +694,24 @@ export const AttendanceManagementView: React.FC<{
                 />
               </div>
 
+              {/* Công tác riêng của giảng viên */}
+              <div className="rounded-md border border-amber-100 bg-amber-50/50 p-3">
+                <label className="flex items-center gap-2 font-semibold text-xs text-amber-900">
+                  <input
+                    type="checkbox"
+                    checked={createIsLecturerOnly}
+                    onChange={(e) => setCreateIsLecturerOnly(e.target.checked)}
+                    className="rounded text-amber-600 focus:ring-amber-500"
+                  />
+                  Công tác riêng của giảng viên
+                </label>
+                <p className="mt-1 ml-6 text-[11px] text-amber-800">
+                  Dùng cho chuẩn bị hồ sơ, tổng hợp, đánh giá sau thực tập và các nhiệm vụ nội bộ; không tạo dòng điểm danh sinh viên.
+                </p>
+              </div>
+
               {/* Sinh viên tham gia */}
-              <div>
+              {!createIsLecturerOnly && <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="font-bold text-slate-700">
                     Sinh viên tham dự ({selectedStudentIds.length}/{assignedStudents.length})
@@ -723,7 +760,7 @@ export const AttendanceManagementView: React.FC<{
                     );
                   })}
                 </div>
-              </div>
+              </div>}
 
               <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
                 <button
@@ -735,7 +772,7 @@ export const AttendanceManagementView: React.FC<{
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmittingCreate || selectedStudentIds.length === 0}
+                  disabled={isSubmittingCreate || (!createIsLecturerOnly && selectedStudentIds.length === 0)}
                   className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold rounded-lg transition-colors shadow-sm"
                 >
                   {isSubmittingCreate ? "Đang lưu..." : "Lên lịch buổi gặp"}
@@ -979,13 +1016,13 @@ export const AttendanceManagementView: React.FC<{
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Thời lượng (phút)</label>
+                  <label className="block font-bold text-slate-700 mb-1">Số tiết</label>
                   <input
                     type="number"
-                    min={15}
-                    step={15}
-                    value={editDuration}
-                    onChange={(e) => setEditDuration(Number(e.target.value))}
+                    min={0.5}
+                    step={0.5}
+                    value={editSoTiet}
+                    onChange={(e) => setEditSoTiet(Number(e.target.value))}
                     className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 focus:border-blue-500 font-medium outline-none"
                   />
                 </div>
@@ -1022,6 +1059,23 @@ export const AttendanceManagementView: React.FC<{
                   onChange={(e) => setEditDescription(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 focus:border-blue-500 font-medium outline-none"
                 />
+              </div>
+
+              <div className="rounded-md border border-amber-100 bg-amber-50/50 p-3">
+                <label className="flex items-center gap-2 font-semibold text-xs text-amber-900">
+                  <input
+                    type="checkbox"
+                    checked={editIsLecturerOnly}
+                    onChange={(e) => setEditIsLecturerOnly(e.target.checked)}
+                    className="rounded text-amber-600 focus:ring-amber-500"
+                  />
+                  Công tác riêng của giảng viên
+                </label>
+                <p className="mt-1 ml-6 text-[11px] text-amber-800">
+                  {editIsLecturerOnly
+                    ? "Buổi này ẩn khỏi trang Sinh viên — không có dòng điểm danh."
+                    : "Bật lên để ẩn buổi gặp khỏi trang Sinh viên."}
+                </p>
               </div>
 
               <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">

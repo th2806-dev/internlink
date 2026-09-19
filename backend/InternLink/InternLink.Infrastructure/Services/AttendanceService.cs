@@ -118,10 +118,10 @@ public class AttendanceService : IAttendanceService
         }
         else
         {
-            // Default: All assigned students in this semester
-            targetInternships = await _context.Internships
-                .Where(i => i.SemesterId == dto.SemesterId && i.LecturerId == lecturerId)
-                .ToListAsync();
+            // No students selected and not lecturer-only: reject to avoid
+            // silently creating attendance records for every assigned student.
+            throw new InvalidOperationException(
+                "Vui lòng chọn ít nhất một sinh viên tham dự, hoặc đánh dấu là công tác riêng của giảng viên.");
         }
 
         foreach (var internship in targetInternships)
@@ -172,6 +172,36 @@ public class AttendanceService : IAttendanceService
         if (!string.IsNullOrWhiteSpace(dto.Status) && Enum.TryParse<AttendanceSessionStatus>(dto.Status, true, out var parsedStatus))
         {
             session.Status = parsedStatus;
+        }
+
+        // Handle isLecturerOnly toggle
+        if (dto.IsLecturerOnly.HasValue && dto.IsLecturerOnly.Value != session.IsLecturerOnly)
+        {
+            if (dto.IsLecturerOnly.Value)
+            {
+                // Switching to lecturer-only: remove all attendance records
+                var records = await _context.AttendanceRecords
+                    .Where(r => r.AttendanceSessionId == sessionId)
+                    .ToListAsync();
+                _context.AttendanceRecords.RemoveRange(records);
+            }
+            else
+            {
+                // Switching from lecturer-only to student session: create records for all assigned students
+                var internships = await _context.Internships
+                    .Where(i => i.SemesterId == session.SemesterId && i.LecturerId == lecturerId)
+                    .ToListAsync();
+                foreach (var internship in internships)
+                {
+                    session.Records.Add(new AttendanceRecord
+                    {
+                        StudentId = internship.StudentId,
+                        InternshipId = internship.Id,
+                        Status = AttendanceStatus.Present,
+                    });
+                }
+            }
+            session.IsLecturerOnly = dto.IsLecturerOnly.Value;
         }
 
         await _context.SaveChangesAsync();

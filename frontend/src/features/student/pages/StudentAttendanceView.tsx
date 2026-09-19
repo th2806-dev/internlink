@@ -151,7 +151,7 @@ export const StudentAttendanceView: React.FC<{
                   hour: "2-digit",
                   minute: "2-digit",
                 })}
-                {upcomingSession.durationMinutes ? ` (${upcomingSession.durationMinutes} phút)` : ""}
+                {upcomingSession.durationMinutes ? ` (${(upcomingSession.durationMinutes / 45).toFixed(1).replace(/\.0$/, "")} tiết)` : ""}
               </span>
             </div>
 
@@ -257,7 +257,7 @@ export const StudentAttendanceView: React.FC<{
                             year: "numeric",
                           })}{" "}
                           • {meetingDateObj.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}
-                          {session.durationMinutes ? ` (${session.durationMinutes}p)` : ""}
+                          {session.durationMinutes ? ` (${(session.durationMinutes / 45).toFixed(1).replace(/\.0$/, "")} tiết)` : ""}
                         </span>
 
                         {session.location && (
