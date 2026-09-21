@@ -21,7 +21,7 @@ public class SemesterReportScheduleController : ControllerBase
     }
 
     [HttpGet]
-    [Authorize]
+    [Authorize(Policy = "RequireLecturerOrAdmin")]
     public async Task<IActionResult> GetReportSchedules(Guid semesterId)
     {
         var schedules = await _semesterService.GetReportSchedulesAsync(semesterId);
@@ -29,7 +29,7 @@ public class SemesterReportScheduleController : ControllerBase
     }
 
     [HttpPost("generate-defaults")]
-    [Authorize(Policy = "RequireDepartmentAdmin")]
+    [Authorize(Policy = "RequireLecturerOrAdmin")]
     public async Task<IActionResult> GenerateDefaults(Guid semesterId)
     {
         try
@@ -44,7 +44,7 @@ public class SemesterReportScheduleController : ControllerBase
     }
 
     [HttpPut("{weekNumber:int}")]
-    [Authorize(Policy = "RequireDepartmentAdmin")]
+    [Authorize(Policy = "RequireLecturerOrAdmin")]
     public async Task<IActionResult> UpdateSchedule(
         Guid semesterId,
         int weekNumber,

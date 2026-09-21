@@ -263,6 +263,8 @@ public class AppDbContext : DbContext
             b.Property(x => x.TeamworkScore).IsRequired();
             b.Property(x => x.InitiativeScore).IsRequired();
             b.Property(x => x.FinalGrade).IsRequired().HasPrecision(5, 2);
+            b.Property(x => x.QualityLevel).HasPrecision(3, 1);
+            b.Property(x => x.OralExamScore).HasPrecision(4, 1);
             b.Property(x => x.Comments).HasMaxLength(3000);
             b.Property(x => x.Strengths).HasMaxLength(2000);
             b.Property(x => x.AreasForImprovement).HasMaxLength(2000);
@@ -419,6 +421,7 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<Evaluation>(b =>
         {
             b.Property(x => x.CriteriaScoresJson).HasMaxLength(8000);
+            b.Property(x => x.HasCreativeProduct).HasDefaultValue(false);
             b.HasOne(x => x.Rubric).WithMany().HasForeignKey(x => x.RubricId).OnDelete(DeleteBehavior.SetNull);
         });
 
@@ -499,6 +502,7 @@ public class AppDbContext : DbContext
             b.Property(x => x.Title).IsRequired().HasMaxLength(250);
             b.Property(x => x.Description).HasMaxLength(1000);
             b.Property(x => x.AllowLateSubmission).HasDefaultValue(true);
+            b.Property(x => x.IsSubmissionOpen).HasDefaultValue(true);
             b.Property(x => x.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
             b.HasIndex(x => new { x.SemesterId, x.WeekNumber }).IsUnique();
             b.HasOne(x => x.Semester)

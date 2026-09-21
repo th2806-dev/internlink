@@ -1,6 +1,14 @@
 import { apiRequest, downloadAuthenticatedFile } from "../lib/apiClient";
 import type { StudentDto, StudentImportResultDto } from "../types/api";
 
+export type AdminStudentListItem = StudentDto & {
+  internshipId?: string | null;
+  finalGrade?: number | null;
+  hasEvaluation?: boolean;
+  isEvaluationFinalized?: boolean;
+  progressPercent?: number;
+};
+
 export const adminStudentsService = {
   getAll(skip = 0, take = 500, semesterId?: string, departmentId?: string): Promise<StudentDto[]> {
     const params = new URLSearchParams({ skip: String(skip), take: String(take) });

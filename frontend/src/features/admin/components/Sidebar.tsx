@@ -10,6 +10,7 @@ import {
   User,
   Calendar,
   FileText,
+  ClipboardList,
 } from "lucide-react";
 import { FEATURES } from "../../../config/featureFlags";
 import { formatCountBadge } from "../../../lib/userDisplay";
@@ -98,6 +99,11 @@ export const Sidebar = ({
           label: "Biểu mẫu & Tài liệu",
           icon: FileText,
         },
+        {
+          id: "admin-summary",
+          label: "Báo cáo tổng kết",
+          icon: ClipboardList,
+        },
       ],
     },
     {
@@ -152,6 +158,7 @@ export const Sidebar = ({
             "admin-users",
             "admin-settings",
             "admin-account",
+            "admin-summary",
           ]);
           if (!superAdminItems.has(item.id)) return false;
         }

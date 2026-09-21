@@ -472,4 +472,27 @@ public class AttendanceService : IAttendanceService
             MarkedBy = r.MarkedBy,
         };
     }
+
+    /// <inheritdoc />
+    public async Task<Dictionary<string, int>> GetStudentAbsenceSummaryAsync(Guid lecturerId, Guid semesterId)
+    {
+        var query = _context.AttendanceRecords
+            .AsNoTracking()
+            .Include(r => r.AttendanceSession)
+            .Where(r => !r.IsDeleted
+                        && r.Status == AttendanceStatus.Absent
+                        && r.AttendanceSession.SemesterId == semesterId
+                        && !r.AttendanceSession.IsDeleted);
+
+        // Lecturer: chỉ đếm các buổi do mình phụ trách; Guid.Empty → toàn bộ (admin)
+        if (lecturerId != Guid.Empty)
+        {
+            query = query.Where(r => r.AttendanceSession.LecturerId == lecturerId);
+        }        var summary = await query
+            .GroupBy(r => r.StudentId)
+            .Select(g => new { StudentId = g.Key, AbsentCount = g.Count() })
+            .ToDictionaryAsync(x => x.StudentId.ToString(), x => x.AbsentCount);
+
+        return summary;
+    }
 }

@@ -93,6 +93,9 @@ export const AttendanceManagementView: React.FC<{
   const [isSavingMark, setIsSavingMark] = useState(false);
   const [markSearchQuery, setMarkSearchQuery] = useState("");
 
+  // Tổng số buổi vắng theo sinh viên trong kỳ — highlight đỏ khi >= 2
+  const [absenceSummary, setAbsenceSummary] = useState<Record<string, number>>({});
+
   const loadSessions = useCallback(async () => {
     if (!attendanceSemesterId) return;
     setIsLoading(true);
@@ -196,6 +199,13 @@ export const AttendanceManagementView: React.FC<{
   const handleOpenMarkModal = async (session: AttendanceSessionDto) => {
     try {
       const detail = await attendanceService.getSessionDetail(session.id);
+      // Tải song song tổng vắng trong kỳ để cảnh báo (không chặn modal nếu lỗi)
+      if (attendanceSemesterId) {
+        attendanceService
+          .getStudentAbsenceSummary(attendanceSemesterId)
+          .then(setAbsenceSummary)
+          .catch(() => setAbsenceSummary({}));
+      }
       setActiveMarkSession(detail);
       const initialRecordMap: Record<string, { status: AttendanceStatus; notes: string }> = {};
       detail.records.forEach((r) => {
@@ -843,13 +853,22 @@ export const AttendanceManagementView: React.FC<{
                 const currentNotes = markRecords[r.studentId]?.notes ?? (r.notes || "");
                 const isPresent = currentStatus === "Present";
 
+                // Tổng vắng trong kỳ — điều chỉnh theo thay đổi chưa lưu của buổi hiện tại
+                const currentStatusThisSession = markRecords[r.studentId]?.status ?? r.status;
+                let totalAbsences = absenceSummary[r.studentId] ?? 0;
+                if (currentStatusThisSession === "Absent" && r.status === "Present") totalAbsences += 1;
+                if (currentStatusThisSession === "Present" && r.status === "Absent") totalAbsences -= 1;
+                const isHighRisk = totalAbsences >= 2;
+
                 return (
                   <div
                     key={r.studentId}
                     className={`p-3 rounded-lg border transition-all flex flex-col md:flex-row items-start md:items-center justify-between gap-3 ${
-                      isPresent
-                        ? "bg-emerald-50/30 border-emerald-200"
-                        : "bg-rose-50/40 border-rose-200"
+                      isHighRisk
+                        ? "bg-red-100/70 border-red-300 ring-1 ring-red-200"
+                        : isPresent
+                          ? "bg-emerald-50/30 border-emerald-200"
+                          : "bg-rose-50/40 border-rose-200"
                     }`}
                   >
                     {/* Student Info */}
@@ -861,6 +880,14 @@ export const AttendanceManagementView: React.FC<{
                           <span className="font-mono text-[10px] text-blue-600 font-bold">
                             {r.studentCode}
                           </span>
+                          {isHighRisk && (
+                            <span
+                              title={`Đã vắng ${totalAbsences} buổi — gần mất điều kiện dự thi`}
+                              className="rounded-full bg-red-600 px-1.5 py-0.5 text-[9px] font-bold text-white"
+                            >
+                              VẮNG {totalAbsences}
+                            </span>
+                          )}
                         </div>
                         <p className="text-[11px] text-slate-500">
                           {r.companyName || "Chưa phân bổ DN"} • {r.class || "Chưa có lớp"}

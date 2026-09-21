@@ -1,5 +1,6 @@
 using System.Data;
 using ClosedXML.Excel;
+using InternLink.Application.Common;
 using InternLink.Application.DTOs.Export;
 using InternLink.Application.Interfaces;
 using InternLink.Domain.Entities;
@@ -43,6 +44,8 @@ public class ExcelExportService : IExcelExportService
                 .ThenInclude(i => i.Lecturer)
             .Include(s => s.Internships.Where(i => !i.IsDeleted && (!semesterId.HasValue || i.SemesterId == semesterId.Value) && (!lecturerId.HasValue || i.LecturerId == lecturerId.Value)))
                 .ThenInclude(i => i.WeeklyReports)
+            .Include(s => s.AttendanceRecords.Where(a => !a.IsDeleted))
+                .ThenInclude(a => a.AttendanceSession)
             .Where(s => !lecturerId.HasValue || s.Internships.Any(i => !i.IsDeleted && i.LecturerId == lecturerId.Value && (!semesterId.HasValue || i.SemesterId == semesterId.Value)));
 
         if (!string.IsNullOrWhiteSpace(department))
@@ -73,8 +76,20 @@ public class ExcelExportService : IExcelExportService
             .Where(e => internshipIds.Contains(e.InternshipId))
             .ToDictionaryAsync(e => e.InternshipId, cancellationToken);
 
+        var totalWeeks = semesterId.HasValue
+            ? Math.Max(await _db.Semesters.Where(s => s.Id == semesterId.Value).Select(s => (int?)s.TotalWeeks).FirstOrDefaultAsync(cancellationToken) ?? 1, 1)
+            : Math.Max(await _db.Internships.Where(i => internshipIds.Contains(i.Id)).Select(i => (int?)i.Semester!.TotalWeeks).MaxAsync(cancellationToken) ?? 1, 1);
+        var finalReportWeek = totalWeeks + 1;
+
+        // Report schedule and attendance use the week count configured on the semester.
+        var reportScheduleByWeek = await _db.SemesterReportSchedules
+            .AsNoTracking()
+            .Where(s => !s.IsDeleted && (!semesterId.HasValue || s.SemesterId == semesterId.Value) && s.WeekNumber >= 1 && s.WeekNumber <= totalWeeks)
+            .OrderBy(s => s.WeekNumber)
+            .ToDictionaryAsync(s => s.WeekNumber, cancellationToken);
         var studentExportList = new List<InternshipStudentExportDto>();
         int stt = 1;
+        var now = DateTime.UtcNow;
 
         foreach (var student in students)
         {
@@ -96,18 +111,69 @@ public class ExcelExportService : IExcelExportService
                 dto.GvHuongDan = internship.Lecturer?.FullName ?? "Chưa phân công";
                 dto.GhiChu = internship.Notes ?? string.Empty;
 
+                // Count missing/late reports and attendance violations by configured week.
+                var reports23 = internship.WeeklyReports
+                    .Where(r => !r.IsDeleted && r.Status != WeeklyReportStatus.Draft)
+                    .ToList();
+                var reportMissingCount = 0;
+                var lateCount = 0;
+                var eligibilityViolationWeeks = new HashSet<int>();
+                foreach (var (week, schedule) in reportScheduleByWeek)
+                {
+                    var hasReport = reports23.Any(r => r.WeekNumber == week && r.SubmittedAt.HasValue);
+                    var absent = student.AttendanceRecords.Any(a => !a.IsDeleted
+                        && a.Status == AttendanceStatus.Absent
+                        && a.AttendanceSession != null
+                        && a.AttendanceSession.SemesterId == (internship.SemesterId ?? semesterId)
+                        && !a.AttendanceSession.IsLecturerOnly
+                        && a.AttendanceSession.WeekNumber == week);
+
+                    if (!hasReport)
+                    {
+                        // Chưa nộp: tính thiếu nếu đã quá deadline hoặc có buổi vắng tuần đó
+                        if (schedule.DueDate < now || absent)
+                        {
+                            if (schedule.DueDate < now)
+                                reportMissingCount++;
+                            eligibilityViolationWeeks.Add(week);
+                        }
+                    }
+                    else
+                    {
+                        var submittedAt = reports23.First(r => r.WeekNumber == week && r.SubmittedAt.HasValue).SubmittedAt!.Value;
+                        if (submittedAt > schedule.DueDate)
+                            lateCount++;
+                        if (absent)
+                            eligibilityViolationWeeks.Add(week);
+                    }
+                }
+
+                var finalSubmitted = reports23.Any(r => r.WeekNumber == finalReportWeek && r.SubmittedAt.HasValue);
+                var ineligible = !finalSubmitted || eligibilityViolationWeeks.Count >= InternshipGradeCalculator.MaxMissingWeeks;
+
                 // Map scores from Evaluation if available
                 if (evaluations.TryGetValue(internship.Id, out var eval))
                 {
                     dto.DiemThamGia = eval.InitiativeScore;
-                    // DiemQT: average of Technical, Communication, Teamwork
-                    dto.DiemQT = Math.Round((eval.TechnicalScore + eval.CommunicationScore + eval.TeamworkScore) / 3.0m, 1);
-                    dto.Thi = eval.FinalGrade;
+                    // Điểm QT = MIN(10, Nộp đủ(2) + Đúng hạn(2) + Chất lượng(5) + Sáng tạo(+1))
+                    dto.DiemQT = InternshipGradeCalculator.ComputeProcessScore(
+                        reportMissingCount, lateCount, eval.QualityLevel, eval.HasCreativeProduct);
+                    // Cột J: Điểm thi vấn đáp nhập tay
+                    dto.Thi = eval.OralExamScore ?? eval.FinalGrade;
                 }
+                else
+                {
+                    dto.DiemQT = InternshipGradeCalculator.ComputeProcessScore(reportMissingCount, lateCount, null, false);
+                }
+
+                dto.IsIneligible = ineligible;
 
                 // Map weekly reports
                 var reports = internship.WeeklyReports.OrderBy(r => r.WeekNumber).ToList();
-                dto.HdChung = reports.Count >= 6 ? "Đủ" : "Thiếu";
+                dto.HdChung = reports.Count(r => r.WeekNumber >= 1 && r.WeekNumber <= totalWeeks && r.SubmittedAt.HasValue) >= totalWeeks ? "Đủ" : "Thiếu";
+                dto.WeeklyReportCells = Enumerable.Range(1, totalWeeks)
+                    .Select(week => FormatWeeklyReportCell(reports.FirstOrDefault(r => r.WeekNumber == week)))
+                    .ToList();
                 dto.Tuan1 = FormatWeeklyReportCell(reports.FirstOrDefault(r => r.WeekNumber == 1));
                 dto.Tuan2 = FormatWeeklyReportCell(reports.FirstOrDefault(r => r.WeekNumber == 2));
                 dto.Tuan3 = FormatWeeklyReportCell(reports.FirstOrDefault(r => r.WeekNumber == 3));
@@ -115,10 +181,11 @@ public class ExcelExportService : IExcelExportService
                 dto.Tuan5 = FormatWeeklyReportCell(reports.FirstOrDefault(r => r.WeekNumber == 5));
                 dto.Tuan6 = FormatWeeklyReportCell(reports.FirstOrDefault(r => r.WeekNumber == 6));
 
-                // Report submission status: "Đã nộp" or "X"
-                bool isSubmitted = internship.Status == InternshipStatus.Completed ||
+                // Report submission status follows the dynamically derived final report week.
+                bool isSubmitted = finalSubmitted ||
+                                   internship.Status == InternshipStatus.Completed ||
                                    internship.Status == InternshipStatus.Graded ||
-                                   reports.Count >= 6;
+                                   reports.Count(r => r.WeekNumber >= 1 && r.WeekNumber <= totalWeeks && r.SubmittedAt.HasValue) >= totalWeeks;
                 dto.NopBc = isSubmitted ? "Đã nộp" : "X";
             }
             else
@@ -223,6 +290,7 @@ public class ExcelExportService : IExcelExportService
 
         return new InternshipExportDataDto
         {
+            TotalWeeks = totalWeeks,
             Students = studentExportList,
             Companies = companies,
             LecturerAssignments = assignments
@@ -257,7 +325,7 @@ public class ExcelExportService : IExcelExportService
 
         using (workbook)
         {
-            ExportStudents(workbook, data.Students);
+            ExportStudents(workbook, data.Students, Math.Max(data.TotalWeeks, 1));
             ExportCompanies(workbook, data.Companies);
             ExportLecturerAssignments(workbook, data.LecturerAssignments);
 
@@ -522,7 +590,7 @@ public class ExcelExportService : IExcelExportService
     /// <summary>
     /// Populates Sheet 1 (DANH SÁCH / DANH SÁCH THỰC TẬP) with dynamic rows, formulas, and preserved formatting.
     /// </summary>
-    private void ExportStudents(XLWorkbook workbook, List<InternshipStudentExportDto> students)
+    private void ExportStudents(XLWorkbook workbook, List<InternshipStudentExportDto> students, int totalWeeks)
     {
         var ws = FindWorksheet(workbook, "DANH SÁCH (2)", "DANH SÁCH THỰC TẬP", "DANH SÁCH")
             ?? workbook.Worksheets.FirstOrDefault();
@@ -564,7 +632,7 @@ public class ExcelExportService : IExcelExportService
         {
             int r = dataStartRow + i;
             var s = students[i];
-            MapStudentToRow(ws, r, s, currentLookupStartRow, currentLookupEndRow);
+            MapStudentToRow(ws, r, s, totalWeeks, currentLookupStartRow, currentLookupEndRow);
         }
 
         // 3. Clear unused template placeholder rows (if fewer than 50 records)
@@ -644,6 +712,7 @@ public class ExcelExportService : IExcelExportService
         IXLWorksheet ws,
         int row,
         InternshipStudentExportDto s,
+        int totalWeeks,
         int lookupStartRow,
         int lookupEndRow)
     {
@@ -665,29 +734,44 @@ public class ExcelExportService : IExcelExportService
         if (s.Thi.HasValue) ws.Cell(row, 10).Value = s.Thi.Value;
         else ws.Cell(row, 10).Clear(XLClearOptions.Contents);
 
-        // K: Điểm TB Formula
-        ws.Cell(row, 11).FormulaA1 = $"I{row}*0.4+J{row}*0.6";
+        // K: Điểm TB Formula — không đủ điều kiện → 0, ngược lại QT*0.4 + Thi*0.6
+        if (s.IsIneligible)
+        {
+            ws.Cell(row, 11).Value = 0m;
+            ws.Cell(row, 12).Value = InternshipGradeCalculator.IneligibleClassification;
+        }
+        else
+        {
+            ws.Cell(row, 11).FormulaA1 = $"ROUND(I{row}*0.4+J{row}*0.6,1)";
 
-        // L: Xếp loại Formula via dynamic VLOOKUP
-        ws.Cell(row, 12).FormulaA1 = $"VLOOKUP(K{row},$I${lookupStartRow}:$L${lookupEndRow},4,1)";
+            // L: Xếp loại Formula via dynamic VLOOKUP
+            ws.Cell(row, 12).FormulaA1 = $"VLOOKUP(K{row},$I${lookupStartRow}:$L${lookupEndRow},4,1)";
+        }
 
-        // Progress (Cols M to S)
+        // Progress starts at M and expands with the configured number of weeks.
         ws.Cell(row, 13).Value = s.HdChung;
-        ws.Cell(row, 14).Value = s.Tuan1;
-        ws.Cell(row, 15).Value = s.Tuan2;
-        ws.Cell(row, 16).Value = s.Tuan3;
-        ws.Cell(row, 17).Value = s.Tuan4;
-        ws.Cell(row, 18).Value = s.Tuan5;
-        ws.Cell(row, 19).Value = s.Tuan6;
+        var weeklyCells = s.WeeklyReportCells.Count > 0
+            ? s.WeeklyReportCells
+            : new[] { s.Tuan1, s.Tuan2, s.Tuan3, s.Tuan4, s.Tuan5, s.Tuan6 }.Take(totalWeeks).ToList();
+        for (var week = 0; week < totalWeeks; week++)
+            ws.Cell(row, 14 + week).Value = week < weeklyCells.Count ? weeklyCells[week] : string.Empty;
 
-        // T: Nộp báo cáo
-        ws.Cell(row, 20).Value = s.NopBc;
+        var finalReportColumn = 14 + totalWeeks;
+        var eligibilityColumn = finalReportColumn + 1;
 
-        // U: Final eligibility dynamic formula
-        ws.Cell(row, 21).FormulaA1 = $"IF(OR(T{row}=\"X\",(COUNTIF(N{row}:S{row},\"V\")>=2)),\"Không đủ điều kiện\",\"\")";
+        // Final report submission.
+        ws.Cell(row, finalReportColumn).Value = s.NopBc;
+
+        // Final eligibility formula uses the dynamically sized weekly range.
+        var firstWeekColumn = 14;
+        var lastWeekColumn = finalReportColumn - 1;
+        var firstWeekAddress = ws.Cell(row, firstWeekColumn).Address.ColumnLetter;
+        var lastWeekAddress = ws.Cell(row, lastWeekColumn).Address.ColumnLetter;
+        var finalReportAddress = ws.Cell(row, finalReportColumn).Address.ColumnLetter;
+        ws.Cell(row, eligibilityColumn).FormulaA1 = $"IF(OR(NOT(OR({finalReportAddress}{row}=\"Đã nộp\",{finalReportAddress}{row}=\"✓\")),(COUNTIF({firstWeekAddress}{row}:{lastWeekAddress}{row},\"V\")>=2)),\"{InternshipGradeCalculator.IneligibleCell}\",\"\")";
 
         // Formatting styles
-        for (int c = 1; c <= 21; c++)
+        for (int c = 1; c <= eligibilityColumn; c++)
         {
             var cell = ws.Cell(row, c);
             cell.Style.Font.FontName = "Times New Roman";
@@ -705,7 +789,7 @@ public class ExcelExportService : IExcelExportService
         ws.Cell(row, 10).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
         ws.Cell(row, 11).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
         ws.Cell(row, 12).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-        for (int c = 13; c <= 21; c++)
+        for (int c = 13; c <= eligibilityColumn; c++)
         {
             ws.Cell(row, c).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
         }

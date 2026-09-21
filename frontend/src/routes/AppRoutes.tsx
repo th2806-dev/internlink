@@ -47,11 +47,11 @@ import { EnterprisesDetailView as LecturerEnterprisesDetailView } from "../featu
 import { TemplatesView as LecturerTemplatesView } from "../features/lecturer/pages/TemplatesView";
 import { ReportsView as LecturerReportsView } from "../features/lecturer/pages/ReportsView";
 import { AnalyticsView as LecturerAnalyticsView } from "../features/lecturer/pages/AnalyticsView";
-import { EvaluationsView as LecturerEvaluationsView } from "../features/lecturer/pages/EvaluationsView";
 import { NotificationsView as LecturerNotificationsView } from "../features/lecturer/pages/NotificationsView";
 import { AccountView as LecturerAccountView } from "../features/lecturer/pages/AccountView";
 import { AttendanceManagementView as LecturerAttendanceView } from "../features/lecturer/pages/AttendanceManagementView";
 import { SummaryView as LecturerSummaryView } from "../features/lecturer/pages/SummaryView";
+import { InternshipEvaluationView as LecturerInternshipEvaluationView } from "../features/lecturer/pages/InternshipEvaluationView";
 import { StudentWorkspace as LecturerStudentWorkspace } from "../features/lecturer/components/StudentWorkspace";
 
 // Student Pages
@@ -266,6 +266,16 @@ export function AppRoutes() {
                   }
                 />
                 <Route
+                  path="summary"
+                  element={
+                    isSuperAdmin ? (
+                      <Navigate to="/admin/dashboard" replace />
+                    ) : (
+                      <LecturerSummaryView onShowToast={showToast} scope="admin" />
+                    )
+                  }
+                />
+                <Route
                   path="account-requests"
                   element={
                     isSuperAdmin && FEATURES.adminAccountRequests ? (
@@ -391,13 +401,24 @@ export function AppRoutes() {
                 <Route path="templates" element={<LecturerTemplatesView />} />
                 <Route
                   path="evaluations"
-                  element={<LecturerEvaluationsView onShowToast={showToast} />}
+                  element={<LecturerInternshipEvaluationView onShowToast={showToast} initialTab="grading" />}
                 />
                 <Route
                   path="evaluations/:internshipId"
-                  element={<LecturerEvaluationsView onShowToast={showToast} />}
+                  element={<LecturerInternshipEvaluationView onShowToast={showToast} initialTab="grading" />}
                 />
-                <Route path="summary" element={<LecturerSummaryView onShowToast={showToast} />} />
+                <Route
+                  path="summary"
+                  element={<LecturerInternshipEvaluationView onShowToast={showToast} initialTab="summary" />}
+                />
+                <Route
+                  path="evaluation"
+                  element={<LecturerInternshipEvaluationView onShowToast={showToast} />}
+                />
+                <Route
+                  path="evaluation/:tab"
+                  element={<LecturerInternshipEvaluationView onShowToast={showToast} />}
+                />
                 <Route path="export" element={<Navigate to="/lecturer/summary" replace />} />
                 <Route
                   path="reports"

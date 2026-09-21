@@ -55,6 +55,11 @@ export const attendanceService = {
     return apiRequest<AttendanceRecordDto[]>(
       `/api/Attendance/lecturer/students/${studentId}?semesterId=${encodeURIComponent(semesterId)}`
     );
+  },  /** Tổng số buổi vắng theo sinh viên trong 1 kỳ (cho cảnh báo >= 2 buổi) */
+  getStudentAbsenceSummary(semesterId: string): Promise<Record<string, number>> {
+    return apiRequest<Record<string, number>>(
+      `/api/Attendance/absence-summary?semesterId=${encodeURIComponent(semesterId)}`
+    );
   },
 
   // ---- STUDENT PORTAL ----

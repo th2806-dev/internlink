@@ -72,6 +72,35 @@ public class AttendanceController : ControllerBase
     }
 
     /// <summary>
+    /// Tổng số buổi vắng theo sinh viên trong 1 kỳ (dùng cho cảnh báo vắng >= 2 buổi).
+    /// Lecturer: chỉ sinh viên của mình. Admin: toàn bộ hoặc theo lecturerId.
+    /// </summary>
+    [HttpGet("absence-summary")]
+    [Authorize(Policy = "RequireLecturerOrAdmin")]
+    public async Task<IActionResult> GetAbsenceSummary([FromQuery] Guid semesterId, [FromQuery] Guid? lecturerId = null)
+    {
+        Guid targetLecturerId;
+        if (User.IsLecturer())
+        {
+            var resolvedId = await ResolveCurrentLecturerIdAsync();
+            if (!resolvedId.HasValue)
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Không tìm thấy hồ sơ giảng viên." }));
+            targetLecturerId = resolvedId.Value;
+        }
+        else if (lecturerId.HasValue)
+        {
+            targetLecturerId = lecturerId.Value;
+        }
+        else
+        {
+            targetLecturerId = Guid.Empty; // admin: tất cả
+        }
+
+        var summary = await _attendanceService.GetStudentAbsenceSummaryAsync(targetLecturerId, semesterId);
+        return Ok(ApiResponse<Dictionary<string, int>>.Ok(summary));
+    }
+
+    /// <summary>
     /// Lấy chi tiết buổi gặp và danh sách điểm danh
     /// </summary>
     [HttpGet("sessions/{id:guid}")]

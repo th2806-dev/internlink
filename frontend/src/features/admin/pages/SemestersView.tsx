@@ -21,7 +21,6 @@ import {
 } from "lucide-react";
 import { useSemester } from "../../../contexts/SemesterContext";
 import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
-import { RubricEditor } from "../components/RubricEditor";
 import { CreateSemesterModal } from "../components/modals/CreateSemesterModal";
 import { AssignLecturerModal } from "../components/modals/AssignLecturerModal";
 import { ImportStudentsModal } from "../components/modals/ImportStudentsModal";
@@ -403,16 +402,6 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
               </div>
             </div>
           </Panel>
-
-          {/* RUBRIC EDITOR — Tiêu chí chấm điểm */}
-          {currentActiveSem.id && isDepartmentAdmin && (
-            <RubricEditor
-              semesterId={currentActiveSem.id}
-              semesterName={currentActiveSem.name}
-              onShowToast={onShowToast}
-              readOnly={!canMutateSemesters}
-            />
-          )}
 
           {/* INTERNSHIP LIST TABLE (Clean Data Grid) */}
           <Panel className="space-y-4">

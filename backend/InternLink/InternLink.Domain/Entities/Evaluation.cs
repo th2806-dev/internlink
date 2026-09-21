@@ -81,6 +81,24 @@ public class Evaluation : BaseEntity
     public Guid? RubricId { get; set; }
     public EvaluationRubric? Rubric { get; set; }
 
+    // ─── C23 grading (Quy định chấm điểm mới) ───
+
+    /// <summary>
+    /// Điểm chất lượng bài báo cáo theo Rubric 5 mức: 1.0 / 2.0 / 3.5 / 4.0 / 5.0.
+    /// Null = giảng viên chưa chấm chất lượng.
+    /// </summary>
+    public decimal? QualityLevel { get; set; }
+
+    /// <summary>
+    /// Sinh viên có sản phẩm sáng tạo (+1.0 điểm cộng vào Điểm QT).
+    /// </summary>
+    public bool HasCreativeProduct { get; set; } = false;
+
+    /// <summary>
+    /// Điểm thi vấn đáp nhập tay (cột J, thang 10). Null = chưa nhập.
+    /// </summary>
+    public decimal? OralExamScore { get; set; }
+
     /// <summary>
     /// JSON-serialized criteria scores.
     /// Format: [{ "criterionId": "...", "criterionName": "...", "weight": 40, "maxScore": 10, "score": 8, "comment": "..." }]

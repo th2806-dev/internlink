@@ -102,9 +102,6 @@ public static class DependencyInjection
         // Evaluation and grading service
         services.AddScoped<InternLink.Application.Interfaces.IEvaluationService, InternLink.Infrastructure.Services.EvaluationService>();
 
-        // Evaluation rubric management
-        services.AddScoped<InternLink.Application.Interfaces.IRubricService, InternLink.Infrastructure.Services.RubricService>();
-
         // Submission and feedback service
         services.AddScoped<InternLink.Application.Interfaces.ISubmissionService, InternLink.Infrastructure.Services.SubmissionService>();
 
@@ -113,6 +110,7 @@ public static class DependencyInjection
 
         // Attendance & Meeting service
         services.AddScoped<IAttendanceService, InternLink.Infrastructure.Services.AttendanceService>();
+        services.AddScoped<IInternshipGradingService, InternLink.Infrastructure.Services.InternshipGradingService>();
 
         // Notification service
         services.AddScoped<InternLink.Application.Interfaces.INotificationService, InternLink.Infrastructure.Services.NotificationService>();

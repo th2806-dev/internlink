@@ -5,14 +5,21 @@ export interface SemesterReportScheduleDto {
   semesterId: string;
   weekNumber: number;
   title: string;
+  /** Ngày mở nộp báo cáo (mới — C23) */
+  startDate?: string | null;
   dueDate: string;
+  isSubmissionOpen: boolean;
   allowLateSubmission: boolean;
   description?: string | null;
+  /** true với dòng "Báo cáo cuối kỳ" (WeekNumber = totalWeeks + 1) */
+  isFinalReport?: boolean;
 }
 
 export interface UpdateReportScheduleRequest {
   title?: string;
+  startDate?: string | null;
   dueDate?: string;
+  isSubmissionOpen?: boolean;
   allowLateSubmission?: boolean;
   description?: string;
 }

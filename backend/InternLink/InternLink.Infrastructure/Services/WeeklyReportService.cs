@@ -423,6 +423,11 @@ public class WeeklyReportService : IWeeklyReportService
             var schedule = await _db.SemesterReportSchedules
                 .FirstOrDefaultAsync(s => s.SemesterId == report.Internship.SemesterId && s.WeekNumber == report.WeekNumber && !s.IsDeleted);
 
+            if (schedule != null && !schedule.IsSubmissionOpen)
+            {
+                throw new InvalidOperationException($"Bài nộp cho {schedule.Title} hiện đang tạm dừng nhận. Vui lòng liên hệ giảng viên hướng dẫn.");
+            }
+
             if (schedule != null && !schedule.AllowLateSubmission && DateTime.UtcNow > schedule.DueDate)
             {
                 throw new InvalidOperationException($"Hạn nộp báo cáo tuần {report.WeekNumber} đã kết thúc vào ngày {schedule.DueDate:dd/MM/yyyy HH:mm}. Không cho phép nộp muộn.");

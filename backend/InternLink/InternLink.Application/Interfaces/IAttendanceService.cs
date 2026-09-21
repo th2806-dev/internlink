@@ -13,4 +13,7 @@ public interface IAttendanceService
     Task<StudentAttendanceOverviewDto> GetStudentAttendanceAsync(Guid studentId, Guid semesterId);
     Task<AdminAttendanceReportDto> GetAdminAttendanceReportAsync(Guid semesterId, Guid? departmentId = null);
     Task<List<AttendanceRecordDto>> GetStudentAttendanceForLecturerAsync(Guid lecturerId, Guid studentId, Guid semesterId);
+
+    /// <summary>Tổng số buổi vắng theo sinh viên trong kỳ. lecturerId = Guid.Empty → tất cả.</summary>
+    Task<Dictionary<string, int>> GetStudentAbsenceSummaryAsync(Guid lecturerId, Guid semesterId);
 }

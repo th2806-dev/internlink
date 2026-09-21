@@ -86,7 +86,7 @@ export const Sidebar = ({
         },
         {
           id: "summary",
-          label: "Tổng kết",
+          label: "Đánh giá thực tập",
           icon: ClipboardList,
         },
         {

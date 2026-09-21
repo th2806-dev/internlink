@@ -27,7 +27,14 @@ public class InternshipStudentExportDto
     public string Tuan4 { get; set; } = string.Empty;
     public string Tuan5 { get; set; } = string.Empty;
     public string Tuan6 { get; set; } = string.Empty;
+    public List<string> WeeklyReportCells { get; set; } = new();
 
     // Report Submission ("Đã nộp" or "X" if missing/unsubmitted)
     public string NopBc { get; set; } = string.Empty;
+
+    /// <summary>
+    /// C23: true khi không đủ điều kiện dự thi (chưa nộp báo cáo cuối kỳ hoặc vắng/thiếu >= 2 tuần)
+    /// → cột K = 0, cột L = "không thực tập" (giữ nguyên công thức Excel nếu false).
+    /// </summary>
+    public bool IsIneligible { get; set; }
 }

@@ -285,11 +285,16 @@ public class SemesterService : ISemesterService
             SemesterId = s.SemesterId,
             WeekNumber = s.WeekNumber,
             Title = s.Title,
+            StartDate = s.StartDate,
             DueDate = s.DueDate,
+            IsSubmissionOpen = s.IsSubmissionOpen,
             AllowLateSubmission = s.AllowLateSubmission,
-            Description = s.Description
+            Description = s.Description,
+            IsFinalReport = s.WeekNumber > (s.Semester?.TotalWeeks ?? C23_DEFAULT_TOTAL_WEEKS)
         });
     }
+
+    private const int C23_DEFAULT_TOTAL_WEEKS = 6;
 
     public async Task<IEnumerable<SemesterReportScheduleDto>> GenerateDefaultSchedulesAsync(Guid semesterId)
     {
@@ -305,7 +310,7 @@ public class SemesterService : ISemesterService
             .ToListAsync();
 
         var existingWeeks = existingSchedules.Select(s => s.WeekNumber).ToHashSet();
-        var totalWeeks = semester.TotalWeeks > 0 ? semester.TotalWeeks : 6;
+        var totalWeeks = semester.TotalWeeks > 0 ? semester.TotalWeeks : C23_DEFAULT_TOTAL_WEEKS;
         var startDate = semester.StartDate ?? DateTime.UtcNow;
 
         var newSchedules = new List<SemesterReportSchedule>();
@@ -319,7 +324,9 @@ public class SemesterService : ISemesterService
                     SemesterId = semesterId,
                     WeekNumber = week,
                     Title = $"Báo cáo tuần {week}",
+                    StartDate = startDate.AddDays((week - 1) * 7).Date,
                     DueDate = startDate.AddDays(week * 7).Date.AddHours(23).AddMinutes(59).AddSeconds(59),
+                    IsSubmissionOpen = true,
                     AllowLateSubmission = true,
                     Description = $"Hạn nộp báo cáo kết quả thực tập tuần thứ {week}.",
                     CreatedAt = DateTime.UtcNow
@@ -329,12 +336,34 @@ public class SemesterService : ISemesterService
             }
         }
 
+        // Báo cáo cuối kỳ — tuần số quy ước = totalWeeks + 1 (cột NỘP BC trong template C23)
+        var finalWeek = totalWeeks + 1;
+        if (!existingWeeks.Contains(finalWeek))
+        {
+            var finalSchedule = new SemesterReportSchedule
+            {
+                Id = Guid.NewGuid(),
+                SemesterId = semesterId,
+                WeekNumber = finalWeek,
+                Title = "Báo cáo cuối kỳ",
+                StartDate = startDate.AddDays((totalWeeks - 1) * 7).Date,
+                DueDate = startDate.AddDays(totalWeeks * 7 + 3).Date.AddHours(23).AddMinutes(59).AddSeconds(59),
+                IsSubmissionOpen = true,
+                AllowLateSubmission = true,
+                Description = "Hạn nộp báo cáo tổng kết cuối kỳ thực tập tốt nghiệp.",
+                CreatedAt = DateTime.UtcNow
+            };
+            newSchedules.Add(finalSchedule);
+            _context.SemesterReportSchedules.Add(finalSchedule);
+        }
+
         if (newSchedules.Count > 0)
         {
             await _context.SaveChangesAsync();
         }
 
         var allSchedules = await _context.SemesterReportSchedules
+            .Include(s => s.Semester)
             .Where(s => s.SemesterId == semesterId && !s.IsDeleted)
             .OrderBy(s => s.WeekNumber)
             .ToListAsync();
@@ -345,9 +374,12 @@ public class SemesterService : ISemesterService
             SemesterId = s.SemesterId,
             WeekNumber = s.WeekNumber,
             Title = s.Title,
+            StartDate = s.StartDate,
             DueDate = s.DueDate,
+            IsSubmissionOpen = s.IsSubmissionOpen,
             AllowLateSubmission = s.AllowLateSubmission,
-            Description = s.Description
+            Description = s.Description,
+            IsFinalReport = s.WeekNumber > (s.Semester?.TotalWeeks ?? C23_DEFAULT_TOTAL_WEEKS)
         });
     }
 
@@ -368,8 +400,10 @@ public class SemesterService : ISemesterService
                 Id = Guid.NewGuid(),
                 SemesterId = semesterId,
                 WeekNumber = weekNumber,
-                Title = request.Title ?? $"Báo cáo tuần {weekNumber}",
+                Title = request.Title ?? (weekNumber > C23_DEFAULT_TOTAL_WEEKS ? "Báo cáo cuối kỳ" : $"Báo cáo tuần {weekNumber}"),
+                StartDate = request.StartDate ?? startDate.AddDays((weekNumber - 1) * 7).Date,
                 DueDate = request.DueDate ?? startDate.AddDays(weekNumber * 7).Date.AddHours(23).AddMinutes(59).AddSeconds(59),
+                IsSubmissionOpen = request.IsSubmissionOpen ?? true,
                 AllowLateSubmission = request.AllowLateSubmission ?? true,
                 Description = request.Description,
                 CreatedAt = DateTime.UtcNow
@@ -379,7 +413,9 @@ public class SemesterService : ISemesterService
         else
         {
             if (request.Title != null) schedule.Title = request.Title;
+            if (request.StartDate.HasValue) schedule.StartDate = request.StartDate.Value;
             if (request.DueDate.HasValue) schedule.DueDate = request.DueDate.Value;
+            if (request.IsSubmissionOpen.HasValue) schedule.IsSubmissionOpen = request.IsSubmissionOpen.Value;
             if (request.AllowLateSubmission.HasValue) schedule.AllowLateSubmission = request.AllowLateSubmission.Value;
             if (request.Description != null) schedule.Description = request.Description;
             schedule.UpdatedAt = DateTime.UtcNow;
@@ -393,7 +429,9 @@ public class SemesterService : ISemesterService
             SemesterId = schedule.SemesterId,
             WeekNumber = schedule.WeekNumber,
             Title = schedule.Title,
+            StartDate = schedule.StartDate,
             DueDate = schedule.DueDate,
+            IsSubmissionOpen = schedule.IsSubmissionOpen,
             AllowLateSubmission = schedule.AllowLateSubmission,
             Description = schedule.Description
         };

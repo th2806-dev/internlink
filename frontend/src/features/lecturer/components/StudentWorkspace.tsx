@@ -12,13 +12,12 @@ import {
   Mail,
   RefreshCw,
   Save,
-  Sliders,
-  Star,
   Target,
   User,
   CalendarCheck,
   XCircle,
 } from "lucide-react";
+import { Star } from "lucide-react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useSemester } from "../../../contexts/SemesterContext";
 import { useStudentWorkspace } from "../../../hooks/useStudentWorkspace";
@@ -30,19 +29,17 @@ import { mapInternshipStatusToUi, mapWeeklyReportStatusToUi } from "../../../lib
 import { INTERNSHIP_WEEKS } from "../../../config/internship";
 import { WeeklyReportTimeline } from "./WeeklyReportTimeline";
 import { StudentReportsTab } from "./StudentReportsTab";
-import { StudentEvaluationTab } from "./StudentEvaluationTab";
 import type { EvaluationDetailDto } from "../../../types/api";
 
 import { attendanceService } from "../../../services/attendance.service";
 import type { AttendanceRecordDto } from "../../../types/api";
 
-type TabId = "overview" | "progress" | "reports" | "evaluation" | "attendance";
+type TabId = "overview" | "progress" | "reports" | "attendance";
 
 const TABS: { id: TabId; label: string; icon: typeof Target }[] = [
   { id: "overview", label: "Tổng quan", icon: Target },
   { id: "progress", label: "Tiến độ", icon: Clock },
   { id: "reports", label: "Báo cáo & Bài nộp", icon: FileText },
-  { id: "evaluation", label: "Đánh giá", icon: Star },
 ];
 
 export function StudentWorkspace({
@@ -70,7 +67,6 @@ export function StudentWorkspace({
     weeklyReports,
     submissions,
     evaluation,
-    rubric,
     isLoading,
     error,
     sectionErrors,
@@ -83,7 +79,6 @@ export function StudentWorkspace({
       { id: "overview" as TabId, label: "Tổng quan", icon: Target },
       { id: "progress" as TabId, label: `Tiến độ ${totalWeeks} tuần`, icon: Clock },
       { id: "reports" as TabId, label: "Báo cáo & Bài nộp", icon: FileText },
-      { id: "evaluation" as TabId, label: "Đánh giá", icon: Star },
       { id: "attendance" as TabId, label: "Chuyên cần", icon: CalendarCheck },
     ],
     [totalWeeks],
@@ -239,13 +234,6 @@ export function StudentWorkspace({
           {/* Action buttons */}
           <div className="flex items-center gap-2 shrink-0">
             <button
-              onClick={() => selectTab("evaluation")}
-              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-md flex items-center gap-1.5 transition-colors shadow-sm"
-            >
-              <Sliders className="w-3.5 h-3.5" />
-              Đánh giá
-            </button>
-            <button
               onClick={handleRefreshAndNotify}
               className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-md border border-slate-200 flex items-center gap-1.5 transition-colors"
             >
@@ -332,29 +320,6 @@ export function StudentWorkspace({
           onRefresh={handleRefreshAndNotify}
           onShowToast={onShowToast}
           errors={sectionErrors}
-        />
-      )}
-
-      {activeTab === "evaluation" && (
-        <StudentEvaluationTab
-          internshipId={id!}
-          evaluation={evaluation}
-          rubric={rubric}
-          student={{
-            name: student.fullName,
-            mssv: student.studentCode,
-            class: student.class ?? "—",
-            major: student.major ?? "—",
-            company: company?.companyName ?? "Chưa có DN",
-            supervisor: detail.supervisorName ?? "—",
-            internshipId: id!,
-            evaluationId: evaluation?.id,
-            semesterId: activeSemesterId || undefined,
-          }}
-          isFinalized={evaluation?.isFinalized ?? false}
-          onRefresh={handleRefreshAndNotify}
-          onShowToast={onShowToast}
-          error={sectionErrors.rubric ?? sectionErrors.evaluation}
         />
       )}
 
@@ -540,16 +505,6 @@ function OverviewTab({
               <span className="flex items-center gap-2">
                 <FileText className="w-4 h-4" />
                 Xem báo cáo & bài nộp
-              </span>
-              <span className="text-slate-400">→</span>
-            </button>
-            <button
-              onClick={() => onNavigate("evaluation")}
-              className="w-full p-3 bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-200 rounded-md text-xs font-bold text-slate-800 hover:text-blue-700 flex items-center justify-between transition-colors"
-            >
-              <span className="flex items-center gap-2">
-                <Star className="w-4 h-4" />
-                Đánh giá & chấm điểm
               </span>
               <span className="text-slate-400">→</span>
             </button>

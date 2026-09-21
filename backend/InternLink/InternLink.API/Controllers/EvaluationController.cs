@@ -15,18 +15,15 @@ namespace InternLink.API.Controllers;
 public class EvaluationController : ControllerBase
 {
     private readonly IEvaluationService _evaluationService;
-    private readonly IRubricService _rubricService;
     private readonly ILecturerAccessService _lecturerAccessService;
     private readonly ILogger<EvaluationController> _logger;
 
     public EvaluationController(
         IEvaluationService evaluationService,
-        IRubricService rubricService,
         ILecturerAccessService lecturerAccessService,
         ILogger<EvaluationController> logger)
     {
         _evaluationService = evaluationService;
-        _rubricService = rubricService;
         _lecturerAccessService = lecturerAccessService;
         _logger = logger;
     }
@@ -154,22 +151,6 @@ public class EvaluationController : ControllerBase
             _logger.LogError(ex, "Error retrieving evaluation scores {EvaluationId}", id);
             return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Error retrieving evaluation scores" });
         }
-    }
-
-    /// <summary>
-    /// Get the approved evaluation rubric for a student's semester.
-    /// </summary>
-    [HttpGet("rubric")]
-    [Authorize(Roles = "Student")]
-    [ProducesResponseType(typeof(RubricDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<RubricDto>> GetStudentRubric([FromQuery] Guid semesterId)
-    {
-        var rubric = await _rubricService.GetApprovedRubricAsync(semesterId);
-        if (rubric == null)
-            return NotFound(new { message = "Chưa có rubric đã phê duyệt cho kỳ này." });
-
-        return Ok(rubric);
     }
 
     /// <summary>
