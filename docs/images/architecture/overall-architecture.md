@@ -9,14 +9,15 @@
 ```mermaid
 flowchart TB
     subgraph Users["Các Tác Nhân Người Dùng (Actors)"]
-        SA["SuperAdmin<br/>(Quản trị viên Khoa)"]
+        SA["SuperAdmin<br/>(Quản trị hệ thống — read-only oversight)"]
+        DA["DepartmentAdmin<br/>(Quản trị khoa — nghiệp vụ)"]
         L["Lecturer<br/>(Giảng viên hướng dẫn)"]
         S["Student<br/>(Sinh viên thực tập)"]
     end
 
     subgraph Frontend["Tầng Trình Diễn (Frontend Layer - Port 5173)"]
         direction TB
-        F_ADMIN["Admin Portal<br/>- Quản lý Học kỳ, Users<br/>- Import Excel & Phân công<br/>- Duyệt tài khoản & Rubric"]
+        F_ADMIN["Admin Portal<br/>- SA: Khoa/Cài đặt/Users toàn cục/Duyệt TK (giám sát read-only)<br/>- DA: Học kỳ, Import Excel & Phân công, Rubric, Broadcast"]
         F_LEC["Lecturer Portal<br/>- Dashboard & Danh sách SV<br/>- Duyệt nhật ký & Đồ án<br/>- Chấm điểm Rubric<br/>- Ghi chú & Thông báo hàng loạt<br/>- Xuất PDF & Excel"]
         F_STU["Student Portal<br/>- Dashboard & Tiến độ<br/>- Nộp báo cáo tuần & Đồ án<br/>- Phản hồi bài nộp<br/>- Tải phiếu thực tập PDF<br/>- Xem điểm số & Nhận xét"]
         F_CORE["Core Engine<br/>React 19 + TypeScript + Tailwind 4 + Vite"]
@@ -46,6 +47,7 @@ flowchart TB
     end
 
     SA --> F_ADMIN
+    DA --> F_ADMIN
     L --> F_LEC
     S --> F_STU
 
@@ -73,7 +75,7 @@ flowchart TB
 
 ## 📌 Đặc Điểm Nổi Bật Của Kiến Trúc
 
-1. **Phân quyền 3 vai trò chặt chẽ (RBAC)**: SuperAdmin, Lecturer, Student — mỗi vai trò có bộ endpoint và giao diện riêng biệt, kiểm soát qua JWT Claims + Policy.
+1. **Phân quyền 4 vai trò chặt chẽ (RBAC)**: SuperAdmin (hệ thống, read-only oversight), DepartmentAdmin (nghiệp vụ khoa), Lecturer, Student — mỗi vai trò có bộ endpoint và giao diện riêng biệt, kiểm soát qua JWT Claims + Policy (`RequireSuperAdmin`, `RequireDepartmentAdmin`, `RequireLecturerOrDepartmentAdmin` cho ghi nghiệp vụ — SuperAdmin bị loại).
 2. **Xử lý tài liệu Server-side**: PDF và Excel được tạo trực tiếp từ Backend (QuestPDF, ClosedXML), đảm bảo chuẩn mực và bảo mật dữ liệu.
 3. **Hệ thống tài khoản linh hoạt**: Bao gồm luồng Account Requests (Admin duyệt cấp tài khoản) và Rubric Management (Admin save/apply rubric, hệ thống giữ Approved ngay).
 4. **Thao tác phản hồi 2 chiều**: Giảng viên ghi chú sinh viên (`/notes`), gửi thông báo hàng loạt scoped (`/notify`); Sinh viên phản hồi bài nộp (`/student-reply`).

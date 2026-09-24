@@ -1,7 +1,7 @@
 # InternLink — Kiến Trúc Hệ Thống (System Architecture)
 
 **Dự án:** InternLink — Nền tảng Quản lý và Giám sát Thực tập Tốt nghiệp  
-**Phiên bản:** 4.0  
+**Phiên bản:** 4.1  
 **Ngày cập nhật:** Tháng 9/2026
 
 ---
@@ -102,7 +102,8 @@ Các API Endpoint được bảo vệ bằng Policy-Based Authorization:
 |:---|:---|:---|
 | `RequireAdmin` | SuperAdmin | Toàn quyền quản trị hệ thống |
 | `RequireLecturer` | Lecturer | Giảng viên hướng dẫn |
-| `RequireLecturerOrAdmin` | Lecturer + SuperAdmin | Giảng viên hoặc Admin |
+| `RequireLecturerOrAdmin` | Lecturer + SuperAdmin + DepartmentAdmin | Đọc/giám sát dữ liệu nghiệp vụ (SuperAdmin read-only oversight) |
+| `RequireLecturerOrDepartmentAdmin` | Lecturer + DepartmentAdmin | Ghi nghiệp vụ thực tập (chấm điểm, duyệt báo cáo, phản biện, tài liệu, gán DN) — **SuperAdmin bị loại** |
 | `RequireStudent` | Student | Sinh viên thực tập |
 
 ### 3.3. Mã Hóa Mật Khẩu

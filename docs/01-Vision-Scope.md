@@ -1,7 +1,7 @@
 # InternLink — Tầm Nhìn & Phạm Vi Dự Án (Vision & Scope)
 
 **Dự án:** InternLink — Nền tảng Quản lý và Giám sát Thực tập Tốt nghiệp  
-**Phiên bản:** 4.0  
+**Phiên bản:** 4.1  
 **Ngày cập nhật:** Tháng 9/2026  
 **Trạng thái:** v1.0 Release — Sẵn sàng vận hành học kỳ
 
@@ -9,11 +9,12 @@
 
 ## 1. Giới thiệu Tổng quan (Executive Summary)
 
-**InternLink** là nền tảng quản lý và giám sát thực tập tốt nghiệp toàn diện dành cho Khoa Công nghệ Thông tin, số hóa 100% quy trình kết nối giữa 3 chủ thể:
+**InternLink** là nền tảng quản lý và giám sát thực tập tốt nghiệp toàn diện dành cho Khoa Công nghệ Thông tin, số hóa 100% quy trình kết nối giữa 4 chủ thể:
 
-1. **Ban Quản trị Khoa (SuperAdmin)**: Quản lý học kỳ, danh mục doanh nghiệp, import hàng loạt danh sách SV/GV bằng Excel, phân công hướng dẫn, quản lý yêu cầu tài khoản, quản lý rubric đánh giá (save/apply tức thì), phát thông báo broadcast.
-2. **Giảng viên hướng dẫn (Lecturer)**: Theo dõi tiến độ sinh viên, duyệt báo cáo tuần, phản hồi bài nộp, chấm điểm rubric, lưu ghi chú SV, gửi thông báo hàng loạt, xuất báo cáo PDF/Excel.
-3. **Sinh viên thực tập (Student)**: Theo dõi tiến độ thực tập, nộp báo cáo tuần, nộp bài nộp sản phẩm, phản hồi 2 chiều với GV, xem điểm đánh giá, tải PDF chứng nhận thực tập.
+1. **Quản trị hệ thống (SuperAdmin)**: Cấu hình cấp toàn trường — quản lý khoa/bộ môn, cài đặt hệ thống, tài khoản Admin khoa, duyệt yêu cầu tài khoản, dashboard giám sát tổng quan (read-only), test email. Không tham gia thao tác nghiệp vụ SV thực tập tại doanh nghiệp.
+2. **Quản trị khoa (DepartmentAdmin)**: Quản lý học kỳ, danh mục doanh nghiệp, import hàng loạt danh sách SV/GV bằng Excel, phân công hướng dẫn, quản lý rubric/biểu mẫu (save/apply tức thì), phát thông báo broadcast trong khoa.
+3. **Giảng viên hướng dẫn (Lecturer)**: Theo dõi tiến độ sinh viên, duyệt báo cáo tuần, phản hồi bài nộp, chấm điểm rubric, lưu ghi chú SV, gửi thông báo hàng loạt, xuất báo cáo PDF/Excel.
+4. **Sinh viên thực tập (Student)**: Theo dõi tiến độ thực tập, nộp báo cáo tuần, nộp bài nộp sản phẩm, phản hồi 2 chiều với GV, xem điểm đánh giá, tải PDF chứng nhận thực tập.
 
 ---
 

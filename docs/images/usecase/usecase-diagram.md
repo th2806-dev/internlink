@@ -1,8 +1,8 @@
 # Sơ Đồ Use Case Tổng Thể (Use Case Diagram) — InternLink
 
 **Dự án:** InternLink — Nền tảng Quản lý và Giám sát Thực tập Tốt nghiệp  
-**Phiên bản:** 4.0  
-**Tác nhân (Actors):** SuperAdmin (Quản trị Khoa), Lecturer (GVHD), Student (Sinh viên)  
+**Phiên bản:** 4.1  
+**Tác nhân (Actors):** SuperAdmin (Quản trị hệ thống), DepartmentAdmin (Quản trị khoa), Lecturer (GVHD), Student (Sinh viên)  
 **Tài liệu tham chiếu chuẩn:** [`04-Use-Case-Specification.md`](../../04-Use-Case-Specification.md)
 
 ---
@@ -13,7 +13,8 @@ flowchart TB
     %% ACTORS
     %% ==========================================
     subgraph Actors["👥 Tác Nhân Hệ Thống"]
-        SA(["👨‍💼 SuperAdmin<br/>(Quản trị viên Khoa)"])
+        SA(["👨‍💼 SuperAdmin<br/>(Quản trị hệ thống)"])
+        DA(["🧑‍💼 DepartmentAdmin<br/>(Quản trị khoa)"])
         L(["👨‍🏫 Lecturer<br/>(Giảng viên hướng dẫn)"])
         S(["👨‍🎓 Student<br/>(Sinh viên thực tập)"])
     end
@@ -27,9 +28,9 @@ flowchart TB
     end
 
     %% ==========================================
-    %% SUPERADMIN USE CASES (15 UCs)
+    %% ADMIN USE CASES (16 UCs — SuperAdmin + DepartmentAdmin)
     %% ==========================================
-    subgraph AdminUC["🏛️ Phân Hệ Quản Trị Khoa (15 Use Cases — UC-ADM)"]
+    subgraph AdminUC["🏛️ Phân Hệ Quản Trị (16 Use Cases — UC-ADM)"]
         UC_ADM_01(["UC-ADM-01: Quản lý Học kỳ<br/>(CRUD, Set Current, Close, Duplicate)"])
         UC_ADM_02(["UC-ADM-02: Quản lý Users<br/>(CRUD, Reset Password, Lock/Unlock)"])
         UC_ADM_03(["UC-ADM-03: Import Sinh viên<br/>(Excel template, validate & parse)"])
@@ -45,6 +46,7 @@ flowchart TB
         UC_ADM_13(["UC-ADM-13: Xuất Danh sách Excel<br/>(Export SV, GV, Doanh nghiệp)"])
         UC_ADM_14(["UC-ADM-14: Xuất Ma trận Phân công<br/>(Export bảng gán GVHD - SV)"])
         UC_ADM_15(["UC-ADM-15: Kiểm thử Email SMTP<br/>(Gửi test mail xác minh dịch vụ)"])
+        UC_ADM_16(["UC-ADM-16: Quản lý Khoa/Bộ môn<br/>(CRUD khoa, gán Admin khoa)"])
     end
 
     %% ==========================================
@@ -84,24 +86,34 @@ flowchart TB
     %% ==========================================
     %% ACTOR TO USE CASE ASSOCIATIONS
     %% ==========================================
-    %% SuperAdmin Associations
+    %% SuperAdmin Associations (quản trị hệ thống — read-only trên nghiệp vụ khoa)
     SA --> UC_AUTH_LOGIN
     SA --> UC_AUTH_FORGOT
     SA --> UC_ADM_01
     SA --> UC_ADM_02
-    SA --> UC_ADM_03
-    SA --> UC_ADM_04
-    SA --> UC_ADM_05
-    SA --> UC_ADM_06
     SA --> UC_ADM_07
     SA --> UC_ADM_08
     SA --> UC_ADM_09
-    SA --> UC_ADM_10
     SA --> UC_ADM_11
     SA --> UC_ADM_12
-    SA --> UC_ADM_13
-    SA --> UC_ADM_14
     SA --> UC_ADM_15
+    SA --> UC_ADM_16
+
+    %% DepartmentAdmin Associations (nghiệp vụ trong khoa)
+    DA --> UC_AUTH_LOGIN
+    DA --> UC_AUTH_FORGOT
+    DA --> UC_ADM_01
+    DA --> UC_ADM_02
+    DA --> UC_ADM_03
+    DA --> UC_ADM_04
+    DA --> UC_ADM_05
+    DA --> UC_ADM_06
+    DA --> UC_ADM_08
+    DA --> UC_ADM_09
+    DA --> UC_ADM_10
+    DA --> UC_ADM_12
+    DA --> UC_ADM_13
+    DA --> UC_ADM_14
 
     %% Lecturer Associations
     L --> UC_AUTH_LOGIN
@@ -153,9 +165,14 @@ flowchart TB
 
 ---
 
-## 📌 Bảng Đối Chiếu 37 Use Cases Chuẩn Hóa
+## 📌 Bảng Đối Chiếu 38 Use Cases Chuẩn Hóa
 
-### 1. Phân Hệ SuperAdmin (15 Use Cases)
+### 1. Phân Hệ Admin (16 Use Cases)
+
+> **Chủ sở hữu theo vai trò:**
+> - **SuperAdmin (hệ thống):** UC-ADM-02 (users toàn cục), 07, 08, 09, 11, 12, 15, 16 — và **chỉ đọc** UC-ADM-01.
+> - **DepartmentAdmin (khoa):** UC-ADM-01–06, 08–10, 12–14 trong phạm vi khoa (DepartmentId scope).
+> - Đặc quyền SuperAdmin: UC-ADM-07, 11, 15, 16. SuperAdmin không gọi được endpoint ghi nghiệp vụ (policy `RequireLecturerOrDepartmentAdmin`).
 
 | Mã UC | Tên Use Case | Mô tả Nghiệp vụ | API Endpoint Liên quan |
 |:---|:---|:---|:---|
@@ -174,6 +191,7 @@ flowchart TB
 | **UC-ADM-13** | Xuất Danh sách Excel | Xuất dữ liệu sinh viên, giảng viên, doanh nghiệp ra file Excel | `/api/Admin/export` |
 | **UC-ADM-14** | Xuất Ma trận Phân công | Xuất bảng phân công GVHD - SV ra file Excel phục vụ lưu trữ | `/api/Assignment/export` |
 | **UC-ADM-15** | Kiểm thử Email SMTP | Gửi thư thử nghiệm kiểm tra tính sẵn sàng của dịch vụ SMTP | `/api/Email/test` |
+| **UC-ADM-16** | Quản lý Khoa/Bộ môn | CRUD khoa/bộ môn, gán Admin khoa chịu trách nhiệm — đặc quyền SuperAdmin | `/api/SuperAdmin/departments` |
 
 ---
 
@@ -217,6 +235,7 @@ flowchart TB
 
 | Tác nhân (Role) | Phạm vi & Quyền hạn | Ranh giới Bảo mật (Boundary Constraints) |
 |:---|:---|:---|
-| **SuperAdmin** | Toàn quyền cấu hình hệ thống: Quản lý học kỳ, phân công GVHD, duyệt tài khoản, duyệt rubric, cấu hình khoa, broadcast thông báo. | ❌ Không trực tiếp chấm điểm SV hay duyệt báo cáo tuần (tôn trọng tính độc lập học thuật của GVHD). |
+| **SuperAdmin** | Quản trị hệ thống cấp toàn trường: quản lý Khoa/Bộ môn, cài đặt hệ thống, users toàn cục, duyệt yêu cầu tài khoản (kể cả tạo Admin khoa), dashboard giám sát tổng quan, test email; quyền **đọc** trên dữ liệu vận hành để giám sát. | ❌ Không import SV/GV/DN, không phân công, không broadcast, không CRUD học kỳ, không chấm điểm / duyệt báo cáo tuần / phản biện (policy `RequireLecturerOrDepartmentAdmin`). |
+| **DepartmentAdmin** | Quản trị khoa: import SV/GV/DN, phân công hướng dẫn, CRUD học kỳ & users trong khoa, rubric/biểu mẫu, broadcast, dashboard vận hành — toàn quyền thao tác trong phạm vi khoa (multi-tenant theo DepartmentId). | ❌ Không đụng cấu hình cấp toàn trường (tạo khoa, cài đặt hệ thống, tài khoản Admin khoa khác khoa); dữ liệu bó hẹp theo khoa của mình. |
 | **Lecturer** | Toàn quyền quản lý chuyên môn trên **nhóm SV được phân công**: xem tiến độ, duyệt báo cáo tuần, phản hồi đồ án, chấm rubric, khóa điểm, xuất PDF/Excel. | ❌ Không được can thiệp vào sinh viên của GVHD khác (bảo vệ bằng JWT Claims & LecturerId Scope). Không được sửa cấu hình hệ thống/học kỳ. |
 | **Student** | Tự quản lý tiến độ cá nhân: Nộp báo cáo tuần, nộp đồ án, phản hồi góp ý của GV, tra cứu điểm và tải giấy xác nhận PDF. | ❌ Chỉ truy cập được dữ liệu của chính mình (StudentId Scope). Không được xem bài nộp, điểm số hay ghi chú riêng tư của sinh viên khác. |

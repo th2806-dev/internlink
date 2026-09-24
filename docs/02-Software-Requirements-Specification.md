@@ -1,7 +1,7 @@
 # InternLink — Đặc Tả Yêu Cầu Phần Mềm (SRS)
 
 **Dự án:** InternLink — Nền tảng Quản lý và Giám sát Thực tập Tốt nghiệp  
-**Phiên bản:** 4.0  
+**Phiên bản:** 4.1  
 **Ngày cập nhật:** Tháng 9/2026
 
 ---
@@ -14,10 +14,11 @@ Tài liệu đặc tả toàn bộ yêu cầu chức năng (FR) và phi chức n
 
 ## 2. Tác nhân (Actors)
 
-1. **SuperAdmin**: Quản trị viên Khoa — toàn quyền quản lý hệ thống.
-2. **Lecturer**: Giảng viên hướng dẫn — quản lý SV, chấm điểm, xuất báo cáo.
-3. **Student**: Sinh viên thực tập — nộp báo cáo, xem điểm, phản hồi.
-4. **System**: Xử lý nền — Email SMTP, SignalR, PDF/Excel engine.
+1. **SuperAdmin**: Quản trị hệ thống — cấu hình cấp toàn trường (khoá/bộ môn, cài đặt, tài khoản Admin khoa, duyệt yêu cầu TK), dashboard giám sát **read-only**. Không tham gia thao tác nghiệp vụ SV thực tập tại doanh nghiệp (không import SV/GV/DN, không phân công, không chấm điểm hay duyệt báo cáo).
+2. **DepartmentAdmin**: Quản trị khoa — toàn quyền thao tác nghiệp vụ trong phạm vi khoa: import SV/GV/DN, phân công hướng dẫn, rubric/biểu mẫu, broadcast, CRUD học kỳ.
+3. **Lecturer**: Giảng viên hướng dẫn — quản lý SV được phân công, chấm điểm, xuất báo cáo.
+4. **Student**: Sinh viên thực tập — nộp báo cáo, xem điểm, phản hồi.
+5. **System**: Xử lý nền — Email SMTP, SignalR, PDF/Excel engine.
 
 ---
 
@@ -28,30 +29,33 @@ Tài liệu đặc tả toàn bộ yêu cầu chức năng (FR) và phi chức n
 | Mã | Chức năng | Mô tả |
 |:---|:---|:---|
 | FR-AUTH-01 | Đăng nhập | JWT Access Token (60 phút) + Refresh Token (7 ngày) |
-| FR-AUTH-02 | Phân quyền RBAC | Policy: RequireAdmin (SuperAdmin + DepartmentAdmin), RequireLecturerOrAdmin, RequireStudent |
+| FR-AUTH-02 | Phân quyền RBAC | Policy: `RequireSuperAdmin`, `RequireDepartmentAdmin`, `RequireLecturerOrDepartmentAdmin` (ghi nghiệp vụ — **SuperAdmin bị loại**), `RequireLecturerOrAdmin` (đọc/giám sát), `RequireLecturer`, `RequireStudent` |
 | FR-AUTH-03 | Đổi mật khẩu lần đầu | MustChangePassword = true |
 | FR-AUTH-04 | Quên mật khẩu | Token 15 phút + Email link |
 | FR-AUTH-05 | Hồ sơ cá nhân | Xem + cập nhật thông tin |
 
-### 3.2. Admin Module (15 FR)
+### 3.2. Admin Module (16 FR)
 
-| Mã | Chức năng | Mô tả |
-|:---|:---|:---|
-| FR-ADM-01 | Quản lý Học kỳ | CRUD + Close + Duplicate |
-| FR-ADM-02 | Quản lý Users | CRUD + Reset password + **Lock/Unlock** |
-| FR-ADM-03 | Import Sinh viên | Excel import + auto-create accounts |
-| FR-ADM-04 | Import Giảng viên | Excel import + auto-create accounts |
-| FR-ADM-05 | Import Doanh nghiệp | Excel import |
-| FR-ADM-06 | Phân công Hướng dẫn | **Bulk/Auto assign** + Company allocation |
-| FR-ADM-07 | **Yêu cầu Tài khoản** | Request Queue + **Provision tự động** |
-| FR-ADM-08 | **Tạo Rubric** | Dynamic rubric với tiêu chí tùy chỉnh |
-| FR-ADM-09 | **Quản lý Rubric** | Save/Update rubric bằng admin; hệ thống áp dụng ngay và lưu trạng thái Approved |
-| FR-ADM-10 | Phát Thông báo | Broadcast toàn hệ thống |
-| FR-ADM-11 | Cấu hình Hệ thống | Settings CRUD + Reset |
-| FR-ADM-12 | Dashboard Tổng quan | KPI, Charts, Action items |
-| FR-ADM-13 | Xuất Excel | Danh sách SV/GV/DN |
-| FR-ADM-14 | Xuất Phân công | Ma trận phân công |
-| FR-ADM-15 | Test Email SMTP | Kiểm tra cấu hình |
+> **Ranh giới vai trò:** **SuperAdmin** = quản trị hệ thống cấp toàn trường (cấu hình, tài khoản Admin khoa, giám sát read-only). **DepartmentAdmin** = chủ sở hữu toàn bộ thao tác nghiệp vụ trong khoa. SuperAdmin **không** tham gia import SV/GV/DN, phân công, broadcast hay chấm/duyệt dữ liệu thực tập.
+
+| Mã | Chức năng | Mô tả | Chủ sở hữu |
+|:---|:---|:---|:---|
+| FR-ADM-01 | Quản lý Học kỳ | CRUD + Close + Duplicate | DepartmentAdmin (SuperAdmin chỉ đọc) |
+| FR-ADM-02 | Quản lý Users | CRUD + Reset password + **Lock/Unlock** | SuperAdmin (toàn cục) + DepartmentAdmin (trong khoa) |
+| FR-ADM-03 | Import Sinh viên | Excel import + auto-create accounts | DepartmentAdmin |
+| FR-ADM-04 | Import Giảng viên | Excel import + auto-create accounts | DepartmentAdmin |
+| FR-ADM-05 | Import Doanh nghiệp | Excel import | DepartmentAdmin |
+| FR-ADM-06 | Phân công Hướng dẫn | **Bulk/Auto assign** + Company allocation | DepartmentAdmin |
+| FR-ADM-07 | **Yêu cầu Tài khoản** | Request Queue + **Provision tự động** (kể cả duyệt TK Admin khoa) | SuperAdmin |
+| FR-ADM-08 | **Tạo Rubric** | Dynamic rubric với tiêu chí tùy chỉnh | SuperAdmin + DepartmentAdmin |
+| FR-ADM-09 | **Quản lý Rubric** | Save/Update rubric; hệ thống áp dụng ngay và lưu trạng thái Approved | SuperAdmin + DepartmentAdmin |
+| FR-ADM-10 | Phát Thông báo | Broadcast trong khoa | DepartmentAdmin |
+| FR-ADM-11 | Cấu hình Hệ thống | Settings CRUD + Reset | SuperAdmin |
+| FR-ADM-12 | Dashboard Tổng quan | KPI, Charts, Action items | SuperAdmin (giám sát) + DepartmentAdmin (vận hành) |
+| FR-ADM-13 | Xuất Excel | Danh sách SV/GV/DN | DepartmentAdmin |
+| FR-ADM-14 | Xuất Phân công | Ma trận phân công | DepartmentAdmin |
+| FR-ADM-15 | Test Email SMTP | Kiểm tra cấu hình | SuperAdmin |
+| FR-ADM-16 | **Quản lý Khoa/Bộ môn** | CRUD khoa — SuperAdmin cấp toàn trường, gán Admin khoa theo khoa | SuperAdmin |
 
 ### 3.3. Lecturer Module (12 FR)
 
@@ -69,6 +73,8 @@ Tài liệu đặc tả toàn bộ yêu cầu chức năng (FR) và phi chức n
 | FR-LEC-10 | Xuất PDF | Báo cáo + Phiếu đánh giá |
 | FR-LEC-11 | Quản lý Tài liệu | Upload, Download, Archive |
 | FR-LEC-12 | Phản hồi Thông báo | Reply notification |
+
+> **Lưu ý phân quyền:** Các FR ghi dữ liệu của GVHD (FR-LEC-03 → FR-LEC-08, FR-LEC-11) dùng policy `RequireLecturerOrDepartmentAdmin` — **SuperAdmin không gọi được**; SuperAdmin chỉ xem/giám sát qua `RequireLecturerOrAdmin`.
 
 ### 3.4. Student Module (10 FR)
 
