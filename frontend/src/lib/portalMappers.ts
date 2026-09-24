@@ -363,7 +363,7 @@ export function mapWeeklyReportDtoToUi(r: WeeklyReportDto) {
 export function mapEvaluationListItemToUi(e: EvaluationListItemDto) {
   const grade = Number(e.finalGrade);
   let gradeClassification = "Khá";
-  if (grade >= 9) gradeClassification = "Xuất sắc";
+  if (grade >= 8.5) gradeClassification = "Xuất sắc";
   else if (grade >= 8) gradeClassification = "Giỏi";
   else if (grade >= 6.5) gradeClassification = "Khá";
   else if (grade < 5) gradeClassification = "Không đạt";
@@ -509,6 +509,7 @@ export function mapNotificationDtoToLecturerUi(n: NotificationDto) {
     color,
     isUnread,
     time: formatViDate(n.createdAt),
+    createdAt: n.createdAt,
     sender,
     receiver: "Giảng viên",
     content: n.content,

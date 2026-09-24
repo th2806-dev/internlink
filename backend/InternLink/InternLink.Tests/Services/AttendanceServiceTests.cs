@@ -61,6 +61,44 @@ public class AttendanceServiceTests
     }
 
     [Fact]
+    public async Task CreateSessionAsync_ShouldMapInternshipWeekToSemesterWeek()
+    {
+        var db = GetDb();
+        var semester = new Semester
+        {
+            Id = Guid.NewGuid(),
+            Name = "Kỳ 1 2026",
+            Term = "HK1",
+            AcademicYear = "2026-2027",
+            TotalWeeks = 6,
+            StartDate = new DateTime(2026, 1, 1),
+            InternshipStartWeek = 14,
+        };
+        var lecturer = new Lecturer { Id = Guid.NewGuid(), StaffCode = "GV01", FullName = "Thầy A" };
+        var student = new Student { Id = Guid.NewGuid(), StudentCode = "SV01", FullName = "Nguyễn Văn A" };
+        var internship = new Internship { Id = Guid.NewGuid(), SemesterId = semester.Id, LecturerId = lecturer.Id, StudentId = student.Id };
+
+        await db.Semesters.AddAsync(semester);
+        await db.Lecturers.AddAsync(lecturer);
+        await db.Students.AddAsync(student);
+        await db.Internships.AddAsync(internship);
+        await db.SaveChangesAsync();
+
+        var service = new AttendanceService(db, NullLogger<AttendanceService>.Instance);
+        var result = await service.CreateSessionAsync(lecturer.Id, new CreateAttendanceSessionDto
+        {
+            SemesterId = semester.Id,
+            WeekNumber = 1,
+            Title = "Thực tập tuần 1",
+            MeetingDate = new DateTime(2026, 4, 2, 2, 0, 0, DateTimeKind.Utc),
+            StudentIds = new List<Guid> { student.Id },
+        });
+
+        result.WeekNumber.Should().Be(1);
+        result.SemesterWeekNumber.Should().Be(14);
+    }
+
+    [Fact]
     public async Task CreateSessionAsync_WithSpecificStudentIds_ShouldOnlyIncludeSpecifiedStudents()
     {
         var db = GetDb();

@@ -60,16 +60,11 @@ export const TemplatesView = () => {
     (async () => {
       setIsLoadingDocs(true);
       try {
-        const [internshipsResult, documentsResult, templatesResult] = await Promise.allSettled([
-          lecturerInternshipsService.getAll(),
+        const [documentsResult, templatesResult] = await Promise.allSettled([
           documentService.getAll(),
           documentService.getTemplates(),
         ]);
         if (cancelled) return;
-
-        if (internshipsResult.status === "fulfilled" && internshipsResult.value[0]?.id) {
-          setDefaultInternshipId(internshipsResult.value[0].id);
-        }
 
         const docMap = new Map<string, any>();
         if (templatesResult.status === "fulfilled") {
@@ -91,6 +86,24 @@ export const TemplatesView = () => {
       cancelled = true;
     };
   }, []);
+
+  // Gắn tài liệu vào internship của kỳ ĐANG CHỌN (không phải internship đầu tiên trả về)
+  useEffect(() => {
+    let cancelled = false;
+    const semesterId = selectedSemester?.id && selectedSemester.id !== "all" ? selectedSemester.id : undefined;
+    lecturerInternshipsService
+      .getAll(semesterId)
+      .then((rows) => {
+        if (cancelled) return;
+        setDefaultInternshipId(rows[0]?.id ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setDefaultInternshipId(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedSemester?.id]);
 
   const totalDocs = documents.length;
   const circulatingCount = documents.filter(
@@ -260,23 +273,6 @@ export const TemplatesView = () => {
     }
   };
 
-  if (subView === "detail" && selectedDoc) {
-    return (
-      <DocumentDetailWorkspace
-        document={selectedDoc}
-        onBack={() => setSubView("list")}
-        onDownload={handleDownload}
-        onArchiveToggle={(doc) => {
-          if (doc.status === "Đang lưu hành" || (doc as any).status === "Đang áp dụng") {
-            setArchivingDoc(doc);
-          } else {
-            handleReactivateCirculation(doc);
-          }
-        }}
-      />
-    );
-  }
-
   if (subView === "student_library") {
     return (
       <StudentDocumentLibrary
@@ -411,16 +407,19 @@ export const TemplatesView = () => {
           </div>
 
           <div className="flex items-center gap-3">
-            {(selectedCategory !== "Tất cả" ||
-              semesterFilter !== (selectedSemester?.name || "") ||
+            {Boolean(
+              selectedCategory !== "Tất cả" ||
+              semesterFilter !== "Tất cả" ||
               majorFilter !== "Tất cả" ||
               fileTypeFilter !== "Tất cả" ||
-              searchQuery) && (
+              searchQuery,
+            ) && (
               <button
                 onClick={() => {
                   setSearchQuery("");
                   setSelectedCategory("Tất cả");
-                  setSemesterFilter(selectedSemester?.name || "");
+                  // Reset về "Tất cả" — không gán tên kỳ đang chọn (gây latch bộ lọc).
+                  setSemesterFilter("Tất cả");
                   setMajorFilter("Tất cả");
                   setFileTypeFilter("Tất cả");
                 }}
@@ -707,7 +706,16 @@ export const TemplatesView = () => {
       ) : (
         /* CARDS GRID VIEW */
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredDocuments.map((doc) => {
+          {isLoadingDocs ? (
+            <div className="col-span-full py-10 text-center text-slate-400 font-medium text-xs">
+              Đang tải danh sách tài liệu...
+            </div>
+          ) : filteredDocuments.length === 0 ? (
+            <div className="col-span-full py-10 text-center text-slate-400 font-medium text-xs">
+              Không có tài liệu nào khớp bộ lọc.
+            </div>
+          ) : null}
+          {!isLoadingDocs && filteredDocuments.map((doc) => {
             const isCirc =
               doc.status === "Đang lưu hành" || (doc as any).status === "Đang áp dụng";
             return (
@@ -747,8 +755,7 @@ export const TemplatesView = () => {
                   </h3>
 
                   <p className="text-xs text-slate-500 font-medium line-clamp-2">
-                    {doc.description ||
-                      "Biểu mẫu chuẩn ban hành theo quy định của Khoa CNTT."}
+                    {doc.description || "Biểu mẫu chuẩn ban hành theo quy định của Khoa."}
                   </p>
 
                   {!isCirc && doc.archiveReason && (

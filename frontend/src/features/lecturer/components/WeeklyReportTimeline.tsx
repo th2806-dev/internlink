@@ -1,5 +1,4 @@
-import { CheckCircle2, Clock, Circle, AlertTriangle, FileText, Edit3, RefreshCw } from "lucide-react";
-import { mapWeeklyReportStatusToUi } from "../../../lib/portalMappers";
+import { CheckCircle2, Clock, Circle, AlertTriangle, Edit3, RefreshCw } from "lucide-react";
 import { INTERNSHIP_WEEKS } from "../../../config/internship";
 import { Panel } from "../../../components/common/Panel";
 import type { WeeklyReportDto } from "../../../types/api";
@@ -14,6 +13,11 @@ interface WeeklyReportTimelineProps {
   error?: string | null;
   evaluation?: EvaluationDetailDto | null;
   totalWeeks?: number;
+  /**
+   * Tuần TUYỆT ĐỐI của học kỳ nơi Tuần thực tập 1 bắt đầu
+   * (vd 14 → thực tập tuần 1..6 = tuần 14..19 của học kỳ). Mặc định 1 = không lệch.
+   */
+  internshipStartWeek?: number;
 }
 
 const STATUS_CONFIG: Record<
@@ -41,8 +45,15 @@ export function WeeklyReportTimeline({
   error,
   evaluation,
   totalWeeks: totalWeeksProp,
+  internshipStartWeek = 1,
 }: WeeklyReportTimelineProps) {
+  void internshipId; // kept for API-parity with workspace hooks
   const totalWeeks = totalWeeksProp || INTERNSHIP_WEEKS;
+  // Nhãn tuần học kỳ: hiển thị khi kỳ đã cấu hình lệch tuần (start > 1).
+  const offset = (internshipStartWeek || 1) - 1;
+  const showSemesterWeek = offset > 0;
+  const semesterWeekLabel = (weekNum: number) => `HK tuần ${weekNum + offset}`;
+
   // Build weeks + defense milestone
   const weeks = Array.from({ length: totalWeeks }, (_, i) => {
     const weekNum = i + 1;
@@ -80,6 +91,7 @@ export function WeeklyReportTimeline({
             <h3 className="text-sm font-bold text-slate-900">Tiến độ báo cáo tuần</h3>
             <p className="text-xs text-slate-500">
               {approvedCount}/{totalWeeks} tuần đã duyệt
+              {showSemesterWeek && ` · thực tập ${semesterWeekLabel(1)} → ${semesterWeekLabel(totalWeeks)}`}
             </p>
           </div>
         </div>
@@ -136,6 +148,11 @@ export function WeeklyReportTimeline({
                         <h4 className="text-sm font-bold text-slate-900">
                           Tuần {weekNum}
                         </h4>
+                        {showSemesterWeek && (
+                          <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-slate-100 text-slate-500 border border-slate-200">
+                            {semesterWeekLabel(weekNum)}
+                          </span>
+                        )}
                         <span
                           className={`px-2 py-0.5 text-[10px] font-bold rounded-full border inline-flex items-center gap-1 ${config.bgColor} ${config.color} ${config.borderColor}`}
                         >
@@ -179,7 +196,7 @@ export function WeeklyReportTimeline({
             </div>
             <div className="flex-1 p-4 rounded-lg border border-indigo-200 bg-indigo-50/50">
               <div className="flex items-center gap-2">
-                <h4 className="text-sm font-bold text-slate-900">Bảo vệ luận án</h4>
+                <h4 className="text-sm font-bold text-slate-900">Bảo vệ thực tập tốt nghiệp</h4>
                 <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-indigo-100 text-indigo-700 border border-indigo-200">
                   {evaluation?.initiativeScore != null ? `Điểm ${evaluation.initiativeScore}/10` : "Chưa cập nhật"}
                 </span>

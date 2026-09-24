@@ -38,6 +38,7 @@ export interface AppState {
   weeklyReports: WeeklyReportDto[];
   weeklyReportPage: { total: number; skip: number; take: number };
   weeklyReportQuery: { status: string; searchTerm: string; skip: number };
+  weeklyReportTotals: { total: number; pending: number; revision: number; approved: number };
   queryWeeklyReports: (query: { status: string; searchTerm: string; skip: number }) => void;
   isLecturerLoading: boolean;
   lecturerError: string | null;

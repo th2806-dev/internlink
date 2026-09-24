@@ -365,6 +365,11 @@ export function AppRoutes() {
                       submissions={appState.assignedSubmissions}
                       stats={appState.stats}
                       weeklyTrendData={appState.weeklyTrendData}
+                      students={appState.assignedStudents}
+                      weeklyReports={appState.weeklyReports}
+                      lecturerName={appState.currentLecturer}
+                      isLoading={appState.isLecturerLoading}
+                      error={appState.lecturerError}
                       onShowToast={showToast}
                       onNavigate={(tab) => navigate(`/lecturer/${tab}`)}
                       onRefresh={appState.refresh}
@@ -409,7 +414,7 @@ export function AppRoutes() {
                 />
                 <Route
                   path="summary"
-                  element={<LecturerInternshipEvaluationView onShowToast={showToast} initialTab="summary" />}
+                  element={<Navigate to="/lecturer/evaluations" replace />}
                 />
                 <Route
                   path="evaluation"
@@ -419,7 +424,7 @@ export function AppRoutes() {
                   path="evaluation/:tab"
                   element={<LecturerInternshipEvaluationView onShowToast={showToast} />}
                 />
-                <Route path="export" element={<Navigate to="/lecturer/summary" replace />} />
+                <Route path="export" element={<Navigate to="/lecturer/evaluations" replace />} />
                 <Route
                   path="reports"
                   element={
@@ -427,6 +432,7 @@ export function AppRoutes() {
                       submissions={appState.assignedSubmissions}
                       weeklyReports={appState.weeklyReports}
                       weeklyReportPage={appState.weeklyReportPage}
+                      weeklyReportTotals={appState.weeklyReportTotals}
                       weeklyReportQuery={appState.weeklyReportQuery}
                       onQueryWeeklyReports={appState.queryWeeklyReports}
                       isLoading={appState.isLecturerLoading}

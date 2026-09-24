@@ -1,4 +1,3 @@
-import { Download } from "lucide-react";
 import { useSemester } from "../../../contexts/SemesterContext";
 import { lecturerCompaniesService } from "../../../services/lecturerCompanies.service";
 import { mapCompanyDetailDtoToEnterpriseDetail } from "../../../lib/portalMappers";
@@ -18,14 +17,6 @@ export const EnterprisesDetailView = () => {
       backLabel="Quay lại danh sách"
       backPath="/lecturer/enterprises"
       semesterId={selectedSemesterId}
-      actions={[
-        {
-          label: "Tải Xuống",
-          icon: Download,
-          onClick: () => {},
-          variant: "secondary",
-        },
-      ]}
     />
   );
 };

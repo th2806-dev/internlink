@@ -5,6 +5,9 @@ namespace InternLink.Application.Interfaces;
 public interface IAttendanceService
 {
     Task<List<AttendanceSessionDto>> GetLecturerSessionsAsync(Guid lecturerId, Guid semesterId);
+
+    /// <summary>Danh sách buổi gặp của cả kỳ, lọc theo khoa nếu có (null = tất cả khoa).</summary>
+    Task<List<AttendanceSessionDto>> GetSessionsBySemesterAsync(Guid semesterId, Guid? departmentId = null);
     Task<AttendanceSessionDetailDto?> GetSessionDetailAsync(Guid sessionId, Guid? lecturerId = null);
     Task<AttendanceSessionDetailDto> CreateSessionAsync(Guid lecturerId, CreateAttendanceSessionDto dto);
     Task<AttendanceSessionDetailDto> UpdateSessionAsync(Guid sessionId, Guid lecturerId, UpdateAttendanceSessionDto dto);

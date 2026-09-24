@@ -44,30 +44,32 @@ public class AttendanceController : ControllerBase
     // =========================================================================
 
     /// <summary>
-    /// Lấy danh sách các buổi gặp của giảng viên trong một học kỳ
+    /// Lấy danh sách buổi gặp trong học kỳ.
+    /// Lecturer: buổi của mình. Admin: theo lecturerId nếu có, hoặc tất cả buổi trong khoa của mình.
     /// </summary>
     [HttpGet("sessions")]
     [Authorize(Policy = "RequireLecturerOrAdmin")]
     public async Task<IActionResult> GetLecturerSessions([FromQuery] Guid semesterId, [FromQuery] Guid? lecturerId = null)
     {
-        Guid targetLecturerId;
+        List<AttendanceSessionDto> sessions;
         if (User.IsLecturer())
         {
             var resolvedId = await ResolveCurrentLecturerIdAsync();
             if (!resolvedId.HasValue)
                 return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Không tìm thấy hồ sơ giảng viên." }));
-            targetLecturerId = resolvedId.Value;
+            sessions = await _attendanceService.GetLecturerSessionsAsync(resolvedId.Value, semesterId);
         }
         else if (lecturerId.HasValue)
         {
-            targetLecturerId = lecturerId.Value;
+            sessions = await _attendanceService.GetLecturerSessionsAsync(lecturerId.Value, semesterId);
         }
         else
         {
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Vui lòng cung cấp lecturerId." }));
+            // Admin không chỉ định giảng viên: trả buổi của toàn khoa (SuperAdmin → tất cả khoa).
+            var deptId = _deptScope.GetCurrentDepartmentId(User);
+            sessions = await _attendanceService.GetSessionsBySemesterAsync(semesterId, deptId);
         }
 
-        var sessions = await _attendanceService.GetLecturerSessionsAsync(targetLecturerId, semesterId);
         return Ok(ApiResponse<List<AttendanceSessionDto>>.Ok(sessions));
     }
 

@@ -31,6 +31,7 @@ import {
   internshipGradingService,
   type StudentGrade,
   type GradingWeekStatus,
+  type GradingSummaryResponse,
 } from "../../../services/internshipGrading.service";
 import { PageHeader } from "../../../components/common/PageHeader";
 import { Panel } from "../../../components/common/Panel";
@@ -43,6 +44,7 @@ import {
   getClassificationTone,
 } from "../../../lib/gradingRules";
 import { formatDateTimeVi } from "../../../lib/formatDateTimeVi";
+import { lecturerExportService } from "../../../services/lecturerExport.service";
 
 // ────────────────────────────────────────────────────────────────────────────
 // Tab 1: Cấu hình báo cáo & deadline
@@ -390,6 +392,7 @@ function GradingTab({
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [quality, setQuality] = useState<number | null>(null);
+  const [weeklyQuality, setWeeklyQuality] = useState<Record<number, number>>({});
   const [creative, setCreative] = useState(false);
   const [oralExam, setOralExam] = useState<string>("");
   const [isSaving, setIsSaving] = useState(false);
@@ -433,6 +436,7 @@ function GradingTab({
   const openPanel = (student: StudentGrade) => {
     setSelectedId(student.studentId);
     setQuality(student.qualityScore);
+    setWeeklyQuality(student.weeklyQualityScores ?? {});
     setCreative(student.hasCreativeProduct);
     setOralExam(student.oralExamScore != null ? String(student.oralExamScore) : "");
   };
@@ -445,8 +449,9 @@ function GradingTab({
         weekNumber: week.weekNumber,
         submittedAt: week.submittedAt,
         deadline: week.deadline,
-        isAbsent: week.isAttendanceAbsent,
       })),
+      absentWeekCount: selected.absentCount,
+      weeklyQualityLevels: Object.values(weeklyQuality),
       finalReportSubmittedAt: selected.finalReportSubmitted ? "1970-01-01T00:00:00Z" : null,
       qualityLevel: quality,
       hasCreativeProduct: creative,
@@ -458,18 +463,22 @@ function GradingTab({
       average: result.averageScore,
       classification: result.classification,
     };
-  }, [selected, quality, creative, oralExam]);
+  }, [selected, quality, weeklyQuality, creative, oralExam]);
 
   const saveGrade = async () => {
     if (!semesterId || !selected) return;
     setIsSaving(true);
     try {
       const oralNum = oralExam.trim() === "" ? null : Number(oralExam);
+      // Không gửi Điểm thi khi SV không đủ điều kiện (backend cũng chặn — bảo vệ 2 lớp)
+      const eligibleOral =
+        preview?.eligible && oralNum != null && !isNaN(oralNum) ? oralNum : null;
       const updated = await internshipGradingService.saveGrade(semesterId, {
         studentId: selected.studentId,
-        qualityScore: quality,
+        qualityScore: Object.keys(weeklyQuality).length > 0 ? null : quality,
+        weeklyQualityScores: weeklyQuality,
         hasCreativeProduct: creative,
-        oralExamScore: oralNum != null && !isNaN(oralNum) ? oralNum : null,
+        oralExamScore: eligibleOral,
       });
       setStudents((prev) => prev.map((s) => (s.studentId === updated.studentId ? updated : s)));
       onShowToast?.(`Đã lưu điểm cho ${updated.fullName}.`, "success");
@@ -635,32 +644,19 @@ function GradingTab({
                 </div>
               </div>
 
-              {/* Cụm 1 — mức chất lượng cố định theo quy định */}
+              {/* Cụm 1 — đánh giá chất lượng theo từng báo cáo tuần */}
               <div>
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Chất lượng bài (tối đa 5 điểm)
+                  Chất lượng từng báo cáo (tính trung bình, tối đa 5 điểm)
                 </p>
                 <div className="grid grid-cols-1 gap-1.5">
-                  {GR_QUALITY_RUBRIC_LEVELS.map((level) => (
-                    <label
-                      key={level.value}
-                      className={`flex cursor-pointer items-center justify-between rounded-lg border px-3 py-2 text-sm transition-colors ${
-                        quality === level.value
-                          ? "border-blue-500 bg-blue-50 text-blue-700"
-                          : "border-slate-200 hover:bg-slate-50"
-                      }`}
-                    >
-                      <span className="flex items-center gap-2">
-                        <input
-                          type="radio"
-                          name="quality-level"
-                          checked={quality === level.value}
-                          onChange={() => setQuality(level.value)}
-                          className="h-3.5 w-3.5 accent-blue-600"
-                        />
-                        {level.label}
-                      </span>
-                      <span className="font-semibold">{level.value.toFixed(1)}đ</span>
+                  {selected.weeks.map((week) => (
+                    <label key={week.weekNumber} className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm">
+                      <span className="font-medium">Tuần {week.weekNumber}</span>
+                      <select value={weeklyQuality[week.weekNumber] ?? ""} onChange={(event) => setWeeklyQuality((current) => ({ ...current, ...(event.target.value ? { [week.weekNumber]: Number(event.target.value) } : (() => { const next = { ...current }; delete next[week.weekNumber]; return next; })()) }))} className="rounded border border-slate-200 px-2 py-1 text-xs">
+                        <option value="">Chưa chấm</option>
+                        {GR_QUALITY_RUBRIC_LEVELS.map((level) => <option key={level.value} value={level.value}>{level.value.toFixed(1)} - {level.label}</option>)}
+                      </select>
                     </label>
                   ))}
                 </div>
@@ -682,6 +678,9 @@ function GradingTab({
                   />
                 </span>
               </label>
+              <p className="text-[11px] text-slate-500">
+                {selected.productSubmitted ? "Sinh viên đã nộp sản phẩm. Giảng viên tick để xác nhận cộng 1 điểm." : "Chưa ghi nhận sản phẩm sinh viên."}
+              </p>
 
               {/* Cụm 3 — tự đếm + QT tạm tính */}
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
@@ -732,7 +731,15 @@ function GradingTab({
                   value={oralExam}
                   onChange={(e) => setOralExam(e.target.value)}
                   placeholder="Nhập điểm thi..."
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                  disabled={!preview?.eligible}
+                  title={
+                    preview?.eligible
+                      ? undefined
+                      : `Không đủ điều kiện dự thi: ${selected.ineligibleReasons.join("; ")}`
+                  }
+                  className={`w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400 ${
+                    !preview?.eligible ? "cursor-not-allowed bg-slate-100 text-slate-400" : ""
+                  }`}
                 />
                 {preview && (
                   <div className="mt-2 grid grid-cols-2 gap-2">
@@ -789,7 +796,13 @@ const WEEK_CELL_STYLE: Record<GradingWeekStatus["status"], string> = {
 function weekCellLabel(w: GradingWeekStatus): string {
   if (w.status === "on_time") return "✓";
   if (w.status === "late") return "Trễ";
-  if (w.status === "missing") return "V";
+  if (w.status === "missing") return "X";
+  return "–";
+}
+
+function attendanceCellLabel(status: GradingWeekStatus["attendanceStatus"]): string {
+  if (status === "present") return "✓";
+  if (status === "absent") return "V";
   return "–";
 }
 
@@ -808,6 +821,8 @@ function SummaryTab({
   const [search, setSearch] = useState("");
   const [oralDrafts, setOralDrafts] = useState<Record<string, string>>({});
   const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
+  // Lịch tuần của kỳ (từ API summary) — nguồn cho header cột T1..TN đúng số tuần
+  const [data, setData] = useState<GradingSummaryResponse | null>(null);
 
   const load = useCallback(async () => {
     if (!semesterId) return;
@@ -815,6 +830,7 @@ function SummaryTab({
     setError(null);
     try {
       const data = await internshipGradingService.getSummary(semesterId);
+      setData(data);
       setStudents(data.students);
       setOralDrafts(
         Object.fromEntries(
@@ -837,11 +853,14 @@ function SummaryTab({
     void load();
   }, [load]);
 
+  const schedule = useMemo(() => data?.schedule ?? [], [data]);
   const rowPreview = useMemo(() => {
-    const map: Record<string, { average: number | null; classification: string }> = {};
+    const map: Record<string, { average: number | null; classification: string; isEligible: boolean }> = {};
     for (const s of students) {
       const oralRaw = oralDrafts[s.studentId] ?? "";
       const oralNum = oralRaw.trim() === "" ? null : Number(oralRaw);
+      // Tính cùng input với tab Chấm điểm (GradingTab.preview): đủ weeks + isAbsent,
+      // absentWeekCount và weeklyQualityScores — hai bảng phải ra cùng kết quả cho cùng SV.
       const result = computeGrade({
         weeks: s.weeks.map((week) => ({
           weekNumber: week.weekNumber,
@@ -849,12 +868,14 @@ function SummaryTab({
           deadline: week.deadline,
           isAbsent: week.isAttendanceAbsent,
         })),
+        absentWeekCount: s.absentCount,
+        weeklyQualityLevels: Object.values(s.weeklyQualityScores ?? {}),
         finalReportSubmittedAt: s.finalReportSubmitted ? "1970-01-01T00:00:00Z" : null,
         qualityLevel: s.qualityScore,
         hasCreativeProduct: s.hasCreativeProduct,
         oralExamScore: oralNum != null && !isNaN(oralNum) ? oralNum : null,
       });
-      map[s.studentId] = { average: result.averageScore, classification: result.classification };
+      map[s.studentId] = { average: result.averageScore, classification: result.classification, isEligible: result.isEligible };
     }
     return map;
   }, [students, oralDrafts]);
@@ -872,6 +893,14 @@ function SummaryTab({
 
   const commitOralScore = async (studentId: string) => {
     if (!semesterId) return;
+    const target = students.find((s) => s.studentId === studentId);
+    if (target && !target.isEligible) {
+      onShowToast?.(
+        `${target.fullName} không đủ điều kiện dự thi (${target.ineligibleReasons.join("; ")}) — không thể nhập Điểm thi.`,
+        "error"
+      );
+      return;
+    }
     const raw = (oralDrafts[studentId] ?? "").trim();
     const num = raw === "" ? null : Number(raw);
     if (num != null && (isNaN(num) || num < 0 || num > 10)) {
@@ -901,7 +930,7 @@ function SummaryTab({
     if (!semesterId) return;
     setIsExporting(true);
     try {
-      await internshipGradingService.exportExcel(semesterId);
+      await lecturerExportService.downloadInternshipExcel(semesterId);
       onShowToast?.("Đã xuất file Excel danh sách thực tập.", "success");
     } catch (err) {
       onShowToast?.(getApiErrorMessage(err), "error");
@@ -993,6 +1022,10 @@ function SummaryTab({
           <p className="py-10 text-center text-sm text-slate-400">Không có dữ liệu.</p>
         ) : (
           <div className="overflow-x-auto">
+            <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
+              <span><strong className="text-slate-700">Trên:</strong> bài nộp (✓ đúng hạn, Trễ, X chưa nộp)</span>
+              <span><strong className="text-slate-700">Dưới:</strong> điểm danh (✓ có mặt, V vắng, – không có buổi)</span>
+            </div>
             <table className="w-full min-w-[1150px] text-sm">
               <thead>
                 <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
@@ -1003,12 +1036,10 @@ function SummaryTab({
                   <th className="px-2 py-2.5 text-center">ĐIỂM THI</th>
                   <th className="px-2 py-2.5 text-center">ĐIỂM TB</th>
                   <th className="px-2 py-2.5 text-center">XẾP LOẠI</th>
-                  <th className="px-2 py-2.5 text-center">T1</th>
-                  <th className="px-2 py-2.5 text-center">T2</th>
-                  <th className="px-2 py-2.5 text-center">T3</th>
-                  <th className="px-2 py-2.5 text-center">T4</th>
-                  <th className="px-2 py-2.5 text-center">T5</th>
-                  <th className="px-2 py-2.5 text-center">T6</th>
+                  {/* Cột tuần render theo lịch kỳ (schedule) — không hardcode T1..T6 */}
+                  {schedule.map((week) => (
+                    <th key={week.weekNumber} className="px-2 py-2.5 text-center">T{week.weekNumber}</th>
+                  ))}
                   <th className="px-2 py-2.5 text-center">NỘP BC</th>
                   <th className="px-2 py-2.5 text-center">VẮNG</th>
                   <th className="px-2 py-2.5 text-center">TỔNG</th>
@@ -1040,7 +1071,15 @@ function SummaryTab({
                           onBlur={() => void commitOralScore(s.studentId)}
                           onKeyDown={(e) => e.key === "Enter" && void commitOralScore(s.studentId)}
                           placeholder="—"
-                          className="w-16 rounded-md border border-slate-200 px-1.5 py-1 text-center text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                          disabled={!s.isEligible}
+                          title={
+                            s.isEligible
+                              ? undefined
+                              : `Không đủ điều kiện dự thi: ${s.ineligibleReasons.join("; ")}`
+                          }
+                          className={`w-16 rounded-md border border-slate-200 px-1.5 py-1 text-center text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400 ${
+                            !s.isEligible ? "cursor-not-allowed bg-slate-100 text-slate-400" : ""
+                          }`}
                         />
                         {isSaving && <Loader2 className="mx-auto mt-0.5 h-3 w-3 animate-spin text-blue-500" />}
                       </td>
@@ -1059,10 +1098,21 @@ function SummaryTab({
                       {s.weeks.map((w) => (
                         <td key={w.weekNumber} className="px-2 py-2.5 text-center">
                           <span
-                            title={`Nộp bài: ${weekCellLabel(w)} · Điểm danh: ${w.attendanceStatus === "present" ? "Có mặt" : w.attendanceStatus === "absent" ? "Vắng" : "Không có buổi"}`}
-                            className={`inline-flex w-8 justify-center rounded px-1.5 py-0.5 text-xs ${WEEK_CELL_STYLE[w.status]}`}
+                            title={`Bài nộp: ${w.status === "on_time" ? "Đúng hạn" : w.status === "late" ? "Trễ" : w.status === "missing" ? "Chưa nộp" : "Chưa đến hạn"} · Điểm danh: ${w.attendanceStatus === "present" ? "Có mặt" : w.attendanceStatus === "absent" ? "Vắng" : "Không có buổi"}`}
+                            className="inline-flex w-10 flex-col items-center gap-0.5"
                           >
-                            {w.attendanceStatus === "absent" ? "V" : weekCellLabel(w)}
+                            <span className={`inline-flex min-h-5 w-full justify-center rounded px-1 py-0.5 text-[10px] ${WEEK_CELL_STYLE[w.status]}`}>
+                              {weekCellLabel(w)}
+                            </span>
+                            <span className={`inline-flex min-h-4 w-full justify-center rounded px-1 text-[10px] font-semibold ${
+                              w.attendanceStatus === "absent"
+                                ? "bg-red-100 text-red-700"
+                                : w.attendanceStatus === "present"
+                                  ? "bg-emerald-50 text-emerald-700"
+                                  : "bg-slate-50 text-slate-400"
+                            }`}>
+                              {attendanceCellLabel(w.attendanceStatus)}
+                            </span>
                           </span>
                         </td>
                       ))}

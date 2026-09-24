@@ -1,4 +1,7 @@
--- Reset demo data completely: wipe all seeded business data and leave only the single SuperAdmin account.
+-- Reset demo data completely: wipe ALL business data and leave ONLY the single SuperAdmin
+-- account (admin). On the next API restart, startup seed re-creates Departments, Department
+-- admins, semesters and demo data (DemoDataSeeder).
+-- Run seed scripts only AFTER restart if you want the four-semester fixture on top.
 -- Child tables first (FK order), then parents. Runs in one transaction — rolls back on error.
 SET XACT_ABORT ON;
 SET QUOTED_IDENTIFIER ON;
@@ -17,6 +20,8 @@ DELETE FROM Evaluations;
 DELETE FROM EvaluationRubricCriteria;
 DELETE FROM EvaluationRubrics;
 DELETE FROM SemesterReportSchedules;
+IF OBJECT_ID(N'LecturerSemesterSummaries', N'U') IS NOT NULL DELETE FROM LecturerSemesterSummaries;
+IF OBJECT_ID(N'LecturerGuidanceScheduleItems', N'U') IS NOT NULL DELETE FROM LecturerGuidanceScheduleItems;
 DELETE FROM CompanyPositions;
 DELETE FROM SemesterCompanies;
 DELETE FROM SemesterLecturers;
@@ -33,7 +38,8 @@ DELETE FROM Semesters;
 -- Remove every user except the original SuperAdmin account so the environment starts clean.
 DELETE FROM Users WHERE Username <> 'admin';
 
--- Remove seeded departments so the database starts from a blank state.
+-- Remove seeded departments so the database starts from a blank state
+-- (startup seed re-creates them together with DepartmentAdmin accounts).
 DELETE FROM Departments;
 
 COMMIT;

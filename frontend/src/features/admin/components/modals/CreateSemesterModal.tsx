@@ -9,6 +9,8 @@ export interface SemesterModalFormValues {
   endDate: string;
   targetStudents: number;
   totalWeeks: number;
+  /** Tuần tuyệt đối của học kỳ nơi Tuần thực tập 1 bắt đầu (vd 14 → TT 1..6 = HK 14..19). */
+  internshipStartWeek: number;
   description?: string;
 }
 
@@ -35,6 +37,7 @@ export const CreateSemesterModal = ({
     startDate: string;
     endDate: string;
     totalWeeks?: number;
+    internshipStartWeek?: number;
     description?: string;
   } | null;
 }) => {
@@ -45,6 +48,7 @@ export const CreateSemesterModal = ({
   const [endDate, setEndDate] = useState("2026-12-15");
   const [targetStudents, setTargetStudents] = useState("1350");
   const [totalWeeks, setTotalWeeks] = useState("6");
+  const [internshipStartWeek, setInternshipStartWeek] = useState("14");
   const isEditing = Boolean(editing?.id);
 
   // Preload form when opening in edit mode; reset to defaults in create mode.
@@ -57,6 +61,7 @@ export const CreateSemesterModal = ({
       setStartDate(parseToInputDate(editing.startDate));
       setEndDate(parseToInputDate(editing.endDate));
       setTotalWeeks(String(editing.totalWeeks ?? 6));
+      setInternshipStartWeek(String(editing.internshipStartWeek ?? 1));
     } else {
       setSemesterName("Thực tập Tốt nghiệp K21 (2026 - 2027)");
       setTerm("Học kỳ I");
@@ -64,6 +69,7 @@ export const CreateSemesterModal = ({
       setStartDate("2026-09-01");
       setEndDate("2026-12-15");
       setTotalWeeks("6");
+      setInternshipStartWeek("14");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, editing?.id, editing?.name, editing?.startDate, editing?.endDate]);
@@ -80,6 +86,7 @@ export const CreateSemesterModal = ({
       endDate,
       targetStudents: parseInt(targetStudents) || 0,
       totalWeeks: Math.min(52, Math.max(1, parseInt(totalWeeks) || 6)),
+      internshipStartWeek: Math.min(52, Math.max(1, parseInt(internshipStartWeek) || 1)),
       description: editing?.description,
     };
     if (isEditing && editing && onUpdate) {
@@ -206,20 +213,41 @@ export const CreateSemesterModal = ({
             </div>
           )}
 
-          <div>
-            <label className="block font-bold text-slate-700 mb-1">
-              Số tuần thực tập *
-            </label>
-            <input
-              type="number"
-              min={1}
-              max={52}
-              value={totalWeeks}
-              onChange={(e) => setTotalWeeks(e.target.value)}
-              required
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-900 outline-none focus:bg-white focus:border-blue-500"
-            />
-            <p className="text-[11px] text-slate-500 mt-1">Cấu hình theo quy định của từng kỳ.</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Số tuần thực tập *
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={52}
+                value={totalWeeks}
+                onChange={(e) => setTotalWeeks(e.target.value)}
+                required
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-900 outline-none focus:bg-white focus:border-blue-500"
+              />
+              <p className="text-[11px] text-slate-500 mt-1">Theo quy định của kỳ.</p>
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Tuần HK bắt đầu thực tập *
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={52}
+                value={internshipStartWeek}
+                onChange={(e) => setInternshipStartWeek(e.target.value)}
+                required
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-900 outline-none focus:bg-white focus:border-blue-500"
+              />
+              <p className="text-[11px] text-slate-500 mt-1">
+                {Math.min(52, Math.max(1, parseInt(internshipStartWeek) || 1)) + Math.min(52, Math.max(1, parseInt(totalWeeks) || 6)) - 1 > 52
+                  ? "Vượt 52 tuần học kỳ — kiểm tra lại."
+                  : `Thực tập 1..${Math.min(52, Math.max(1, parseInt(totalWeeks) || 6))} = HK tuần ${Math.min(52, Math.max(1, parseInt(internshipStartWeek) || 1))}..${Math.min(52, Math.max(1, parseInt(internshipStartWeek) || 1)) + Math.min(52, Math.max(1, parseInt(totalWeeks) || 6)) - 1}`}
+              </p>
+            </div>
           </div>
 
           {/* Action Buttons */}

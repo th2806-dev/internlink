@@ -9,11 +9,11 @@ import {
   Bell,
   User,
   CalendarCheck,
-  ClipboardList,
 } from "lucide-react";
 import { FEATURES } from "../../../config/featureFlags";
 import { useAuth } from "../../../hooks/useAuth";
 import { useLecturerNavStats } from "../../../hooks/useLecturerNavStats";
+import { toApiSemesterId, useSemester } from "../../../contexts/SemesterContext";
 import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
 
 import type { UserRole } from "../../../types/common";
@@ -38,7 +38,10 @@ export const Sidebar = ({
   onSwitchPortal?: (role: UserRole) => void;
 }) => {
   const { user } = useAuth();
-  const { stats } = useLecturerNavStats();
+  // Badge sidebar theo HỌC KỲ đang chọn ("all" → toàn bộ kỳ) — đổi kỳ là tự reload,
+  // khớp số liệu với các trang bên trong.
+  const { selectedSemesterId } = useSemester();
+  const { stats } = useLecturerNavStats(toApiSemesterId(selectedSemesterId));
 
   const displayName = user?.name || currentLecturer || "Giảng viên";
 
@@ -83,11 +86,6 @@ export const Sidebar = ({
           label: "Đánh giá & Chấm điểm",
           icon: Award,
           badge: stats.evaluatedCount > 0 ? String(stats.evaluatedCount) : undefined,
-        },
-        {
-          id: "summary",
-          label: "Đánh giá thực tập",
-          icon: ClipboardList,
         },
         {
           id: "analytics",

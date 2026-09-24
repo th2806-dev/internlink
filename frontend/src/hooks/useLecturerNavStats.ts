@@ -30,18 +30,29 @@ interface DashboardStatsDto {
   statusDistribution: Record<string, number>;
 }
 
-export function useLecturerNavStats(enabled = true) {
+/**
+ * Badge số liệu cho sidebar giảng viên (SV / DN / chờ duyệt / đã đánh giá / thông báo).
+ * Toàn bộ số liệu được scope theo HỌC KỲ đang chọn (semesterId) — đổi kỳ là tự tải lại,
+ * khớp với số liệu các trang bên trong thay vì đếm trôi nổi toàn bộ các kỳ.
+ */
+export function useLecturerNavStats(semesterId?: string, enabled = true) {
   const [stats, setStats] = useState<LecturerNavStats>(DEFAULT_NAV_STATS);
   const [isLoading, setIsLoading] = useState(enabled);
 
   const load = useCallback(async () => {
     if (!enabled) return;
     setIsLoading(true);
+    // "all" / rỗng → không gửi semesterId (backend hiểu là toàn bộ kỳ).
+    const scopedSemesterId = semesterId && semesterId !== "all" ? semesterId : undefined;
     try {
       const [statsDto, notifs, companies] = await Promise.all([
-        apiRequest<DashboardStatsDto>("/api/Lecturer/stats").catch(() => null),
+        apiRequest<DashboardStatsDto>(
+          scopedSemesterId
+            ? `/api/Lecturer/stats?semesterId=${encodeURIComponent(scopedSemesterId)}`
+            : "/api/Lecturer/stats",
+        ).catch(() => null),
         notificationService.getMine().catch(() => []),
-        lecturerCompaniesService.getAll().catch(() => []),
+        lecturerCompaniesService.getAll(scopedSemesterId).catch(() => []),
       ]);
 
       setStats({
@@ -54,7 +65,7 @@ export function useLecturerNavStats(enabled = true) {
     } finally {
       setIsLoading(false);
     }
-  }, [enabled]);
+  }, [enabled, semesterId]);
 
   useEffect(() => {
     void load();

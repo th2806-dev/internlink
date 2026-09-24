@@ -15,6 +15,8 @@ public class SemesterDto
     public string? Description { get; set; }
     public int MaxStudentsPerLecturer { get; set; }
     public int TotalWeeks { get; set; } = 6;
+    /// <summary>Tuần tuyệt đối của học kỳ nơi Tuần thực tập 1 bắt đầu (1 = không lệch).</summary>
+    public int InternshipStartWeek { get; set; } = 1;
     public int StudentsCount { get; set; }
     public int LecturersCount { get; set; }
     public int PlacedStudents { get; set; }
@@ -37,6 +39,8 @@ public class CreateSemesterDto
     public string? Description { get; set; }
     public int MaxStudentsPerLecturer { get; set; } = 30;
     public int TotalWeeks { get; set; } = 6;
+    /// <summary>Tuần tuyệt đối của học kỳ nơi Tuần thực tập 1 bắt đầu (ví dụ 14).</summary>
+    public int InternshipStartWeek { get; set; } = 1;
     public int TargetStudents { get; set; } = 0;
     /// <summary>Department owning this semester. SuperAdmin may set it; DepartmentAdmin is forced to their own.</summary>
     public Guid? DepartmentId { get; set; }
@@ -53,4 +57,6 @@ public class UpdateSemesterDto
     public string? Description { get; set; }
     public int? MaxStudentsPerLecturer { get; set; }
     public int? TotalWeeks { get; set; }
+    /// <summary>Tuần tuyệt đối của học kỳ nơi Tuần thực tập 1 bắt đầu (1 = không lệch).</summary>
+    public int? InternshipStartWeek { get; set; }
 }

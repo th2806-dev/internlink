@@ -75,6 +75,7 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
     startDate: string;
     endDate: string;
     totalWeeks?: number;
+    internshipStartWeek?: number;
     description?: string;
   }>(null);
   const [importType, setImportType] = useState(null);
@@ -285,6 +286,7 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
                           startDate: currentActiveSem.startDate,
                           endDate: currentActiveSem.endDate,
                           totalWeeks: "totalWeeks" in currentActiveSem ? currentActiveSem.totalWeeks : undefined,
+                          internshipStartWeek: "internshipStartWeek" in currentActiveSem ? currentActiveSem.internshipStartWeek : undefined,
                           description: currentActiveSem.description,
                         });
                         setShowCreateModal(true);
@@ -545,6 +547,7 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
                                     startDate: sem.startDate,
                                     endDate: sem.endDate,
                                     totalWeeks: sem.totalWeeks,
+                                    internshipStartWeek: sem.internshipStartWeek,
                                     description: sem.description,
                                   });
                                   setShowCreateModal(true);
@@ -692,6 +695,7 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
             endDate: data.endDate,
             studentsCount: data.targetStudents,
             totalWeeks: data.totalWeeks,
+            internshipStartWeek: data.internshipStartWeek,
             status: "upcoming",
             description: `Đợt thực tập ${data.term} ${data.academicYear}`,
           });
@@ -706,6 +710,7 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
               startDate: data.startDate,
               endDate: data.endDate,
               totalWeeks: data.totalWeeks,
+              internshipStartWeek: data.internshipStartWeek,
               description: data.description,
             },
             onShowToast,

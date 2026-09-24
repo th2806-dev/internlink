@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 import { PageHeader } from "../../../components/common/PageHeader";
 import { KpiCard, KpiGrid } from "../../../components/common/KpiCard";
-import { Panel } from "../../../components/common/Panel";
 import { lecturerAnalyticsService } from "../../../services/lecturerAnalytics.service";
 import { useSemester, toApiSemesterId } from "../../../contexts/SemesterContext";
 import { getApiErrorMessage } from "../../../lib/apiClient";
@@ -42,9 +41,13 @@ export const LecturerAnalytics = () => {
   const [weeklyTrend, setWeeklyTrend] = useState<LecturerWeeklyTrendDto[]>([]);
   const [gradeDist, setGradeDist] = useState<LecturerGradeDistributionDto | null>(null);
   const [companyStats, setCompanyStats] = useState<LecturerCompanyStatDto[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
 
   const semesterId = toApiSemesterId(selectedSemester?.id);
+
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(null), 3e3);
+  };
 
   const filteredCompanyStats =
     selectedCompanyFilter === "Tất cả doanh nghiệp"
@@ -52,7 +55,6 @@ export const LecturerAnalytics = () => {
       : companyStats.filter((c) => c.companyName === selectedCompanyFilter);
 
   const fetchData = useCallback(async () => {
-    setIsLoading(true);
     try {
       const [stats, trend, grade, company] = await Promise.all([
         lecturerAnalyticsService.getStats(semesterId),
@@ -65,9 +67,8 @@ export const LecturerAnalytics = () => {
       setGradeDist(grade);
       setCompanyStats(company);
     } catch (err) {
-      console.error("Analytics fetch error:", err);
-    } finally {
-      setIsLoading(false);
+      // Lỗi phải hiện cho người dùng (toast) — không chỉ console.error để bảng trống im lặng.
+      showToast(getApiErrorMessage(err));
     }
   }, [semesterId]);
 
@@ -75,10 +76,10 @@ export const LecturerAnalytics = () => {
     fetchData();
   }, [fetchData]);
 
-  const showToast = (msg: string) => {
-    setToastMsg(msg);
-    setTimeout(() => setToastMsg(null), 3e3);
-  };
+  // Đổi kỳ → reset lọc doanh nghiệp (DN của kỳ cũ không còn trong danh sách → bảng rỗng ảo).
+  useEffect(() => {
+    setSelectedCompanyFilter("Tất cả doanh nghiệp");
+  }, [semesterId]);
 
   const totalStudents = statsData?.totalStudents ?? 0;
   const interningStudents = statsData?.interningCount ?? 0;
@@ -156,7 +157,11 @@ export const LecturerAnalytics = () => {
             <div>
               <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
                 <BarChart3 className="w-4 h-4 text-blue-600" />
-                Xu hướng nộp Báo cáo tuần (Tuần 1 - Tuần 12)
+                {(() => {
+                  const firstLabel = weeklyTrend[0]?.label ?? "Tuần 1";
+                  const lastLabel = weeklyTrend[weeklyTrend.length - 1]?.label ?? `Tuần ${selectedSemester?.totalWeeks ?? 6}`;
+                  return `Xu hướng nộp Báo cáo tuần (${firstLabel} - ${lastLabel})`;
+                })()}
               </h3>
               <p className="text-xs text-slate-500">
                 Tỷ lệ sinh viên nộp báo cáo đúng hạn, trễ hạn và quá hạn theo
@@ -231,7 +236,7 @@ export const LecturerAnalytics = () => {
               );
             })()}
             <span className="font-bold text-blue-600">
-              Tổng {weeklyTrend.length > 0 ? weeklyTrend.length : 12} báo cáo tuần / SV
+              Tổng {weeklyTrend.length} báo cáo tuần / SV
             </span>
           </div>
         </div>

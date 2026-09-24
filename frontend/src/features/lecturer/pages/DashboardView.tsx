@@ -1,24 +1,64 @@
+import { useMemo } from "react";
 import {
   LayoutDashboard,
   RefreshCw,
   ArrowUpRight,
-  AlertTriangle,
   CalendarDays,
   Clock,
+  CheckCircle2,
+  XCircle,
+  ClipboardList,
+  Activity,
+  Users,
 } from "lucide-react";
 import { PageHeader } from "../../../components/common/PageHeader";
 import { Panel } from "../../../components/common/Panel";
 import { RecentSubmissions } from "../components/RecentSubmissions";
 import { StatsCards } from "../components/StatsCards";
 import {
-  DashboardDonutChart,
   DashboardTrendChart,
   buildLecturerStatusSlices,
 } from "../../../components/common/DashboardCharts";
 import type { ActionItem } from "../../../types/common";
 import type { Deadline } from "../../../types/common";
 import type { Submission } from "../../../types/submission";
+import type { Student } from "../../../types/student";
+import type { WeeklyReportDto } from "../../../types/api";
 import { useSemester } from "../../../contexts/SemesterContext";
+
+const PRIORITY_CONFIG: Record<
+  string,
+  { dot: string; badge: string; label: string }
+> = {
+  danger: {
+    dot: "bg-rose-500",
+    badge: "bg-rose-50 text-rose-700 border-rose-200",
+    label: "Nghiêm trọng",
+  },
+  warning: {
+    dot: "bg-amber-500",
+    badge: "bg-amber-50 text-amber-700 border-amber-200",
+    label: "Cần phản hồi",
+  },
+  info: {
+    dot: "bg-blue-500",
+    badge: "bg-blue-50 text-blue-700 border-blue-200",
+    label: "Cần lưu ý",
+  },
+};
+
+/** Skeleton block reused by the loading state. */
+function SkeletonCard({ className = "" }: { className?: string }) {
+  return (
+    <div
+      className={`bg-white rounded-lg border border-slate-200/80 p-5 animate-pulse ${className}`}
+    >
+      <div className="h-3 w-24 bg-slate-200 rounded mb-3" />
+      <div className="h-7 w-16 bg-slate-200 rounded mb-2" />
+      <div className="h-2.5 w-32 bg-slate-100 rounded" />
+    </div>
+  );
+}
 
 export const DashboardView = ({
   actionItems,
@@ -26,6 +66,11 @@ export const DashboardView = ({
   submissions,
   stats,
   weeklyTrendData = [],
+  students = [],
+  weeklyReports = [],
+  lecturerName,
+  isLoading = false,
+  error = null,
   onShowToast,
   onNavigate,
   onRefresh,
@@ -43,6 +88,11 @@ export const DashboardView = ({
     statusDistribution?: Record<string, number>;
   };
   weeklyTrendData?: { label: string; value: number; target?: number; late?: number; missing?: number }[];
+  students?: Student[];
+  weeklyReports?: WeeklyReportDto[];
+  lecturerName?: string;
+  isLoading?: boolean;
+  error?: string | null;
   onShowToast: (msg: string) => void;
   onNavigate: (tab: string) => void;
   onRefresh?: () => Promise<void> | void;
@@ -50,6 +100,130 @@ export const DashboardView = ({
   const { selectedSemester, activeSemesterId } = useSemester();
   const statusSlices = buildLecturerStatusSlices(stats);
   const hasActiveSemester = !!activeSemesterId;
+
+  // ---- Recent activity feed (derived from real data, newest first) ----  // ---- Recent activity feed (derived from real data, newest first) ----
+  const recentActivity = useMemo(() => {
+    type ActivityEntry = {
+      id: string;
+      actor: string;
+      action: string;
+      time: Date;
+    };
+    const entries: ActivityEntry[] = [];
+
+    for (const r of weeklyReports.slice(0, 30)) {
+      // Đã duyệt → dùng updatedAt (lúc GV duyệt); còn lại → submittedAt (lúc SV nộp)
+      const ts = r.status === "Approved" ? (r.updatedAt ?? r.submittedAt) : (r.submittedAt ?? r.updatedAt);
+      if (!ts) continue;
+      const student = students.find((s) => s.id === r.internshipId);
+      // Bài đã duyệt (mốc updatedAt): actor là "Bạn" (GV) → "Bạn đã duyệt Báo cáo tuần N của {tên SV}".
+      // Bài SV nộp: actor là tên SV → "{tên SV} đã nộp Báo cáo tuần N".
+      const approved = r.status === "Approved";
+      entries.push({
+        id: `act-weekly-${r.id}`,
+        actor: approved ? "Bạn" : student?.name ?? "Sinh viên",
+        action: approved
+          ? `đã duyệt Báo cáo tuần ${r.weekNumber} của ${student?.name ?? "sinh viên"}`
+          : `đã nộp Báo cáo tuần ${r.weekNumber}`,
+        time: new Date(ts),
+      });
+    }
+    for (const sub of submissions
+      .filter((s) => s.sourceType !== "weeklyReport")
+      .slice(0, 15)) {
+      const ts = (sub as any).submittedAt ?? (sub as any).updatedAt ?? null;
+      if (!ts) continue;
+      entries.push({
+        id: `act-sub-${sub.id}`,
+        actor: sub.studentName,
+        action: `đã gửi ${sub.reportType}`,
+        time: new Date(ts),
+      });
+    }
+
+    return entries
+      .filter((e) => !Number.isNaN(e.time.getTime()))
+      .sort((a, b) => b.time.getTime() - a.time.getTime())
+      .slice(0, 5);
+  }, [weeklyReports, submissions, students]);
+
+  const formatTimeAgo = (date: Date) => {
+    const diffMinutes = Math.floor((Date.now() - date.getTime()) / 60000);
+    if (diffMinutes < 1) return "Vừa xong";
+    if (diffMinutes < 60) return `${diffMinutes} phút trước`;
+    const hours = Math.floor(diffMinutes / 60);
+    if (hours < 24) return `${hours} giờ trước`;
+    return `${Math.floor(hours / 24)} ngày trước`;
+  };
+
+  // ---- Deadlines split: overdue vs upcoming (overdue first, clearly separated) ----
+  const { upcomingDeadlines, overdueDeadlines } = useMemo(() => {
+    const upcoming: Deadline[] = [];
+    const overdue: Deadline[] = [];
+    for (const d of deadlines) {
+      if (d.isOverdue || (d.daysLeft != null && d.daysLeft < 0)) overdue.push(d);
+      else upcoming.push(d);
+    }
+    return {
+      upcomingDeadlines: upcoming.slice(0, 4),
+      overdueDeadlines: overdue.slice(0, 2),
+    };
+  }, [deadlines]);
+
+  // ---- Loading state ----
+  if (isLoading) {
+    return (
+      <div className="space-y-5 max-w-[1500px] mx-auto">
+        <PageHeader
+          icon={LayoutDashboard}
+          title="Tổng quan"
+          subtitle="Đang tải dữ liệu nhóm hướng dẫn…"
+        />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          {[1, 2, 3, 4].map((i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+          <SkeletonCard className="lg:col-span-8 h-72" />
+          <SkeletonCard className="lg:col-span-4 h-72" />
+        </div>
+      </div>
+    );
+  }
+
+  // ---- Error state (retry keeps the layout so it doesn't crash the page) ----
+  if (error) {
+    return (
+      <div className="space-y-5 max-w-[1500px] mx-auto">
+        <PageHeader
+          icon={LayoutDashboard}
+          title="Tổng quan"
+          subtitle="Cổng Giảng viên hướng dẫn"
+        />
+        <Panel className="p-10 text-center space-y-4 max-w-2xl mx-auto">
+          <div className="w-16 h-16 bg-rose-50 text-rose-600 rounded-full flex items-center justify-center mx-auto">
+            <XCircle className="w-8 h-8" />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-lg font-bold text-slate-800">
+              Không thể tải dữ liệu tổng quan
+            </h3>
+            <p className="text-sm text-slate-500">
+              {error} — vui lòng thử lại.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void onRefresh?.()}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-md transition-colors"
+          >
+            Thử lại
+          </button>
+        </Panel>
+      </div>
+    );
+  }
 
   // Empty state: no active semester
   if (!hasActiveSemester && stats.total === 0) {
@@ -81,12 +255,14 @@ export const DashboardView = ({
     );
   }
 
+  const hasWork = actionItems.length > 0;
+
   return (
-    <div className="space-y-5 max-w-[1500px] mx-auto">
+    <div className="space-y-5 max-w-[1500px] mx-auto pb-16">
       <PageHeader
         icon={LayoutDashboard}
         title="Tổng quan"
-        subtitle={`Số liệu nhóm hướng dẫn · ${selectedSemester?.name || "Kỳ thực tập hiện tại"}`}
+        subtitle="Theo dõi tiến độ, báo cáo và tình trạng sinh viên thực tập."
         actions={[
           {
             label: "Làm mới",
@@ -110,14 +286,80 @@ export const DashboardView = ({
         onCardClick={() => onNavigate("students")}
       />
 
-      <div className="il-accent-panel px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-blue-700">Nhịp hướng dẫn</p>
-          <p className="text-sm font-semibold text-slate-900 mt-0.5">Một màn hình để biết sinh viên nào cần bạn phản hồi tiếp theo.</p>
+      {/* ==== ACTION CENTER (primary section) ==== */}
+      <Panel
+        className={`border ${
+          hasWork ? "border-amber-200 bg-amber-50/40" : "border-emerald-200 bg-emerald-50/40"
+        }`}
+      >
+        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+          <div>
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <ClipboardList className={`w-4 h-4 ${hasWork ? "text-amber-600" : "text-emerald-600"}`} />
+              Cần bạn xử lý
+            </h3>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              Những nội dung cần giảng viên xem hoặc phản hồi.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => onNavigate("reports")}
+            className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1"
+          >
+            Xem tất cả <ArrowUpRight className="w-3.5 h-3.5" />
+          </button>
         </div>
-        <span className="text-[11px] font-semibold text-slate-500">Cập nhật theo nhóm phụ trách</span>
-      </div>
 
+        {!hasWork ? (
+          <div className="py-8 flex flex-col items-center gap-2 text-center">
+            <CheckCircle2 className="w-8 h-8 text-emerald-500" />
+            <p className="text-sm font-bold text-slate-800">Không có nội dung cần xử lý</p>
+            <p className="text-xs text-slate-500">
+              Tất cả {stats.total} sinh viên đang đúng tiến độ.
+            </p>
+          </div>
+        ) : (
+          <ul className="divide-y divide-slate-100">
+            {actionItems.slice(0, 6).map((item) => {
+              const cfg = PRIORITY_CONFIG[item.priority ?? "info"] ?? PRIORITY_CONFIG.info;
+              return (
+                <li key={item.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (item.type === "review" || item.type === "grade" || item.type === "reports") {
+                        onNavigate("reports");
+                      } else {
+                        onNavigate("students");
+                      }
+                    }}
+                    className="w-full py-3 flex items-center gap-3 text-left hover:bg-white/70 transition-colors cursor-pointer"
+                  >
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${cfg.dot}`} />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-xs text-slate-900 truncate">
+                        {item.title}
+                      </p>
+                      <p className="text-[11px] text-slate-500 truncate">{item.subtitle}</p>
+                    </div>
+                    <span
+                      className={`hidden sm:inline-flex px-2 py-0.5 text-[10px] font-bold rounded-md border shrink-0 ${cfg.badge}`}
+                    >
+                      {cfg.label}
+                    </span>
+                    <span className="flex items-center gap-1 text-[#1d4ed8] font-semibold text-[11px] shrink-0">
+                      {item.buttonText ?? "Xem"} <ArrowUpRight className="w-3.5 h-3.5" />
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Panel>
+
+      {/* ==== CHART + STATUS SUMMARY ==== */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         <Panel className="lg:col-span-8">
           <DashboardTrendChart
@@ -130,154 +372,228 @@ export const DashboardView = ({
           />
         </Panel>
         <Panel className="lg:col-span-4">
-          <DashboardDonutChart
-            title="Trạng thái sinh viên"
-            subtitle={`${stats.total} SV được phân công`}
-            data={
-              statusSlices.length > 0
-                ? statusSlices
-                : [{ name: "Chưa có dữ liệu", value: 1, tone: "slate" }]
-            }
+          <StudentStatusSummary
+            stats={stats}
+            onNavigate={onNavigate}
           />
         </Panel>
       </div>
 
+      {/* ==== DEADLINES + RECENT ACTIVITY ==== */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        <div className="lg:col-span-7 space-y-5">
-          <Panel>
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-amber-600" />
-                  Cần xử lý
-                </h3>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  Báo cáo, nhắc nhở và đánh giá chờ GVHD
-                </p>
-              </div>
-              <span className="text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-md">
-                {actionItems.length} mục
-              </span>
+        <Panel className="lg:col-span-7">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <CalendarDays className="w-4 h-4 text-blue-600" />
+                Hạn sắp tới
+              </h3>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Các mốc nộp báo cáo của nhóm
+              </p>
             </div>
-
-            <ul className="divide-y divide-slate-100">
-              {actionItems.map((item) => (
-                <li key={item.id}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (item.type === "review" || item.type === "grade") {
-                        onNavigate("reports");
-                      } else {
-                        onNavigate("students");
-                      }
-                    }}
-                    className="w-full py-3 flex items-center justify-between gap-3 text-left hover:bg-slate-50 transition-colors cursor-pointer"
-                  >
-                    <div>
-                      <p className="font-semibold text-xs text-slate-900">
-                        {item.title}
-                      </p>
-                      <p className="text-[11px] text-slate-500">
-                        {item.subtitle}
-                      </p>
-                    </div>
-                    <span className="flex items-center gap-1 text-[#1d4ed8] font-semibold text-[11px] shrink-0">
-                      {item.buttonText}{" "}
-                      <ArrowUpRight className="w-3.5 h-3.5" />
+            <span className="text-[11px] text-slate-400 font-medium">
+              {upcomingDeadlines.length} mốc
+            </span>
+          </div>
+          <ul className="divide-y divide-slate-100">
+            {upcomingDeadlines.length === 0 && overdueDeadlines.length === 0 && (
+              <li className="py-8 text-center text-xs text-slate-400">
+                Không có hạn nào sắp tới.
+              </li>
+            )}
+            {overdueDeadlines.map((d) => (
+              <li key={d.id} className="py-3 flex items-start gap-3 text-xs">
+                <span className="mt-0.5 w-2 h-2 rounded-full bg-rose-500 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-slate-900 flex items-center gap-1.5 flex-wrap">
+                    {d.title}
+                    <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-rose-50 text-rose-700 border border-rose-200">
+                      Đã quá hạn
                     </span>
-                  </button>
-                </li>
-              ))}
-              {stats.pending > 0 && (
-                <li>
-                  <button
-                    type="button"
-                    onClick={() => onNavigate("reports")}
-                    className="w-full py-3 flex items-center justify-between gap-3 text-left hover:bg-slate-50 transition-colors cursor-pointer"
-                  >
-                    <div>
-                      <p className="font-semibold text-xs text-slate-900">
-                        {stats.pending} bài nộp chờ nhận xét
-                      </p>
-                      <p className="text-[11px] text-slate-500">
-                        Kho báo cáo & bài nộp
-                      </p>
-                    </div>
-                    <span className="flex items-center gap-1 text-amber-700 font-semibold text-[11px] shrink-0">
-                      Duyệt <ArrowUpRight className="w-3.5 h-3.5" />
-                    </span>
-                  </button>
-                </li>
-              )}
-              {stats.overdue > 0 && (
-                <li>
-                  <button
-                    type="button"
-                    onClick={() => onNavigate("students")}
-                    className="w-full py-3 flex items-center justify-between gap-3 text-left hover:bg-slate-50 transition-colors cursor-pointer"
-                  >
-                    <div>
-                      <p className="font-semibold text-xs text-slate-900">
-                        {stats.overdue} sinh viên quá hạn / rủi ro
-                      </p>
-                      <p className="text-[11px] text-slate-500">
-                        Cần theo dõi sát tiến độ
-                      </p>
-                    </div>
-                    <span className="flex items-center gap-1 text-rose-700 font-semibold text-[11px] shrink-0">
-                      Xem <ArrowUpRight className="w-3.5 h-3.5" />
-                    </span>
-                  </button>
-                </li>
-              )}
-            </ul>
-          </Panel>
-
-          <RecentSubmissions
-            submissions={submissions.slice(0, 5)}
-            onViewAll={() => onNavigate("reports")}
-            onReviewSubmission={() => onNavigate("reports")}
-          />
-        </div>
-
-        <div className="lg:col-span-5 space-y-5">
-          <Panel>
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="text-sm font-bold text-slate-900">Hạn sắp tới</h3>
-              <span className="text-[11px] text-slate-400 font-medium">
-                {deadlines.length} mốc
-              </span>
-            </div>
-            <ul className="divide-y divide-slate-100">
-              {deadlines.map((d) => (
-                <li
-                  key={d.id}
-                  className="py-3 flex items-start gap-3 text-xs"
-                >
-                  <div className="text-center shrink-0 w-10">
-                    <div className="text-sm font-bold text-slate-900">
-                      {d.day}
-                    </div>
-                    <div className="text-[10px] text-slate-400 uppercase">
-                      {d.month}
-                    </div>
-                  </div>
-                  <div className="min-w-0">
+                  </p>
+                  <p className="text-[11px] text-slate-500">{d.subtitle}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="font-bold text-rose-700">
+                    {d.day}/{d.month}
+                  </p>
+                  <p className="text-[10px] text-slate-400">{d.studentCount} SV</p>
+                </div>
+              </li>
+            ))}
+            {upcomingDeadlines.map((d) => {
+              const urgent = (d.daysLeft ?? 99) <= 3;
+              return (
+                <li key={d.id} className="py-3 flex items-start gap-3 text-xs">
+                  <span
+                    className={`mt-0.5 w-2 h-2 rounded-full shrink-0 ${
+                      urgent ? "bg-amber-500" : "bg-blue-500"
+                    }`}
+                  />
+                  <div className="min-w-0 flex-1">
                     <p className="font-semibold text-slate-900">{d.title}</p>
                     <p className="text-[11px] text-slate-500">{d.subtitle}</p>
-                    <p className="text-[10px] text-blue-700 font-bold mt-0.5">
-                      {d.studentCount} sinh viên
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="font-bold text-slate-900">
+                      {d.day}/{d.month}
+                    </p>
+                    <p
+                      className={`text-[10px] font-bold ${
+                        urgent ? "text-amber-700" : "text-blue-700"
+                      }`}
+                    >
+                      {d.daysLeft != null ? `Còn ${d.daysLeft} ngày` : ""}
                     </p>
                   </div>
                 </li>
+              );
+            })}
+          </ul>
+        </Panel>
+
+        <Panel className="lg:col-span-5">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <Activity className="w-4 h-4 text-blue-600" />
+                Hoạt động gần đây
+              </h3>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Nhóm hướng dẫn · mới nhất trước
+              </p>
+            </div>
+          </div>
+          {recentActivity.length === 0 ? (
+            <p className="py-8 text-center text-xs text-slate-400">
+              Chưa có hoạt động gần đây.
+            </p>
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {recentActivity.map((a) => (
+                <li key={a.id} className="py-2.5 flex items-start gap-2.5 text-xs">
+                  <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
+                  <p className="text-slate-600 min-w-0">
+                    <span className="font-bold text-slate-900">{a.actor}</span> {a.action}
+                    <span className="block text-[10px] text-slate-400 mt-0.5">
+                      {formatTimeAgo(a.time)}
+                    </span>
+                  </p>
+                </li>
               ))}
             </ul>
-          </Panel>
-        </div>
+          )}
+        </Panel>
       </div>
+
+      {/* ==== RECENT SUBMISSIONS ==== */}
+      <RecentSubmissions
+        submissions={submissions.slice(0, 5)}
+        onViewAll={() => onNavigate("reports")}
+        onReviewSubmission={() => onNavigate("reports")}
+      />
     </div>
   );
 };
+
+/**
+ * Compact status summary replacing the donut chart — the lecturer should read
+ * "how many students are fine / need watching / have problems" in one glance.
+ */
+function StudentStatusSummary({
+  stats,
+  onNavigate,
+}: {
+  stats: {
+    total: number;
+    interning: number;
+    pending: number;
+    overdue: number;
+    completed: number;
+    statusDistribution?: Record<string, number>;
+  };
+  onNavigate: (tab: string) => void;
+}) {
+  const dist = stats.statusDistribution;
+  const hasDistribution = dist && Object.keys(dist).length > 0;
+
+  const rows: { tone: string; label: string; value: number }[] = hasDistribution
+    ? [
+        { tone: "emerald", label: "Đúng tiến độ", value: (dist.InProgress ?? 0) + (dist.Completed ?? 0) + (dist.Graded ?? 0) },
+        { tone: "amber", label: "Cần theo dõi", value: (dist.AwaitingFeedback ?? 0) + (dist.RequiresRevision ?? 0) },
+        { tone: "rose", label: "Có vấn đề", value: dist.BehindSchedule ?? 0 },
+      ]
+    : [
+        {
+          tone: "emerald",
+          label: "Đúng tiến độ",
+          value: Math.max(0, stats.total - stats.pending - stats.overdue),
+        },
+        { tone: "amber", label: "Cần theo dõi", value: stats.pending },
+        { tone: "rose", label: "Có vấn đề", value: stats.overdue },
+      ];
+
+  const allGood = rows.every((r) => r.value === 0) || (rows[0].value === stats.total && stats.total > 0);
+
+  const TONE_DOT: Record<string, string> = {
+    emerald: "bg-emerald-500",
+    amber: "bg-amber-500",
+    rose: "bg-rose-500",
+    slate: "bg-slate-400",
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <Users className="w-4 h-4 text-blue-600" />
+            Trạng thái sinh viên
+          </h3>
+          <p className="text-[11px] text-slate-500 mt-0.5">
+            {stats.total} sinh viên được phân công
+          </p>
+        </div>
+      </div>
+
+      {allGood && stats.total > 0 ? (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50/60 px-4 py-5 flex flex-col items-center gap-1.5 text-center">
+          <CheckCircle2 className="w-8 h-8 text-emerald-600" />
+          <p className="text-lg font-bold text-slate-900">
+            {stats.total} / {stats.total}
+          </p>
+          <p className="text-xs font-bold text-emerald-700">Đang đúng tiến độ</p>
+          <p className="text-[11px] text-slate-500">
+            Không có sinh viên cần can thiệp.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-2.5">
+          {rows
+            .filter((r) => r.value > 0)
+            .map((r) => (
+              <div
+                key={r.label}
+                className="flex items-center gap-2.5 p-2.5 rounded-md border border-slate-200/80 bg-slate-50/60"
+              >
+                <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${TONE_DOT[r.tone]}`} />
+                <span className="text-xs font-semibold text-slate-700 flex-1">{r.label}</span>
+                <span className="text-lg font-bold text-slate-900">{r.value}</span>
+              </div>
+            ))}
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={() => onNavigate("students")}
+        className="w-full text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center justify-center gap-1 pt-1"
+      >
+        Xem danh sách sinh viên <ArrowUpRight className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+}
 
 export { DashboardView as LecturerDashboardView };

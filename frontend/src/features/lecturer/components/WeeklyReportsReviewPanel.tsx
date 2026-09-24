@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FileCheck2, Check, RotateCcw, Download, Eye, X, Loader2 } from "lucide-react";
+import { FileCheck2, Check, RotateCcw, Download, Eye, X, Loader2, AlertCircle } from "lucide-react";
 import { Panel } from "../../../components/common/Panel";
 import {
   mapWeeklyReportStatusToUi,
@@ -15,11 +15,14 @@ type WeeklyReportsReviewPanelProps = {
     uiStatus: string,
     comment?: string,
   ) => void | Promise<void>;
+  /** Toast của portal (bắt buộc để báo lỗi thay vì im lặng/alert). */
+  onShowToast?: (msg: string, type?: "success" | "error" | "info") => void;
 };
 
 export function WeeklyReportsReviewPanel({
   reports,
   onReview,
+  onShowToast,
 }: WeeklyReportsReviewPanelProps) {
   const [commentById, setCommentById] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -38,6 +41,13 @@ export function WeeklyReportsReviewPanel({
     setBusyId(id);
     try {
       await onReview(id, uiStatus, commentById[id]);
+      onShowToast?.(
+        uiStatus === "Đã duyệt" ? "Đã duyệt báo cáo tuần." : "Đã gửi yêu cầu chỉnh sửa báo cáo tuần.",
+        "success",
+      );
+    } catch (err) {
+      // try/finally trước đây nuốt lỗi → duyệt/yêu cầu sửa thất bại im lặng.
+      onShowToast?.(getApiErrorMessage(err), "error");
     } finally {
       setBusyId(null);
     }
@@ -51,7 +61,7 @@ export function WeeklyReportsReviewPanel({
       if (preview?.url) URL.revokeObjectURL(preview.url);
       setPreview({ url: URL.createObjectURL(blob), fileName: filename });
     } catch (err) {
-      window.alert(getApiErrorMessage(err));
+      onShowToast?.(getApiErrorMessage(err), "error");
     } finally {
       setPreviewLoadingId(null);
     }
@@ -68,7 +78,7 @@ export function WeeklyReportsReviewPanel({
       anchor.click();
       URL.revokeObjectURL(url);
     } catch (err) {
-      window.alert(getApiErrorMessage(err));
+      onShowToast?.(getApiErrorMessage(err), "error");
     }
   };
 

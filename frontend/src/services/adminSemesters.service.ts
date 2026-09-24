@@ -11,6 +11,8 @@ export interface BackendSemesterDto {
   description?: string | null;
   maxStudentsPerLecturer: number;
   totalWeeks: number;
+  /** Tuần tuyệt đối của học kỳ nơi Tuần thực tập 1 bắt đầu (1 = không lệch). */
+  internshipStartWeek?: number;
   studentsCount: number;
   lecturersCount: number;
   placedStudents: number;
@@ -30,6 +32,7 @@ export interface CreateSemesterRequest {
   description?: string | null;
   maxStudentsPerLecturer?: number;
   totalWeeks?: number;
+  internshipStartWeek?: number;
 }
 
 export interface UpdateSemesterRequest {
@@ -42,6 +45,7 @@ export interface UpdateSemesterRequest {
   description?: string | null;
   maxStudentsPerLecturer?: number;
   totalWeeks?: number;
+  internshipStartWeek?: number;
 }
 
 export const adminSemestersService = {

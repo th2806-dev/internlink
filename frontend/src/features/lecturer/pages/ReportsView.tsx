@@ -26,6 +26,8 @@ interface ReportsViewProps {
   onRetry?: () => Promise<void>;
   weeklyReportPage?: { total: number; skip: number; take: number };
   weeklyReportQuery?: { status: string; searchTerm: string; skip: number };
+  /** Tổng theo trạng thái tính trên TOÀN BỘ kỳ (server-side) — không phụ thuộc trang hiện tại. */
+  weeklyReportTotals?: { total: number; pending: number; revision: number; approved: number };
   onQueryWeeklyReports?: (query: { status: string; searchTerm: string; skip: number }) => void;
 }
 
@@ -40,6 +42,7 @@ export const ReportsView = ({
   onRetry,
   weeklyReportPage = { total: 0, skip: 0, take: 20 },
   weeklyReportQuery = { status: "", searchTerm: "", skip: 0 },
+  weeklyReportTotals,
   onQueryWeeklyReports,
 }: ReportsViewProps) => {
   const [searchInput, setSearchInput] = useState(weeklyReportQuery.searchTerm);
@@ -52,7 +55,8 @@ export const ReportsView = ({
     onQueryWeeklyReports?.({ ...weeklyReportQuery, searchTerm: searchInput, skip: 0 });
   };
 
-  const reportSummary = {
+  // Ưu tiên tổng server-side (đúng cả kỳ); fallback về đếm trang hiện tại nếu chưa load kịp.
+  const reportSummary = weeklyReportTotals ?? {
     total: weeklyReportPage.total,
     pending: weeklyReports.filter((report) => report.status === "Submitted").length,
     revision: weeklyReports.filter((report) => report.status === "RevisionRequested").length,
@@ -160,6 +164,7 @@ export const ReportsView = ({
       <WeeklyReportsReviewPanel
         reports={weeklyReports}
         onReview={onReviewWeeklyReport ?? (() => {})}
+        onShowToast={showToast}
       />
       <SubmissionsHub
         submissions={submissions}

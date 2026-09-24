@@ -9,6 +9,7 @@ import {
   Clock,
   FileSpreadsheet,
   File,
+  FileArchive,
   BarChart3,
   ArrowUpRight,
 } from "lucide-react";
@@ -55,9 +56,11 @@ export const StudentDocumentLibrary = ({
       `\u0110\xE3 t\u1EA3i xu\u1ED1ng th\xE0nh c\xF4ng: ${doc.title}`,
     );
   };
+  // Luôn trả về badge hợp lệ — ZIP/RAR/fileType lạ rơi vào nhánh mặc định thay vì undefined (crash).
   const getFileTypeBadge = (type) => {
-    switch (type) {
+    switch ((type || "").toUpperCase()) {
       case "DOCX":
+      case "DOC":
         return {
           bg: "bg-blue-50 text-blue-700 border-blue-200",
           icon: <FileText className="w-5 h-5 text-blue-600" />,
@@ -68,14 +71,28 @@ export const StudentDocumentLibrary = ({
           icon: <File className="w-5 h-5 text-rose-600" />,
         };
       case "XLSX":
+      case "XLS":
         return {
           bg: "bg-emerald-50 text-emerald-700 border-emerald-200",
           icon: <FileSpreadsheet className="w-5 h-5 text-emerald-600" />,
         };
       case "PPTX":
+      case "PPT":
         return {
           bg: "bg-amber-50 text-amber-700 border-amber-200",
           icon: <BarChart3 className="w-5 h-5 text-amber-600" />,
+        };
+      case "ZIP":
+      case "RAR":
+      case "7Z":
+        return {
+          bg: "bg-violet-50 text-violet-700 border-violet-200",
+          icon: <FileArchive className="w-5 h-5 text-violet-600" />,
+        };
+      default:
+        return {
+          bg: "bg-slate-100 text-slate-700 border-slate-200",
+          icon: <File className="w-5 h-5 text-slate-500" />,
         };
     }
   };

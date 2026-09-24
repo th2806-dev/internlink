@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   CheckCircle2,
   Clock,
@@ -40,6 +40,12 @@ export function StudentReportsTab({
   errors,
 }: StudentReportsTabProps) {
   const [view, setView] = useState<"weekly" | "submissions">("weekly");
+
+  // Sort trên BẢN SAO — không mutate array props của parent (React strict-mode & memo-safe).
+  const sortedWeeklyReports = useMemo(
+    () => [...weeklyReports].sort((a, b) => a.weekNumber - b.weekNumber),
+    [weeklyReports],
+  );
 
   const weeklyStatusClass = (status: string) => {
     if (status === "Approved") return "bg-emerald-50 text-emerald-700 border-emerald-200";
@@ -97,7 +103,7 @@ export function StudentReportsTab({
         {view === "weekly" && (
           <div className="space-y-2">
             {errors?.reports && <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">Không thể tải báo cáo: {errors.reports} <button type="button" onClick={() => void onRefresh?.()} className="ml-2 font-bold underline">Thử lại</button></p>}
-            {weeklyReports.length === 0 ? (
+            {sortedWeeklyReports.length === 0 ? (
               <div className="py-12 text-center">
                 <FileText className="w-8 h-8 mx-auto text-slate-300 mb-2" />
                 <p className="text-xs text-slate-500">Chưa có báo cáo tuần nào</p>
@@ -115,8 +121,7 @@ export function StudentReportsTab({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {weeklyReports
-                      .sort((a, b) => a.weekNumber - b.weekNumber)
+                    {sortedWeeklyReports
                       .map((r) => (
                         <tr key={r.id} className="hover:bg-slate-50/80 transition-colors">
                           <td className="py-3 px-3 font-bold text-blue-700">

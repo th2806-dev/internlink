@@ -22,7 +22,8 @@ describe("summaryWordTemplate", () => {
     });
 
     expect(result.header.department).toBe("KHOA CĐ 2026");
-    expect(result.header.dateLabel).toBe("ngày 19 tháng 09 năm 2026");
+    // reportDate mặc định là hôm nay — chỉ assert đúng định dạng, không assert ngày cứng
+    expect(result.header.dateLabel).toMatch(/^ngày \d{1,2} tháng \d{2} năm \d{4}$/);
     expect(result.stats.companyCount).toBe(14);
     expect(result.stats.completedStudents).toBe(165);
     expect(result.gradeSummary[0].label).toBe("Xuất sắc");

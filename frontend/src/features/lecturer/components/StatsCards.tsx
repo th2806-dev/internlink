@@ -1,4 +1,4 @@
-import { Users, Briefcase, FileText, TrendingUp } from "lucide-react";
+import { Users, Building2, FileText, TrendingUp } from "lucide-react";
 import { KpiCard, KpiGrid } from "../../../components/common/KpiCard";
 
 export const StatsCards = ({
@@ -7,6 +7,8 @@ export const StatsCards = ({
   pendingResponseCount,
   overdueCount,
   avgProgress,
+  interningPercent,
+  interningPercentLabel,
   semesterName,
   onCardClick,
 }: {
@@ -16,9 +18,17 @@ export const StatsCards = ({
   overdueCount: number;
   completedCount?: number;
   avgProgress: number;
+  /** Percent of students who already have a company (0-100). */
+  interningPercent?: number;
+  /** Custom note for the "has company" card when there is nothing to intern yet. */
+  interningPercentLabel?: string;
   semesterName?: string;
   onCardClick?: (type: string) => void;
 }) => {
+  const pct =
+    interningPercent ??
+    (totalStudents > 0 ? Math.round((interningCount / totalStudents) * 100) : 0);
+
   return (
     <KpiGrid>
       <KpiCard
@@ -32,31 +42,35 @@ export const StatsCards = ({
       />
       <KpiCard
         tone="emerald"
-        title="Đã nhận Doanh nghiệp"
+        title="Đã có doanh nghiệp"
         value={interningCount}
         unit="sinh viên"
-        icon={Briefcase}
-        footer="Đang thực tập tại công ty"
+        icon={Building2}
+        footer={
+          totalStudents > 0
+            ? `${pct}% sinh viên đã có nơi thực tập`
+            : interningPercentLabel ?? "Chưa có sinh viên được phân công"
+        }
         onClick={() => onCardClick?.("interning")}
       />
       <KpiCard
         tone="amber"
-        title="Nội dung cần phản hồi"
+        title="Cần phản hồi"
         value={pendingResponseCount}
         unit="báo cáo"
         icon={FileText}
         footer={
           overdueCount > 0
-            ? `${overdueCount} cần duyệt gấp`
-            : "Đã phản hồi kịp thời"
+            ? `${overdueCount} quá hạn`
+            : "Không có nội dung đang chờ xử lý"
         }
         onClick={() => onCardClick?.("pending")}
       />
       <KpiCard
         tone="sky"
-        title="Tiến độ trung bình"
+        title="Tiến độ thực tập"
         value={`${avgProgress}%`}
-        unit="tiến độ"
+        unit="trung bình nhóm"
         icon={TrendingUp}
         footer={
           <div className="w-full bg-slate-100 h-1.5 rounded-full mt-1 overflow-hidden">

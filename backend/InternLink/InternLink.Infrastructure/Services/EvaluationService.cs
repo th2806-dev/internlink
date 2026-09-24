@@ -691,6 +691,12 @@ public class EvaluationService : IEvaluationService
             TeamworkScore = evaluation.TeamworkScore,
             InitiativeScore = evaluation.InitiativeScore,
             FinalGrade = evaluation.FinalGrade,
+            QualityLevel = evaluation.QualityLevel,
+            OralExamScore = evaluation.OralExamScore,
+            HasCreativeProduct = evaluation.HasCreativeProduct,
+            WeeklyQualityScores = string.IsNullOrWhiteSpace(evaluation.WeeklyQualityJson)
+                ? null
+                : JsonSerializer.Deserialize<Dictionary<int, decimal>>(evaluation.WeeklyQualityJson),
             Comments = evaluation.Comments,
             Strengths = evaluation.Strengths,
             AreasForImprovement = evaluation.AreasForImprovement,

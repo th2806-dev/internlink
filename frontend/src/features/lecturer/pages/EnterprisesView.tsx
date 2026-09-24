@@ -23,7 +23,6 @@ export const EnterprisesView = ({
   const [fieldFilter, setFieldFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [selectedCompany, setSelectedCompany] = useState<Enterprise | null>(null);
 
   const fields = useMemo(
     () => [...new Set(enterprises.map((company) => company.field).filter((field) => field && field !== "—"))].sort(),
@@ -142,7 +141,6 @@ export const EnterprisesView = ({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setSelectedCompany(company);
                         navigate(`/lecturer/enterprises/${company.id}`);
                       }}
                       className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-blue-600 rounded-lg transition-colors cursor-pointer"
@@ -176,25 +174,6 @@ export const EnterprisesView = ({
           </div>
         </div>
       </Panel>
-
-      {selectedCompany && (
-        <Panel className="space-y-4 border-blue-200">
-          <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-3">
-            <div className="flex items-center gap-3">
-              <CompanyAvatar name={selectedCompany.name} size={48} />
-              <div><h2 className="text-base font-bold text-slate-900">{selectedCompany.name}</h2><p className="text-xs text-slate-500">Thông tin theo học kỳ đang chọn</p></div>
-            </div>
-            <button type="button" onClick={() => setSelectedCompany(null)} className="text-xs font-bold text-blue-600 hover:text-blue-800">Đóng</button>
-          </div>
-          <div className="grid gap-3 md:grid-cols-2 text-xs">
-            <div className="border border-slate-200 rounded-md p-3"><span className="text-slate-500">Lĩnh vực</span><strong className="mt-1 block text-slate-900">{selectedCompany.field}</strong></div>
-            <div className="border border-slate-200 rounded-md p-3"><span className="text-slate-500">Sinh viên được phân công</span><strong className="mt-1 block text-slate-900">{selectedCompany.studentCount}</strong></div>
-            <div className="border border-slate-200 rounded-md p-3"><span className="text-slate-500">Người liên hệ</span><strong className="mt-1 block text-slate-900">{selectedCompany.contactPerson}</strong></div>
-            <div className="border border-slate-200 rounded-md p-3"><span className="text-slate-500">Liên hệ</span><strong className="mt-1 block text-slate-900">{selectedCompany.contactPhone} · {selectedCompany.contactEmail}</strong></div>
-            <div className="border border-slate-200 rounded-md p-3 md:col-span-2"><span className="text-slate-500">Địa chỉ</span><strong className="mt-1 block text-slate-900">{selectedCompany.location}</strong></div>
-          </div>
-        </Panel>
-      )}
     </div>
   );
 };

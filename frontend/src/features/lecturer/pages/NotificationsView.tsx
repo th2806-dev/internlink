@@ -58,18 +58,32 @@ export const NotificationsView = () => {
       .filter((item) => matchesFilter(item, filter))
       .filter((item) => !unreadOnly || item.isUnread)
       .filter((item) => !query || [item.title, item.desc, item.sender, item.content].some((value) => value?.toLowerCase().includes(query)))
-      .sort((a, b) => b.id.localeCompare(a.id));
+      .sort((a, b) => {
+        // Mới nhất trước theo createdAt thật (GUID id không có thứ tự thời gian)
+        const ta = Date.parse(a.createdAt ?? "");
+        const tb = Date.parse(b.createdAt ?? "");
+        if (!Number.isNaN(ta) && !Number.isNaN(tb) && ta !== tb) return tb - ta;
+        return b.id.localeCompare(a.id);
+      });
   }, [filter, notifications, search, unreadOnly]);
 
   const markRead = async (item: NotificationItem) => {
     if (!item.isUnread) return;
-    await notificationService.markRead(item.id);
+    try {
+      await notificationService.markRead(item.id);
+    } catch {
+      // API lỗi vẫn tối ưu UI trước, dữ liệu sẽ đồng bộ khi refresh
+    }
     setNotifications((current) => current.map((entry) => entry.id === item.id ? { ...entry, isUnread: false } : entry));
     setSelected((current) => current?.id === item.id ? { ...current, isUnread: false } : current);
   };
 
   const markAllRead = async () => {
-    await notificationService.markAllRead();
+    try {
+      await notificationService.markAllRead();
+    } catch {
+      // API lỗi vẫn tối ưu UI trước, dữ liệu sẽ đồng bộ khi refresh
+    }
     setNotifications((current) => current.map((item) => ({ ...item, isUnread: false })));
     setSelected((current) => current ? { ...current, isUnread: false } : current);
   };

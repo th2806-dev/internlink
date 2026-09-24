@@ -1,8 +1,13 @@
+using System.Globalization;
+using System.Text;
+using System.Text.RegularExpressions;
 using InternLink.Application.Interfaces;
 using InternLink.API.Extensions;
+using InternLink.Infrastructure.Persistence;
 using InternLink.Shared.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace InternLink.API.Controllers;
 
@@ -19,19 +24,22 @@ public class ExportController : ControllerBase
     private readonly ILogger<ExportController> _logger;
     private readonly ILecturerAccessService _lecturerAccessService;
     private readonly IDepartmentScopeService _deptScope;
+    private readonly AppDbContext _db;
 
     public ExportController(
         IExcelExportService excelExportService,
         IInternshipReportService reportService,
         ILogger<ExportController> logger,
         ILecturerAccessService lecturerAccessService,
-        IDepartmentScopeService deptScope)
+        IDepartmentScopeService deptScope,
+        AppDbContext db)
     {
         _excelExportService = excelExportService;
         _reportService = reportService;
         _logger = logger;
         _lecturerAccessService = lecturerAccessService;
         _deptScope = deptScope;
+        _db = db;
     }
 
     /// <summary>
@@ -48,6 +56,14 @@ public class ExportController : ControllerBase
     {
         try
         {
+            if (User.IsInRole("Lecturer"))
+            {
+                var userId = User.GetUserId();
+                if (userId == null) return Unauthorized();
+                lecturerId = await _lecturerAccessService.ResolveLecturerIdAsync(userId.Value);
+                if (lecturerId == null) return Forbid();
+            }
+
             var deptId = _deptScope.ResolveEffectiveDepartmentId(User, departmentId);
             _logger.LogInformation("Admin/Lecturer initiated Excel export for semester: {SemesterId}, Lecturer: {LecturerId}, Department: {Department}, DepartmentId: {DepartmentId}", semesterId, lecturerId, department, deptId);
             var fileBytes = await _excelExportService.GenerateInternshipExportExcelAsync(semesterId, lecturerId, department, deptId, cancellationToken);
@@ -206,7 +222,11 @@ public class ExportController : ControllerBase
         try
         {
             var fileBytes = await _excelExportService.GenerateGuidanceScheduleExcelAsync(semesterId, targetLecturerId, cancellationToken);
-            var fileName = $"LichHuongDanTTTN_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+
+            // Tên file kèm tên giảng viên (bỏ dấu tiếng Việt, thay khoảng trắng bằng gạch dưới)
+            var lecturerForFile = await _dbLecturerNameAsync(targetLecturerId, cancellationToken);
+            var safeLecturerName = SanitizeFileName(lecturerForFile);
+            var fileName = $"LichHuongDanTTTN_{safeLecturerName}_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
 
             return File(
                 fileBytes,
@@ -226,5 +246,45 @@ public class ExportController : ControllerBase
                 Detail = ex.Message
             }));
         }
+    }
+
+    /// <summary>Lấy họ tên giảng viên để đặt tên file xuất.</summary>
+    private async Task<string> _dbLecturerNameAsync(Guid lecturerId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var name = await _db.Lecturers
+                .AsNoTracking()
+                .Where(l => l.Id == lecturerId)
+                .Select(l => l.FullName)
+                .FirstOrDefaultAsync(cancellationToken);
+            return name ?? string.Empty;
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    /// <summary>Bỏ dấu tiếng Việt, thay khoảng trắng bằng gạch dưới và loại ký tự cấm trong tên file.</summary>
+    private static string SanitizeFileName(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return string.Empty;
+
+        var formD = input.Normalize(NormalizationForm.FormD);
+        var sb = new StringBuilder();
+        foreach (var ch in formD)
+        {
+            var cat = CharUnicodeInfo.GetUnicodeCategory(ch);
+            if (cat == UnicodeCategory.NonSpacingMark) continue; // bỏ dấu thanh, dấu mũ
+            sb.Append(ch);
+        }
+        var ascii = sb.ToString().Normalize(NormalizationForm.FormC);
+
+        foreach (var c in Path.GetInvalidFileNameChars())
+            ascii = ascii.Replace(c, '_');
+
+        ascii = Regex.Replace(ascii, @"\s+", "_");
+        return Regex.Replace(ascii, @"[^A-Za-z0-9_\-\.]", string.Empty).Trim('_');
     }
 }

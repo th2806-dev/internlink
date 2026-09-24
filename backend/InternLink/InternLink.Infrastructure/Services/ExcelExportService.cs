@@ -44,6 +44,8 @@ public class ExcelExportService : IExcelExportService
                 .ThenInclude(i => i.Lecturer)
             .Include(s => s.Internships.Where(i => !i.IsDeleted && (!semesterId.HasValue || i.SemesterId == semesterId.Value) && (!lecturerId.HasValue || i.LecturerId == lecturerId.Value)))
                 .ThenInclude(i => i.WeeklyReports)
+            .Include(s => s.Internships.Where(i => !i.IsDeleted && (!semesterId.HasValue || i.SemesterId == semesterId.Value) && (!lecturerId.HasValue || i.LecturerId == lecturerId.Value)))
+                .ThenInclude(i => i.Submissions)
             .Include(s => s.AttendanceRecords.Where(a => !a.IsDeleted))
                 .ThenInclude(a => a.AttendanceSession)
             .Where(s => !lecturerId.HasValue || s.Internships.Any(i => !i.IsDeleted && i.LecturerId == lecturerId.Value && (!semesterId.HasValue || i.SemesterId == semesterId.Value)));
@@ -84,7 +86,7 @@ public class ExcelExportService : IExcelExportService
         // Report schedule and attendance use the week count configured on the semester.
         var reportScheduleByWeek = await _db.SemesterReportSchedules
             .AsNoTracking()
-            .Where(s => !s.IsDeleted && (!semesterId.HasValue || s.SemesterId == semesterId.Value) && s.WeekNumber >= 1 && s.WeekNumber <= totalWeeks)
+            .Where(s => !s.IsDeleted && s.IsSubmissionOpen && (!semesterId.HasValue || s.SemesterId == semesterId.Value) && s.WeekNumber >= 1 && s.WeekNumber <= totalWeeks)
             .OrderBy(s => s.WeekNumber)
             .ToDictionaryAsync(s => s.WeekNumber, cancellationToken);
         var studentExportList = new List<InternshipStudentExportDto>();
@@ -109,15 +111,21 @@ public class ExcelExportService : IExcelExportService
             {
                 dto.PhuTrachCongTy = internship.Company?.CompanyName ?? "Chưa có";
                 dto.GvHuongDan = internship.Lecturer?.FullName ?? "Chưa phân công";
-                dto.GhiChu = internship.Notes ?? string.Empty;
+                dto.GhiChu = string.Empty;
 
                 // Count missing/late reports and attendance violations by configured week.
                 var reports23 = internship.WeeklyReports
                     .Where(r => !r.IsDeleted && r.Status != WeeklyReportStatus.Draft)
                     .ToList();
+                var submittedWeekCount = reports23
+                    .Where(r => r.SubmittedAt.HasValue)
+                    .Select(r => r.WeekNumber)
+                    .Distinct()
+                    .Count();
                 var reportMissingCount = 0;
                 var lateCount = 0;
-                var eligibilityViolationWeeks = new HashSet<int>();
+                // Hai hệ thống độc lập: thiếu bài (nộp bài) vs vắng (điểm danh buổi hẹn)
+                var absentCount23 = 0;
                 foreach (var (week, schedule) in reportScheduleByWeek)
                 {
                     var hasReport = reports23.Any(r => r.WeekNumber == week && r.SubmittedAt.HasValue);
@@ -128,78 +136,96 @@ public class ExcelExportService : IExcelExportService
                         && !a.AttendanceSession.IsLecturerOnly
                         && a.AttendanceSession.WeekNumber == week);
 
+                    if (absent)
+                        absentCount23++;
+
                     if (!hasReport)
                     {
-                        // Chưa nộp: tính thiếu nếu đã quá deadline hoặc có buổi vắng tuần đó
-                        if (schedule.DueDate < now || absent)
-                        {
-                            if (schedule.DueDate < now)
-                                reportMissingCount++;
-                            eligibilityViolationWeeks.Add(week);
-                        }
+                        // Chưa nộp quá hạn → tính thiếu bài (chỉ ảnh hưởng Điểm QT)
+                        if (schedule.DueDate < now)
+                            reportMissingCount++;
                     }
                     else
                     {
                         var submittedAt = reports23.First(r => r.WeekNumber == week && r.SubmittedAt.HasValue).SubmittedAt!.Value;
                         if (submittedAt > schedule.DueDate)
                             lateCount++;
-                        if (absent)
-                            eligibilityViolationWeeks.Add(week);
                     }
                 }
 
-                var finalSubmitted = reports23.Any(r => r.WeekNumber == finalReportWeek && r.SubmittedAt.HasValue);
-                var ineligible = !finalSubmitted || eligibilityViolationWeeks.Count >= InternshipGradeCalculator.MaxMissingWeeks;
+                var finalSubmitted = internship.Submissions.Any(s => !s.IsDeleted
+                    && s.Type == SubmissionType.FinalReport
+                    && s.Status != SubmissionStatus.Rejected);
+                var ineligible = !finalSubmitted || absentCount23 >= InternshipGradeCalculator.MaxAbsentWeeks;
 
                 // Map scores from Evaluation if available
                 if (evaluations.TryGetValue(internship.Id, out var eval))
                 {
-                    dto.DiemThamGia = eval.InitiativeScore;
-                    // Điểm QT = MIN(10, Nộp đủ(2) + Đúng hạn(2) + Chất lượng(5) + Sáng tạo(+1))
-                    dto.DiemQT = InternshipGradeCalculator.ComputeProcessScore(
-                        reportMissingCount, lateCount, eval.QualityLevel, eval.HasCreativeProduct);
+                    // Điểm tham gia là điểm cộng riêng cho sản phẩm sáng tạo.
+                    dto.DiemThamGia = eval.HasCreativeProduct ? 1m : 0m;
+                    if (eval.HasCreativeProduct)
+                        dto.GhiChu = "Có sản phẩm sáng tạo";
+
+                    // Điểm QT = MIN(10, Điểm QT cơ bản + Điểm tham gia).
+                    var weeklyQualityLevels = new List<decimal?>();
+                    if (!string.IsNullOrWhiteSpace(eval.WeeklyQualityJson))
+                    {
+                        try
+                        {
+                            var parsedQuality = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, decimal>>(eval.WeeklyQualityJson);
+                            if (parsedQuality != null) weeklyQualityLevels.AddRange(parsedQuality.Values.Select(value => (decimal?)value));
+                        }
+                        catch (System.Text.Json.JsonException) { }
+                    }
+                    if (weeklyQualityLevels.Count == 0) weeklyQualityLevels.Add(eval.QualityLevel);
+                    var processScore = InternshipGradeCalculator.ComputeProcessScore(
+                        reportMissingCount, lateCount, submittedWeekCount, weeklyQualityLevels, false);
+                    dto.DiemQT = InternshipGradeCalculator.Round1(Math.Min(10m, processScore + dto.DiemThamGia.Value));
                     // Cột J: Điểm thi vấn đáp nhập tay
                     dto.Thi = eval.OralExamScore ?? eval.FinalGrade;
                 }
                 else
                 {
-                    dto.DiemQT = InternshipGradeCalculator.ComputeProcessScore(reportMissingCount, lateCount, null, false);
+                    dto.DiemThamGia = 0m;
+                    dto.DiemQT = InternshipGradeCalculator.ComputeProcessScore(
+                        reportMissingCount,
+                        lateCount,
+                        0,
+                        null,
+                        false);
                 }
 
                 dto.IsIneligible = ineligible;
 
-                // Map weekly reports
+                // Các cột TUẦN dùng để đánh vắng: lấy từ điểm danh, không lấy trạng thái bài nộp.
+                // Trạng thái bài nộp vẫn được dùng riêng cho HD CHUNG, Điểm QT và NỘP BC.
                 var reports = internship.WeeklyReports.OrderBy(r => r.WeekNumber).ToList();
-                dto.HdChung = reports.Count(r => r.WeekNumber >= 1 && r.WeekNumber <= totalWeeks && r.SubmittedAt.HasValue) >= totalWeeks ? "Đủ" : "Thiếu";
+                dto.HdChung = reports.Count(r => reportScheduleByWeek.ContainsKey(r.WeekNumber) && r.SubmittedAt.HasValue) >= reportScheduleByWeek.Count ? "Đủ" : "Thiếu";
                 dto.WeeklyReportCells = Enumerable.Range(1, totalWeeks)
-                    .Select(week => FormatWeeklyReportCell(reports.FirstOrDefault(r => r.WeekNumber == week)))
+                    .Select(week => FormatAttendanceCell(student.AttendanceRecords, internship.SemesterId ?? semesterId, week))
                     .ToList();
-                dto.Tuan1 = FormatWeeklyReportCell(reports.FirstOrDefault(r => r.WeekNumber == 1));
-                dto.Tuan2 = FormatWeeklyReportCell(reports.FirstOrDefault(r => r.WeekNumber == 2));
-                dto.Tuan3 = FormatWeeklyReportCell(reports.FirstOrDefault(r => r.WeekNumber == 3));
-                dto.Tuan4 = FormatWeeklyReportCell(reports.FirstOrDefault(r => r.WeekNumber == 4));
-                dto.Tuan5 = FormatWeeklyReportCell(reports.FirstOrDefault(r => r.WeekNumber == 5));
-                dto.Tuan6 = FormatWeeklyReportCell(reports.FirstOrDefault(r => r.WeekNumber == 6));
+                dto.Tuan1 = FormatAttendanceCell(student.AttendanceRecords, internship.SemesterId ?? semesterId, 1);
+                dto.Tuan2 = FormatAttendanceCell(student.AttendanceRecords, internship.SemesterId ?? semesterId, 2);
+                dto.Tuan3 = FormatAttendanceCell(student.AttendanceRecords, internship.SemesterId ?? semesterId, 3);
+                dto.Tuan4 = FormatAttendanceCell(student.AttendanceRecords, internship.SemesterId ?? semesterId, 4);
+                dto.Tuan5 = FormatAttendanceCell(student.AttendanceRecords, internship.SemesterId ?? semesterId, 5);
+                dto.Tuan6 = FormatAttendanceCell(student.AttendanceRecords, internship.SemesterId ?? semesterId, 6);
 
                 // Report submission status follows the dynamically derived final report week.
-                bool isSubmitted = finalSubmitted ||
-                                   internship.Status == InternshipStatus.Completed ||
-                                   internship.Status == InternshipStatus.Graded ||
-                                   reports.Count(r => r.WeekNumber >= 1 && r.WeekNumber <= totalWeeks && r.SubmittedAt.HasValue) >= totalWeeks;
-                dto.NopBc = isSubmitted ? "Đã nộp" : "X";
+                dto.NopBc = finalSubmitted ? "C" : "X";
             }
             else
             {
                 dto.PhuTrachCongTy = string.Empty;
                 dto.GvHuongDan = string.Empty;
-                dto.GhiChu = "Không thực tập";
+                dto.GhiChu = string.Empty;
                 dto.HdChung = "Thiếu";
-                dto.Tuan1 = "V";
-                dto.Tuan2 = "V";
-                dto.Tuan3 = "V";
-                dto.Tuan4 = "V";
-                dto.Tuan5 = "V";
-                dto.Tuan6 = "V";
+                dto.Tuan1 = "–";
+                dto.Tuan2 = "–";
+                dto.Tuan3 = "–";
+                dto.Tuan4 = "–";
+                dto.Tuan5 = "–";
+                dto.Tuan6 = "–";
                 dto.NopBc = "X";
             }
 
@@ -367,6 +393,10 @@ public class ExcelExportService : IExcelExportService
             .ThenBy(s => s.MeetingDate)
             .ToListAsync(cancellationToken);
 
+        // Tuần học kỳ tuyệt đối: tuần HK = InternshipStartWeek + (tuần tương đối - 1)
+        // (thực tập tuần 1..6 = tuần 14..19 của học kỳ khi InternshipStartWeek = 14).
+        var semesterWeekOffset = semester.InternshipStartWeek - 1;
+
         // The workbook is a layout template only; all semester and student data below
         // comes from the selected semester and current lecturer assignment.
         var templatePath = TemplateHelper.FindTemplatePath("Lich huong dan TTTN.xlsx");
@@ -447,7 +477,7 @@ public class ExcelExportService : IExcelExportService
                     var session = attendanceSessions[i];
                     ws1.Cell(r, 1).Value = i + 1;                                    // {{item.stt}}
                     ws1.Cell(r, 2).Value = session.MeetingDate.ToString("dd/MM/yyyy"); // {{item.ngay}}
-                    ws1.Cell(r, 3).Value = session.WeekNumber;                        // {{item.tuan}}
+                    ws1.Cell(r, 3).Value = session.WeekNumber + semesterWeekOffset;    // {{item.tuan}} — tuần học kỳ
                     // 1 tiết = 45 phút
                     var soTiet = session.DurationMinutes.HasValue
                         ? Math.Round((decimal)session.DurationMinutes.Value / 45m, 2, MidpointRounding.AwayFromZero)
@@ -595,6 +625,13 @@ public class ExcelExportService : IExcelExportService
         var ws = FindWorksheet(workbook, "DANH SÁCH (2)", "DANH SÁCH THỰC TẬP", "DANH SÁCH")
             ?? workbook.Worksheets.FirstOrDefault();
         if (ws == null) return;
+
+        var courseKey = students
+            .Select(s => s.Lop?.Trim())
+            .Where(className => !string.IsNullOrWhiteSpace(className))
+            .Select(className => className!.Length >= 3 ? className[..3] : className)
+            .FirstOrDefault() ?? "—";
+        ws.Cell(1, 1).Value = $"DANH SÁCH SINH VIÊN THỰC TẬP TẠI DOANH NGHIỆP KHÓA {courseKey}";
 
         const int dataStartRow = 3;
         const int defaultTemplateCapacity = 50; // Rows 3 to 52 in template
@@ -768,7 +805,7 @@ public class ExcelExportService : IExcelExportService
         var firstWeekAddress = ws.Cell(row, firstWeekColumn).Address.ColumnLetter;
         var lastWeekAddress = ws.Cell(row, lastWeekColumn).Address.ColumnLetter;
         var finalReportAddress = ws.Cell(row, finalReportColumn).Address.ColumnLetter;
-        ws.Cell(row, eligibilityColumn).FormulaA1 = $"IF(OR(NOT(OR({finalReportAddress}{row}=\"Đã nộp\",{finalReportAddress}{row}=\"✓\")),(COUNTIF({firstWeekAddress}{row}:{lastWeekAddress}{row},\"V\")>=2)),\"{InternshipGradeCalculator.IneligibleCell}\",\"\")";
+        ws.Cell(row, eligibilityColumn).FormulaA1 = $"IF(OR(NOT(OR({finalReportAddress}{row}=\"C\",{finalReportAddress}{row}=\"✓\")),(COUNTIF({firstWeekAddress}{row}:{lastWeekAddress}{row},\"V\")>=2)),\"{InternshipGradeCalculator.IneligibleCell}\",\"\")";
 
         // Formatting styles
         for (int c = 1; c <= eligibilityColumn; c++)
@@ -1001,16 +1038,21 @@ public class ExcelExportService : IExcelExportService
         return (ho, ten);
     }
 
-    private static string FormatWeeklyReportCell(WeeklyReport? report)
+    private static string FormatAttendanceCell(
+        IEnumerable<AttendanceRecord> records,
+        Guid? semesterId,
+        int weekNumber)
     {
-        if (report == null) return "V"; // Vắng / Chưa nộp
-        return report.Status switch
-        {
-            WeeklyReportStatus.Approved => "✓",
-            WeeklyReportStatus.Reviewed => "✓",
-            WeeklyReportStatus.Submitted => "Đã nộp",
-            WeeklyReportStatus.Draft => "Nháp",
-            _ => "V"
-        };
+        var weekRecords = records.Where(record =>
+            !record.IsDeleted
+            && record.AttendanceSession != null
+            && record.AttendanceSession.SemesterId == semesterId
+            && !record.AttendanceSession.IsDeleted
+            && !record.AttendanceSession.IsLecturerOnly
+            && record.AttendanceSession.WeekNumber == weekNumber);
+
+        if (weekRecords.Any(record => record.Status == AttendanceStatus.Absent)) return "V";
+        if (weekRecords.Any(record => record.Status == AttendanceStatus.Present)) return "✓";
+        return "–";
     }
 }

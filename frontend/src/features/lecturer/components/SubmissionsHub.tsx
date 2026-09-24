@@ -24,6 +24,7 @@ import { PageHeader } from "../../../components/common/PageHeader";
 import { Toolbar } from "../../../components/common/Toolbar";
 import { Panel } from "../../../components/common/Panel";
 import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
+import { useSemester } from "../../../contexts/SemesterContext";
 import { submissionApiService } from "../../../services/submissionApi.service";
 import { weeklyReportService } from "../../../services/weeklyReport.service";
 
@@ -32,6 +33,7 @@ export const SubmissionsHub = ({
   onUpdateSubmissionStatus,
   onToast,
 }) => {
+  const { selectedSemester } = useSemester();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeSubTab, setActiveSubTab] = useState("all");
   const [selectedReportType, setSelectedReportType] =
@@ -79,12 +81,13 @@ export const SubmissionsHub = ({
       (s) =>
         s.status === "Ch\u1EDD duy\u1EC7t" ||
         s.status === "\u0110\xE3 n\u1ED9p" ||
-        s.status === "C\u1EA7n nh\u1EADn x\xE9t",
-    ).length;
-    const revision = submissions.filter(
-      (s) =>
-        s.status === "Y\xEAu c\u1EA7u s\u1EEDa" ||
+        s.status === "C\u1EA7n nh\u1EADn x\xE9t" ||
         s.status === "Qu\xE1 h\u1EA1n",
+    ).length;
+    // "Quá hạn" chỉ thuộc nhóm CHỜ DUYỆT (cần GV xử lý), không đếm vào "cần sửa"
+    // để tổng KPI không trùng lặp và khớp bộ lọc tab bên dưới.
+    const revision = submissions.filter(
+      (s) => s.status === "Y\xEAu c\u1EA7u s\u1EEDa",
     ).length;
     const avgPlagiarism =
       total > 0
@@ -105,11 +108,8 @@ export const SubmissionsHub = ({
           sub.status === "Y\xEAu c\u1EA7u s\u1EEDa")
       )
         return false;
-      if (
-        activeSubTab === "revision" &&
-        sub.status !== "Y\xEAu c\u1EA7u s\u1EEDa" &&
-        sub.status !== "Qu\xE1 h\u1EA1n"
-      )
+      // Tab "Yêu cầu sửa" KHÔNG chứa "Quá hạn" (đã thuộc nhóm chờ duyệt) — khớp KPI stats.
+      if (activeSubTab === "revision" && sub.status !== "Y\xEAu c\u1EA7u s\u1EEDa")
         return false;
       if (
         selectedReportType !== "T\u1EA5t c\u1EA3" &&
@@ -175,6 +175,8 @@ export const SubmissionsHub = ({
     );
   };
   const [isBatchApproving, setIsBatchApproving] = useState(false);
+  // Đang gọi API duyệt/yêu cầu sửa 1 bài (modal chi tiết) — khóa nút & hiện trạng thái
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
   const handleBatchApprove = async () => {
     if (selectedSubIds.length === 0) return;
@@ -339,49 +341,67 @@ export const SubmissionsHub = ({
       setIsSendingFeedback(false);
     }
   };
-  const handleApproveSingle = () => {
-    if (!selectedSubmission) return;
-    onUpdateSubmissionStatus?.(
-      selectedSubmission.id,
-      "\u0110\xE3 duy\u1EC7t",
-      feedbackInput ||
-        "\u0110\xE3 ki\u1EC3m tra & ph\xEA duy\u1EC7t b\xE0i n\u1ED9p",
-    );
-    onToast?.(
-      `\u0110\xE3 ph\xEA duy\u1EC7t b\xE0i n\u1ED9p c\u1EE7a ${selectedSubmission.studentName}`,
-    );
-    setShowDetailModal(false);
+  const handleApproveSingle = async () => {
+    if (!selectedSubmission || isUpdatingStatus) return;
+    setIsUpdatingStatus(true);
+    try {
+      await onUpdateSubmissionStatus?.(
+        selectedSubmission.id,
+        "\u0110\xE3 duy\u1EC7t",
+        feedbackInput ||
+          "\u0110\xE3 ki\u1EC3m tra & ph\xEA duy\u1EC7t b\xE0i n\u1ED9p",
+      );
+      onToast?.(
+        `\u0110\xE3 ph\xEA duy\u1EC7t b\xE0i n\u1ED9p c\u1EE7a ${selectedSubmission.studentName}`,
+      );
+      setShowDetailModal(false);
+    } catch (err) {
+      // API lỗi → toast lỗi thật, không đóng modal để GV thử lại
+      onToast?.(err instanceof Error ? err.message : "Không thể phê duyệt bài nộp. Vui lòng thử lại.");
+    } finally {
+      setIsUpdatingStatus(false);
+    }
   };
-  const handleRequestRevisionSingle = () => {
-    if (!selectedSubmission) return;
-    onUpdateSubmissionStatus?.(
-      selectedSubmission.id,
-      "Y\xEAu c\u1EA7u s\u1EEDa",
-      feedbackInput ||
-        "C\u1EA7n b\u1ED5 sung chi ti\u1EBFt theo y\xEAu c\u1EA7u",
-    );
-    onToast?.(
-      `\u0110\xE3 g\u1EEDi y\xEAu c\u1EA7u ch\u1EC9nh s\u1EEDa cho ${selectedSubmission.studentName}`,
-    );
-    setShowDetailModal(false);
+  const handleRequestRevisionSingle = async () => {
+    if (!selectedSubmission || isUpdatingStatus) return;
+    setIsUpdatingStatus(true);
+    try {
+      await onUpdateSubmissionStatus?.(
+        selectedSubmission.id,
+        "Y\xEAu c\u1EA7u s\u1EEDa",
+        feedbackInput ||
+          "C\u1EA7n b\u1ED5 sung chi ti\u1EBFt theo y\xEAu c\u1EA7u",
+      );
+      onToast?.(
+        `\u0110\xE3 g\u1EEDi y\xEAu c\u1EA7u ch\u1EC9nh s\u1EEDa cho ${selectedSubmission.studentName}`,
+      );
+      setShowDetailModal(false);
+    } catch (err) {
+      onToast?.(err instanceof Error ? err.message : "Không thể gửi yêu cầu chỉnh sửa. Vui lòng thử lại.");
+    } finally {
+    setIsUpdatingStatus(false);
+    }
+  };
+  // Duyệt trực tiếp trên hàng bảng — await API, chỉ toast khi thành công
+  const handleApproveRow = async (sub: { id: string; studentName: string }) => {
+    if (isUpdatingStatus) return;
+    setIsUpdatingStatus(true);
+    try {
+      await onUpdateSubmissionStatus?.(sub.id, "\u0110\xE3 duy\u1EC7t", "\u0110\xE3 duy\u1EC7t tr\u1EF1c ti\u1EBFp");
+      onToast?.(`\u0110\xE3 duy\u1EC7t b\xE0i n\u1ED9p c\u1EE7a ${sub.studentName}`);
+    } catch (err) {
+      onToast?.(err instanceof Error ? err.message : "Không thể duyệt bài nộp. Vui lòng thử lại.");
+    } finally {
+      setIsUpdatingStatus(false);
+    }
   };
   return (
     <div className="space-y-5 max-w-[1500px] mx-auto animate-in fade-in duration-200">
       <PageHeader
         icon={FileCheck}
         title="Kho Báo Cáo & Bài Nộp Sinh Viên"
-        subtitle="Tổng hợp tất cả bài báo cáo tuần, giữa kỳ & cuối kỳ do sinh viên tải lên đợt Thực tập Học kỳ I - 2026"
+        subtitle={`Tổng hợp báo cáo tuần, giữa kỳ & cuối kỳ do sinh viên tải lên · ${selectedSemester?.name || "Kỳ thực tập đang chọn"}`}
         actions={[
-          {
-            label: "Xuất Excel",
-            icon: FileSpreadsheet,
-            variant: "ghost",
-            onClick: () =>
-              onToast?.(
-                "Đã xuất danh sách tổng hợp bài nộp dưới định dạng Excel (.XLSX)",
-              ),
-            ariaLabel: "Xuất danh sách bài nộp ra file Excel",
-          },
           {
             label: "Tải toàn bộ (.ZIP)",
             icon: Download,
@@ -692,16 +712,7 @@ export const SubmissionsHub = ({
 
                           {sub.status !== "\u0110\xE3 duy\u1EC7t" && (
                             <button
-                              onClick={() => {
-                                onUpdateSubmissionStatus?.(
-                                  sub.id,
-                                  "\u0110\xE3 duy\u1EC7t",
-                                  "\u0110\xE3 duy\u1EC7t tr\u1EF1c ti\u1EBFp",
-                                );
-                                onToast?.(
-                                  `\u0110\xE3 duy\u1EC7t b\xE0i n\u1ED9p c\u1EE7a ${sub.studentName}`,
-                                );
-                              }}
+                              onClick={() => void handleApproveRow(sub)}
                               className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-[11px] shadow-2xs transition-colors flex items-center gap-1"
                             >
                               <Check className="w-3 h-3" />
@@ -733,9 +744,9 @@ export const SubmissionsHub = ({
             className="px-2 py-1 border border-slate-200 rounded-md bg-white font-medium text-slate-700 outline-none"
             aria-label="Số bài nộp mỗi trang"
           >
+            <option value={5}>5 / trang</option>
             <option value={10}>10 / trang</option>
-            <option value={25}>25 / trang</option>
-            <option value={50}>50 / trang</option>
+            <option value={20}>20 / trang</option>
           </select>
         </div>
         <div className="flex items-center gap-1.5">
@@ -949,20 +960,22 @@ export const SubmissionsHub = ({
 
                 <button
                   type="button"
-                  onClick={handleRequestRevisionSingle}
-                  className="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-md text-xs border border-rose-200 flex items-center gap-1.5"
+                  onClick={() => void handleRequestRevisionSingle()}
+                  disabled={isUpdatingStatus}
+                  className="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-md text-xs border border-rose-200 flex items-center gap-1.5 disabled:opacity-60"
                 >
                   <AlertCircle className="w-3.5 h-3.5" />
-                  <span>Yêu cầu sửa lại</span>
+                  <span>{isUpdatingStatus ? "Đang xử lý..." : "Yêu cầu sửa lại"}</span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={handleApproveSingle}
-                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-md text-xs shadow-md transition-colors flex items-center gap-1.5"
+                  onClick={() => void handleApproveSingle()}
+                  disabled={isUpdatingStatus}
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-md text-xs shadow-md transition-colors flex items-center gap-1.5 disabled:opacity-60"
                 >
                   <Check className="w-4 h-4" />
-                  <span>Phê Duyệt Bài Nộp</span>
+                  <span>{isUpdatingStatus ? "Đang xử lý..." : "Phê Duyệt Bài Nộp"}</span>
                 </button>
               </div>
             </div>

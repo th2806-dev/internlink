@@ -6,6 +6,12 @@ public class AttendanceRecordDto
     public Guid AttendanceSessionId { get; set; }
     public Guid StudentId { get; set; }
     public string StudentName { get; set; } = string.Empty;
+
+    /// <summary>Ngày của buổi gặp (từ AttendanceSession) — dùng hiển thị thay vì MarkedAt.</summary>
+    public DateTime? MeetingDate { get; set; }
+
+    /// <summary>Tuần của buổi gặp (từ AttendanceSession).</summary>
+    public int? WeekNumber { get; set; }
     public string StudentCode { get; set; } = string.Empty;
     public string? Class { get; set; }
     public string? Major { get; set; }
@@ -25,6 +31,12 @@ public class AttendanceSessionDto
     public Guid LecturerId { get; set; }
     public string LecturerName { get; set; } = string.Empty;
     public int WeekNumber { get; set; }
+    /// <summary>
+    /// Tuần TUYỆT ĐỐI trong học kỳ của trường (= WeekNumber + InternshipStartWeek - 1).
+    /// Ví dụ: tuần thực tập 1 → tuần 14 học kỳ; tuần chuẩn bị 0 → tuần 13.
+    /// Dùng cho hiển thị và Excel "Lịch hướng dẫn" đúng theo lịch học kỳ.
+    /// </summary>
+    public int SemesterWeekNumber { get; set; }
     public string Title { get; set; } = string.Empty;
     public string? Description { get; set; }
     public DateTime MeetingDate { get; set; }
@@ -59,6 +71,8 @@ public class CreateAttendanceSessionDto
 
 public class UpdateAttendanceSessionDto
 {
+    /// <summary>Tuần tương đối (1..TotalWeeks, <=0 = tuần chuẩn bị). Bỏ trống = giữ nguyên/nghĩa từ ngày họp.</summary>
+    public int? WeekNumber { get; set; }
     public string? Title { get; set; }
     public string? Description { get; set; }
     public DateTime? MeetingDate { get; set; }

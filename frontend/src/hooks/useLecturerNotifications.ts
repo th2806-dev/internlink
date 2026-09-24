@@ -32,6 +32,7 @@ export const useLecturerNotifications = (): UseLecturerNotificationsState => {
           color: base.color as SystemNotificationItem['color'],
           isUnread: base.isUnread,
           time: base.time,
+          createdAt: base.createdAt,
           sender: base.sender,
           receiver: base.receiver,
           content: base.content,

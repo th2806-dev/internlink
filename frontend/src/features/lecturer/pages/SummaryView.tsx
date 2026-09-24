@@ -19,6 +19,7 @@ import { lecturerExportService } from "../../../services/lecturerExport.service"
 import { lecturerInternshipsService } from "../../../services/lecturerInternships.service";
 import { attendanceService } from "../../../services/attendance.service";
 import { adminStudentsService } from "../../../services/adminStudents.service";
+import { internshipGradingService } from "../../../services/internshipGrading.service";
 import { toApiSemesterId, useSemester } from "../../../contexts/SemesterContext";
 import type { AttendanceSessionDto, LecturerStudentListItemDto } from "../../../types/api";
 import { buildWordReportPreviewData, formatWordDate } from "./summaryWordTemplate";
@@ -87,15 +88,8 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
     }] as ExportOption[]),
   ];
 
-  useEffect(() => {
-    if (isAdminScope && activeModule === "schedule") {
-      setActiveModule("report");
-      return;
-    }
-    if (!isAdminScope && activeModule === "report") {
-      setActiveModule("grades");
-    }
-  }, [activeModule, isAdminScope]);
+  // Chỉ chặn module "Lịch hướng dẫn" ở cổng admin (option này không hiển thị cho GV).
+  // Module "Báo cáo tổng kết công tác" dùng được cho CẢ giảng viên lẫn admin — không đá tab.
 
   useEffect(() => {
     let cancelled = false;
@@ -107,9 +101,23 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
       setIsLoading(true);
       try {
         const rows = isAdminScope
-          ? (await adminStudentsService.getAll(0, 500, semesterId)).map((student) => ({
-              studentId: student.id,
-              internshipId: student.id,
+          ? await (async () => {
+              const adminRows: Awaited<ReturnType<typeof adminStudentsService.getAll>> = [];
+              let skip = 0;
+              const pageSize = 1000;
+              while (true) {
+                const page = await adminStudentsService.getAll(skip, pageSize, semesterId);
+                adminRows.push(...page);
+                if (page.length < pageSize) break;
+                skip += pageSize;
+              }
+              const grading = await internshipGradingService.getSummary(semesterId);
+                const gradesByStudent = new Map(grading.students.map((grade) => [grade.studentId, grade]));
+                return adminRows.map((student) => {
+                  const grade = gradesByStudent.get(student.id);
+                  return {
+                    studentId: student.id,
+                internshipId: grade?.studentId ?? student.id,
               studentCode: student.studentCode,
               fullName: student.fullName,
               email: student.email ?? null,
@@ -119,19 +127,21 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
               companyId: null,
               companyName: null,
               position: null,
-              internshipStatus: "Chưa phân công",
+              internshipStatus: grade ? "Đang thực tập" : "Chưa phân công",
               startDate: null,
               endDate: null,
-              weeklyReportCount: 0,
-              pendingReportCount: 0,
-              submissionCount: 0,
+              weeklyReportCount: grade?.weeks.filter((week) => week.submittedAt).length ?? 0,
+              pendingReportCount: grade?.missingCount ?? 0,
+              submissionCount: grade?.weeks.filter((week) => week.submittedAt).length ?? 0,
               notes: "",
-              finalGrade: null,
-              hasEvaluation: false,
-              isEvaluationFinalized: false,
-              progressPercent: 0,
+              finalGrade: grade?.averageScore ?? null,
+              hasEvaluation: grade != null,
+              isEvaluationFinalized: grade?.averageScore != null,
+              progressPercent: grade ? Math.round((grade.weeks.filter((week) => week.submittedAt).length / Math.max(grade.weeks.length, 1)) * 100) : 0,
               progressBreakdown: undefined,
-            })) as LecturerStudentListItemDto[]
+                  };
+              }) as LecturerStudentListItemDto[];
+            })()
           : await lecturerInternshipsService.getStudents(semesterId);
         if (!cancelled) {
           setStudents(rows);
@@ -198,21 +208,30 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
   const notesCount = students.filter((student) => student.notes?.trim()).length;
 
   const reportPreview = useMemo(() => {
+    // Phân loại theo NGƯỠNG CHUẨN của gradingRules (classifyScore):
+    // >= 8.5 Xuất sắc | >= 8 Giỏi | >= 6.5 Khá | >= 5 Trung bình | < 5 Không đạt.
+    // Chỉ đếm SV đã có điểm (finalGrade != null); SV chưa chốt điểm KHÔNG rơi vào "Không thực tập".
+    const graded = students.filter((student) => student.finalGrade != null);
+    const gradedCount = graded.length;
+    const gradedTotal = students.length;
+    const shareOf = (predicate: (grade: number) => boolean) =>
+      graded.filter((student) => predicate(student.finalGrade!)).length;
+    const percentOf = (count: number) =>
+      gradedTotal > 0 ? Number(((count / gradedTotal) * 100).toFixed(1)) : 0;
     const gradeSummary = [
-      { label: "Xuất sắc", quantity: students.filter((student) => (student.finalGrade ?? -1) >= 9).length, rate: students.length ? Number(((students.filter((student) => (student.finalGrade ?? -1) >= 9).length / students.length) * 100).toFixed(1)) : 0 },
-      { label: "Giỏi", quantity: students.filter((student) => (student.finalGrade ?? -1) >= 8 && (student.finalGrade ?? -1) < 9).length, rate: students.length ? Number(((students.filter((student) => (student.finalGrade ?? -1) >= 8 && (student.finalGrade ?? -1) < 9).length / students.length) * 100).toFixed(1)) : 0 },
-      { label: "Khá", quantity: students.filter((student) => (student.finalGrade ?? -1) >= 7 && (student.finalGrade ?? -1) < 8).length, rate: students.length ? Number(((students.filter((student) => (student.finalGrade ?? -1) >= 7 && (student.finalGrade ?? -1) < 8).length / students.length) * 100).toFixed(1)) : 0 },
-      { label: "Trung bình khá", quantity: students.filter((student) => (student.finalGrade ?? -1) >= 6.5 && (student.finalGrade ?? -1) < 7).length, rate: students.length ? Number(((students.filter((student) => (student.finalGrade ?? -1) >= 6.5 && (student.finalGrade ?? -1) < 7).length / students.length) * 100).toFixed(1)) : 0 },
-      { label: "Trung bình", quantity: students.filter((student) => (student.finalGrade ?? -1) >= 5 && (student.finalGrade ?? -1) < 6.5).length, rate: students.length ? Number(((students.filter((student) => (student.finalGrade ?? -1) >= 5 && (student.finalGrade ?? -1) < 6.5).length / students.length) * 100).toFixed(1)) : 0 },
-      { label: "Yếu", quantity: students.filter((student) => (student.finalGrade ?? -1) < 5 && student.finalGrade != null).length, rate: students.length ? Number(((students.filter((student) => (student.finalGrade ?? -1) < 5 && student.finalGrade != null).length / students.length) * 100).toFixed(1)) : 0 },
-      { label: "Không thực tập", quantity: students.filter((student) => student.finalGrade == null && !student.isEvaluationFinalized).length, rate: students.length ? Number(((students.filter((student) => student.finalGrade == null && !student.isEvaluationFinalized).length / students.length) * 100).toFixed(1)) : 0 },
+      { label: "Xuất sắc", quantity: shareOf((grade) => grade >= 8.5), rate: percentOf(shareOf((grade) => grade >= 8.5)) },
+      { label: "Giỏi", quantity: shareOf((grade) => grade >= 8 && grade < 8.5), rate: percentOf(shareOf((grade) => grade >= 8 && grade < 8.5)) },
+      { label: "Khá", quantity: shareOf((grade) => grade >= 6.5 && grade < 8), rate: percentOf(shareOf((grade) => grade >= 6.5 && grade < 8)) },
+      { label: "Trung bình", quantity: shareOf((grade) => grade >= 5 && grade < 6.5), rate: percentOf(shareOf((grade) => grade >= 5 && grade < 6.5)) },
+      { label: "Không đạt", quantity: shareOf((grade) => grade < 5), rate: percentOf(shareOf((grade) => grade < 5)) },
+      { label: "Không thực tập", quantity: gradedTotal - gradedCount, rate: percentOf(gradedTotal - gradedCount) },
     ];
 
     return buildWordReportPreviewData({
       semesterName: selectedSemester?.name ?? "KHOA",
       reportDate: new Date(),
-      startDate: selectedSemester?.startDate ?? "2026-09-01",
-      endDate: selectedSemester?.endDate ?? "2026-12-31",
+      startDate: selectedSemester?.startDate ?? new Date().toISOString().slice(0, 10),
+      endDate: selectedSemester?.endDate ?? new Date().toISOString().slice(0, 10),
       companyCount: new Set(students.map((student) => student.companyName).filter(Boolean)).size,
       registeredStudents: students.length,
       completedStudents: students.filter((student) => student.isEvaluationFinalized || student.finalGrade != null).length,
@@ -273,7 +292,10 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
     }
     setExporting(kind);
     try {
-      if (kind === "grades") await lecturerExportService.downloadInternshipExcel(semesterId);
+      if (kind === "grades") {
+        if (isAdminScope) await lecturerExportService.downloadDepartmentInternshipExcel(semesterId);
+        else await lecturerExportService.downloadInternshipExcel(semesterId);
+      }
       else if (kind === "report") await lecturerExportService.downloadSummaryReportWord(semesterId);
       else await lecturerExportService.downloadGuidanceSchedule(semesterId);
       onShowToast?.("Đã tải file thành công.");
@@ -368,7 +390,7 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
                   BÁO CÁO TỔNG KẾT CÔNG TÁC THỰC TẬP TỐT NGHIỆP
                 </div>
                 <div className="mt-3 text-center text-[11px]">
-                  Thời gian thực tập: từ {formatWordDate(selectedSemester?.startDate ?? "2026-09-01")} đến {formatWordDate(selectedSemester?.endDate ?? "2026-12-31")}
+                  Thời gian thực tập: từ {formatWordDate(selectedSemester?.startDate ?? new Date().toISOString().slice(0, 10))} đến {formatWordDate(selectedSemester?.endDate ?? new Date().toISOString().slice(0, 10))}
                 </div>
 
                 <div className="mt-6">
@@ -444,7 +466,11 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
 
                 <div className="mt-6">
                   <p className="font-bold uppercase text-[11px]">III. ĐIỂM NỔI BẬT VÀ HẠN CHẾ TRONG CÔNG TÁC THỰC TẬP</p>
-                  <div className="mt-2 whitespace-pre-wrap min-h-[80px]">{reportContent.difficulties || reportContent.recommendations || reportContent.conclusion || "Chưa có nội dung điểm nổi bật và hạn chế..."}</div>
+                  <div className="mt-2 whitespace-pre-wrap min-h-[80px]">
+                    {[reportContent.difficulties, reportContent.recommendations, reportContent.conclusion]
+                      .filter(Boolean)
+                      .join("\n\n") || "Chưa có nội dung điểm nổi bật và hạn chế..."}
+                  </div>
                 </div>
 
                 <div className="mt-10 text-[10px]">

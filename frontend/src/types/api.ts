@@ -646,6 +646,10 @@ export interface EvaluationDetailDto {
   teamworkScore: number;
   initiativeScore: number;
   finalGrade: number;
+  qualityLevel?: number | null;
+  oralExamScore?: number | null;
+  hasCreativeProduct?: boolean;
+  weeklyQualityScores?: Record<number, number> | null;
   comments?: string | null;
   strengths?: string | null;
   areasForImprovement?: string | null;
@@ -869,6 +873,10 @@ export interface AttendanceRecordDto {
   attendanceSessionId: string;
   studentId: string;
   studentName: string;
+  /** Ngày của buổi gặp (từ AttendanceSession) */
+  meetingDate?: string | null;
+  /** Tuần của buổi gặp */
+  weekNumber?: number | null;
   studentCode: string;
   class?: string | null;
   major?: string | null;
@@ -887,6 +895,11 @@ export interface AttendanceSessionDto {
   lecturerId: string;
   lecturerName: string;
   weekNumber: number;
+  /**
+   * Tuần TUYỆT ĐỐI trong học kỳ của trường (= weekNumber + internshipStartWeek - 1).
+   * Ví dụ tuần thực tập 1 → tuần 14 học kỳ; tuần chuẩn bị 0 → tuần 13.
+   */
+  semesterWeekNumber?: number;
   title: string;
   description?: string | null;
   meetingDate: string;
@@ -918,6 +931,8 @@ export interface CreateAttendanceSessionDto {
 }
 
 export interface UpdateAttendanceSessionDto {
+  /** Tuần tương đối (1..totalWeeks, <=0 = tuần chuẩn bị). Bỏ trống = suy ra từ ngày họp. */
+  weekNumber?: number;
   title?: string;
   description?: string | null;
   meetingDate?: string;

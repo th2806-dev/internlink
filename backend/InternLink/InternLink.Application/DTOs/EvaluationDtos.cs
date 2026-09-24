@@ -123,6 +123,10 @@ public class EvaluationDetailDto
     public int TeamworkScore { get; set; }
     public int InitiativeScore { get; set; }
     public decimal FinalGrade { get; set; }
+    public decimal? QualityLevel { get; set; }
+    public decimal? OralExamScore { get; set; }
+    public bool HasCreativeProduct { get; set; }
+    public Dictionary<int, decimal>? WeeklyQualityScores { get; set; }
     public string? Comments { get; set; }
     public string? Strengths { get; set; }
     public string? AreasForImprovement { get; set; }

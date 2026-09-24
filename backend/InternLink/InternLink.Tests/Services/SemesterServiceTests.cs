@@ -185,7 +185,7 @@ public class SemesterServiceTests
         var created = await service.CreateSemesterAsync(dto);
 
         var schedules = (await service.GetReportSchedulesAsync(created.Id)).ToList();
-        schedules.Should().HaveCount(8);
+        schedules.Should().HaveCount(9);
         schedules[0].WeekNumber.Should().Be(1);
         schedules[0].Title.Should().Be("Báo cáo tuần 1");
         schedules[0].AllowLateSubmission.Should().BeTrue();

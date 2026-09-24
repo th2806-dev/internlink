@@ -10,6 +10,7 @@ public class InternshipWeekStatusDto
     public DateTime? StartDate { get; set; }
     public DateTime? Deadline { get; set; }
     public DateTime? SubmittedAt { get; set; }
+    public bool IsSubmissionOpen { get; set; } = true;
     /// <summary>Trạng thái nộp báo cáo tuần: on_time | late | missing | pending</summary>
     public string Status { get; set; } = "pending";
     /// <summary>Điểm danh buổi hẹn tuần đó (nguồn sự thật: trang Điểm danh): present | absent | no_session</summary>
@@ -34,7 +35,11 @@ public class InternshipStudentGradeDto
     // Cột I: Điểm QT
     public decimal SubmissionScore { get; set; }
     public decimal PunctualityScore { get; set; }
+    /// <summary>Điểm chất lượng = trung bình các tuần đã chấm rubric (null = chưa chấm tuần nào).</summary>
     public decimal? QualityScore { get; set; }
+    /// <summary>Mức rubric GV chọn cho TỪNG tuần (key = tuần 1..N).</summary>
+    public Dictionary<int, decimal> WeeklyQualityScores { get; set; } = new();
+    public bool ProductSubmitted { get; set; }
     public bool HasCreativeProduct { get; set; }
     public decimal ProcessScore { get; set; }
 
@@ -68,8 +73,10 @@ public class InternshipSummaryResponseDto
 public class SaveInternshipGradeRequestDto
 {
     public Guid StudentId { get; set; }
-    /// <summary>1 trong 5 mức rubric: 1.0 / 2.0 / 3.5 / 4.0 / 5.0 (null = chưa chấm).</summary>
+    /// <summary>1 trong 5 mức rubric: 1.0 / 2.0 / 3.5 / 4.0 / 5.0 (null = chưa chấm) — dùng cho UI chọn nhanh 1 mức chung.</summary>
     public decimal? QualityScore { get; set; }
+    /// <summary>Mức rubric theo TỪNG tuần (key = tuần). Ưu tiên hơn QualityScore khi có.</summary>
+    public Dictionary<int, decimal>? WeeklyQualityScores { get; set; }
     public bool HasCreativeProduct { get; set; }
     /// <summary>Cột J — Điểm thi vấn đáp nhập tay (thang 10).</summary>
     public decimal? OralExamScore { get; set; }

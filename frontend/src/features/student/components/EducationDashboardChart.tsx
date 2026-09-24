@@ -129,7 +129,7 @@ export function buildProgressChartData(
 }
 
 function gradeLabel(grade: number): string {
-  if (grade >= 9) return "Xuất sắc";
+  if (grade >= 8.5) return "Xuất sắc";
   if (grade >= 8) return "Giỏi";
   if (grade >= 6.5) return "Khá";
   if (grade >= 5) return "Trung bình";

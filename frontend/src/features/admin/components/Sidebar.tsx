@@ -158,7 +158,6 @@ export const Sidebar = ({
             "admin-users",
             "admin-settings",
             "admin-account",
-            "admin-summary",
           ]);
           if (!superAdminItems.has(item.id)) return false;
         }

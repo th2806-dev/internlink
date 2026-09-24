@@ -94,6 +94,7 @@ public class SemesterService : ISemesterService
             Description = dto.Description,
             MaxStudentsPerLecturer = dto.MaxStudentsPerLecturer,
             TotalWeeks = Math.Clamp(dto.TotalWeeks, 1, 52),
+            InternshipStartWeek = Math.Clamp(dto.InternshipStartWeek, 1, 52),
             DepartmentId = dto.DepartmentId,
             CreatedAt = DateTime.UtcNow
         };
@@ -126,6 +127,7 @@ public class SemesterService : ISemesterService
         if (dto.Description != null) semester.Description = dto.Description;
         if (dto.MaxStudentsPerLecturer.HasValue) semester.MaxStudentsPerLecturer = dto.MaxStudentsPerLecturer.Value;
         if (dto.TotalWeeks.HasValue) semester.TotalWeeks = Math.Clamp(dto.TotalWeeks.Value, 1, 52);
+        if (dto.InternshipStartWeek.HasValue) semester.InternshipStartWeek = Math.Clamp(dto.InternshipStartWeek.Value, 1, 52);
 
         semester.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
@@ -311,7 +313,8 @@ public class SemesterService : ISemesterService
 
         var existingWeeks = existingSchedules.Select(s => s.WeekNumber).ToHashSet();
         var totalWeeks = semester.TotalWeeks > 0 ? semester.TotalWeeks : C23_DEFAULT_TOTAL_WEEKS;
-        var startDate = semester.StartDate ?? DateTime.UtcNow;
+        var startDate = (semester.StartDate ?? DateTime.UtcNow)
+            .AddDays((semester.InternshipStartWeek - 1) * 7);
 
         var newSchedules = new List<SemesterReportSchedule>();
         for (int week = 1; week <= totalWeeks; week++)
@@ -394,7 +397,8 @@ public class SemesterService : ISemesterService
             if (semester == null)
                 throw new KeyNotFoundException($"Semester with ID {semesterId} not found");
 
-            var startDate = semester.StartDate ?? DateTime.UtcNow;
+            var startDate = (semester.StartDate ?? DateTime.UtcNow)
+                .AddDays((semester.InternshipStartWeek - 1) * 7);
             schedule = new SemesterReportSchedule
             {
                 Id = Guid.NewGuid(),
@@ -478,6 +482,7 @@ public class SemesterService : ISemesterService
             Description = semester.Description,
             MaxStudentsPerLecturer = semester.MaxStudentsPerLecturer,
             TotalWeeks = semester.TotalWeeks,
+            InternshipStartWeek = semester.InternshipStartWeek,
             DepartmentId = semester.DepartmentId,
             StudentsCount = studentsCount,
             LecturersCount = lecturersCount,

@@ -90,6 +90,12 @@ public class Evaluation : BaseEntity
     public decimal? QualityLevel { get; set; }
 
     /// <summary>
+    /// Mức rubric chất lượng theo TỪNG TUẦN (JSON: {"1": 4.0, "2": 3.5, ...}).
+    /// Null/{} = giảng viên chưa chấm theo tuần. Điểm chất lượng cuối = trung bình các tuần đã chấm.
+    /// </summary>
+    public string? WeeklyQualityJson { get; set; }
+
+    /// <summary>
     /// Sinh viên có sản phẩm sáng tạo (+1.0 điểm cộng vào Điểm QT).
     /// </summary>
     public bool HasCreativeProduct { get; set; } = false;

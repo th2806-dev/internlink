@@ -428,6 +428,11 @@ public class WeeklyReportService : IWeeklyReportService
                 throw new InvalidOperationException($"Bài nộp cho {schedule.Title} hiện đang tạm dừng nhận. Vui lòng liên hệ giảng viên hướng dẫn.");
             }
 
+            if (schedule?.StartDate.HasValue == true && DateTime.UtcNow < schedule.StartDate.Value)
+            {
+                throw new InvalidOperationException($"Bài nộp cho {schedule.Title} chưa mở nhận trước ngày {schedule.StartDate.Value:dd/MM/yyyy HH:mm}.");
+            }
+
             if (schedule != null && !schedule.AllowLateSubmission && DateTime.UtcNow > schedule.DueDate)
             {
                 throw new InvalidOperationException($"Hạn nộp báo cáo tuần {report.WeekNumber} đã kết thúc vào ngày {schedule.DueDate:dd/MM/yyyy HH:mm}. Không cho phép nộp muộn.");

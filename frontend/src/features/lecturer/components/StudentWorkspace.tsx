@@ -4,28 +4,27 @@ import {
   Building2,
   CalendarDays,
   CheckCircle2,
-  Clock,
   Download,
   Edit3,
   FileText,
   GraduationCap,
   Mail,
   RefreshCw,
-  Save,
   Target,
   User,
   CalendarCheck,
   XCircle,
+  Clock,
 } from "lucide-react";
 import { Star } from "lucide-react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useSemester } from "../../../contexts/SemesterContext";
 import { useStudentWorkspace } from "../../../hooks/useStudentWorkspace";
 import { PageHeader } from "../../../components/common/PageHeader";
 import { KpiCard, KpiGrid } from "../../../components/common/KpiCard";
 import { Panel } from "../../../components/common/Panel";
 import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
-import { mapInternshipStatusToUi, mapWeeklyReportStatusToUi } from "../../../lib/portalMappers";
+import { mapInternshipStatusToUi } from "../../../lib/portalMappers";
 import { INTERNSHIP_WEEKS } from "../../../config/internship";
 import { WeeklyReportTimeline } from "./WeeklyReportTimeline";
 import { StudentReportsTab } from "./StudentReportsTab";
@@ -33,28 +32,18 @@ import type { EvaluationDetailDto } from "../../../types/api";
 
 import { attendanceService } from "../../../services/attendance.service";
 import type { AttendanceRecordDto } from "../../../types/api";
-
-type TabId = "overview" | "progress" | "reports" | "attendance";
-
-const TABS: { id: TabId; label: string; icon: typeof Target }[] = [
-  { id: "overview", label: "Tổng quan", icon: Target },
-  { id: "progress", label: "Tiến độ", icon: Clock },
-  { id: "reports", label: "Báo cáo & Bài nộp", icon: FileText },
-];
+import { getApiErrorMessage } from "../../../lib/apiClient";
 
 export function StudentWorkspace({
   internshipId: initialInternshipId,
-  initialTab = "overview",
   onRefreshParent,
   onShowToast,
 }: {
   internshipId?: string;
-  initialTab?: TabId;
   onRefreshParent?: () => Promise<void> | void;
   onShowToast?: (msg: string) => void;
 }) {
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
   const { selectedSemester, activeSemesterId } = useSemester();
 
   // Read internshipId from URL params if not provided as prop
@@ -74,25 +63,8 @@ export function StudentWorkspace({
   } = useStudentWorkspace(id);
 
   const totalWeeks = selectedSemester?.totalWeeks || INTERNSHIP_WEEKS;
-  const tabs = useMemo(
-    () => [
-      { id: "overview" as TabId, label: "Tổng quan", icon: Target },
-      { id: "progress" as TabId, label: `Tiến độ ${totalWeeks} tuần`, icon: Clock },
-      { id: "reports" as TabId, label: "Báo cáo & Bài nộp", icon: FileText },
-      { id: "attendance" as TabId, label: "Chuyên cần", icon: CalendarCheck },
-    ],
-    [totalWeeks],
-  );
-
-  const queryTab = searchParams.get("tab") as TabId | null;
-  const activeTab: TabId = tabs.some((tab) => tab.id === queryTab) ? queryTab! : initialTab;
-
-  const selectTab = (tab: TabId) => {
-    setSearchParams((previous) => {
-      previous.set("tab", tab);
-      return previous;
-    });
-  };
+  // Tuần HK nơi Tuần thực tập 1 bắt đầu (vd 14 → TT 1..6 = HK 14..19) — dùng cho timeline.
+  const internshipStartWeek = selectedSemester?.internshipStartWeek || 1;
 
   // ---- Derived data ----
   const student = detail?.student;
@@ -110,6 +82,9 @@ export function StudentWorkspace({
   const submissionCount = submissions.length;
   const progressPercent = assignment?.progressPercent ?? 0;
   const finalGrade = assignment?.finalGrade ?? evaluation?.finalGrade ?? null;
+
+  // Đã có điểm trung bình → tiến độ coi như hoàn thành 100%
+  const effectiveProgress = finalGrade != null ? 100 : progressPercent;
 
   const statusClass = useMemo(() => {
     if (internshipStatus === "Completed" || internshipStatus === "Graded")
@@ -176,12 +151,11 @@ export function StudentWorkspace({
     );
   }
 
-  // ---- Main render ----
+  // ---- Main render: single unified page ----
   return (
     <div className="space-y-5 max-w-[1500px] mx-auto pb-16 animate-in fade-in duration-200">
-      {/* === WORKSPACE HEADER (Evaluation style) === */}
+      {/* === WORKSPACE HEADER === */}
       <div className="bg-white rounded-lg border border-slate-200/80 shadow-xs overflow-hidden">
-        {/* Top bar: back + student info + badges */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-5">
           <div className="flex items-start gap-4">
             <button
@@ -242,149 +216,16 @@ export function StudentWorkspace({
             </button>
           </div>
         </div>
-
-        {/* Tab bar */}
-        <div className="border-t border-slate-200 px-5">
-          <nav className="flex gap-0 overflow-x-auto" role="tablist">
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  role="tab"
-                  aria-selected={isActive}
-                  onClick={() => selectTab(tab.id)}
-                  className={`relative px-4 py-3 text-xs font-bold whitespace-nowrap flex items-center gap-1.5 transition-colors ${
-                    isActive
-                      ? "text-blue-700"
-                      : "text-slate-500 hover:text-slate-700"
-                  }`}
-                >
-                  <Icon className="w-3.5 h-3.5" />
-                  {tab.label}
-                  {isActive && (
-                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-t" />
-                  )}
-                </button>
-              );
-            })}
-          </nav>
-        </div>
       </div>
 
-      {/* === TAB CONTENT === */}
-      {activeTab === "overview" && (
-        <OverviewTab
-          detail={detail}
-          assignment={assignment}
-          student={student}
-          company={company}
-          submissions={submissions}
-          progressPercent={progressPercent}
-          weeklyReportCount={weeklyReportCount}
-          pendingReportCount={pendingReportCount}
-          submissionCount={submissionCount}
-          finalGrade={finalGrade}
-          internshipStatus={internshipStatus}
-          evaluation={evaluation}
-          internshipId={id!}
-          totalWeeks={totalWeeks}
-          onNavigate={selectTab}
-          onRefresh={handleRefreshAndNotify}
-          onShowToast={onShowToast}
-        />
-      )}
-
-      {activeTab === "progress" && (
-        <WeeklyReportTimeline
-          internshipId={id!}
-          weeklyReports={weeklyReports}
-          isLoading={isLoading}
-          onRefresh={handleRefreshAndNotify}
-          onShowToast={onShowToast}
-          error={sectionErrors.reports}
-          evaluation={evaluation}
-          totalWeeks={totalWeeks}
-        />
-      )}
-
-      {activeTab === "reports" && (
-        <StudentReportsTab
-          internshipId={id!}
-          studentName={student.fullName}
-          studentCode={student.studentCode}
-          weeklyReports={weeklyReports}
-          submissions={submissions}
-          isLoading={isLoading}
-          onRefresh={handleRefreshAndNotify}
-          onShowToast={onShowToast}
-          errors={sectionErrors}
-        />
-      )}
-
-      {activeTab === "attendance" && (
-        <StudentAttendanceTab
-          studentId={student.id}
-          semesterId={activeSemesterId || ""}
-          onShowToast={onShowToast}
-        />
-      )}
-    </div>
-  );
-}
-
-// ---- Overview Tab ----
-import { evaluationService } from "../../../services/evaluation.service";
-import { getApiErrorMessage } from "../../../lib/apiClient";
-
-function OverviewTab({
-  detail,
-  assignment,
-  student,
-  company,
-  submissions,
-  progressPercent,
-  weeklyReportCount,
-  pendingReportCount,
-  submissionCount,
-  finalGrade,
-  internshipStatus,
-  evaluation,
-  internshipId,
-  totalWeeks,
-  onNavigate,
-  onRefresh,
-  onShowToast,
-}: {
-  detail: any;
-  assignment: any;
-  student: any;
-  company: any;
-  submissions: any[];
-  progressPercent: number;
-  weeklyReportCount: number;
-  pendingReportCount: number;
-  submissionCount: number;
-  finalGrade: number | null;
-  internshipStatus: string;
-  evaluation?: EvaluationDetailDto | null;
-  internshipId?: string;
-  totalWeeks: number;
-  onNavigate: (tab: TabId) => void;
-  onRefresh: () => Promise<void>;
-  onShowToast?: (msg: string) => void;
-}) {
-  return (
-    <div className="space-y-5">
-      {/* KPI Cards */}
+      {/* === KPI CARDS === */}
       <KpiGrid>
         <KpiCard
           tone="blue"
           title="Tiến độ thực tập"
-          value={`${progressPercent}%`}
+          value={`${effectiveProgress}%`}
           icon={Target}
-          footer={`${weeklyReportCount} / ${totalWeeks} tuần đã nộp`}
+          footer={finalGrade != null ? "Đã có điểm trung bình — hoàn thành" : `${weeklyReportCount} / ${totalWeeks} tuần đã nộp`}
         />
         <KpiCard
           tone="emerald"
@@ -392,7 +233,7 @@ function OverviewTab({
           value={weeklyReportCount}
           unit="báo cáo"
           icon={FileText}
-          footer={`${pendingReportCount} chờ duyệt`}
+          footer={`${approvedReportCount} đã duyệt · ${pendingReportCount} chờ duyệt`}
         />
         <KpiCard
           tone="amber"
@@ -408,12 +249,13 @@ function OverviewTab({
           value={finalGrade != null ? String(finalGrade) : "—"}
           unit={finalGrade != null ? "/ 10" : undefined}
           icon={Star}
-          footer={finalGrade != null ? `Xếp loại: ${finalGrade >= 8 ? "Giỏi" : finalGrade >= 6.5 ? "Khá" : finalGrade >= 5 ? "TB" : "Chưa đạt"}` : "Chưa có điểm"}
+          footer={finalGrade != null ? `Xếp loại: ${finalGrade >= 8.5 ? "Xuất sắc" : finalGrade >= 8 ? "Giỏi" : finalGrade >= 6.5 ? "Khá" : finalGrade >= 5 ? "Trung bình" : "Không đạt"}` : "Chưa có điểm"}
         />
       </KpiGrid>
 
+      {/* === MAIN CONTENT GRID === */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* Left: Student info + Internship info */}
+        {/* Left: Student info + Internship info + Reports */}
         <div className="lg:col-span-7 space-y-5">
           {/* Student Info Card */}
           <Panel className="space-y-4">
@@ -452,9 +294,22 @@ function OverviewTab({
               />
             </div>
           </Panel>
+
+          {/* Reports & Submissions */}
+          <StudentReportsTab
+            internshipId={id!}
+            studentName={student.fullName}
+            studentCode={student.studentCode}
+            weeklyReports={weeklyReports}
+            submissions={submissions}
+            isLoading={isLoading}
+            onRefresh={handleRefreshAndNotify}
+            onShowToast={onShowToast}
+            errors={sectionErrors}
+          />
         </div>
 
-        {/* Right: Quick actions + Progress */}
+        {/* Right: Progress + quick stats */}
         <div className="lg:col-span-5 space-y-5">
           {/* Progress */}
           <Panel className="space-y-4">
@@ -463,15 +318,21 @@ function OverviewTab({
                 <Target className="w-4 h-4 text-blue-600" />
                 Tiến độ thực tập
               </h3>
-              <span className="text-xs font-bold text-blue-700">{progressPercent}%</span>
+              <span className="text-xs font-bold text-blue-700">{effectiveProgress}%</span>
             </div>
             <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
               <div
-                className="h-full bg-blue-600 rounded-full transition-all"
-                style={{ width: `${progressPercent}%` }}
+                className={`h-full rounded-full transition-all ${finalGrade != null ? "bg-emerald-500" : "bg-blue-600"}`}
+                style={{ width: `${effectiveProgress}%` }}
               />
             </div>
-            {assignment?.progressBreakdown && (
+            {finalGrade != null && (
+              <p className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-2.5 py-1.5 flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                Đã có điểm trung bình ({finalGrade}/10) — tiến độ hoàn thành 100%.
+              </p>
+            )}
+            {assignment?.progressBreakdown && finalGrade == null && (
               <div className="text-[10px] text-slate-500 bg-slate-50 border border-slate-200/60 rounded-md p-2 space-y-1">
                 <div className="flex justify-between font-semibold text-slate-600">
                   <span>TK: {assignment.progressBreakdown.accountPercent}%</span>
@@ -487,49 +348,33 @@ function OverviewTab({
             )}
             <div className="grid grid-cols-2 gap-3 text-xs">
               <MiniStat label="Báo cáo tuần" value={`${weeklyReportCount}/${totalWeeks}`} />
+              <MiniStat label="Đã duyệt" value={`${approvedReportCount}/${totalWeeks}`} />
               <MiniStat label="Chờ duyệt" value={String(pendingReportCount)} alert={pendingReportCount > 0} />
               <MiniStat label="Bài nộp" value={String(submissionCount)} />
-              <MiniStat label="Điểm" value={finalGrade != null ? String(finalGrade) : "—"} />
             </div>
           </Panel>
 
-          {/* Quick actions */}
-          <Panel className="space-y-3">
-            <div className="pb-3 border-b border-slate-100">
-              <h3 className="text-sm font-bold text-slate-900">Thao tác nhanh</h3>
-            </div>
-            <button
-              onClick={() => onNavigate("reports")}
-              className="w-full p-3 bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-200 rounded-md text-xs font-bold text-slate-800 hover:text-blue-700 flex items-center justify-between transition-colors"
-            >
-              <span className="flex items-center gap-2">
-                <FileText className="w-4 h-4" />
-                Xem báo cáo & bài nộp
-              </span>
-              <span className="text-slate-400">→</span>
-            </button>
-            <button
-              onClick={() => onNavigate("progress")}
-              className="w-full p-3 bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-200 rounded-md text-xs font-bold text-slate-800 hover:text-blue-700 flex items-center justify-between transition-colors"
-            >
-              <span className="flex items-center gap-2">
-                <Clock className="w-4 h-4" />
-                Xem tiến độ {totalWeeks} tuần
-              </span>
-              <span className="text-slate-400">→</span>
-            </button>
-          </Panel>
-
-          {internshipId && (
-            <DefenseOverviewPanel
-              internshipId={internshipId}
-              evaluation={evaluation}
-              onRefresh={onRefresh}
-              onShowToast={onShowToast ?? (() => {})}
-            />
-          )}
+          {/* Attendance summary (compact) */}
+          <AttendanceSummaryCard
+            studentId={student.id}
+            semesterId={activeSemesterId || ""}
+            onShowToast={onShowToast}
+          />
         </div>
       </div>
+
+      {/* === WEEKLY TIMELINE (full width) === */}
+      <WeeklyReportTimeline
+        internshipId={id!}
+        weeklyReports={weeklyReports}
+        isLoading={isLoading}
+        onRefresh={handleRefreshAndNotify}
+        onShowToast={onShowToast}
+        error={sectionErrors.reports}
+        evaluation={evaluation}
+        totalWeeks={totalWeeks}
+        internshipStartWeek={internshipStartWeek}
+      />
     </div>
   );
 }
@@ -577,103 +422,8 @@ function MiniStat({
   );
 }
 
-// ---- Overview defense panel ----
-function DefenseOverviewPanel({
-  internshipId,
-  evaluation,
-  onRefresh,
-  onShowToast,
-}: {
-  internshipId: string;
-  evaluation?: EvaluationDetailDto | null;
-  onRefresh: () => Promise<void>;
-  onShowToast: (msg: string) => void;
-}) {
-  const [defenseDate, setDefenseDate] = useState(evaluation?.defenseDate?.slice(0, 10) ?? "");
-  const [defenseStatus, setDefenseStatus] = useState<EvaluationDetailDto["defenseStatus"]>(evaluation?.defenseStatus ?? "NotScheduled");
-  const [defenseCouncilName, setDefenseCouncilName] = useState(evaluation?.defenseCouncilName ?? "");
-  const [defenseExaminerName, setDefenseExaminerName] = useState(evaluation?.defenseExaminerName ?? "");
-  const [isSaving, setIsSaving] = useState(false);
-
-  const saveDefense = async () => {
-    setIsSaving(true);
-    try {
-      await evaluationService.scheduleDefense(internshipId, {
-        defenseDate: defenseDate || null,
-        defenseStatus,
-        defenseCouncilName: defenseCouncilName.trim() || null,
-        defenseExaminerName: defenseExaminerName.trim() || null,
-      });
-      await onRefresh();
-      onShowToast("Đã cập nhật lịch bảo vệ.");
-    } catch (err) {
-      onShowToast(getApiErrorMessage(err));
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  return (
-    <Panel className="space-y-4">
-      <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-        <div className="flex items-center gap-2">
-          <CalendarDays className="h-4 w-4 text-indigo-600" />
-          <div>
-            <h3 className="text-sm font-bold text-slate-900">Lịch bảo vệ</h3>
-            <p className="text-[11px] text-slate-500">Quản lý lịch phòng vệ từ tổng quan.</p>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={saveDefense}
-          disabled={isSaving}
-          className="inline-flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-indigo-700 disabled:pointer-events-none disabled:opacity-50"
-        >
-          <Save className="h-3.5 w-3.5" />
-          {isSaving ? "Đang lưu..." : "Lưu lịch"}
-        </button>
-      </div>
-
-      <div className="grid gap-3 md:grid-cols-2 text-xs">
-        <label className="font-bold text-slate-700">
-          Trạng thái
-          <select value={defenseStatus} onChange={(event) => setDefenseStatus(event.target.value as EvaluationDetailDto["defenseStatus"])} className="mt-1 w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 font-medium outline-none focus:border-indigo-500">
-            <option value="NotScheduled">Chưa xếp lịch</option>
-            <option value="Scheduled">Đã xếp lịch</option>
-            <option value="Completed">Đã bảo vệ</option>
-          </select>
-        </label>
-        <label className="font-bold text-slate-700">
-          Ngày bảo vệ
-          <input type="date" value={defenseDate} onChange={(event) => setDefenseDate(event.target.value)} className="mt-1 w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 font-medium outline-none focus:border-indigo-500" />
-        </label>
-        <label className="font-bold text-slate-700">
-          Hội đồng
-          <input value={defenseCouncilName} onChange={(event) => setDefenseCouncilName(event.target.value)} placeholder="Ví dụ: Hội đồng CNTT 01" className="mt-1 w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 font-medium outline-none focus:border-indigo-500" />
-        </label>
-        <label className="font-bold text-slate-700">
-          Người phản biện
-          <input value={defenseExaminerName} onChange={(event) => setDefenseExaminerName(event.target.value)} placeholder="Tên giảng viên phản biện" className="mt-1 w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 font-medium outline-none focus:border-indigo-500" />
-        </label>
-      </div>
-
-      {evaluation && (defenseDate || defenseCouncilName || defenseExaminerName) && (
-        <div className="rounded-md border border-indigo-200 bg-indigo-50/60 px-3 py-3 text-xs">
-          <p className="font-bold text-indigo-900">Thông tin bảo vệ</p>
-          <p className="mt-1 text-indigo-800">
-            {evaluation.defenseStatus === "Completed" ? "Đã bảo vệ" : evaluation.defenseStatus === "Scheduled" ? "Đã xếp lịch" : "Chưa xếp lịch"}
-            {evaluation.defenseDate ? ` · ${new Date(evaluation.defenseDate).toLocaleDateString("vi-VN")}` : ""}
-            {evaluation.defenseCouncilName ? ` · ${evaluation.defenseCouncilName}` : ""}
-            {evaluation.defenseExaminerName ? ` · Phản biện: ${evaluation.defenseExaminerName}` : ""}
-          </p>
-        </div>
-      )}
-    </Panel>
-  );
-}
-
-// ---- Attendance Tab in StudentWorkspace ----
-function StudentAttendanceTab({
+// ---- Compact attendance card (right column) ----
+function AttendanceSummaryCard({
   studentId,
   semesterId,
   onShowToast,
@@ -686,112 +436,109 @@ function StudentAttendanceTab({
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (!studentId || !semesterId) return;
+    if (!studentId || !semesterId) {
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
+    let cancelled = false;
     attendanceService
       .getStudentAttendanceForLecturer(studentId, semesterId)
-      .then((data) => setRecords(data))
-      .catch((err) => onShowToast?.(getApiErrorMessage(err)))
-      .finally(() => setIsLoading(false));
-  }, [studentId, semesterId, onShowToast]);
+      .then((data) => {
+        if (!cancelled) setRecords(data);
+      })
+      .catch((err) => {
+        if (!cancelled) onShowToast?.(getApiErrorMessage(err));
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [studentId, semesterId]);
 
   const total = records.length;
   const present = records.filter((r) => r.status === "Present").length;
   const absent = records.filter((r) => r.status === "Absent").length;
-  const rate = total > 0 ? Math.round((present / total) * 100) : 100;
-
-  if (isLoading) {
-    return (
-      <div className="py-12 flex flex-col items-center justify-center gap-2 text-slate-400">
-        <RefreshCw className="w-6 h-6 animate-spin text-blue-500" />
-        <p className="text-xs">Đang tải lịch sử chuyên cần...</p>
-      </div>
-    );
-  }
+  // Chưa có bản ghi điểm danh → hiển thị "—" thay vì 100% vô nghĩa.
+  const rate = total > 0 ? `${Math.round((present / total) * 100)}%` : "—";
 
   return (
-    <div className="space-y-5">
-      <KpiGrid>
-        <KpiCard
-          tone="blue"
-          title="Tỷ lệ chuyên cần"
-          value={`${rate}%`}
-          icon={CalendarCheck}
-          footer={`${present} / ${total} buổi có mặt`}
-        />
-        <KpiCard
-          tone="emerald"
-          title="Số buổi có mặt"
-          value={present}
-          unit="buổi"
-          icon={CheckCircle2}
-          footer="Tham dự đầy đủ"
-        />
-        <KpiCard
-          tone={absent > 0 ? "rose" : "blue"}
-          title="Số buổi vắng"
-          value={absent}
-          unit="buổi"
-          icon={XCircle}
-          footer={absent === 0 ? "Không vắng buổi nào" : "Cần nhắc nhở sinh viên"}
-        />
-      </KpiGrid>
+    <Panel className="space-y-4">
+      <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+        <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+          <CalendarCheck className="w-4 h-4 text-blue-600" />
+          Chuyên cần & điểm danh
+        </h3>
+        <span className="text-xs text-slate-500">{total} buổi gặp</span>
+      </div>
 
-      <Panel className="space-y-4">
-        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-            <CalendarDays className="w-4 h-4 text-blue-600" />
-            Chi tiết các buổi gặp & điểm danh
-          </h3>
-          <span className="text-xs text-slate-500">{total} buổi gặp</span>
+      {isLoading ? (
+        <div className="py-6 flex flex-col items-center justify-center gap-2 text-slate-400">
+          <RefreshCw className="w-5 h-5 animate-spin text-blue-500" />
+          <p className="text-xs">Đang tải chuyên cần...</p>
         </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-3 gap-3 text-xs">
+            <MiniStat label="Tỷ lệ có mặt" value={rate} />
+            <MiniStat label="Có mặt" value={String(present)} />
+            <MiniStat label="Vắng" value={String(absent)} alert={absent >= 2} />
+          </div>
 
-        {records.length === 0 ? (
-          <p className="text-xs text-slate-500 py-6 text-center">
-            Chưa có buổi gặp nào có tên sinh viên này được lên lịch trong kỳ.
-          </p>
-        ) : (
-          <div className="space-y-2.5">
-            {records.map((r, idx) => {
-              const isPresent = r.status === "Present";
-              return (
-                <div
-                  key={r.id || idx}
-                  className={`p-3.5 rounded-lg border flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs ${
-                    isPresent ? "bg-white border-slate-200" : "bg-rose-50/30 border-rose-200"
-                  }`}
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
+          {absent >= 2 && (
+            <p className="text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-md px-2.5 py-1.5 flex items-center gap-1.5">
+              <XCircle className="w-3.5 h-3.5 shrink-0" />
+              Vắng {absent} buổi — đủ điều kiện dự thi có thể bị ảnh hưởng (≥ 2 buổi vắng).
+            </p>
+          )}
+
+          {records.length === 0 ? (
+            <p className="text-xs text-slate-500 py-3 text-center">
+              Chưa có buổi gặp nào có tên sinh viên này được lên lịch trong kỳ.
+            </p>
+          ) : (
+            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+              {records.map((r, idx) => {
+                const isPresent = r.status === "Present";
+                return (
+                  <div
+                    key={r.id || idx}
+                    className={`p-2.5 rounded-md border flex items-center justify-between gap-3 text-xs ${
+                      isPresent ? "bg-white border-slate-200" : "bg-rose-50/40 border-rose-200"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
                       <span
-                        className={`px-2.5 py-1 rounded-md text-xs font-bold inline-flex items-center gap-1 ${
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold inline-flex items-center gap-1 shrink-0 ${
                           isPresent
                             ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                             : "bg-rose-50 text-rose-700 border border-rose-200"
                         }`}
                       >
-                        {isPresent ? <CheckCircle2 className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
+                        {isPresent ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
                         {isPresent ? "Có mặt" : "Vắng"}
                       </span>
-                      {r.markedAt && (
-                        <span className="text-[11px] text-slate-400">
-                          Điểm danh: {new Date(r.markedAt).toLocaleDateString("vi-VN")} bởi {r.markedBy || "GV"}
-                        </span>
-                      )}
+                      <span className="text-slate-600 truncate">
+                        {(r.weekNumber != null ? `T${r.weekNumber} · ` : "")}
+                        {r.meetingDate
+                          ? new Date(r.meetingDate).toLocaleDateString("vi-VN")
+                          : r.markedAt
+                            ? new Date(r.markedAt).toLocaleDateString("vi-VN")
+                            : "—"}
+                        {r.notes ? ` · ${r.notes}` : ""}
+                      </span>
                     </div>
-                    {r.notes && (
-                      <p className="text-slate-600 bg-slate-50 p-2 rounded border border-slate-200/60 mt-1 italic">
-                        "Nhận xét: {r.notes}"
-                      </p>
-                    )}
+                    <CalendarDays className="w-3.5 h-3.5 text-slate-300 shrink-0" />
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </Panel>
-    </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+    </Panel>
   );
 }
-

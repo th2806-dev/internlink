@@ -16,6 +16,16 @@ public class Semester : BaseEntity, IDepartmentScoped
     public int TotalWeeks { get; set; } = 6;
 
     /// <summary>
+    /// Tuần TUYỆT ĐỐI trong học kỳ của trường mà Tuần thực tập 1 bắt đầu.
+    /// Thực tập là một học phần liên tiếp, ví dụ thực tập tuần 1..6 tương ứng
+    /// tuần 14..19 của học kỳ ⇒ InternshipStartWeek = 14 (offset = 13).
+    /// Giá trị 1 (mặc định) nghĩa là không lệch: tuần thực tập = tuần học kỳ.
+    /// Tuần âm trong AttendanceSession (chuẩn bị) cũng quy đổi theo công thức này:
+    /// tuần học kỳ = InternshipStartWeek + (tuần tương đối - 1) ⇒ 14 + (-3 - 1) = 10.
+    /// </summary>
+    public int InternshipStartWeek { get; set; } = 1;
+
+    /// <summary>
     /// Department this semester belongs to.
     /// SuperAdmin-created semesters may be null (visible to all departments).
     /// </summary>

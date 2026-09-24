@@ -167,6 +167,7 @@ describe("computeGrade", () => {
       qualityLevel: 5,
       hasCreativeProduct: true,
       oralExamScore: 9,
+      absentWeekCount: 2,
       now: NOW,
     });
 
@@ -193,7 +194,7 @@ describe("computeGrade", () => {
     expect(result.classification).toBe(GR_INELIGIBLE_LABEL);
   });
 
-  it("attendance absence (V) counts toward missing weeks even when report submitted", () => {
+  it("attendance absence affects eligibility but never submission penalties", () => {
     // Tuần 3: đã nộp báo cáo nhưng điểm danh V; Tuần 5: nộp trễ
     const weeks = onTimeWeeks().map((week) => {
       if (week.weekNumber === 3) return { ...week, isAbsent: true };
@@ -203,17 +204,18 @@ describe("computeGrade", () => {
     const updated = computeGrade({
       weeks,
       finalReportSubmittedAt: "2026-09-25T00:00:00Z",
+      absentWeekCount: 1,
       qualityLevel: 4,
       oralExamScore: 8,
       now: NOW,
     });
 
-    expect(updated.missingWeeks).toEqual([3]);
+    expect(updated.missingWeeks).toEqual([]);
     expect(updated.lateWeeks).toEqual([5]);
     expect(updated.isEligible).toBe(true);
     // Vắng tuần 3 → nộp đủ 1.5 + trễ tuần 5 → đúng hạn 1.5 + chất lượng 4
-    expect(updated.processScore).toBe(7);
-    expect(updated.averageScore).toBe(7.6); // 7*0.4 + 8*0.6 = 2.8 + 4.8
+    expect(updated.processScore).toBe(7.5);
+    expect(updated.averageScore).toBe(7.8); // 7.5*0.4 + 8*0.6 = 3 + 4.8
   });
 
   it("does not double count a week that is both missing and absent", () => {

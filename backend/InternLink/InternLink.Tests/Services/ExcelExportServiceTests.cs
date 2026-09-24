@@ -108,9 +108,10 @@ public class ExcelExportServiceTests
         s.Lop.Should().Be("C23A.TH1");
         s.PhuTrachCongTy.Should().Be("Công ty ABC");
         s.GvHuongDan.Should().Be("TS. Nguyễn Văn B");
-        s.DiemThamGia.Should().Be(9);
+        s.DiemThamGia.Should().Be(0);
+        s.GhiChu.Should().BeEmpty();
         s.Thi.Should().Be(8.5m);
-        s.Tuan1.Should().Be("✓");
+        s.Tuan1.Should().Be("–");
 
         data.Companies.Should().HaveCount(1);
         data.Companies[0].CompanyName.Should().Be("Công ty ABC");

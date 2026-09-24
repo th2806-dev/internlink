@@ -25,6 +25,12 @@ export interface Deadline {
   title: string;
   subtitle: string;
   studentCount: number;
+  /** ISO date of the deadline (optional, for sorting/overdue computation in the UI). */
+  isoDate?: string;
+  /** Whole-day difference vs today: > 0 upcoming, <= 0 past due. */
+  daysLeft?: number;
+  /** True when the deadline is already past due. */
+  isOverdue?: boolean;
 }
 
 export interface Activity {

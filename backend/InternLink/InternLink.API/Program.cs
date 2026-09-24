@@ -31,11 +31,13 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("Frontend", policy =>
     {
+        // Content-Disposition phải được expose để frontend đọc tên file xuất (Excel/PDF/Word)
         if (allowedOrigins.Length > 0)
         {
             policy.WithOrigins(allowedOrigins)
                 .AllowAnyHeader()
                 .AllowAnyMethod()
+                .WithExposedHeaders("Content-Disposition", "Content-Length")
                 .AllowCredentials();
         }
         else if (builder.Environment.IsDevelopment())
@@ -43,13 +45,15 @@ builder.Services.AddCors(options =>
             policy.WithOrigins("http://localhost:3000", "http://localhost:5173")
                 .AllowAnyHeader()
                 .AllowAnyMethod()
+                .WithExposedHeaders("Content-Disposition", "Content-Length")
                 .AllowCredentials();
         }
         else
         {
             policy.WithOrigins(Array.Empty<string>())
                 .AllowAnyHeader()
-                .AllowAnyMethod();
+                .AllowAnyMethod()
+                .WithExposedHeaders("Content-Disposition", "Content-Length");
         }
     });
 });

@@ -60,6 +60,11 @@ export const WeeklyReportsView = ({ onShowToast }: { onShowToast: (msg: string) 
   const { internshipId, profile } = useStudentPortal();
   const { selectedSemester } = useSemester();
   const totalWeeks = selectedSemester.totalWeeks || INTERNSHIP_WEEKS;
+  // Đồng bộ tuần theo lịch học kỳ trường: tuần HK = tuần thực tập + (InternshipStartWeek - 1).
+  // vd InternshipStartWeek = 14 → báo cáo tuần 1..6 rơi vào HK tuần 14..19.
+  const internshipStartWeek = selectedSemester.internshipStartWeek || 1;
+  const showSemesterWeek = internshipStartWeek > 1;
+  const semWeek = (week: number) => week + internshipStartWeek - 1;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("Tất cả");
@@ -80,6 +85,12 @@ export const WeeklyReportsView = ({ onShowToast }: { onShowToast: (msg: string) 
   const [isLoadingApi, setIsLoadingApi] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+
+  const requiredSchedules = useMemo(
+    () => schedules.filter((schedule) => schedule.weekNumber <= totalWeeks && schedule.isSubmissionOpen),
+    [schedules, totalWeeks],
+  );
+  const requiredWeekCount = requiredSchedules.length || totalWeeks;
 
   useEffect(() => {
     if (selectedSemester?.id) {
@@ -132,8 +143,7 @@ export const WeeklyReportsView = ({ onShowToast }: { onShowToast: (msg: string) 
 
   const allWeekRows = useMemo(
     () =>
-      Array.from({ length: totalWeeks }, (_, i) => {
-        const week = i + 1;
+      (requiredSchedules.length > 0 ? requiredSchedules.map((schedule) => schedule.weekNumber) : Array.from({ length: totalWeeks }, (_, i) => i + 1)).map((week) => {
         const existing = reports.find((r) => r.weekNumber === week);
         const schedule = schedules.find((s) => s.weekNumber === week);
         const deadline = schedule?.dueDate
@@ -161,7 +171,7 @@ export const WeeklyReportsView = ({ onShowToast }: { onShowToast: (msg: string) 
           scheduleDueDate: schedule?.dueDate,
         };
       }),
-    [reports, totalWeeks, schedules],
+    [reports, totalWeeks, schedules, requiredSchedules],
   );
 
   const currentReport =
@@ -346,7 +356,7 @@ export const WeeklyReportsView = ({ onShowToast }: { onShowToast: (msg: string) 
     return matchesSearch && matchesStatus;
   });
   const completedCount = reports.filter(
-    (r) => r.status === "\u0110\xE3 ho\xE0n th\xE0nh",
+    (r) => r.status === "\u0110\xE3 ho\xE0n th\xE0nh" && requiredSchedules.some((schedule) => schedule.weekNumber === r.weekNumber),
   ).length;
   return (
     <div className="space-y-5 animate-in fade-in duration-200 max-w-7xl mx-auto">
@@ -354,7 +364,7 @@ export const WeeklyReportsView = ({ onShowToast }: { onShowToast: (msg: string) 
         icon={FileCheck2}
         title="Báo cáo thực tập tuần"
         subtitle="Xem biểu mẫu, theo dõi tiến độ và nộp báo cáo đúng hạn cho Giảng viên hướng dẫn."
-        badge={`Tiến độ: ${completedCount} / ${totalWeeks} tuần hoàn thành`}
+        badge={`Tiến độ: ${completedCount} / ${requiredWeekCount} tuần cần nộp`}
         badgeColor="bg-blue-100 text-blue-800 border-blue-200"
         actions={[
           {
@@ -370,13 +380,13 @@ export const WeeklyReportsView = ({ onShowToast }: { onShowToast: (msg: string) 
         left={
           <span className="text-xs font-semibold text-slate-600">
             <span className="text-slate-900 font-bold">{completedCount}</span> /{" "}
-            {totalWeeks} tuần đã hoàn thành · Tuần {selectedWeek} đang chọn
+            {requiredWeekCount} tuần cần nộp · Tuần {selectedWeek}{showSemesterWeek ? ` (HK tuần ${semWeek(selectedWeek)})` : ""} đang chọn
           </span>
         }
         right={
           nextPendingWeek ? (
             <span className="text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-md">
-              Cần nộp: Tuần {nextPendingWeek.weekNumber}
+              Cần nộp: Tuần {nextPendingWeek.weekNumber}{showSemesterWeek ? ` (HK ${semWeek(nextPendingWeek.weekNumber)})` : ""}
             </span>
           ) : (
             <span className="text-[11px] font-semibold text-emerald-800 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-md">
@@ -395,7 +405,7 @@ export const WeeklyReportsView = ({ onShowToast }: { onShowToast: (msg: string) 
               <div>
                 <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
                   <FileCheck2 className="w-5 h-5 text-blue-600" /> Danh sách báo
-                  cáo ({totalWeeks} tuần)
+                  cáo ({requiredWeekCount} tuần cần nộp)
                 </h2>
               </div>
 
@@ -473,6 +483,11 @@ export const WeeklyReportsView = ({ onShowToast }: { onShowToast: (msg: string) 
                         >
                           <td className="p-3 font-bold text-blue-700">
                             Tuần {rep.weekNumber}
+                            {showSemesterWeek && (
+                              <span className="block text-[10px] font-semibold text-slate-400">
+                                HK tuần {semWeek(rep.weekNumber)}
+                              </span>
+                            )}
                           </td>
                           <td className="p-3">
                             <p className="font-bold text-slate-800 line-clamp-1">
@@ -532,6 +547,11 @@ export const WeeklyReportsView = ({ onShowToast }: { onShowToast: (msg: string) 
                 </span>
                 <h2 className="text-base font-bold text-slate-900 mt-1">
                   Tuần {selectedWeek}: {currentReport.title}
+                  {showSemesterWeek && (
+                    <span className="ml-2 align-middle px-2 py-0.5 text-[10px] font-bold rounded bg-slate-100 text-slate-500 border border-slate-200">
+                      HK tuần {semWeek(selectedWeek)}
+                    </span>
+                  )}
                 </h2>
                 {currentReport.deadline !== "—" && (
                   <p className="text-xs text-slate-500 mt-1 flex items-center gap-1.5 font-medium">
@@ -673,7 +693,7 @@ export const WeeklyReportsView = ({ onShowToast }: { onShowToast: (msg: string) 
           <Panel className="space-y-4">
             <h3 className="text-sm font-bold text-slate-900 border-b border-slate-100 pb-3 flex items-center gap-2">
               <Clock className="w-4 h-4 text-blue-600" /> Lịch sử nộp (Tuần{" "}
-              {selectedWeek})
+              {selectedWeek}{showSemesterWeek ? ` · HK ${semWeek(selectedWeek)}` : ""})
             </h3>
 
             <div className="space-y-2.5 text-xs">

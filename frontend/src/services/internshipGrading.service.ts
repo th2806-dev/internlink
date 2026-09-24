@@ -11,6 +11,7 @@ export interface GradingWeekStatus {
   startDate?: string | null;
   deadline?: string | null;
   submittedAt?: string | null;
+  isSubmissionOpen: boolean;
   status: "on_time" | "late" | "missing" | "pending";
   /** Điểm danh buổi hẹn tuần đó: present | absent | no_session (nguồn: trang Điểm danh) */
   attendanceStatus: "present" | "absent" | "no_session";
@@ -31,6 +32,8 @@ export interface StudentGrade {
   submissionScore: number;
   punctualityScore: number;
   qualityScore: number | null;
+  weeklyQualityScores: Record<number, number>;
+  productSubmitted: boolean;
   hasCreativeProduct: boolean;
   processScore: number;
 
@@ -58,6 +61,7 @@ export interface SaveGradeRequest {
   studentId: string;
   /** 1 trong 5 mức rubric: 1 | 2 | 3.5 | 4 | 5 (null = chưa chấm) */
   qualityScore?: number | null;
+  weeklyQualityScores?: Record<number, number>;
   hasCreativeProduct: boolean;
   /** Cột J — Điểm thi vấn đáp (thang 10) */
   oralExamScore?: number | null;

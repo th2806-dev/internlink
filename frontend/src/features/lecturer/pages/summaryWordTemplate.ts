@@ -32,7 +32,8 @@ export function formatWordDate(value?: string | Date | null): string {
 
   const parsedDate = dateValue instanceof Date ? dateValue : new Date(dateValue);
   if (Number.isNaN(parsedDate.getTime())) {
-    return "ngày 01 tháng 01 năm 2026";
+    const now = new Date();
+    return `ngày ${String(now.getDate()).padStart(2, "0")} tháng ${String(now.getMonth() + 1).padStart(2, "0")} năm ${now.getFullYear()}`;
   }
 
   const day = String(parsedDate.getDate()).padStart(2, "0");

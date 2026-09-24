@@ -39,6 +39,8 @@ export function useLecturerPortalData(
   const [error, setError] = useState<string | null>(null);
   const [weeklyReportPage, setWeeklyReportPage] = useState({ total: 0, skip: 0, take: 20 });
   const [weeklyReportQuery, setWeeklyReportQuery] = useState({ status: "", searchTerm: "", skip: 0 });
+  // Tổng theo trạng thái tính trên TOÀN BỘ kỳ (server-side), không phụ thuộc trang hiện tại.
+  const [weeklyReportTotals, setWeeklyReportTotals] = useState({ total: 0, pending: 0, revision: 0, approved: 0 });
 
   const loadWeeklyReports = useCallback(async (query = weeklyReportQuery) => {
     const result = await weeklyReportService.getAllForLecturer({
@@ -52,6 +54,29 @@ export function useLecturerPortalData(
     setWeeklyReports(result.items);
     return result.items;
   }, [semesterId, weeklyReportQuery]);
+
+  // Đếm tổng theo trạng thái trên server (take=1 chỉ để lấy total) — dùng cho KPI của trang Báo cáo.
+  const loadWeeklyReportTotals = useCallback(async () => {
+    if (!semesterId) {
+      setWeeklyReportTotals({ total: 0, pending: 0, revision: 0, approved: 0 });
+      return;
+    }
+    const countBy = (status: string) =>
+      weeklyReportService
+        .getAllForLecturer({ semesterId: semesterId ?? undefined, skip: 0, take: 1, status })
+        .then((res) => res.total)
+        .catch(() => 0);
+    const [allTotal, pending, revision, approved] = await Promise.all([
+      weeklyReportService
+        .getAllForLecturer({ semesterId: semesterId ?? undefined, skip: 0, take: 1 })
+        .then((res) => res.total)
+        .catch(() => 0),
+      countBy("Submitted"),
+      countBy("RevisionRequested"),
+      countBy("Approved"),
+    ]);
+    setWeeklyReportTotals({ total: allTotal, pending, revision, approved });
+  }, [semesterId]);
 
   const load = useCallback(async () => {
     if (!enabled) return;
@@ -68,6 +93,8 @@ export function useLecturerPortalData(
           lecturerDashboardService.getStats(semesterId ?? undefined),
           lecturerDashboardService.getWeeklyTrend(semesterId ?? undefined),
         ]);
+      // KPI tổng theo trạng thái (server-side) — chạy nền sau khi dữ liệu chính xong
+      void loadWeeklyReportTotals();
 
       const studentRows = assignedStudents.map((item: LecturerStudentListItemDto) =>
         mapLecturerStudentDtoToStudent(item, lecturerName),
@@ -190,6 +217,7 @@ export function useLecturerPortalData(
     weeklyReports,
     weeklyReportPage,
     weeklyReportQuery,
+    weeklyReportTotals,
     queryWeeklyReports,
     dashboardStats,
     weeklyTrend,

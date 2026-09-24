@@ -125,6 +125,7 @@ public class SubmissionService : ISubmissionService
     {
         var internship = await _db.Internships
             .Include(i => i.Student)
+            .Include(i => i.Semester)
             .FirstOrDefaultAsync(i => i.Id == request.InternshipId && !i.IsDeleted);
 
         if (internship == null)
@@ -141,6 +142,22 @@ public class SubmissionService : ISubmissionService
             s.Type == SubmissionType.FinalReport &&
             !s.IsDeleted))
             throw new InvalidOperationException("Báo cáo thực tập tốt nghiệp là sản phẩm bắt buộc trước khi nộp sản phẩm thực tế.");
+
+        if (internship.SemesterId.HasValue && type == SubmissionType.FinalReport)
+        {
+            var totalWeeks = Math.Max(internship.Semester?.TotalWeeks ?? 1, 1);
+            var schedule = await _db.SemesterReportSchedules.FirstOrDefaultAsync(s =>
+                s.SemesterId == internship.SemesterId.Value && s.WeekNumber == totalWeeks + 1 && !s.IsDeleted);
+            if (schedule != null)
+            {
+                if (!schedule.IsSubmissionOpen)
+                    throw new InvalidOperationException("Báo cáo cuối kỳ hiện đang tạm dừng nhận.");
+                if (schedule.StartDate.HasValue && DateTime.UtcNow < schedule.StartDate.Value)
+                    throw new InvalidOperationException($"Báo cáo cuối kỳ chưa mở nhận trước ngày {schedule.StartDate.Value:dd/MM/yyyy HH:mm}.");
+                if (!schedule.AllowLateSubmission && DateTime.UtcNow > schedule.DueDate)
+                    throw new InvalidOperationException($"Hạn nộp báo cáo cuối kỳ đã kết thúc vào ngày {schedule.DueDate:dd/MM/yyyy HH:mm}.");
+            }
+        }
 
         var submission = new Submission
         {

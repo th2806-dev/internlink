@@ -18,6 +18,11 @@ export interface Semester {
   status: "active" | "upcoming" | "completed" | "draft";
   progressPercent: number;
   totalWeeks: number;
+  /**
+   * Tuần TUYỆT ĐỐI của học kỳ trường nơi Tuần thực tập 1 bắt đầu
+   * (vd 14 → thực tập tuần 1..6 = tuần 14..19 của học kỳ). 1 = không lệch.
+   */
+  internshipStartWeek: number;
   currentPhase: string;
   description: string;
 }
@@ -64,6 +69,7 @@ const mapBackendToFrontend = (dto: BackendSemesterDto): Semester => {
     status: statusMap[dto.status] || "upcoming",
     progressPercent: dto.progressPercent,
     totalWeeks: dto.totalWeeks || 6,
+    internshipStartWeek: dto.internshipStartWeek || 1,
     currentPhase: dto.currentPhase,
     description: dto.description || "",
   };
@@ -249,6 +255,7 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           status: "active" as const,
           progressPercent: 0,
           totalWeeks: semesters.reduce((max, s) => Math.max(max, s.totalWeeks), 6),
+          internshipStartWeek: semesters[0]?.internshipStartWeek || 1,
           currentPhase: "",
           description: "",
         }
@@ -269,6 +276,7 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           status: "upcoming" as const,
           progressPercent: 0,
           totalWeeks: 6,
+          internshipStartWeek: 1,
           currentPhase: "",
           description: "",
         };
@@ -313,6 +321,7 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         status: statusNumber,
         description: data.description,
         totalWeeks: data.totalWeeks || 6,
+        internshipStartWeek: data.internshipStartWeek || 1,
       });
       const mapped = mapBackendToFrontend(res);
       setSemesters((prev) => [mapped, ...prev]);
@@ -337,6 +346,7 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       status: data.status || "upcoming",
       progressPercent: 0,
       totalWeeks: data.totalWeeks || 6,
+      internshipStartWeek: data.internshipStartWeek || 1,
       currentPhase: data.currentPhase || "Chuẩn bị danh sách",
       description: data.description || `Đợt thực tập ${data.term} ${data.academicYear}`,
     };
@@ -358,6 +368,7 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         endDate: data.endDate || null,
         description: data.description,
         totalWeeks: data.totalWeeks || 6,
+        internshipStartWeek: data.internshipStartWeek || 1,
       });
       const mapped = mapBackendToFrontend(updated);
       setSemesters((prev) => prev.map((semester) => (semester.id === id ? mapped : semester)));

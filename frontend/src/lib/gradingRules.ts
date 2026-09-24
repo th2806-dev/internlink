@@ -25,7 +25,7 @@
  * 5) Điểm TB (cột K) & Xếp loại (cột L):
  *    - Không đủ điều kiện → Điểm TB = 0, Xếp loại = "không thực tập"
  *    - Đủ điều kiện       → TB = ROUND(QT * 0.4 + Thi * 0.6, 1)
- *      >= 9.0 Xuất sắc | >= 8.0 Giỏi | >= 6.5 Khá | >= 5.0 Trung bình | < 5.0 Không đạt
+ *      >= 8.5 Xuất sắc | >= 8.0 Giỏi | >= 6.5 Khá | >= 5.0 Trung bình | < 5.0 Không đạt
  *
  * Module này là pure functions (không I/O) để dùng chung cho:
  *  - Màn hình 2 (chấm điểm rubric — tự nhảy Điểm QT tạm tính)
@@ -60,8 +60,8 @@ export const GR_CLOSING_SOON_WINDOW_MS = 48 * 60 * 60 * 1000;
 export const GR_QUALITY_RUBRIC_LEVELS = [
   { value: 1.0, label: "Không tốt" },
   { value: 2.0, label: "Trung bình" },
-  { value: 3.5, label: "Tốt" },
-  { value: 4.0, label: "Khá" },
+  { value: 3.5, label: "Khá" },
+  { value: 4.0, label: "Tốt" },
   { value: 5.0, label: "Giỏi" },
 ] as const;
 
@@ -69,7 +69,7 @@ const VALID_QUALITY_LEVELS = new Set<number>(GR_QUALITY_RUBRIC_LEVELS.map((l) =>
 
 /** Ngưỡng xếp loại thang 10 (xấp xỉ trên, khớp Excel VLOOKUP approximate) */
 export const GR_CLASSIFICATION_THRESHOLDS = [
-  { min: 9.0, label: "Xuất sắc" },
+  { min: 8.5, label: "Xuất sắc" },
   { min: 8.0, label: "Giỏi" },
   { min: 6.5, label: "Khá" },
   { min: 5.0, label: "Trung bình" },
@@ -213,17 +213,21 @@ export interface GradeInput {
   finalReportDeadline?: string | Date | null;
   /** Mức rubric chất lượng do GV chọn: 1 / 2 / 3.5 / 4 / 5 (null = chưa chấm) */
   qualityLevel?: number | null;
+  weeklyQualityLevels?: number[];
+  absentWeekCount?: number;
   /** Có sản phẩm sáng tạo (+1.0) */
   hasCreativeProduct?: boolean;
   /** Điểm thi vấn đáp nhập tay (0..10) */
   oralExamScore?: number | null;
+  /** Số tuần đã nộp ít nhất một báo cáo. */
+  submittedWeekCount?: number;
   now?: Date;
 }
 
 export interface GradeResult {
   /** Trạng thái từng tuần (1..6) */
   weekStates: { weekNumber: number; state: SubmissionState }[];
-  /** Các tuần bị tính thiếu/vắng (is_missing hoặc điểm danh V) — union theo tuần */
+  /** Các tuần không nộp quá hạn — chỉ dùng trừ Điểm QT. */
   missingWeeks: number[];
   /** Các tuần nộp trễ */
   lateWeeks: number[];
@@ -270,10 +274,7 @@ export function computeGrade(input: GradeInput): GradeResult {
 
   // Union: tuần bị tính thiếu/vắng khi không nộp quá hạn HOẶC điểm danh V trong tuần đó
   const missingWeeks = weeks
-    .filter((week, index) => {
-      const state = weekStates[index].state;
-      return state === "missing" || Boolean(week.isAbsent);
-    })
+    .filter((_, index) => weekStates[index].state === "missing")
     .map((week) => week.weekNumber);
 
   const lateWeeks = weekStates
@@ -294,15 +295,22 @@ export function computeGrade(input: GradeInput): GradeResult {
   // ── Cột U: Điều kiện dự thi ──
   const ineligibilityReasons: string[] = [];
   if (!finalReportSubmitted) ineligibilityReasons.push(GR_INELIGIBLE_REASON_NO_FINAL);
-  if (missingCount >= GR_MAX_MISSING_WEEKS) ineligibilityReasons.push(GR_INELIGIBLE_REASON_ABSENCE);
+  if ((input.absentWeekCount ?? 0) >= GR_MAX_MISSING_WEEKS) ineligibilityReasons.push(GR_INELIGIBLE_REASON_ABSENCE);
   const isEligible = ineligibilityReasons.length === 0;
 
   // ── Cột I: Điểm QT ──
-  const submissionPoints = roundScore(Math.max(0, GR_SUBMISSION_MAX - missingCount * GR_MISSING_PENALTY));
-  const punctualityPoints = roundScore(Math.max(0, GR_PUNCTUALITY_MAX - lateCount * GR_LATE_PENALTY));
-  const qualityLevel = input.qualityLevel != null && VALID_QUALITY_LEVELS.has(input.qualityLevel)
-    ? input.qualityLevel
-    : null;
+  const submittedWeekCount = input.submittedWeekCount ?? weekStates.filter((item) => item.state === "on_time" || item.state === "late").length;
+  const submissionPoints = roundScore(
+    submittedWeekCount > 0 ? Math.max(0, GR_SUBMISSION_MAX - missingCount * GR_MISSING_PENALTY) : 0,
+  );
+  const punctualityPoints = roundScore(
+    submittedWeekCount > 0 ? Math.max(0, GR_PUNCTUALITY_MAX - lateCount * GR_LATE_PENALTY) : 0,
+  );
+  const ratedQualityLevels = (input.weeklyQualityLevels ?? [])
+    .filter((level) => VALID_QUALITY_LEVELS.has(level));
+  const qualityLevel = ratedQualityLevels.length > 0
+    ? roundScore(ratedQualityLevels.reduce((sum, level) => sum + level, 0) / ratedQualityLevels.length)
+    : input.qualityLevel != null && VALID_QUALITY_LEVELS.has(input.qualityLevel) ? input.qualityLevel : null;
   const qualityPoints = qualityLevel ?? 0;
   const creativeBonus = input.hasCreativeProduct ? GR_CREATIVE_BONUS : 0;
   const rawProcessScore = submissionPoints + punctualityPoints + qualityPoints + creativeBonus;

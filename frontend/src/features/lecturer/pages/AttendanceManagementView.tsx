@@ -18,16 +18,27 @@ import {
   X,
   RefreshCw,
   Video,
+  FileSpreadsheet,
 } from "lucide-react";
 import { useSemester } from "../../../contexts/SemesterContext";
 import { attendanceService } from "../../../services/attendance.service";
 import { lecturerInternshipsService } from "../../../services/lecturerInternships.service";
+import { lecturerExportService } from "../../../services/lecturerExport.service";
 import { PageHeader } from "../../../components/common/PageHeader";
 import { Panel } from "../../../components/common/Panel";
 import { KpiCard, KpiGrid } from "../../../components/common/KpiCard";
 import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { parseBackendDate } from "../../../lib/formatDateTimeVi";
+import {
+  MAX_PREP_WEEKS,
+  getWeekWindow,
+  isMeetingDateInWeek,
+  relativeWeekFromMeetingDate,
+  semesterWeekLabel,
+  shiftDateIntoWeek,
+  toSemesterWeek,
+} from "../../../lib/internshipWeeks";
 import type {
   AttendanceSessionDto,
   AttendanceSessionDetailDto,
@@ -45,10 +56,24 @@ function toDateTimeLocalValue(date: Date) {
 export const AttendanceManagementView: React.FC<{
   onShowToast?: (msg: string, type?: string) => void;
 }> = ({ onShowToast }) => {
-  const { activeSemesterId, selectedSemester } = useSemester();
+  const { activeSemesterId, selectedSemester, semesters } = useSemester();
   const attendanceSemesterId = selectedSemester?.id && selectedSemester.id !== "all"
     ? selectedSemester.id
     : activeSemesterId;
+  // Kỳ thật đang thao tác (selectedSemester="all" là kỳ ảo → dùng kỳ đang hoạt động).
+  const currentSemester =
+    semesters.find((s) => s.id === attendanceSemesterId) ?? selectedSemester;
+  // Tuần tuyệt đối của học kỳ nơi Tuần thực tập 1 bắt đầu (vd 14 → TT 1..6 = HK 14..19).
+  const internshipStartWeek = currentSemester?.internshipStartWeek || 1;
+  // Ngày bắt đầu kỳ (chuỗi dd/MM/yyyy của context) — nguồn tính khung 7 ngày/tuần.
+  const semesterStartRaw = currentSemester?.startDate || null;
+  /** Tuần tương đối → nhãn "Tuần 14 học kỳ" (chưa cấu hình thì giữ nhãn cũ). */
+  const weekLabel = (week: number) => semesterWeekLabel(week, internshipStartWeek);
+  /** Nhãn option dropdown: hiển thị cả tuần thực tập (tương đối) lẫn tuần học kỳ (tuyệt đối). */
+  const weekOptionLabel = (week: number) => {
+    if (internshipStartWeek <= 1) return week > 0 ? `Tuần ${week}` : `Tuần ${week} — chuẩn bị`;
+    return `Tuần ${week}${week <= 0 ? " (chuẩn bị)" : ""} — HK tuần ${toSemesterWeek(week, internshipStartWeek)}`;
+  };
   const [sessions, setSessions] = useState<AttendanceSessionDto[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,7 +90,9 @@ export const AttendanceManagementView: React.FC<{
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   // Form states for creating session
-  const totalWeeks = selectedSemester?.totalWeeks || 6;
+  const totalWeeks = currentSemester?.totalWeeks || 6;
+  // Tuần <= 0 = tuần chuẩn bị trước khi sinh viên đi thực tập (0 = tuần trước tuần 1)
+  const PREP_WEEKS = Array.from({ length: MAX_PREP_WEEKS + 1 }, (_, i) => i - MAX_PREP_WEEKS);
   const [createWeek, setCreateWeek] = useState(1);
   const [createTitle, setCreateTitle] = useState("");
   const [createDescription, setCreateDescription] = useState("");
@@ -76,7 +103,16 @@ export const AttendanceManagementView: React.FC<{
   const [createIsLecturerOnly, setCreateIsLecturerOnly] = useState(false);
   const [isSubmittingCreate, setIsSubmittingCreate] = useState(false);
 
+  // Tuần thực tập chính đã có buổi gặp sinh viên (buổi công tác riêng không chiếm tuần)
+  const mainWeeksUsed = useMemo(() => new Set(sessions.filter((s) => !s.isLecturerOnly).map((s) => s.weekNumber)), [sessions]);
+  const duplicateWeekWarning = !createIsLecturerOnly && mainWeeksUsed.has(createWeek)
+    ? `${weekLabel(createWeek)} đã có buổi gặp sinh viên — buổi này sẽ bị từ chối. Hãy chọn "Công tác riêng" nếu đây là lịch nội bộ.`
+    : null;
+
   // Form states for editing session
+  // (editWeek = tuần tương đối của buổi đang sửa; gửi lên backend khi lưu —
+  //  đổi tuần sẽ tự dời ngày họp sang khung tuần mới, đổi ngày sẽ tự suy ra tuần.)
+  const [editWeek, setEditWeek] = useState(1);
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editDate, setEditDate] = useState("");
@@ -85,6 +121,15 @@ export const AttendanceManagementView: React.FC<{
   const [editStatus, setEditStatus] = useState<"Scheduled" | "Completed" | "Cancelled">("Scheduled");
   const [editIsLecturerOnly, setEditIsLecturerOnly] = useState(false);
   const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+  // Tuần thực tập chính đã bị buổi KHÁC chiếm (loại trừ chính buổi đang sửa)
+  const editMainWeeksUsed = useMemo(
+    () => new Set(sessions.filter((s) => !s.isLecturerOnly && s.id !== editingSession?.id).map((s) => s.weekNumber)),
+    [sessions, editingSession],
+  );
+  // Cảnh báo trùng tuần khi bật/tắt "Công tác riêng" hoặc đổi tuần ở modal Sửa
+  const editDuplicateWarning = !editIsLecturerOnly && editMainWeeksUsed.has(editWeek)
+    ? `${weekLabel(editWeek)} đã có buổi gặp sinh viên khác — hãy chọn tuần khác hoặc giữ buổi này là "Công tác riêng".`
+    : null;
 
   // In-memory mark states
   const [markRecords, setMarkRecords] = useState<
@@ -95,6 +140,21 @@ export const AttendanceManagementView: React.FC<{
 
   // Tổng số buổi vắng theo sinh viên trong kỳ — highlight đỏ khi >= 2
   const [absenceSummary, setAbsenceSummary] = useState<Record<string, number>>({});
+
+  // Xuất file Excel lịch hướng dẫn/công tác (template Lich huong dan TTTN) của giảng viên trong kỳ đang chọn
+  const [isExportingSchedule, setIsExportingSchedule] = useState(false);
+  const handleExportWorkSchedule = async () => {
+    if (!attendanceSemesterId) return;
+    setIsExportingSchedule(true);
+    try {
+      await lecturerExportService.downloadGuidanceSchedule(attendanceSemesterId);
+      onShowToast?.("Đã xuất file Excel lịch công tác.", "success");
+    } catch (err) {
+      onShowToast?.(getApiErrorMessage(err), "error");
+    } finally {
+      setIsExportingSchedule(false);
+    }
+  };
 
   const loadSessions = useCallback(async () => {
     if (!attendanceSemesterId) return;
@@ -136,20 +196,23 @@ export const AttendanceManagementView: React.FC<{
   // Handle open create modal
   const handleOpenCreateModal = async () => {
     const students = await loadAssignedStudents();
+    // Ưu tiên tuần thực tập chính còn trống; nếu đã kín hết thì mở sẵn tuần chuẩn bị 0.
     const nextWeek = Array.from({ length: totalWeeks }, (_, index) => index + 1)
-      .find((week) => !sessions.some((session) => session.weekNumber === week));
+      .find((week) => !sessions.some((session) => session.weekNumber === week && !session.isLecturerOnly));
     if (!nextWeek) {
-      onShowToast?.("Mỗi tuần chỉ được lên lịch một buổi gặp trong kỳ này.", "error");
-      return;
+      onShowToast?.("Các tuần thực tập chính đã kín lịch — có thể tạo thêm lịch công tác riêng hoặc tuần chuẩn bị.", "info");
     }
-    setCreateWeek(nextWeek);
-    setCreateTitle(`Buổi gặp hướng dẫn tuần ${nextWeek}`);
+    const initialWeek = nextWeek ?? 0;
+    setCreateWeek(initialWeek);
+    setCreateTitle(initialWeek > 0 ? `Buổi gặp hướng dẫn tuần ${initialWeek}` : "Buổi chuẩn bị trước thực tập");
     setCreateDescription("");
-    // Default to tomorrow at 09:00 AM
+    // Mặc định 09:00 ngày mai, tự dời vào đúng khung của tuần được chọn
+    // (nếu kỳ đã cấu hình ngày bắt đầu) để ngày ↔ tuần không bao giờ lệch.
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     tomorrow.setHours(9, 0, 0, 0);
-    setCreateDate(toDateTimeLocalValue(tomorrow));
+    const shiftedDefault = shiftDateIntoWeek(tomorrow.toISOString(), initialWeek, semesterStartRaw, internshipStartWeek);
+    setCreateDate(toDateTimeLocalValue(new Date(shiftedDefault ?? tomorrow.toISOString())));
     setCreateSoTiet(1);
     setCreateLocation("Phòng làm việc bộ môn");
     setCreateIsLecturerOnly(false);
@@ -169,6 +232,22 @@ export const AttendanceManagementView: React.FC<{
       onShowToast?.("Vui lòng chọn thời gian buổi gặp", "error");
       return;
     }
+    if (!createIsLecturerOnly && mainWeeksUsed.has(createWeek)) {
+      onShowToast?.(`${weekLabel(createWeek)} đã có buổi gặp sinh viên. Mỗi tuần chỉ một buổi gặp sinh viên — đánh dấu "Công tác riêng" nếu đây là lịch nội bộ.`, "error");
+      return;
+    }
+    // Đồng bộ ngày ↔ tuần: ngày họp phải nằm trong khung 7 ngày của tuần đã chọn
+    // theo lịch học kỳ (backend cũng chặn, nhưng báo lỗi client cho nhanh).
+    if (semesterStartRaw && !isMeetingDateInWeek(new Date(createDate), createWeek, semesterStartRaw, internshipStartWeek)) {
+      const win = getWeekWindow(createWeek, semesterStartRaw, internshipStartWeek);
+      onShowToast?.(
+        win
+          ? `Ngày họp không thuộc ${weekLabel(createWeek)} (hiệu lực ${win.from.toLocaleDateString("vi-VN")} – ${new Date(win.to.getTime() - 86400000).toLocaleDateString("vi-VN")}). Hãy chọn lại ngày hoặc tuần.`
+          : `Ngày họp không thuộc ${weekLabel(createWeek)}. Hãy chọn lại ngày hoặc tuần.`,
+        "error",
+      );
+      return;
+    }
 
     setIsSubmittingCreate(true);
     try {
@@ -181,7 +260,9 @@ export const AttendanceManagementView: React.FC<{
         durationMinutes: Math.round(createSoTiet * 45),
         location: createLocation.trim() || undefined,
         isLecturerOnly: createIsLecturerOnly,
-        studentIds: createIsLecturerOnly ? [] : (selectedStudentIds.length === assignedStudents.length ? undefined : selectedStudentIds),
+        // Luôn gửi danh sách sinh viên đã chọn — backend từ chối studentIds rỗng/undefined
+        // (tránh âm thầm tạo điểm danh cho toàn bộ sinh viên được phân công).
+        studentIds: createIsLecturerOnly ? [] : selectedStudentIds,
       };
 
       await attendanceService.createSession(dto);
@@ -258,6 +339,7 @@ export const AttendanceManagementView: React.FC<{
   // Handle open edit modal
   const handleOpenEditModal = (session: AttendanceSessionDto) => {
     setEditingSession(session);
+    setEditWeek(session.weekNumber);
     setEditTitle(session.title);
     setEditDescription(session.description || "");
     setEditDate(toDateTimeLocalValue(parseBackendDate(session.meetingDate)));
@@ -273,9 +355,27 @@ export const AttendanceManagementView: React.FC<{
     e.preventDefault();
     if (!editingSession) return;
 
+    // Chặn trùng tuần trước khi gọi API (backend cũng kiểm tra lại).
+    if (!editIsLecturerOnly && editMainWeeksUsed.has(editWeek)) {
+      onShowToast?.(`${weekLabel(editWeek)} đã có buổi gặp sinh viên. Mỗi tuần chỉ một buổi gặp sinh viên — đánh dấu "Công tác riêng" nếu đây là lịch nội bộ.`, "error");
+      return;
+    }
+    // Đồng bộ ngày ↔ tuần theo lịch học kỳ.
+    if (semesterStartRaw && editDate && !isMeetingDateInWeek(new Date(editDate), editWeek, semesterStartRaw, internshipStartWeek)) {
+      const win = getWeekWindow(editWeek, semesterStartRaw, internshipStartWeek);
+      onShowToast?.(
+        win
+          ? `Ngày họp không thuộc ${weekLabel(editWeek)} (hiệu lực ${win.from.toLocaleDateString("vi-VN")} – ${new Date(win.to.getTime() - 86400000).toLocaleDateString("vi-VN")}). Hãy chọn lại ngày hoặc tuần.`
+          : `Ngày họp không thuộc ${weekLabel(editWeek)}. Hãy chọn lại ngày hoặc tuần.`,
+        "error",
+      );
+      return;
+    }
+
     setIsSubmittingEdit(true);
     try {
       const dto: UpdateAttendanceSessionDto = {
+        weekNumber: editWeek,
         title: editTitle.trim(),
         description: editDescription.trim() || undefined,
         meetingDate: editDate ? new Date(editDate).toISOString() : undefined,
@@ -318,7 +418,9 @@ export const AttendanceManagementView: React.FC<{
   const totalRecordsCount = attendanceSessions.reduce((acc, s) => acc + s.totalStudents, 0);
   const totalPresentCount = attendanceSessions.reduce((acc, s) => acc + s.presentCount, 0);
   const totalAbsentCount = attendanceSessions.reduce((acc, s) => acc + s.absentCount, 0);
-  const overallRate = totalRecordsCount > 0 ? Math.round((totalPresentCount / totalRecordsCount) * 100) : 100;
+  // Chưa có bản ghi điểm danh → hiển thị "—" thay vì "100%" vô nghĩa.
+  const overallRate = totalRecordsCount > 0 ? Math.round((totalPresentCount / totalRecordsCount) * 100) : null;
+  const overallRateLabel = overallRate == null ? "—" : `${overallRate}%`;
   const lecturerOnlyCount = sessions.filter((s) => s.isLecturerOnly).length;
 
   // Filtered records for mark modal
@@ -358,6 +460,15 @@ export const AttendanceManagementView: React.FC<{
             <Plus className="w-4 h-4" />
             {isLoadingAssignedStudents ? "Đang tải sinh viên..." : "Tạo buổi gặp mới"}
           </button>
+          <button
+            onClick={handleExportWorkSchedule}
+            disabled={!attendanceSemesterId || isExportingSchedule}
+            title="Xuất file Excel lịch công tác của bạn trong học kỳ này"
+            className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs rounded-lg flex items-center gap-1.5 transition-colors shadow-sm"
+          >
+            <FileSpreadsheet className={`w-3.5 h-3.5 ${isExportingSchedule ? "animate-pulse" : ""}`} />
+            {isExportingSchedule ? "Đang xuất..." : "Xuất Excel"}
+          </button>
         </div>
       </PageHeader>
 
@@ -374,7 +485,7 @@ export const AttendanceManagementView: React.FC<{
         <KpiCard
           tone="emerald"
           title="Tỷ lệ chuyên cần trung bình"
-          value={`${overallRate}%`}
+          value={overallRateLabel}
           icon={CheckCircle2}
           footer={`${totalPresentCount} / ${totalRecordsCount} lượt có mặt (chỉ buổi có SV)`}
         />
@@ -461,9 +572,15 @@ export const AttendanceManagementView: React.FC<{
                     {/* Header: Week badge + Type badge + Status badge */}
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-1.5">
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                          Tuần {session.weekNumber}
-                        </span>
+                        {session.weekNumber <= 0 ? (
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-violet-50 text-violet-700 border border-violet-200">
+                            {weekLabel(session.weekNumber)}
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                            {weekLabel(session.weekNumber)}
+                          </span>
+                        )}
                         {session.isLecturerOnly && (
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
                             Công tác riêng
@@ -628,16 +745,30 @@ export const AttendanceManagementView: React.FC<{
                     onChange={(e) => {
                       const w = Number(e.target.value);
                       setCreateWeek(w);
-                      setCreateTitle(`Buổi gặp hướng dẫn tuần ${w}`);
+                      setCreateTitle(w > 0 ? `Buổi gặp hướng dẫn tuần ${w}` : "Buổi chuẩn bị trước thực tập");
                     }}
                     className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 focus:border-blue-500 font-medium outline-none"
                   >
-                    {Array.from({ length: totalWeeks }, (_, i) => i + 1).map((w) => (
-                      <option key={w} value={w}>
-                        Tuần {w}
-                      </option>
-                    ))}
+                    <optgroup label="Tuần chuẩn bị (trước thực tập)">
+                      {PREP_WEEKS.map((w) => (
+                        <option key={w} value={w} disabled={!createIsLecturerOnly && mainWeeksUsed.has(w)}>
+                          {weekOptionLabel(w)}
+                          {!createIsLecturerOnly && mainWeeksUsed.has(w) ? " (đã có lịch)" : ""}
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Tuần thực tập chính">
+                      {Array.from({ length: totalWeeks }, (_, i) => i + 1).map((w) => (
+                        <option key={w} value={w} disabled={!createIsLecturerOnly && mainWeeksUsed.has(w)}>
+                          {weekOptionLabel(w)}
+                          {!createIsLecturerOnly && mainWeeksUsed.has(w) ? " (đã có lịch)" : ""}
+                        </option>
+                      ))}
+                    </optgroup>
                   </select>
+                  <p className="mt-1 text-[10px] text-slate-500">
+                    Giảng viên có thể lên lịch chuẩn bị vài tuần trước khi sinh viên bắt đầu thực tập; lịch công tác riêng được tạo trùng tuần.
+                  </p>
                 </div>
 
                 <div>
@@ -703,6 +834,13 @@ export const AttendanceManagementView: React.FC<{
                   className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 focus:border-blue-500 font-medium outline-none"
                 />
               </div>
+
+              {duplicateWeekWarning && (
+                <div className="p-2.5 rounded-md bg-rose-50 border border-rose-200 text-rose-700 flex items-start gap-1.5">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                  <span>{duplicateWeekWarning}</span>
+                </div>
+              )}
 
               {/* Công tác riêng của giảng viên */}
               <div className="rounded-md border border-amber-100 bg-amber-50/50 p-3">
@@ -808,7 +946,7 @@ export const AttendanceManagementView: React.FC<{
                     Điểm danh: {activeMarkSession.title}
                   </h3>
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700">
-                    Tuần {activeMarkSession.weekNumber}
+                    {weekLabel(activeMarkSession.weekNumber)}
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 mt-0.5">
@@ -1021,15 +1159,58 @@ export const AttendanceManagementView: React.FC<{
             </div>
 
             <form onSubmit={handleSubmitEdit} className="p-5 space-y-3.5 text-xs">
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Tiêu đề buổi gặp</label>
-                <input
-                  type="text"
-                  required
-                  value={editTitle}
-                  onChange={(e) => setEditTitle(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 focus:border-blue-500 font-medium outline-none"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Tuần thực tập <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={editWeek}
+                    onChange={(e) => {
+                      const w = Number(e.target.value);
+                      setEditWeek(w);
+                      // Đổi tuần → dời ngày họp sang đúng khung tuần mới (giữ thứ + giờ)
+                      // để ngày luôn khớp tuần theo lịch học kỳ.
+                      if (editDate) {
+                        const shifted = shiftDateIntoWeek(editDate, w, semesterStartRaw, internshipStartWeek);
+                        if (shifted) setEditDate(toDateTimeLocalValue(new Date(shifted)));
+                      }
+                    }}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 focus:border-blue-500 font-medium outline-none"
+                  >
+                    <optgroup label="Tuần chuẩn bị (trước thực tập)">
+                      {PREP_WEEKS.map((w) => (
+                        <option key={w} value={w} disabled={!editIsLecturerOnly && editMainWeeksUsed.has(w)}>
+                          {weekOptionLabel(w)}
+                          {!editIsLecturerOnly && editMainWeeksUsed.has(w) ? " (đã có lịch)" : ""}
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Tuần thực tập chính">
+                      {Array.from({ length: totalWeeks }, (_, i) => i + 1).map((w) => (
+                        <option key={w} value={w} disabled={!editIsLecturerOnly && editMainWeeksUsed.has(w)}>
+                          {weekOptionLabel(w)}
+                          {!editIsLecturerOnly && editMainWeeksUsed.has(w) ? " (đã có lịch)" : ""}
+                        </option>
+                      ))}
+                    </optgroup>
+                  </select>
+                  <p className="mt-1 text-[10px] text-slate-500">
+                    Đổi tuần sẽ tự dời ngày họp sang khung tuần mới (giữ nguyên thứ & giờ).
+                  </p>
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Trạng thái buổi gặp</label>
+                  <select
+                    value={editStatus}
+                    onChange={(e) => setEditStatus(e.target.value as any)}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 focus:border-blue-500 font-medium outline-none"
+                  >
+                    <option value="Scheduled">Sắp diễn ra (Scheduled)</option>
+                    <option value="Completed">Đã hoàn thành (Completed)</option>
+                    <option value="Cancelled">Đã hủy (Cancelled)</option>
+                  </select>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -1038,7 +1219,16 @@ export const AttendanceManagementView: React.FC<{
                   <input
                     type="datetime-local"
                     value={editDate}
-                    onChange={(e) => setEditDate(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setEditDate(value);
+                      // Đổi ngày → tự suy ra tuần tương ứng (nếu kỳ đã cấu hình ngày bắt đầu)
+                      // để tuần luôn khớp ngày theo lịch học kỳ.
+                      if (value && semesterStartRaw) {
+                        const derived = relativeWeekFromMeetingDate(new Date(value), semesterStartRaw, totalWeeks, internshipStartWeek);
+                        if (derived !== null) setEditWeek(derived);
+                      }
+                    }}
                     className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 focus:border-blue-500 font-medium outline-none"
                   />
                 </div>
@@ -1055,6 +1245,13 @@ export const AttendanceManagementView: React.FC<{
                 </div>
               </div>
 
+              {editDuplicateWarning && (
+                <div className="p-2.5 rounded-md bg-rose-50 border border-rose-200 text-rose-700 flex items-start gap-1.5">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                  <span>{editDuplicateWarning}</span>
+                </div>
+              )}
+
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Địa điểm / Link họp</label>
                 <input
@@ -1066,16 +1263,14 @@ export const AttendanceManagementView: React.FC<{
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Trạng thái buổi gặp</label>
-                <select
-                  value={editStatus}
-                  onChange={(e) => setEditStatus(e.target.value as any)}
+                <label className="block font-bold text-slate-700 mb-1">Tiêu đề buổi gặp</label>
+                <input
+                  type="text"
+                  required
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 focus:border-blue-500 font-medium outline-none"
-                >
-                  <option value="Scheduled">Sắp diễn ra (Scheduled)</option>
-                  <option value="Completed">Đã hoàn thành (Completed)</option>
-                  <option value="Cancelled">Đã hủy (Cancelled)</option>
-                </select>
+                />
               </div>
 
               <div>

@@ -249,7 +249,11 @@ export const AccountView = () => {
                           value={editing ? draft[field] : profile[field]}
                           onChange={(event) => setDraft((current) => ({ ...current, [field]: event.target.value }))}
                           placeholder={field === "fullName" ? "Nhập họ và tên" : field === "email" ? "Nhập email công vụ" : field === "phone" ? "Nhập số điện thoại" : "Chưa cập nhật"}
-                          className="w-full rounded-md border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 font-medium outline-none focus:border-blue-500 disabled:bg-slate-100 disabled:text-slate-500"
+                          title={field === "office" ? "Thông tin văn phòng do khoa quản lý" : undefined}
+                          aria-disabled={field === "office" ? "true" : undefined}
+                          className={field === "office"
+                            ? "w-full cursor-not-allowed rounded-md border border-slate-200 bg-slate-100 py-2.5 pl-9 pr-3 font-medium text-slate-400 italic"
+                            : "w-full rounded-md border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 font-medium outline-none focus:border-blue-500 disabled:bg-slate-100 disabled:text-slate-500"}
                         />
                       </span>
                     </label>

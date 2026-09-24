@@ -55,6 +55,7 @@ export const RecentSubmissions = ({
               <th className="py-3 px-4">LOẠI BÀI</th>
               <th className="py-3 px-4">THỜI GIAN</th>
               <th className="py-3 px-4 text-right">TRẠNG THÁI</th>
+              <th className="py-3 px-4 text-center">THAO TÁC</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 font-medium bg-white">
@@ -118,6 +119,20 @@ export const RecentSubmissions = ({
                     )}
                     {sub.status}
                   </span>
+                </td>
+
+                {/* Action */}
+                <td className="py-3 px-4 text-center">
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onReviewSubmission?.(sub);
+                    }}
+                    className="px-2.5 py-1 rounded-md border border-blue-200 bg-blue-50 text-blue-700 text-[10px] font-bold hover:bg-blue-100 transition-colors"
+                  >
+                    Xem
+                  </button>
                 </td>
               </tr>
             ))}
@@ -183,7 +198,7 @@ export const RecentSubmissions = ({
                 }}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-md flex items-center gap-1.5 cursor-pointer shadow-md transition-all"
               >
-                <span>Duyệt bài nộp</span>
+                <span>Mở trang Báo cáo để duyệt</span>
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
