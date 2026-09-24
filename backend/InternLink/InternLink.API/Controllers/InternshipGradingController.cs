@@ -68,6 +68,7 @@ public class InternshipGradingController : ControllerBase
     /// Lưu điểm cho 1 sinh viên: rubric chất lượng (5 mức), thưởng sáng tạo, điểm thi vấn đáp, ghi chú.
     /// </summary>
     [HttpPost("save")]
+    [Authorize(Policy = "RequireLecturerOrDepartmentAdmin")]
     public async Task<ActionResult<ApiResponse<InternshipStudentGradeDto>>> SaveGrade(
         [FromQuery] Guid semesterId,
         [FromBody] SaveInternshipGradeRequestDto dto,

@@ -18,6 +18,7 @@ public class AuthorizationBoundaryTests
         {
             options.AddPolicy(AdminPolicies.SuperAdmin, policy => policy.RequireRole("SuperAdmin"));
             options.AddPolicy(AdminPolicies.DepartmentAdmin, policy => policy.RequireRole("DepartmentAdmin"));
+            options.AddPolicy("RequireLecturerOrDepartmentAdmin", policy => policy.RequireRole("Lecturer", "DepartmentAdmin"));
         });
 
         _authorizationService = services.BuildServiceProvider()
@@ -59,6 +60,36 @@ public class AuthorizationBoundaryTests
             AdminPolicies.DepartmentAdmin);
 
         superAdmin.Succeeded.Should().BeTrue();
+        departmentAdmin.Succeeded.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task SuperAdmin_CannotAuthorizeLecturerOperationalWritePolicy()
+    {
+        // SuperAdmin = system administration only; must not perform lecturer/faculty
+        // internship operations (grading, report review, feedback, documents...).
+        var result = await _authorizationService.AuthorizeAsync(
+            CreateUser("SuperAdmin"),
+            null,
+            "RequireLecturerOrDepartmentAdmin");
+
+        result.Succeeded.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task LecturerAndDepartmentAdmin_CanAuthorizeLecturerOperationalWritePolicy()
+    {
+        var lecturer = await _authorizationService.AuthorizeAsync(
+            CreateUser("Lecturer"),
+            null,
+            "RequireLecturerOrDepartmentAdmin");
+
+        var departmentAdmin = await _authorizationService.AuthorizeAsync(
+            CreateUser("DepartmentAdmin"),
+            null,
+            "RequireLecturerOrDepartmentAdmin");
+
+        lecturer.Succeeded.Should().BeTrue();
         departmentAdmin.Succeeded.Should().BeTrue();
     }
 

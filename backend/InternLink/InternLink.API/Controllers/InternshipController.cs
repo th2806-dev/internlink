@@ -10,8 +10,9 @@ namespace InternLink.API.Controllers;
 /// <summary>
 /// Legacy & Admin API endpoints for global internship management.
 /// NOTE: Lecturers should prefer using the consolidated portal endpoints under `/api/Lecturer/*` (e.g. `/api/Lecturer/internships`, `/api/Lecturer/students`).
-/// Reads are scoped to assigned Lecturer when accessed by a Lecturer (or global for SuperAdmin).
-/// Writes and assignments are restricted to SuperAdmin.
+/// Reads are scoped to assigned Lecturer when accessed by a Lecturer (global for admins — read-only oversight).
+/// Writes: CRUD = DepartmentAdmin; company assignment = Lecturer or DepartmentAdmin.
+/// SuperAdmin (system administration) has read-only access and does not take part in these operations.
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
@@ -301,7 +302,7 @@ public class InternshipController : ControllerBase
     /// Assign or change company for an internship (Lecturer or Admin)
     /// </summary>
     [HttpPut("{id}/company")]
-    [Authorize(Policy = "RequireLecturerOrAdmin")]
+    [Authorize(Policy = "RequireLecturerOrDepartmentAdmin")]
     public async Task<IActionResult> AssignCompany(Guid id, [FromBody] AssignCompanyRequest request)
     {
         try

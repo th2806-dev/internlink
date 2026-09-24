@@ -238,7 +238,7 @@ public class EvaluationController : ControllerBase
     [ProducesResponseType(typeof(EvaluationDetailDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-    [Authorize(Policy = "RequireLecturerOrAdmin")]
+    [Authorize(Policy = "RequireLecturerOrDepartmentAdmin")]
     public async Task<ActionResult<EvaluationDetailDto>> CreateEvaluation([FromBody] CreateEvaluationRequest request)
     {
         try
@@ -273,7 +273,7 @@ public class EvaluationController : ControllerBase
     [ProducesResponseType(typeof(EvaluationDetailDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [Authorize(Policy = "RequireLecturerOrAdmin")]
+    [Authorize(Policy = "RequireLecturerOrDepartmentAdmin")]
     public async Task<ActionResult<EvaluationDetailDto>> UpdateEvaluation(Guid id, [FromBody] UpdateEvaluationRequest request)
     {
         try
@@ -310,7 +310,7 @@ public class EvaluationController : ControllerBase
     [HttpPost("{id}/finalize")]
     [ProducesResponseType(typeof(EvaluationDetailDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [Authorize(Policy = "RequireLecturerOrAdmin")]
+    [Authorize(Policy = "RequireLecturerOrDepartmentAdmin")]
     public async Task<ActionResult<EvaluationDetailDto>> FinalizeEvaluation(Guid id)
     {
         try
@@ -343,7 +343,7 @@ public class EvaluationController : ControllerBase
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [Authorize(Policy = "RequireLecturerOrAdmin")]
+    [Authorize(Policy = "RequireLecturerOrDepartmentAdmin")]
     public async Task<IActionResult> DeleteEvaluation(Guid id)
     {
         try

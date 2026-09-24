@@ -366,6 +366,86 @@ public class AuthServiceTests
     }
 
     [Fact]
+    public void LecturerOperationalWriteEndpoints_ShouldRequireLecturerOrDepartmentAdminPolicy()
+    {
+        // SuperAdmin must NOT be able to grade students, review weekly reports,
+        // update submission status, manage documents or assign companies.
+        var protectedActions = new[]
+        {
+            (typeof(EvaluationController), nameof(EvaluationController.CreateEvaluation)),
+            (typeof(EvaluationController), nameof(EvaluationController.UpdateEvaluation)),
+            (typeof(EvaluationController), nameof(EvaluationController.FinalizeEvaluation)),
+            (typeof(EvaluationController), nameof(EvaluationController.DeleteEvaluation)),
+            (typeof(WeeklyReportController), nameof(WeeklyReportController.Review)),
+            (typeof(SubmissionController), nameof(SubmissionController.UpdateStatus)),
+            (typeof(SubmissionController), nameof(SubmissionController.Delete)),
+            (typeof(InternshipGradingController), nameof(InternshipGradingController.SaveGrade)),
+            (typeof(InternshipController), nameof(InternshipController.AssignCompany)),
+            (typeof(DocumentController), nameof(DocumentController.UploadDocument)),
+            (typeof(DocumentController), nameof(DocumentController.UpdateDocument)),
+            (typeof(DocumentController), nameof(DocumentController.DeleteDocument)),
+            (typeof(SemesterReportScheduleController), nameof(SemesterReportScheduleController.GenerateDefaults)),
+            (typeof(SemesterReportScheduleController), nameof(SemesterReportScheduleController.UpdateSchedule)),
+            (typeof(LecturerController), nameof(LecturerController.CreateEvaluation)),
+            (typeof(LecturerController), nameof(LecturerController.UpdateEvaluation)),
+            (typeof(LecturerController), nameof(LecturerController.FinalizeEvaluation)),
+            (typeof(LecturerController), nameof(LecturerController.UpdateDefense)),
+            (typeof(LecturerController), nameof(LecturerController.ReviewWeeklyReport)),
+            (typeof(LecturerController), nameof(LecturerController.AddFeedback)),
+            (typeof(LecturerController), nameof(LecturerController.UpdateStudentNotes)),
+            (typeof(LecturerController), nameof(LecturerController.NotifyStudents)),
+            (typeof(LecturerController), nameof(LecturerController.RemindStudent)),
+            (typeof(LecturerController), nameof(LecturerController.SaveSemesterSummary)),
+            (typeof(LecturerController), nameof(LecturerController.UploadDocument)),
+            (typeof(LecturerController), nameof(LecturerController.GenerateAiComment)),
+        };
+
+        foreach (var (controllerType, actionName) in protectedActions)
+        {
+            var policies = controllerType.GetMethod(actionName)!
+                .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+                .Cast<AuthorizeAttribute>()
+                .Select(attribute => attribute.Policy)
+                .ToList();
+
+            policies.Should().Contain("RequireLecturerOrDepartmentAdmin",
+                $"{controllerType.Name}.{actionName} is a lecturer operational write and must exclude SuperAdmin");
+        }
+    }
+
+    [Fact]
+    public void LecturerOperationalReadEndpoints_ShouldRemainOpenToSuperAdmin()
+    {
+        // Oversight reads stay on RequireLecturerOrAdmin so SuperAdmin can monitor.
+        var readActions = new[]
+        {
+            (typeof(EvaluationController), nameof(EvaluationController.GetAllEvaluations)),
+            (typeof(WeeklyReportController), nameof(WeeklyReportController.GetByInternship)),
+            (typeof(InternshipGradingController), nameof(InternshipGradingController.GetSummary)),
+            (typeof(LecturerController), nameof(LecturerController.GetDocuments)),
+        };
+
+        foreach (var (controllerType, actionName) in readActions)
+        {
+            var policies = controllerType.GetMethod(actionName)!
+                .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+                .Cast<AuthorizeAttribute>()
+                .Select(attribute => attribute.Policy)
+                .ToList();
+
+            var effectivePolicies = policies.Count > 0
+                ? policies
+                : controllerType.GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+                    .Cast<AuthorizeAttribute>()
+                    .Select(attribute => attribute.Policy)
+                    .ToList();
+
+            effectivePolicies.Should().Contain("RequireLecturerOrAdmin",
+                $"{controllerType.Name}.{actionName} is a read/oversight endpoint and should stay available to SuperAdmin");
+        }
+    }
+
+    [Fact]
     public void OperationalAdminWriteEndpoints_ShouldRequireDepartmentAdminPolicy()
     {
         var protectedActions = new[]

@@ -270,6 +270,7 @@ public class LecturerController : ControllerBase
     /// Update lecturer notes for a student's internship
     /// </summary>
     [HttpPut("internships/{id:guid}/notes")]
+    [Authorize(Policy = "RequireLecturerOrDepartmentAdmin")]
     public async Task<IActionResult> UpdateStudentNotes(Guid id, [FromBody] UpdateStudentNotesRequest request)
     {
         var userId = User.GetUserId();
@@ -294,6 +295,7 @@ public class LecturerController : ControllerBase
     /// Notify all assigned students
     /// </summary>
     [HttpPost("students/notify")]
+    [Authorize(Policy = "RequireLecturerOrDepartmentAdmin")]
     public async Task<IActionResult> NotifyStudents([FromBody] NotifyStudentsRequest request)
     {
         var userId = User.GetUserId();
@@ -317,6 +319,7 @@ public class LecturerController : ControllerBase
     [HttpPost("students/{id:guid}/remind")]
     [HttpPost("internships/{id:guid}/remind")]
     [HttpPost("students/{id:guid}/notify")]
+    [Authorize(Policy = "RequireLecturerOrDepartmentAdmin")]
     public async Task<IActionResult> RemindStudent(Guid id, [FromBody] RemindStudentRequest? request)
     {
         var userId = User.GetUserId();
@@ -393,6 +396,7 @@ public class LecturerController : ControllerBase
     /// Give feedback on a submission
     /// </summary>
     [HttpPost("submissions/{id:guid}/feedback")]
+    [Authorize(Policy = "RequireLecturerOrDepartmentAdmin")]
     public async Task<IActionResult> AddFeedback(Guid id, [FromBody] CreateFeedbackRequest request)
     {
         var userId = User.GetUserId();
@@ -489,6 +493,7 @@ public class LecturerController : ControllerBase
     /// Review weekly report
     /// </summary>
     [HttpPost("weekly-reports/{id:guid}/review")]
+    [Authorize(Policy = "RequireLecturerOrDepartmentAdmin")]
     public async Task<IActionResult> ReviewWeeklyReport(Guid id, [FromBody] ReviewWeeklyReportRequest request)
     {
         var userId = User.GetUserId();
@@ -559,6 +564,7 @@ public class LecturerController : ControllerBase
     /// Create evaluation for assigned student
     /// </summary>
     [HttpPost("evaluations")]
+    [Authorize(Policy = "RequireLecturerOrDepartmentAdmin")]
     public async Task<IActionResult> CreateEvaluation([FromBody] CreateEvaluationRequest request)
     {
         var userId = User.GetUserId();
@@ -584,6 +590,7 @@ public class LecturerController : ControllerBase
     /// Update evaluation for assigned student
     /// </summary>
     [HttpPut("evaluations/{id:guid}")]
+    [Authorize(Policy = "RequireLecturerOrDepartmentAdmin")]
     public async Task<IActionResult> UpdateEvaluation(Guid id, [FromBody] UpdateEvaluationRequest request)
     {
         var userId = User.GetUserId();
@@ -612,6 +619,7 @@ public class LecturerController : ControllerBase
     /// Finalize evaluation
     /// </summary>
     [HttpPost("evaluations/{id:guid}/finalize")]
+    [Authorize(Policy = "RequireLecturerOrDepartmentAdmin")]
     public async Task<IActionResult> FinalizeEvaluation(Guid id)
     {
         var userId = User.GetUserId();
@@ -633,6 +641,7 @@ public class LecturerController : ControllerBase
     }
 
     [HttpPut("evaluations/{id:guid}/defense")]
+    [Authorize(Policy = "RequireLecturerOrDepartmentAdmin")]
     public async Task<IActionResult> UpdateDefense(Guid id, [FromBody] UpdateDefenseRequest request)
     {
         var userId = User.GetUserId();
@@ -676,6 +685,7 @@ public class LecturerController : ControllerBase
     /// </summary>
     [HttpPost("documents/upload")]
     [Consumes("multipart/form-data")]
+    [Authorize(Policy = "RequireLecturerOrDepartmentAdmin")]
     public async Task<IActionResult> UploadDocument([FromForm] UploadDocumentFormRequest form)
     {
         var userId = User.GetUserId();
@@ -764,6 +774,7 @@ public class LecturerController : ControllerBase
     }
 
     [HttpPut("semester-summary/{semesterId:guid}")]
+    [Authorize(Policy = "RequireLecturerOrDepartmentAdmin")]
     public async Task<IActionResult> SaveSemesterSummary(Guid semesterId, [FromBody] SaveLecturerSemesterSummaryRequest request)
     {
         var userId = User.GetUserId();
@@ -841,6 +852,7 @@ public class LecturerController : ControllerBase
     /// Generate AI-assisted comment for a student based on their progress data.
     /// </summary>
     [HttpPost("ai/generate-comment")]
+    [Authorize(Policy = "RequireLecturerOrDepartmentAdmin")]
     public async Task<IActionResult> GenerateAiComment([FromBody] AiCommentRequest request)
     {
         var userId = User.GetUserId();

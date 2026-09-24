@@ -348,7 +348,7 @@ public class WeeklyReportController : ControllerBase
     }
 
     [HttpPost("{id:guid}/review")]
-    [Authorize(Policy = "RequireLecturerOrAdmin")]
+    [Authorize(Policy = "RequireLecturerOrDepartmentAdmin")]
     public async Task<IActionResult> Review(Guid id, [FromBody] ReviewWeeklyReportRequest request)
     {
         try

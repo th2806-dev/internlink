@@ -172,6 +172,9 @@ public static class DependencyInjection
             options.AddPolicy("RequireLecturer", p => p.RequireRole("Lecturer"));
             options.AddPolicy("RequireStudent", p => p.RequireRole("Student"));
             options.AddPolicy("RequireLecturerOrAdmin", p => p.RequireRole("Lecturer", "SuperAdmin", "DepartmentAdmin"));
+            // Lecturer operational writes (grading, report review, feedback, documents...): SuperAdmin is
+            // system administration only and must NOT take part in faculty internship operations.
+            options.AddPolicy("RequireLecturerOrDepartmentAdmin", p => p.RequireRole("Lecturer", "DepartmentAdmin"));
         });
 
         return services;

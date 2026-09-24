@@ -295,7 +295,7 @@ public class SubmissionController : ControllerBase
     }
 
     [HttpPatch("{id:guid}/status")]
-    [Authorize(Policy = "RequireLecturerOrAdmin")]
+    [Authorize(Policy = "RequireLecturerOrDepartmentAdmin")]
     public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] UpdateSubmissionStatusRequest request)
     {
         try
@@ -321,7 +321,7 @@ public class SubmissionController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
-    [Authorize(Policy = "RequireLecturerOrAdmin")]
+    [Authorize(Policy = "RequireLecturerOrDepartmentAdmin")]
     public async Task<IActionResult> Delete(Guid id)
     {
         try

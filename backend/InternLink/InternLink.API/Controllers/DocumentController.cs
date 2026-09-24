@@ -86,7 +86,7 @@ public class DocumentController : ControllerBase
     }
 
     [HttpPost("upload")]
-    [Authorize(Policy = "RequireLecturerOrAdmin")]
+    [Authorize(Policy = "RequireLecturerOrDepartmentAdmin")]
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> UploadDocument([FromForm] UploadDocumentFormRequest form)
     {
@@ -139,7 +139,7 @@ public class DocumentController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
-    [Authorize(Policy = "RequireLecturerOrAdmin")]
+    [Authorize(Policy = "RequireLecturerOrDepartmentAdmin")]
     public async Task<IActionResult> UpdateDocument(Guid id, [FromBody] UpdateDocumentRequest request)
     {
         var userId = User.GetUserId();
@@ -183,7 +183,7 @@ public class DocumentController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
-    [Authorize(Policy = "RequireLecturerOrAdmin")]
+    [Authorize(Policy = "RequireLecturerOrDepartmentAdmin")]
     public async Task<IActionResult> DeleteDocument(Guid id)
     {
         var userId = User.GetUserId();

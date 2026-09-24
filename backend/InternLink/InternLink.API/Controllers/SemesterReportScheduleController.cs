@@ -21,7 +21,9 @@ public class SemesterReportScheduleController : ControllerBase
     }
 
     [HttpGet]
-    [Authorize(Policy = "RequireLecturerOrAdmin")]
+    // Mọi user đã đăng nhập (gồm Sinh viên) đều đọc được lịch deadline —
+    // portal SV cần hiển thị hạn nộp GV đã cấu hình. Việc SỬA vẫn giới hạn ở GV/admin.
+    [Authorize]
     public async Task<IActionResult> GetReportSchedules(Guid semesterId)
     {
         var schedules = await _semesterService.GetReportSchedulesAsync(semesterId);
@@ -29,7 +31,7 @@ public class SemesterReportScheduleController : ControllerBase
     }
 
     [HttpPost("generate-defaults")]
-    [Authorize(Policy = "RequireLecturerOrAdmin")]
+    [Authorize(Policy = "RequireLecturerOrDepartmentAdmin")]
     public async Task<IActionResult> GenerateDefaults(Guid semesterId)
     {
         try
@@ -44,7 +46,7 @@ public class SemesterReportScheduleController : ControllerBase
     }
 
     [HttpPut("{weekNumber:int}")]
-    [Authorize(Policy = "RequireLecturerOrAdmin")]
+    [Authorize(Policy = "RequireLecturerOrDepartmentAdmin")]
     public async Task<IActionResult> UpdateSchedule(
         Guid semesterId,
         int weekNumber,
