@@ -15,18 +15,26 @@ namespace InternLink.API.Controllers;
 public class SemesterPortalController : ControllerBase
 {
     private readonly ISemesterService _semesterService;
+    private readonly IDepartmentScopeService _deptScope;
     private readonly AppDbContext _db;
 
-    public SemesterPortalController(ISemesterService semesterService, AppDbContext db)
+    public SemesterPortalController(
+        ISemesterService semesterService,
+        IDepartmentScopeService deptScope,
+        AppDbContext db)
     {
         _semesterService = semesterService;
+        _deptScope = deptScope;
         _db = db;
     }
 
     [HttpGet("current")]
     public async Task<IActionResult> GetCurrent()
     {
-        var semester = await _semesterService.GetActiveSemesterAsync();
+        // Scope theo khoa của người dùng (audit mục 4.1): ưu tiên kỳ riêng của khoa,
+        // fallback kỳ dùng chung. GET thuần đọc — không còn side-effect ghi DB.
+        var deptId = _deptScope.GetCurrentDepartmentId(User);
+        var semester = await _semesterService.GetActiveSemesterAsync(deptId);
         if (semester == null)
         {
             // Keep student portal usable during setup before an admin starts the first semester.

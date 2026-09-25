@@ -228,5 +228,106 @@ public class SemesterServiceTests
         updated.AllowLateSubmission.Should().BeFalse();
         updated.Description.Should().Be("Nghiêm cấm nộp trễ hạn tuần này");
     }
+
+    // ══ Audit mục 4.1–4.3 ═════════════════════════════════════════════════
+
+    private static Semester NewSemester(string name, SemesterStatus status, Guid? departmentId = null) =>
+        new()
+        {
+            Id = Guid.NewGuid(),
+            Name = name,
+            Term = "Học kỳ I",
+            AcademicYear = "2025 - 2026",
+            Status = status,
+            DepartmentId = departmentId,
+            CreatedAt = DateTime.UtcNow,
+        };
+
+    [Fact]
+    public async Task CloseSemesterAsync_ShouldNotLockStudentsWithOpenInternshipInAnotherSemester()
+    {
+        var db = GetDb();
+        var service = new SemesterService(db);
+
+        var semesterA = NewSemester("Kỳ A", SemesterStatus.Active);
+        var semesterB = NewSemester("Kỳ B", SemesterStatus.Active);
+
+        // SV1 trùng 2 kỳ (còn internship mở ở kỳ B) — SV2 chỉ ở kỳ A.
+        var busyUser = new User { Id = Guid.NewGuid(), Username = "busy", PasswordHash = "h", Role = Role.Student, IsActive = true, FullName = "Busy", CreatedAt = DateTime.UtcNow };
+        var onlyUser = new User { Id = Guid.NewGuid(), Username = "only", PasswordHash = "h", Role = Role.Student, IsActive = true, FullName = "Only", CreatedAt = DateTime.UtcNow };
+        var busyStudent = new Student { Id = Guid.NewGuid(), UserId = busyUser.Id, StudentCode = "SV01", FullName = "Busy", CreatedAt = DateTime.UtcNow };
+        var onlyStudent = new Student { Id = Guid.NewGuid(), UserId = onlyUser.Id, StudentCode = "SV02", FullName = "Only", CreatedAt = DateTime.UtcNow };
+
+        await db.Semesters.AddRangeAsync(semesterA, semesterB);
+        await db.Users.AddRangeAsync(busyUser, onlyUser);
+        await db.Students.AddRangeAsync(busyStudent, onlyStudent);
+        await db.Internships.AddRangeAsync(
+            new Internship { Id = Guid.NewGuid(), StudentId = busyStudent.Id, SemesterId = semesterA.Id, Status = InternshipStatus.InProgress, CreatedAt = DateTime.UtcNow },
+            new Internship { Id = Guid.NewGuid(), StudentId = busyStudent.Id, SemesterId = semesterB.Id, Status = InternshipStatus.InProgress, CreatedAt = DateTime.UtcNow },
+            new Internship { Id = Guid.NewGuid(), StudentId = onlyStudent.Id, SemesterId = semesterA.Id, Status = InternshipStatus.InProgress, CreatedAt = DateTime.UtcNow });
+        await db.SaveChangesAsync();
+
+        var result = await service.CloseSemesterAsync(semesterA.Id);
+
+        result.Should().BeTrue();
+        semesterA.Status.Should().Be(SemesterStatus.Completed);
+        // SV còn internship mở ở kỳ B (Active) → giữ active; SV chỉ ở kỳ A → bị khóa.
+        busyUser.IsActive.Should().BeTrue();
+        onlyUser.IsActive.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task DeleteSemesterAsync_ShouldSoftDeleteChildRecords()
+    {
+        var db = GetDb();
+        var service = new SemesterService(db);
+
+        var semester = NewSemester("Kỳ bị xóa", SemesterStatus.Upcoming);
+        await db.Semesters.AddAsync(semester);
+        await db.Internships.AddAsync(new Internship { Id = Guid.NewGuid(), StudentId = Guid.NewGuid(), SemesterId = semester.Id, Status = InternshipStatus.NotStarted, CreatedAt = DateTime.UtcNow });
+        await db.SemesterReportSchedules.AddAsync(new SemesterReportSchedule { Id = Guid.NewGuid(), SemesterId = semester.Id, WeekNumber = 1, Title = "Tuần 1", DueDate = DateTime.UtcNow.AddDays(7), IsSubmissionOpen = true, CreatedAt = DateTime.UtcNow });
+        await db.SemesterLecturers.AddAsync(new SemesterLecturer { Id = Guid.NewGuid(), SemesterId = semester.Id, LecturerId = Guid.NewGuid(), CreatedAt = DateTime.UtcNow });
+        await db.SemesterCompanies.AddAsync(new SemesterCompany { Id = Guid.NewGuid(), SemesterId = semester.Id, CompanyId = Guid.NewGuid(), IsActive = true, CreatedAt = DateTime.UtcNow });
+        await db.SaveChangesAsync();
+
+        var result = await service.DeleteSemesterAsync(semester.Id);
+
+        result.Should().BeTrue();
+        semester.IsDeleted.Should().BeTrue();
+        // Con cũng bị soft-delete — báo cáo query theo semesterId không còn thấy dữ liệu mồ côi.
+        (await db.Internships.CountAsync(i => i.SemesterId == semester.Id && !i.IsDeleted)).Should().Be(0);
+        (await db.SemesterReportSchedules.CountAsync(rs => rs.SemesterId == semester.Id && !rs.IsDeleted)).Should().Be(0);
+        (await db.SemesterLecturers.CountAsync(sl => sl.SemesterId == semester.Id && !sl.IsDeleted)).Should().Be(0);
+        (await db.SemesterCompanies.CountAsync(sc => sc.SemesterId == semester.Id && !sc.IsDeleted)).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task GetActiveSemesterAsync_ShouldPreferDepartmentSemester_ShouldNotWriteDb()
+    {
+        var db = GetDb();
+        var service = new SemesterService(db);
+
+        var deptA = Guid.NewGuid();
+        var deptB = Guid.NewGuid();
+        var shared = NewSemester("Kỳ dùng chung", SemesterStatus.Active);
+        var ownA = NewSemester("Kỳ khoa A", SemesterStatus.Active, deptA);
+        // Internship NotStarted trong kỳ khoa A: GET KHÔNG được tự chuyển sang InProgress (side-effect cũ).
+        var pending = new Student { Id = Guid.NewGuid(), StudentCode = "SV10", FullName = "Pending", CreatedAt = DateTime.UtcNow };
+        await db.Semesters.AddRangeAsync(shared, ownA);
+        await db.Students.AddAsync(pending);
+        await db.Internships.AddAsync(new Internship { Id = Guid.NewGuid(), StudentId = pending.Id, SemesterId = ownA.Id, Status = InternshipStatus.NotStarted, CreatedAt = DateTime.UtcNow });
+        await db.SaveChangesAsync();
+
+        // Khoa B không có kỳ riêng → nhận kỳ dùng chung.
+        var forB = await service.GetActiveSemesterAsync(deptB);
+        forB!.Id.Should().Be(shared.Id);
+
+        // Khoa A có kỳ riêng → ưu tiên kỳ khoa A.
+        var forA = await service.GetActiveSemesterAsync(deptA);
+        forA!.Id.Should().Be(ownA.Id);
+
+        // Thuần đọc: internship NotStarted giữ nguyên trạng thái.
+        (await db.Internships.CountAsync(i => i.Status == InternshipStatus.NotStarted)).Should().Be(1);
+    }
 }
 

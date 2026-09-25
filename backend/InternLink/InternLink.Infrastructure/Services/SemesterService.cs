@@ -39,34 +39,29 @@ public class SemesterService : ISemesterService
         return semesters.Select(MapToDto);
     }
 
-    public async Task<SemesterDto?> GetActiveSemesterAsync()
+    /// <summary>
+    /// Kỳ đang Active cho portal/người dùng cuối. Thuần đọc (audit mục 4.1: GET không còn
+    /// side-effect ghi DB). Ưu tiên kỳ riêng của khoa (DepartmentId = departmentId),
+    /// fallback kỳ dùng chung (DepartmentId = null).
+    /// </summary>
+    public async Task<SemesterDto?> GetActiveSemesterAsync(Guid? departmentId = null)
     {
-        var semester = await _context.Semesters
-            .Where(s => !s.IsDeleted && s.Status == SemesterStatus.Active)
-            .Include(s => s.Internships)
-            .Include(s => s.SemesterLecturers)
+        var query = _context.Semesters
+            .AsNoTracking()
+            .Where(s => !s.IsDeleted && s.Status == SemesterStatus.Active);
+
+        if (departmentId.HasValue)
+        {
+            // Ưu tiên kỳ riêng của khoa trước kỳ dùng chung.
+            query = query.Where(s => s.DepartmentId == departmentId.Value || s.DepartmentId == null)
+                .OrderBy(s => s.DepartmentId == null);
+        }
+
+        var semester = await query
             .OrderByDescending(s => s.UpdatedAt ?? s.CreatedAt)
             .FirstOrDefaultAsync();
 
-        if (semester == null)
-            return null;
-
-        var pendingInternships = await _context.Internships
-            .Where(i => !i.IsDeleted && i.SemesterId == semester.Id && i.Status == InternshipStatus.NotStarted)
-            .ToListAsync();
-
-        foreach (var internship in pendingInternships)
-        {
-            internship.Status = InternshipStatus.InProgress;
-            internship.StartDate ??= semester.StartDate;
-            internship.EndDate ??= semester.EndDate;
-            internship.UpdatedAt = DateTime.UtcNow;
-        }
-
-        if (pendingInternships.Count > 0)
-            await _context.SaveChangesAsync();
-
-        return MapToDto(semester);
+        return semester == null ? null : MapToDto(semester);
     }
 
     public async Task<SemesterDto?> GetSemesterByIdAsync(Guid id)
@@ -226,23 +221,40 @@ public class SemesterService : ISemesterService
         semester.Status = SemesterStatus.Completed;
         semester.UpdatedAt = DateTime.UtcNow;
 
-        // Optionally lock student user accounts belonging to this semester
-        var studentUserIds = await _context.Internships
+        // Khóa account SV của kỳ này — NHƯNG chỉ SV không còn kỳ thực tập nào khác đang mở
+        // (audit mục 4.3: SV trùng 2 kỳ không bị khóa oan khi 1 kỳ đóng).
+        var closingStudentUserIds = await _context.Internships
             .Where(i => i.SemesterId == id && !i.IsDeleted && i.Student.UserId != null)
             .Select(i => i.Student.UserId!.Value)
             .Distinct()
             .ToListAsync();
 
-        if (studentUserIds.Count > 0)
+        if (closingStudentUserIds.Count > 0)
         {
-            var users = await _context.Users
-                .Where(u => studentUserIds.Contains(u.Id) && !u.IsDeleted)
+            // SV còn internship chưa kết thúc (không phải Completed/Graded) ở kỳ KHÁC đang mở → giữ active.
+            var stillBusyUserIds = await _context.Internships
+                .Where(i => !i.IsDeleted
+                    && i.SemesterId != id
+                    && closingStudentUserIds.Contains(i.Student.UserId!.Value)
+                    && i.Status != InternshipStatus.Completed
+                    && i.Status != InternshipStatus.Graded
+                    && i.Semester!.Status == SemesterStatus.Active)
+                .Select(i => i.Student.UserId!.Value)
+                .Distinct()
                 .ToListAsync();
 
-            foreach (var u in users)
+            var userIdsToLock = closingStudentUserIds.Except(stillBusyUserIds).ToList();
+            if (userIdsToLock.Count > 0)
             {
-                u.IsActive = false; // Closed term students are deactivated
-                u.UpdatedAt = DateTime.UtcNow;
+                var users = await _context.Users
+                    .Where(u => userIdsToLock.Contains(u.Id) && !u.IsDeleted)
+                    .ToListAsync();
+
+                foreach (var u in users)
+                {
+                    u.IsActive = false; // Closed term students are deactivated
+                    u.UpdatedAt = DateTime.UtcNow;
+                }
             }
         }
 
@@ -259,8 +271,32 @@ public class SemesterService : ISemesterService
         if (semester == null)
             return false;
 
+        // Soft-delete cả con (audit mục 4.2): báo cáo query trực tiếp theo semesterId
+        // sẽ không còn "thấy" dữ liệu kỳ đã xóa, không còn dữ liệu mồ côi.
+        var now = DateTime.UtcNow;
+
+        var childInternships = await _context.Internships
+            .Where(i => i.SemesterId == id && !i.IsDeleted)
+            .ToListAsync();
+        foreach (var i in childInternships) { i.IsDeleted = true; i.UpdatedAt = now; }
+
+        var schedules = await _context.SemesterReportSchedules
+            .Where(rs => rs.SemesterId == id && !rs.IsDeleted)
+            .ToListAsync();
+        foreach (var rs in schedules) { rs.IsDeleted = true; rs.UpdatedAt = now; }
+
+        var semesterLecturers = await _context.SemesterLecturers
+            .Where(sl => sl.SemesterId == id && !sl.IsDeleted)
+            .ToListAsync();
+        foreach (var sl in semesterLecturers) { sl.IsDeleted = true; sl.UpdatedAt = now; }
+
+        var semesterCompanies = await _context.SemesterCompanies
+            .Where(sc => sc.SemesterId == id && !sc.IsDeleted)
+            .ToListAsync();
+        foreach (var sc in semesterCompanies) { sc.IsDeleted = true; sc.UpdatedAt = now; }
+
         semester.IsDeleted = true;
-        semester.UpdatedAt = DateTime.UtcNow;
+        semester.UpdatedAt = now;
         await _context.SaveChangesAsync();
         return true;
     }

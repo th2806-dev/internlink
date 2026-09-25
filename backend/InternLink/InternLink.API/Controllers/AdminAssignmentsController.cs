@@ -37,7 +37,8 @@ public class AdminAssignmentsController : ControllerBase
         }
         catch (InvalidOperationException ex)
         {
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = ex.Message }));
+            // Lỗi validate nghiệp vụ (GV không thuộc khoa, chưa có kỳ active…) → 400, không phải 404.
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = ex.Message }));
         }
     }
 

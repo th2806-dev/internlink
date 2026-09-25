@@ -87,14 +87,10 @@ public class AdminStudentsController : ControllerBase
         if (string.IsNullOrWhiteSpace(studentCode))
             return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Student number is required" }));
 
+        // Mã SV là UNIQUE TOÀN HỆ THỐNG (index filter IsDeleted=0) → Create sẽ Conflict
+        // kể cả khi SV trùng mã thuộc khoa khác. CheckExists phải phản ánh đúng điều đó,
+        // nếu không FE sẽ báo "mã dùng được" rồi bị server từ chối (audit mục 4.11).
         var exists = await _studentService.StudentCodeExistsAsync(studentCode);
-        if (exists)
-        {
-            var existing = await _studentService.GetStudentByCodeAsync(studentCode);
-            if (existing != null && !_deptScope.HasAccess(User, existing.DepartmentId))
-                return Ok(ApiResponse<bool>.Ok(false));
-        }
-
         return Ok(ApiResponse<bool>.Ok(exists));
     }
 

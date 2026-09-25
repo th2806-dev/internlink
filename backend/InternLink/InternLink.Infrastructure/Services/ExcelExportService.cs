@@ -36,6 +36,15 @@ public class ExcelExportService : IExcelExportService
         // ────────────────────────────────────────────────────────────────────
         // Join Students with their semester Internship (LEFT JOIN), Company (LEFT JOIN),
         // Lecturer (LEFT JOIN), Evaluation (LEFT JOIN), and WeeklyReports.
+        //
+        // AUDIT MỤC 4.9 — filter internship lặp 4 lần là CỐ Ý, KHÔNG tách được biến dùng chung:
+        // Include-filter của EF Core yêu cầu lambda viết INLINE trong expression tree. Vì
+        // Internships là ICollection, Where resolve về Enumerable.Where — một biến
+        // Expression<Func<>> gây CS1503 lúc compile, còn biến Func<> gây ArgumentException
+        // lúc runtime (EF không dịch được delegate). Đã thử cả 2, đã revert.
+        // Filter chuẩn (mọi Include dưới đây phải khớp):
+        //   !i.IsDeleted && (!semesterId.HasValue || i.SemesterId == semesterId) && (!lecturerId.HasValue || i.LecturerId == lecturerId)
+
         var studentsQuery = _db.Students
             .AsNoTracking()
             .Include(s => s.Internships.Where(i => !i.IsDeleted && (!semesterId.HasValue || i.SemesterId == semesterId.Value) && (!lecturerId.HasValue || i.LecturerId == lecturerId.Value)))
