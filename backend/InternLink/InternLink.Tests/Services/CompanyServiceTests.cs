@@ -4,6 +4,7 @@ using InternLink.Application.DTOs;
 using InternLink.Application.Interfaces;
 using InternLink.Application.Mappings;
 using InternLink.Domain.Entities;
+using InternLink.Domain.Enums;
 using InternLink.Infrastructure.Persistence;
 using InternLink.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
@@ -940,5 +941,58 @@ public class CompanyServiceTests
         suggestions[0].CompanyName.Should().Be("FPT Software");
         suggestions[0].MatchScore.Should().BeGreaterThan(suggestions.Count > 1 ? suggestions[1].MatchScore : 0);
         suggestions[0].OpenPositions.Should().HaveCount(1);
+    }
+
+    // ── IDOR guards (rà lỗ hổng ngoài báo cáo) ─────────────────────────────
+
+    private static async Task<(Company Own, Company Other, Company Shared, Company HostsDeptStudent, Guid DeptA)> SeedAccessCompaniesAsync(AppDbContext db)
+    {
+        var deptA = Guid.NewGuid();
+        var deptB = Guid.NewGuid();
+
+        var own = new Company { Id = Guid.NewGuid(), CompanyName = "Own DN", DepartmentId = deptA, CreatedAt = DateTime.UtcNow };
+        var other = new Company { Id = Guid.NewGuid(), CompanyName = "Other DN", DepartmentId = deptB, CreatedAt = DateTime.UtcNow };
+        var shared = new Company { Id = Guid.NewGuid(), CompanyName = "Shared DN", DepartmentId = null, CreatedAt = DateTime.UtcNow };
+        var host = new Company { Id = Guid.NewGuid(), CompanyName = "Host DN", DepartmentId = deptB, CreatedAt = DateTime.UtcNow };
+
+        await db.Companies.AddRangeAsync(own, other, shared, host);
+
+        // Host DN (của khoa B) đang tiếp nhận 1 SV khoa A → khoa A phải thấy được DN này.
+        var studentA = new Student { Id = Guid.NewGuid(), StudentCode = "SA01", FullName = "SV khoa A", DepartmentId = deptA, CreatedAt = DateTime.UtcNow };
+        await db.Students.AddAsync(studentA);
+        await db.Internships.AddAsync(new Internship { Id = Guid.NewGuid(), StudentId = studentA.Id, CompanyId = host.Id, Status = InternshipStatus.InProgress, CreatedAt = DateTime.UtcNow });
+
+        await db.SaveChangesAsync();
+        return (own, other, shared, host, deptA);
+    }
+
+    [Fact]
+    public async Task HasCompanyAccessAsync_ShouldFollowDepartmentPolicy()
+    {
+        var db = GetInMemoryDbContext();
+        var (own, other, shared, host, deptA) = await SeedAccessCompaniesAsync(db);
+        var service = CreateService(db);
+
+        // DN khoa khác, không nhận SV khoa A → từ chối.
+        (await service.HasCompanyAccessAsync(other.Id, deptA)).Should().BeFalse();
+
+        // DN cùng khoa / dùng chung / đang nhận SV khoa A → cho phép.
+        (await service.HasCompanyAccessAsync(own.Id, deptA)).Should().BeTrue();
+        (await service.HasCompanyAccessAsync(shared.Id, deptA)).Should().BeTrue();
+        (await service.HasCompanyAccessAsync(host.Id, deptA)).Should().BeTrue();
+
+        // SuperAdmin (null) → toàn quyền.
+        (await service.HasCompanyAccessAsync(other.Id, null)).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task HasCompanyAccessAsync_ShouldNotLeakOtherDepartmentData()
+    {
+        var db = GetInMemoryDbContext();
+        var (_, other, _, _, _) = await SeedAccessCompaniesAsync(db);
+        var service = CreateService(db);
+
+        // Khoa khác không thấy DN này qua by-id → IDOR bị chặn.
+        (await service.HasCompanyAccessAsync(other.Id, Guid.NewGuid())).Should().BeFalse();
     }
 }

@@ -175,6 +175,45 @@ public class CompanyService : ICompanyService
         return company == null ? null : _mapper.Map<CompanyDto>(company);
     }
 
+    /// <summary>
+    /// Quyết định một admin khoa được thao tác trên DN này không — dùng cho mọi endpoint
+    /// by-id (detail/update/delete/positions/semester-link). Cùng chính sách với list:
+    /// DN cùng khoa, DN dùng chung (DepartmentId = null) hoặc DN đang nhận SV thực tập của khoa.
+    /// </summary>
+    public async Task<bool> HasCompanyAccessAsync(Guid companyId, Guid? departmentId)
+    {
+        if (!departmentId.HasValue)
+            return true; // SuperAdmin (no department claim) sees everything
+
+        return await _db.Companies
+            .AsNoTracking()
+            .AnyAsync(c => c.Id == companyId && !c.IsDeleted && (
+                c.DepartmentId == null ||
+                c.DepartmentId == departmentId.Value ||
+                c.Internships.Any(i => !i.IsDeleted && i.Student != null && i.Student.DepartmentId == departmentId.Value)));
+    }
+
+    /// <summary>Check truy cập vị trí tuyển dụng qua DN cha (cùng chính sách với HasCompanyAccessAsync).</summary>
+    public async Task<bool> HasPositionAccessAsync(Guid positionId, Guid? departmentId)
+    {
+        if (!departmentId.HasValue)
+            return true;
+
+        return await _db.CompanyPositions
+            .AsNoTracking()
+            .Where(p => p.Id == positionId && !p.IsDeleted)
+            .Select(p => new { p.CompanyId })
+            .Join(_db.Companies.AsNoTracking(),
+                p => p.CompanyId,
+                c => c.Id,
+                (p, c) => new { c.IsDeleted, c.DepartmentId,
+                    HasDeptInternship = c.Internships.Any(i => !i.IsDeleted && i.Student != null && i.Student.DepartmentId == departmentId.Value) })
+            .AnyAsync(x => !x.IsDeleted && (
+                x.DepartmentId == null ||
+                x.DepartmentId == departmentId.Value ||
+                x.HasDeptInternship));
+    }
+
     public async Task<AdminCompanyDetailDto?> GetAdminCompanyDetailAsync(Guid id)
     {
         var company = await _db.Companies
@@ -878,11 +917,22 @@ public class CompanyService : ICompanyService
         });
     }
 
-    public async Task<byte[]> ExportCompaniesExcelAsync()
+    public async Task<byte[]> ExportCompaniesExcelAsync(Guid? departmentId = null)
     {
-        var companies = await _db.Companies
+        var query = _db.Companies
             .Include(c => c.Internships)
-            .Where(c => !c.IsDeleted)
+            .Where(c => !c.IsDeleted);
+
+        // IDOR guard (rà lỗ hổng ngoài báo cáo): admin khoa chỉ xuất DN trong phạm vi
+        // khoa mình — cùng chính sách với list; SuperAdmin (null) xuất tất cả.
+        if (departmentId.HasValue)
+        {
+            query = query.Where(c =>
+                c.DepartmentId == null || c.DepartmentId == departmentId.Value ||
+                c.Internships.Any(i => !i.IsDeleted && i.Student != null && i.Student.DepartmentId == departmentId.Value));
+        }
+
+        var companies = await query
             .OrderBy(c => c.CompanyName)
             .ToListAsync();
 

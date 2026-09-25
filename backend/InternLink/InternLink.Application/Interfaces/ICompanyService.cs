@@ -29,6 +29,16 @@ public interface ICompanyService
     Task<AdminCompanyDetailDto?> GetAdminCompanyDetailAsync(Guid id);
 
     /// <summary>
+    /// Check truy cập by-id cho admin khoa — cùng chính sách với list (DN cùng khoa,
+    /// DN dùng chung DepartmentId = null, hoặc DN đang nhận SV thực tập của khoa).
+    /// Null departmentId = SuperAdmin (luôn cho phép).
+    /// </summary>
+    Task<bool> HasCompanyAccessAsync(Guid companyId, Guid? departmentId);
+
+    /// <summary>Check truy cập vị trí tuyển dụng qua DN cha (cùng chính sách).</summary>
+    Task<bool> HasPositionAccessAsync(Guid positionId, Guid? departmentId);
+
+    /// <summary>
     /// Get all active companies (optionally scoped to a semester: companies marked
     /// "ngưng liên kết" for that term are excluded).
     /// </summary>
@@ -80,7 +90,8 @@ public interface ICompanyService
     /// <summary>
     /// Export companies list to styled Excel.
     /// </summary>
-    Task<byte[]> ExportCompaniesExcelAsync();
+    /// <param name="departmentId">Null = SuperAdmin (toàn bộ); ngược lại chỉ DN trong phạm vi khoa.</param>
+    Task<byte[]> ExportCompaniesExcelAsync(Guid? departmentId = null);
 
     /// <summary>
     /// Get recruitment positions for a company, optionally scoped to a semester.

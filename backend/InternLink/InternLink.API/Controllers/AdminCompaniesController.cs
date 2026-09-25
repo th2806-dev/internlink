@@ -76,6 +76,10 @@ public class AdminCompaniesController : ControllerBase
     {
         try
         {
+            // IDOR guard: không cho ngưng liên kết DN của khoa khác.
+            if (!await _companyService.HasCompanyAccessAsync(id, _deptScope.GetCurrentDepartmentId(User)))
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Company not found" }));
+
             await _companyService.SetCompanySemesterStatusAsync(id, semesterId, request.IsLinked);
             return Ok(ApiResponse<object>.Ok(new { isLinked = request.IsLinked }));
         }
@@ -89,7 +93,7 @@ public class AdminCompaniesController : ControllerBase
     public async Task<IActionResult> GetById(Guid id)
     {
         var company = await _companyService.GetCompanyByIdAsync(id);
-        if (company == null)
+        if (company == null || !await _companyService.HasCompanyAccessAsync(id, _deptScope.GetCurrentDepartmentId(User)))
             return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Company not found" }));
 
         return Ok(ApiResponse<CompanyDto>.Ok(company));
@@ -98,6 +102,10 @@ public class AdminCompaniesController : ControllerBase
     [HttpGet("{id:guid}/detail")]
     public async Task<IActionResult> GetDetail(Guid id)
     {
+        // IDOR guard (rà lỗ hổng ngoài báo cáo): admin khoa chỉ thấy detail DN trong phạm vi khoa mình.
+        if (!await _companyService.HasCompanyAccessAsync(id, _deptScope.GetCurrentDepartmentId(User)))
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Company not found" }));
+
         var detail = await _companyService.GetAdminCompanyDetailAsync(id);
         if (detail == null)
             return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Company not found" }));
@@ -115,8 +123,20 @@ public class AdminCompaniesController : ControllerBase
         if (take < 1 || take > 1000)
             return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Take must be between 1 and 1000" }));
 
-        var companies = await _companyService.GetCompaniesByIndustryAsync(industry, skip, take);
-        return Ok(ApiResponse<IEnumerable<CompanyDto>>.Ok(companies));
+        var deptId = _deptScope.GetCurrentDepartmentId(User);
+        var all = await _companyService.GetCompaniesByIndustryAsync(industry, skip, take);
+        if (deptId == null)
+            return Ok(ApiResponse<IEnumerable<CompanyDto>>.Ok(all));
+
+        // Filter theo khoa ở controller (service method giữ nguyên chữ ký): DN dùng chung
+        // (DepartmentId = null) vẫn hiện; DN của khoa khác không có internship với khoa → ẩn.
+        var scoped = new List<CompanyDto>();
+        foreach (var dto in all)
+        {
+            if (await _companyService.HasCompanyAccessAsync(dto.Id, deptId))
+                scoped.Add(dto);
+        }
+        return Ok(ApiResponse<IEnumerable<CompanyDto>>.Ok(scoped));
     }
 
     [HttpGet("check/{name}")]
@@ -156,6 +176,10 @@ public class AdminCompaniesController : ControllerBase
             if (!ModelState.IsValid)
                 return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Invalid input" }));
 
+            // IDOR guard: chỉ sửa DN trong phạm vi khoa mình.
+            if (!await _companyService.HasCompanyAccessAsync(id, _deptScope.GetCurrentDepartmentId(User)))
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Company not found" }));
+
             var company = await _companyService.UpdateCompanyAsync(id, request);
             if (company == null)
                 return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Company not found" }));
@@ -174,6 +198,10 @@ public class AdminCompaniesController : ControllerBase
     {
         try
         {
+            // IDOR guard: chỉ xóa DN trong phạm vi khoa mình.
+            if (!await _companyService.HasCompanyAccessAsync(id, _deptScope.GetCurrentDepartmentId(User)))
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Company not found" }));
+
             var ok = await _companyService.DeleteCompanyAsync(id);
             if (!ok)
                 return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Company not found" }));
@@ -224,7 +252,10 @@ public class AdminCompaniesController : ControllerBase
     [HttpGet("export")]
     public async Task<IActionResult> Export()
     {
-        var bytes = await _companyService.ExportCompaniesExcelAsync();
+        // IDOR guard (rà lỗ hổng ngoài báo cáo): export toàn bộ DN là dữ liệu liên khoa —
+        // DepartmentAdmin chỉ được xuất trong phạm vi khoa mình; SuperAdmin xuất tất cả.
+        var deptIdForExport = _deptScope.GetCurrentDepartmentId(User);
+        var bytes = await _companyService.ExportCompaniesExcelAsync(deptIdForExport);
         var fileName = $"Danh-sach-doanh-nghiep-{DateTime.UtcNow:yyyyMMdd-HHmmss}.xlsx";
         return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
     }
@@ -232,6 +263,10 @@ public class AdminCompaniesController : ControllerBase
     [HttpGet("{id:guid}/positions")]
     public async Task<IActionResult> GetPositions(Guid id, [FromQuery] Guid? semesterId = null)
     {
+        // IDOR guard: positions theo DN — admin khoa chỉ thấy DN trong phạm vi khoa mình.
+        if (!await _companyService.HasCompanyAccessAsync(id, _deptScope.GetCurrentDepartmentId(User)))
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Company not found" }));
+
         var positions = await _companyService.GetPositionsAsync(id, semesterId);
         return Ok(ApiResponse<IEnumerable<CompanyPositionDto>>.Ok(positions));
     }
@@ -239,6 +274,9 @@ public class AdminCompaniesController : ControllerBase
     [HttpGet("positions/{positionId:guid}")]
     public async Task<IActionResult> GetPositionById(Guid positionId)
     {
+        if (!await _companyService.HasPositionAccessAsync(positionId, _deptScope.GetCurrentDepartmentId(User)))
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Vị trí tuyển dụng không tồn tại" }));
+
         var position = await _companyService.GetPositionByIdAsync(positionId);
         if (position == null)
             return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Vị trí tuyển dụng không tồn tại" }));
@@ -255,6 +293,10 @@ public class AdminCompaniesController : ControllerBase
 
         try
         {
+            // IDOR guard: không tạo position trên DN của khoa khác.
+            if (!await _companyService.HasCompanyAccessAsync(id, _deptScope.GetCurrentDepartmentId(User)))
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Company not found" }));
+
             var position = await _companyService.CreatePositionAsync(id, request);
             return CreatedAtAction(nameof(GetPositionById), new { positionId = position.Id }, ApiResponse<CompanyPositionDto>.Ok(position));
         }
@@ -271,6 +313,10 @@ public class AdminCompaniesController : ControllerBase
         if (string.IsNullOrWhiteSpace(request.Title))
             return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Tên vị trí tuyển dụng không được để trống" }));
 
+        // IDOR guard: không sửa position của DN khoa khác.
+        if (!await _companyService.HasPositionAccessAsync(positionId, _deptScope.GetCurrentDepartmentId(User)))
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Vị trí tuyển dụng không tồn tại" }));
+
         var updated = await _companyService.UpdatePositionAsync(positionId, request);
         if (updated == null)
             return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Vị trí tuyển dụng không tồn tại" }));
@@ -282,6 +328,10 @@ public class AdminCompaniesController : ControllerBase
     [Authorize(Policy = "RequireDepartmentAdmin")]
     public async Task<IActionResult> DeletePosition(Guid positionId)
     {
+        // IDOR guard: không xóa position của DN khoa khác.
+        if (!await _companyService.HasPositionAccessAsync(positionId, _deptScope.GetCurrentDepartmentId(User)))
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Vị trí tuyển dụng không tồn tại" }));
+
         var deleted = await _companyService.DeletePositionAsync(positionId);
         if (!deleted)
             return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Vị trí tuyển dụng không tồn tại" }));
