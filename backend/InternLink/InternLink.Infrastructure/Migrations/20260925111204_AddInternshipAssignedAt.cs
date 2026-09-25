@@ -1,4 +1,3 @@
-﻿using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -11,6 +10,8 @@ namespace InternLink.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            // Lưu ý: file generate tự động bị rỗng vì snapshot đã chứa AssignedAt từ lần
+            // generate trước (khi migration cũ bị xóa nhưng snapshot giữ lại schema).
             migrationBuilder.AddColumn<DateTime>(
                 name: "AssignedAt",
                 table: "Internships",

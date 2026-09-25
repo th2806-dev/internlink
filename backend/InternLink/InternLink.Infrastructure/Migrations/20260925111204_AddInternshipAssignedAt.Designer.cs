@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace InternLink.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260924162038_AddSemesterFacultySummaries")]
-    partial class AddSemesterFacultySummaries
+    [Migration("20260925111204_AddInternshipAssignedAt")]
+    partial class AddInternshipAssignedAt
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -986,6 +986,10 @@ namespace InternLink.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier")
                         .HasColumnName("InternshipId");
+
+                    b.Property<DateTime?>("AssignedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("AssignedAt");
 
                     b.Property<Guid?>("CompanyId")
                         .HasColumnType("uniqueidentifier");

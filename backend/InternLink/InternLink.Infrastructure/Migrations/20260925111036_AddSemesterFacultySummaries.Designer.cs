@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace InternLink.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260925080431_AddInternshipAssignedAt")]
-    partial class AddInternshipAssignedAt
+    [Migration("20260925111036_AddSemesterFacultySummaries")]
+    partial class AddSemesterFacultySummaries
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
