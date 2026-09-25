@@ -47,6 +47,23 @@ public sealed class DepartmentScopeService : IDepartmentScopeService
         return requestedDepartmentId;
     }
 
+    /// <summary>
+    /// <para>
+    /// Kiểm tra quyền truy cập resource theo khoa. HỢP ĐỒNG NGỮ NGHĨA (cố ý, không phải lỗ hổng):
+    /// </para>
+    /// <para>
+    /// - SuperAdmin (không có claim DepartmentId): truy cập mọi resource.
+    /// </para>
+    /// <para>
+    /// - Resource KHÔNG gắn khoa (DepartmentId = null) là dữ liệu legacy/dùng chung toàn hệ thống:
+    /// mọi role đều được XEM/sử dụng. Các endpoint ghi/xóa phải tự siết chặt hơn — xem ví dụ
+    /// AdminSemestersController (kỳ legacy read-only cho DepartmentAdmin) và
+    /// DocumentService.DeleteDocumentAsync (template legacy chỉ SuperAdmin xóa được).
+    /// </para>
+    /// <para>
+    /// - Còn lại: chỉ truy cập khi resource cùng khoa với người dùng.
+    /// </para>
+    /// </summary>
     public bool HasAccess(ClaimsPrincipal user, Guid? resourceDepartmentId)
     {
         var userDeptId = GetCurrentDepartmentId(user);
@@ -55,7 +72,8 @@ public sealed class DepartmentScopeService : IDepartmentScopeService
         if (userDeptId == null)
             return true;
 
-        // If resource has no department, allow (e.g. global data)
+        // Legacy/shared resource (no department): intentionally visible to all roles.
+        // Write/delete endpoints must apply stricter checks (see summary above).
         if (resourceDepartmentId == null)
             return true;
 

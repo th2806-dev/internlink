@@ -198,6 +198,7 @@ public class ExportController : ControllerBase
         Guid targetLecturerId;
         var isLecturer = User.IsInRole("Lecturer");
         var isAdmin = User.IsInRole("SuperAdmin");
+        var isDepartmentAdmin = User.IsInRole("DepartmentAdmin");
 
         if (isLecturer && !isAdmin)
         {
@@ -209,6 +210,23 @@ public class ExportController : ControllerBase
         else if (lecturerId.HasValue)
         {
             targetLecturerId = lecturerId.Value;
+
+            // DepartmentAdmin chỉ được xuất lịch hướng dẫn của giảng viên THUỘC KHOA mình
+            // (tránh rò rỉ lịch/sinh viên của khoa khác).
+            if (isDepartmentAdmin && !isAdmin)
+            {
+                var deptId = _deptScope.GetCurrentDepartmentId(User);
+                if (deptId.HasValue)
+                {
+                    var lecturerDeptId = await _db.Lecturers
+                        .AsNoTracking()
+                        .Where(l => l.Id == targetLecturerId)
+                        .Select(l => l.DepartmentId)
+                        .FirstOrDefaultAsync(cancellationToken);
+                    if (lecturerDeptId != deptId.Value)
+                        return Forbid();
+                }
+            }
         }
         else
         {
@@ -217,6 +235,22 @@ public class ExportController : ControllerBase
                 targetLecturerId = resolvedLecturerId.Value;
             else
                 return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Cần chỉ định mã giảng viên (lecturerId)" }));
+        }
+
+        // DepartmentAdmin chỉ xuất lịch cho học kỳ thuộc khoa của mình.
+        if (isDepartmentAdmin && !isAdmin)
+        {
+            var deptIdForSemester = _deptScope.GetCurrentDepartmentId(User);
+            if (deptIdForSemester.HasValue)
+            {
+                var semesterDeptId = await _db.Semesters
+                    .AsNoTracking()
+                    .Where(s => s.Id == semesterId)
+                    .Select(s => s.DepartmentId)
+                    .FirstOrDefaultAsync(cancellationToken);
+                if (semesterDeptId != deptIdForSemester.Value && semesterDeptId != null)
+                    return Forbid();
+            }
         }
 
         try

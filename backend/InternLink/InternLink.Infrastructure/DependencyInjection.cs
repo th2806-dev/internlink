@@ -112,6 +112,9 @@ public static class DependencyInjection
         services.AddScoped<IAttendanceService, InternLink.Infrastructure.Services.AttendanceService>();
         services.AddScoped<IInternshipGradingService, InternLink.Infrastructure.Services.InternshipGradingService>();
 
+        // Faculty-level semester summary (admin khoa soạn báo cáo tổng kết theo kỳ)
+        services.AddScoped<ISemesterSummaryService, InternLink.Infrastructure.Services.SemesterSummaryService>();
+
         // Notification service
         services.AddScoped<InternLink.Application.Interfaces.INotificationService, InternLink.Infrastructure.Services.NotificationService>();
 

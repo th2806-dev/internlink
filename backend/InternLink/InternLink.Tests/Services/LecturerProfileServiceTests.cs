@@ -117,7 +117,8 @@ public class LecturerProfileServiceTests
         var service = CreateService(db, email.Object);
 
         using var stream = CreateExcel(("GV002", "Tran Van B", "b@uni.edu.vn", "0901", "CNTT", "gv.tranvanb"));
-        var result = await service.ImportFromExcelAsync(stream);
+        // grantAccount: true — import chỉ tạo tài khoản khi admin bật tùy chọn này (opt-in qua query string).
+        var result = await service.ImportFromExcelAsync(stream, grantAccount: true);
 
         result.SuccessCount.Should().Be(1);
         result.EmailSentCount.Should().Be(1);
@@ -137,7 +138,8 @@ public class LecturerProfileServiceTests
         var service = CreateService(db, email.Object);
 
         using var stream = CreateExcel(("GV020", "No Mail Lecturer", "", "0901", "CNTT", "gv.nomail"));
-        var result = await service.ImportFromExcelAsync(stream);
+        // grantAccount: true — bài test này verify cảnh báo "no email" khi tạo tài khoản.
+        var result = await service.ImportFromExcelAsync(stream, grantAccount: true);
 
         result.SuccessCount.Should().Be(1);
         result.EmailSentCount.Should().Be(0);
@@ -389,7 +391,8 @@ public class LecturerProfileServiceTests
         var service = CreateService(db, email.Object);
 
         using var stream = CreateExcel(("GV500", "Giang Vien Da Xoa", "gv500@uni.edu.vn", "0901", "CNTT", "gv500"));
-        var first = await service.ImportFromExcelAsync(stream);
+        // grantAccount: true — test verify việc khôi phục lecturer + user khi re-import.
+        var first = await service.ImportFromExcelAsync(stream, grantAccount: true);
         first.SuccessCount.Should().Be(1);
 
         // Admin deleted the lecturer (soft delete keeps the row so the unique
@@ -404,7 +407,7 @@ public class LecturerProfileServiceTests
 
         // Re-importing the same file used to throw DbUpdateException (500)
         // because a new row collided with the unique StaffCode index.
-        var second = await service.ImportFromExcelAsync(stream);
+        var second = await service.ImportFromExcelAsync(stream, grantAccount: true);
 
         second.SuccessCount.Should().Be(1);
         second.Errors.Should().BeEmpty();

@@ -144,7 +144,7 @@ export function LoginPortal({ onLoginSuccess }: LoginPortalProps) {
         <div className="relative w-full lg:w-[58%] min-h-[340px] lg:min-h-full flex flex-col justify-between p-8 lg:p-12 bg-[#07152f] overflow-hidden select-none">
           {/* Architectural Background Image with Subtle Gradient Overlay */}
           <div
-            className="absolute inset-0 w-full h-full bg-cover bg-center bg-no-repeat transition-all duration-500"
+            className="absolute inset-0 w-full h-full bg-cover bg-no-repeat transition-all duration-500"
             style={{
               backgroundImage: `linear-gradient(to top, rgba(4, 13, 42, 0.75) 0%, rgba(4, 13, 42, 0.2) 45%, rgba(4, 13, 42, 0.05) 100%), url('https://thongtindaotao.hcmct.edu.vn/static/media/br_login.c3b60201.jpg')`,
             }}

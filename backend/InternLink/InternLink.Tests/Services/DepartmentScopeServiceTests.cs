@@ -73,6 +73,25 @@ public class DepartmentScopeServiceTests
         _sut.HasAccess(user, Guid.NewGuid()).Should().BeTrue();
     }
 
+    /// <summary>
+    /// Hợp đồng cố ý (đề xuất P1/P2 — rõ ràng hóa): resource legacy không gắn khoa
+    /// (DepartmentId = null) là dữ liệu dùng chung — mọi role được xem. Các endpoint
+    /// ghi/xóa phải tự siết chặt hơn (kỳ legacy read-only, template legacy chỉ SuperAdmin xóa).
+    /// </summary>
+    [Fact]
+    public void HasAccess_LegacyResourceWithoutDepartment_ShouldBeVisibleToAllRoles()
+    {
+        var deptAdmin = CreateUser(Guid.NewGuid().ToString(), role: "DepartmentAdmin");
+        var lecturer = CreateUser(Guid.NewGuid().ToString(), role: "Lecturer");
+        var student = CreateUser(Guid.NewGuid().ToString(), role: "Student");
+        var superAdmin = CreateUser(departmentId: null, role: "SuperAdmin");
+
+        _sut.HasAccess(deptAdmin, null).Should().BeTrue();
+        _sut.HasAccess(lecturer, null).Should().BeTrue();
+        _sut.HasAccess(student, null).Should().BeTrue();
+        _sut.HasAccess(superAdmin, null).Should().BeTrue();
+    }
+
     [Fact]
     public void ApplyFilter_ForDepartmentAdmin_ReturnsOnlyOwnDepartmentRecords()
     {

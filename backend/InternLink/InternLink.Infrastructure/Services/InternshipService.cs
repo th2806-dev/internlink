@@ -496,18 +496,25 @@ public class InternshipService : IInternshipService
             query = query.Where(i => i.SemesterId == semesterId.Value);
         }
 
-        var internships = await query.ToListAsync();
+        // GROUP BY trong DB (đề xuất P2): thay vì tải toàn bộ internships về rồi Count in-memory.
+        var grouped = await query
+            .GroupBy(i => i.Status)
+            .Select(g => new { Status = g.Key, Count = g.Count() })
+            .ToListAsync();
+
+        var counts = grouped.ToDictionary(x => x.Status, x => x.Count);
+        int Get(InternshipStatus status) => counts.GetValueOrDefault(status);
 
         return new InternshipStatsDto
         {
-            Total = internships.Count,
-            NotStarted = internships.Count(i => i.Status == InternshipStatus.NotStarted),
-            InProgress = internships.Count(i => i.Status == InternshipStatus.InProgress),
-            BehindSchedule = internships.Count(i => i.Status == InternshipStatus.BehindSchedule),
-            AwaitingFeedback = internships.Count(i => i.Status == InternshipStatus.AwaitingFeedback),
-            RequiresRevision = internships.Count(i => i.Status == InternshipStatus.RequiresRevision),
-            Completed = internships.Count(i => i.Status == InternshipStatus.Completed),
-            Graded = internships.Count(i => i.Status == InternshipStatus.Graded)
+            Total = grouped.Sum(x => x.Count),
+            NotStarted = Get(InternshipStatus.NotStarted),
+            InProgress = Get(InternshipStatus.InProgress),
+            BehindSchedule = Get(InternshipStatus.BehindSchedule),
+            AwaitingFeedback = Get(InternshipStatus.AwaitingFeedback),
+            RequiresRevision = Get(InternshipStatus.RequiresRevision),
+            Completed = Get(InternshipStatus.Completed),
+            Graded = Get(InternshipStatus.Graded)
         };
     }
 

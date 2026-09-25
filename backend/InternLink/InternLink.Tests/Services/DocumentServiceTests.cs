@@ -466,4 +466,79 @@ public class DocumentServiceTests
 
         versions.Should().BeEmpty();
     }
+
+    // ── DepartmentAdmin xóa template trong phạm vi khoa (đề xuất P1/P2) ──
+
+    private static async Task<(User DeptAdminA, User DeptAdminB, Department DeptA, Document TemplateA)> SeedTemplatesAsync(AppDbContext db)
+    {
+        var deptA = new Department { Id = Guid.NewGuid(), Code = "CNTT", Name = "Khoa CNTT", IsActive = true, CreatedAt = DateTime.UtcNow };
+        var deptB = new Department { Id = Guid.NewGuid(), Code = "QTKD", Name = "Khoa QTKD", IsActive = true, CreatedAt = DateTime.UtcNow };
+
+        var adminA = new User { Id = Guid.NewGuid(), Username = "adminA", PasswordHash = "hash", Role = Role.DepartmentAdmin, DepartmentId = deptA.Id, FullName = "Admin A", CreatedAt = DateTime.UtcNow };
+        var adminB = new User { Id = Guid.NewGuid(), Username = "adminB", PasswordHash = "hash", Role = Role.DepartmentAdmin, DepartmentId = deptB.Id, FullName = "Admin B", CreatedAt = DateTime.UtcNow };
+
+        // Template do admin A tạo, gắn khoa CNTT (không có Internship → logic cũ chặn cả admin A).
+        var templateA = new Document
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = null,
+            Department = "CNTT",
+            Title = "Bieu mau CNTT",
+            FileName = "bieu-mau.pdf",
+            FilePath = "uploads/documents/bieu-mau.pdf",
+            MimeType = "application/pdf",
+            CreatedAt = DateTime.UtcNow
+        };
+
+        await db.Departments.AddRangeAsync(deptA, deptB);
+        await db.Users.AddRangeAsync(adminA, adminB);
+        await db.Documents.AddAsync(templateA);
+        await db.SaveChangesAsync();
+
+        return (adminA, adminB, deptA, templateA);
+    }
+
+    [Fact]
+    public async Task DeleteDocumentAsync_TemplateSameDepartment_ShouldAllowAnyDeptAdmin()
+    {
+        var db = GetDb();
+        var (adminA, adminB, _, templateA) = await SeedTemplatesAsync(db);
+        var service = CreateService(db);
+
+        // Admin B (cùng khoa CNTT theo DepartmentId claim... ở đây là khoa khác) — bị chặn.
+        var actB = async () => await service.DeleteDocumentAsync(templateA.Id, adminB.Id);
+        await actB.Should().ThrowAsync<UnauthorizedAccessException>();
+
+        // Admin A khác người UploadedBy (không có UploadedById) nhưng CÙNG khoa → được xóa.
+        // (Trước khi sửa: chỉ GV phụ trách internship hoặc SuperAdmin được xóa → admin A cũng bị chặn oan.)
+        var ok = await service.DeleteDocumentAsync(templateA.Id, adminA.Id);
+        ok.Should().BeTrue();
+
+        (await db.Documents.CountAsync(d => d.Id == templateA.Id && !d.IsDeleted)).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task DeleteDocumentAsync_TemplateWithoutDepartment_ShouldBlockDeptAdmin()
+    {
+        var db = GetDb();
+        var (adminA, _, _, _) = await SeedTemplatesAsync(db);
+        var service = CreateService(db);
+
+        // Template legacy không gắn khoa → chỉ SuperAdmin xóa được.
+        var legacy = new Document
+        {
+            Id = Guid.NewGuid(),
+            Department = null,
+            Title = "Bieu mau legacy",
+            FileName = "legacy.pdf",
+            FilePath = "uploads/documents/legacy.pdf",
+            MimeType = "application/pdf",
+            CreatedAt = DateTime.UtcNow
+        };
+        await db.Documents.AddAsync(legacy);
+        await db.SaveChangesAsync();
+
+        var act = async () => await service.DeleteDocumentAsync(legacy.Id, adminA.Id);
+        await act.Should().ThrowAsync<UnauthorizedAccessException>();
+    }
 }

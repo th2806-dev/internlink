@@ -25,11 +25,57 @@ public class AdminSemestersController : ControllerBase
 {
     private readonly ISemesterService _semesterService;
     private readonly IDepartmentScopeService _deptScope;
+    private readonly ISemesterSummaryService _summaryService;
 
-    public AdminSemestersController(ISemesterService semesterService, IDepartmentScopeService deptScope)
+    public AdminSemestersController(
+        ISemesterService semesterService,
+        IDepartmentScopeService deptScope,
+        ISemesterSummaryService summaryService)
     {
         _semesterService = semesterService;
         _deptScope = deptScope;
+        _summaryService = summaryService;
+    }
+
+    /// <summary>
+    /// Nội dung báo cáo tổng kết công tác thực tập CẤP KHOA của một học kỳ
+    /// (admin khoa soạn; được inject vào template Word C22A khi xuất báo cáo tổng kết).
+    /// </summary>
+    [HttpGet("{id:guid}/faculty-summary")]
+    public async Task<IActionResult> GetFacultySummary(Guid id)
+    {
+        var semester = await _semesterService.GetSemesterByIdAsync(id);
+        if (semester == null || !_deptScope.HasAccess(User, semester.DepartmentId))
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Semester not found" }));
+
+        var deptId = _deptScope.GetCurrentDepartmentId(User);
+        var summary = await _summaryService.GetAsync(id, deptId)
+            ?? new LecturerSemesterSummaryDto { SemesterId = id };
+        return Ok(ApiResponse<LecturerSemesterSummaryDto>.Ok(summary));
+    }
+
+    /// <summary>
+    /// Lưu nội dung báo cáo tổng kết cấp khoa (Kết quả / Khó khăn / Kiến nghị / Kết luận)
+    /// cho học kỳ — lưu theo (Kỳ, Khoa của admin).
+    /// </summary>
+    [HttpPut("{id:guid}/faculty-summary")]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
+    public async Task<IActionResult> SaveFacultySummary(Guid id, [FromBody] SaveLecturerSemesterSummaryRequest request)
+    {
+        var semester = await _semesterService.GetSemesterByIdAsync(id);
+        if (semester == null)
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Semester not found" }));
+
+        // DepartmentAdmin chỉ lưu cho khoa của mình; kỳ legacy (DepartmentId = null) là read-only.
+        if (semester.DepartmentId == null || !_deptScope.HasAccess(User, semester.DepartmentId))
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Semester not found" }));
+
+        var deptId = _deptScope.GetCurrentDepartmentId(User);
+        var saved = await _summaryService.SaveAsync(id, deptId, request);
+        if (saved == null)
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Semester not found" }));
+
+        return Ok(ApiResponse<LecturerSemesterSummaryDto>.Ok(saved));
     }
 
     [HttpGet]

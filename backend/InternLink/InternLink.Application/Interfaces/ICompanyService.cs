@@ -15,7 +15,8 @@ public interface ICompanyService
     /// <summary>
     /// Get companies with filtering and pagination
     /// </summary>
-    Task<PaginatedResponse<CompanyDto>> GetCompaniesWithFilterAsync(CompanyFilterRequest filter);
+    /// <param name="departmentId">Khoa của người gọi — lọc DN cùng khoa, DN dùng chung (DepartmentId = null) và DN đang nhận SV của khoa. Null = tất cả (SuperAdmin).</param>
+    Task<PaginatedResponse<CompanyDto>> GetCompaniesWithFilterAsync(CompanyFilterRequest filter, Guid? departmentId = null);
 
     /// <summary>
     /// Get a company by ID
@@ -31,7 +32,8 @@ public interface ICompanyService
     /// Get all active companies (optionally scoped to a semester: companies marked
     /// "ngưng liên kết" for that term are excluded).
     /// </summary>
-    Task<IEnumerable<CompanyDto>> GetActiveCompaniesAsync(int skip = 0, int take = 100, Guid? semesterId = null);
+    /// <param name="departmentId">Khoa của người gọi — lọc DN cùng khoa, DN dùng chung (DepartmentId = null) và DN đang nhận SV của khoa. Null = tất cả (SuperAdmin).</param>
+    Task<IEnumerable<CompanyDto>> GetActiveCompaniesAsync(int skip = 0, int take = 100, Guid? semesterId = null, Guid? departmentId = null);
 
     /// <summary>
     /// Link or unlink a company for a semester ("ngưng liên kết" = isLinked false).

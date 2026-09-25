@@ -1,16 +1,11 @@
 namespace InternLink.Application.Interfaces;
 
 /// <summary>
-/// Generates institutional Excel/Word reports matching the C23 & C22A templates.
+/// Generates the institutional C22A summary report (Excel fallback + official Word template).
+/// File Excel C23 đầy đủ đi qua IExcelExportService.GenerateInternshipExportExcelAsync.
 /// </summary>
 public interface IInternshipReportService
 {
-    /// <summary>
-    /// Export "DANH SÁCH THỰC TẬP" multi-sheet Excel matching C23 template.
-    /// Sheets: DANH SÁCH (tracking & grading), DATABASE (mapping), TÊN CÔNG TY (company directory).
-    /// </summary>
-    Task<byte[]> ExportC23ExcelAsync(Guid? semesterId = null, string? department = null, Guid? departmentId = null);
-
     /// <summary>
     /// Export "Báo cáo tổng kết công tác thực tập tốt nghiệp" as Excel (fallback).
     /// </summary>

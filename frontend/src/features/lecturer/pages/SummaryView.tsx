@@ -16,6 +16,7 @@ import { PageHeader } from "../../../components/common/PageHeader";
 import { Panel } from "../../../components/common/Panel";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { lecturerExportService } from "../../../services/lecturerExport.service";
+import { adminSemestersService } from "../../../services/adminSemesters.service";
 import { lecturerInternshipsService } from "../../../services/lecturerInternships.service";
 import { attendanceService } from "../../../services/attendance.service";
 import { adminStudentsService } from "../../../services/adminStudents.service";
@@ -172,7 +173,12 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
       setReportSavedAt(null);
       return;
     }
-    void lecturerInternshipsService.getSemesterSummary(semesterId).then((summary) => {
+    // Admin khoa: nội dung tổng kết CẤP KHOA (lưu theo Kỳ + Khoa, inject vào Word khi admin xuất).
+    // Giảng viên: nội dung tổng kết của nhóm hướng dẫn (lưu theo Kỳ + Giảng viên).
+    const loadSummary = isAdminScope
+      ? adminSemestersService.getFacultySummary(semesterId)
+      : lecturerInternshipsService.getSemesterSummary(semesterId);
+    void loadSummary.then((summary) => {
       if (!cancelled) {
         setReportContent({
           results: summary.results ?? "",
@@ -186,7 +192,7 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
       if (!cancelled) onShowToast?.(getApiErrorMessage(error));
     });
     return () => { cancelled = true; };
-  }, [onShowToast, semesterId]);
+  }, [isAdminScope, onShowToast, semesterId]);
 
   const filteredStudents = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -271,9 +277,11 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
     }
     setIsSavingReport(true);
     try {
-      const saved = await lecturerInternshipsService.saveSemesterSummary(semesterId, reportContent);
+      const saved = isAdminScope
+        ? await adminSemestersService.saveFacultySummary(semesterId, reportContent)
+        : await lecturerInternshipsService.saveSemesterSummary(semesterId, reportContent);
       setReportSavedAt(saved.updatedAt ?? new Date().toISOString());
-      onShowToast?.("Đã lưu báo cáo tổng kết công tác của khoa.");
+      onShowToast?.(isAdminScope ? "Đã lưu báo cáo tổng kết công tác của khoa." : "Đã lưu nội dung tổng kết của nhóm hướng dẫn.");
     } catch (error) {
       onShowToast?.(getApiErrorMessage(error));
     } finally {

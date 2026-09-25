@@ -227,9 +227,9 @@ describe("computeGrade", () => {
     expect(result.missingCount).toBe(1);
   });
 
-  it("classification boundaries: 9 → Xuất sắc, 8 → Giỏi, 6.5 → Khá, 5 → Trung bình", () => {
-    expect(classifyScore(9)).toBe("Xuất sắc");
-    expect(classifyScore(8.9)).toBe("Giỏi");
+  it("classification boundaries: 8.5 → Xuất sắc, 8 → Giỏi, 6.5 → Khá, 5 → Trung bình (chuẩn khớp BE InternshipGradeCalculator)", () => {
+    expect(classifyScore(8.5)).toBe("Xuất sắc");
+    expect(classifyScore(8.4)).toBe("Giỏi");
     expect(classifyScore(8)).toBe("Giỏi");
     expect(classifyScore(6.5)).toBe("Khá");
     expect(classifyScore(5)).toBe("Trung bình");

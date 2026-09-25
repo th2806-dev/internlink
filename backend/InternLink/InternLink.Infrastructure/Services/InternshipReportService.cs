@@ -3,6 +3,7 @@ using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
 using InternLink.Domain.Entities;
+using InternLink.Application.Common;
 using InternLink.Application.Interfaces;
 using InternLink.Domain.Enums;
 using InternLink.Infrastructure.Persistence;
@@ -24,95 +25,6 @@ public class InternshipReportService : IInternshipReportService
     }
 
     /// <inheritdoc />
-    public async Task<byte[]> ExportC23ExcelAsync(Guid? semesterId = null, string? department = null, Guid? departmentId = null)
-    {
-        // ── Load data ──────────────────────────────────────────────────────
-        var internshipsQuery = _db.Internships
-            .Include(i => i.Student)
-            .Include(i => i.Company)
-            .Include(i => i.Lecturer)
-            .Include(i => i.Semester)
-            .Include(i => i.WeeklyReports)
-            .AsNoTracking();
-
-        if (semesterId.HasValue)
-            internshipsQuery = internshipsQuery.Where(i => i.SemesterId == semesterId.Value);
-
-        // Scope by the STUDENT's department: the report summarizes a khoa's students.
-        // Matching by lecturer's department would leak other departments' students
-        // whenever a lecturer supervises cross-department internships.
-        if (!string.IsNullOrWhiteSpace(department))
-            internshipsQuery = internshipsQuery.Where(i => i.Student.Department == department);
-
-        // GUID filter overrides the legacy string filter when provided.
-        if (departmentId.HasValue)
-            internshipsQuery = internshipsQuery.Where(i => i.Student.DepartmentId == departmentId.Value);
-
-        var internships = await internshipsQuery
-            .OrderBy(i => i.Student.Class)
-            .ThenBy(i => i.Student.FullName)
-            .ToListAsync();
-
-        // Load evaluations separately
-        var internshipIds = internships.Select(i => i.Id).ToHashSet();
-        var evaluations = await _db.Set<Domain.Entities.Evaluation>()
-            .Where(e => internshipIds.Contains(e.InternshipId))
-            .AsNoTracking()
-            .ToDictionaryAsync(e => e.InternshipId);
-
-        // Load students without internship
-        var studentsWithInternshipIds = internships.Select(i => i.StudentId).ToHashSet();
-        var studentsQuery = _db.Students
-            .Where(s => !studentsWithInternshipIds.Contains(s.Id) && !s.IsDeleted);
-
-        if (!string.IsNullOrWhiteSpace(department))
-            studentsQuery = studentsQuery.Where(s => s.Department == department);
-
-        if (departmentId.HasValue)
-            studentsQuery = studentsQuery.Where(s => s.DepartmentId == departmentId.Value);
-
-        var studentsWithoutInternship = await studentsQuery
-            .AsNoTracking()
-            .OrderBy(s => s.Class)
-            .ThenBy(s => s.FullName)
-            .ToListAsync();
-
-        // Load companies
-        var companies = await _db.Companies
-            .Where(c => c.IsActive)
-            .AsNoTracking()
-            .OrderBy(c => c.CompanyName)
-            .ToListAsync();
-
-        using var workbook = new XLWorkbook();
-
-        // ═══════════════════════════════════════════════════════════════════
-        // Sheet 1: DANH SÁCH – Full tracking & grading table
-        // ═══════════════════════════════════════════════════════════════════
-        var ws1 = workbook.Worksheets.Add("DANH SÁCH");
-        var totalWeeks = internships
-            .Select(i => i.Semester?.TotalWeeks ?? 0)
-            .Where(weeks => weeks > 0)
-            .DefaultIfEmpty(6)
-            .Max();
-        BuildDanhSachSheet(ws1, internships, evaluations, studentsWithoutInternship, totalWeeks);
-
-        // ═══════════════════════════════════════════════════════════════════
-        // Sheet 2: DATABASE – Student-Company mapping
-        // ═══════════════════════════════════════════════════════════════════
-        var ws2 = workbook.Worksheets.Add("DATABASE");
-        BuildDatabaseSheet(ws2, internships, studentsWithoutInternship);
-
-        // ═══════════════════════════════════════════════════════════════════
-        // Sheet 3: TÊN CÔNG TY – Company directory
-        // ═══════════════════════════════════════════════════════════════════
-        var ws3 = workbook.Worksheets.Add("TÊN CÔNG TY");
-        BuildCompanySheet(ws3, companies, internships);
-
-        using var ms = new MemoryStream();
-        workbook.SaveAs(ms);
-        return ms.ToArray();
-    }
 
     /// <inheritdoc />
     public async Task<byte[]> ExportC22ASummaryReportAsync(Guid? semesterId = null, string? department = null, Guid? departmentId = null)
@@ -123,6 +35,7 @@ public class InternshipReportService : IInternshipReportService
             .Include(i => i.Company)
             .Include(i => i.Lecturer)
             .Include(i => i.WeeklyReports)
+            .Include(i => i.Semester)
             .AsNoTracking();
 
         if (semesterId.HasValue)
@@ -146,19 +59,23 @@ public class InternshipReportService : IInternshipReportService
             .AsNoTracking()
             .ToDictionaryAsync(e => e.InternshipId);
 
-        var studentsCountQuery = _db.Students.Where(s => !s.IsDeleted);
-        if (!string.IsNullOrWhiteSpace(department))
-            studentsCountQuery = studentsCountQuery.Where(s => s.Department == department);
-        if (departmentId.HasValue)
-            studentsCountQuery = studentsCountQuery.Where(s => s.DepartmentId == departmentId.Value);
-        var totalStudents = await studentsCountQuery.CountAsync();
+        var (absentWeeksByInternship, weeklyQualityLevelsByInternship) = await LoadGradingContextAsync(internships, semesterId, evaluations);
+
+        // Mốc thống kê theo KHÓA THỰC TẬP CỦA KỲ (đề xuất P1) — không tính toàn bộ SV mọi khóa của khoa.
+        var (totalStudents, _) = await ComputeCohortStatsAsync(internships, department, departmentId);
 
         var totalCompanies = internships.Select(i => i.CompanyId).Where(c => c.HasValue).Distinct().Count();
 
         // Build the summary report as a styled Excel file (matching the C22A Word structure)
         using var workbook = new XLWorkbook();
         var ws = workbook.Worksheets.Add("BÁO CÁO TỔNG KẾT");
-        BuildC22ASummarySheet(ws, internships, evaluations, totalStudents, totalCompanies);
+        var totalWeeks = internships
+            .Select(i => i.Semester?.TotalWeeks ?? 0)
+            .Where(weeks => weeks > 0)
+            .DefaultIfEmpty(0)
+            .Max();
+        var reportScheduleByWeek = await LoadReportScheduleByWeekAsync(semesterId, totalWeeks);
+        BuildC22ASummarySheet(ws, internships, evaluations, totalStudents, totalCompanies, absentWeeksByInternship, weeklyQualityLevelsByInternship, reportScheduleByWeek, DateTime.UtcNow);
 
         using var ms = new MemoryStream();
         workbook.SaveAs(ms);
@@ -197,26 +114,39 @@ public class InternshipReportService : IInternshipReportService
             .AsNoTracking()
             .ToDictionaryAsync(e => e.InternshipId);
 
-        var studentsCountQuery = _db.Students.Where(s => !s.IsDeleted);
-        if (!string.IsNullOrWhiteSpace(department))
-            studentsCountQuery = studentsCountQuery.Where(s => s.Department == department);
-        if (departmentId.HasValue)
-            studentsCountQuery = studentsCountQuery.Where(s => s.DepartmentId == departmentId.Value);
-        var totalStudents = await studentsCountQuery.CountAsync();
+        var (absentWeeksByInternship, weeklyQualityLevelsByInternship) = await LoadGradingContextAsync(internships, semesterId, evaluations);
 
         var totalCompanies = internships
             .Select(i => i.CompanyId)
             .Where(c => c.HasValue).Distinct().Count();
 
-        var lecturerSummary = semesterId.HasValue && lecturerId.HasValue
-            ? await _db.Set<LecturerSemesterSummary>()
+        // Ưu tiên nội dung tổng kết CẤP KHOA (admin soạn); fallback sang nội dung tổng kết của giảng viên
+        // khi xuất theo một GV cụ thể.
+        var facultySummary = semesterId.HasValue
+            ? await _db.Set<SemesterFacultySummary>()
                 .AsNoTracking()
-                .FirstOrDefaultAsync(x => x.SemesterId == semesterId.Value && x.LecturerId == lecturerId.Value)
+                .FirstOrDefaultAsync(x => x.SemesterId == semesterId.Value && x.DepartmentId == departmentId)
             : null;
+        var lecturerSummary = !string.IsNullOrWhiteSpace(facultySummary?.Results)
+            ? null
+            : semesterId.HasValue && lecturerId.HasValue
+                ? await _db.Set<LecturerSemesterSummary>()
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(x => x.SemesterId == semesterId.Value && x.LecturerId == lecturerId.Value)
+                : null;
+        var summaryResults = !string.IsNullOrWhiteSpace(facultySummary?.Results) ? facultySummary.Results : lecturerSummary?.Results;
+        var summaryDifficulties = !string.IsNullOrWhiteSpace(facultySummary?.Difficulties) ? facultySummary.Difficulties : lecturerSummary?.Difficulties;
+        var summaryRecommendations = !string.IsNullOrWhiteSpace(facultySummary?.Recommendations) ? facultySummary.Recommendations : lecturerSummary?.Recommendations;
+        var summaryConclusion = !string.IsNullOrWhiteSpace(facultySummary?.Conclusion) ? facultySummary.Conclusion : lecturerSummary?.Conclusion;
 
         var semester = semesterId.HasValue
             ? await _db.Semesters.FirstOrDefaultAsync(s => s.Id == semesterId.Value)
             : await _db.Semesters.OrderByDescending(s => s.StartDate).FirstOrDefaultAsync();
+
+        // Lịch nộp báo cáo của kỳ — dùng để thống kê bài thiếu/trễ cho Điểm QT (khớp chuẩn chấm điểm).
+        var totalWeeks = Math.Max(semester?.TotalWeeks ?? 0, 0);
+        var reportScheduleByWeek = await LoadReportScheduleByWeekAsync(semesterId, totalWeeks);
+        var nowUtc = DateTime.UtcNow;
 
         var startDateStr = semester?.StartDate?.ToString("dd/MM/yyyy") ?? DateTime.Now.ToString("dd/MM/yyyy");
         var endDateStr = semester?.EndDate?.ToString("dd/MM/yyyy") ?? DateTime.Now.AddDays(45).ToString("dd/MM/yyyy");
@@ -226,30 +156,49 @@ public class InternshipReportService : IInternshipReportService
         var completedCount = internships.Count(i =>
             i.Status == InternshipStatus.Completed || i.Status == InternshipStatus.Graded);
         var incompleteCount = interning - completedCount;
-        var notInterning = totalStudents - interning;
 
-        // Grade classification
+        // Mốc % theo KHÓA THỰC TẬP CỦA KỲ (đề xuất P1): "Không thực tập" chỉ đếm SV cùng khóa
+        // (class) đang thực tập kỳ này nhưng chưa đăng ký — loại SV các khóa chưa đến kỳ thực tập.
+        var (totalStudents, notInterning) = await ComputeCohortStatsAsync(internships, department, departmentId);
+
+        // Grade classification — DÙNG CHUẨN DUY NHẤT InternshipGradeCalculator (khớp gradingRules.ts):
+        // TB = QT×0.4 + Thi×0.6; xếp loại ≥8.5 Xuất sắc | ≥8 Giỏi | ≥6.5 Khá | ≥5 Trung bình | <5 Không đạt.
+        // SV chưa chốt điểm (không OralExamScore) hoặc không đủ điều kiện dự thi → "Chưa chốt", KHÔNG rơi vào "Trung bình".
+        const string pendingClassification = "Chưa chốt";
         var gradeCategories = new[]
         {
-            "Xuất sắc", "Giỏi", "Khá", "Trung bình khá",
-            "Trung bình", "Yếu", "Không thực tập"
+            "Xuất sắc", "Giỏi", "Khá", "Trung bình",
+            "Không đạt", pendingClassification, "Không thực tập"
         };
         var gradeCounts = new Dictionary<string, int>();
         foreach (var cat in gradeCategories) gradeCounts[cat] = 0;
 
         foreach (var intern in internships)
         {
-            if (evaluations.TryGetValue(intern.Id, out var eval))
+            var hasFinalReport = intern.Status == InternshipStatus.Completed || intern.Status == InternshipStatus.Graded
+                || intern.Submissions.Any(s => !s.IsDeleted && s.Type == SubmissionType.FinalReport && s.Status != SubmissionStatus.Rejected);
+            var (isEligible, _) = InternshipGradeCalculator.EvaluateEligibility(hasFinalReport, absentWeeksByInternship.GetValueOrDefault(intern.Id));
+
+            if (!isEligible)
             {
-                var classification = ClassifyGrade(eval.FinalGrade);
-                gradeCounts[classification]++;
+                // Xếp loại "không thực tập" theo quy định → gộp vào dòng "Không thực tập" của bảng tổng kết.
+                gradeCounts["Không thực tập"]++;
+                continue;
             }
-            else
+            if (!evaluations.TryGetValue(intern.Id, out var eval) || !eval.OralExamScore.HasValue)
             {
-                gradeCounts["Trung bình"]++;
+                // Đủ điều kiện nhưng chưa có Điểm thi → chưa chốt xếp loại.
+                gradeCounts[pendingClassification]++;
+                continue;
             }
+
+            var (missingCount, lateCount, submittedWeekCount) = CountSubmissionStats(intern, reportScheduleByWeek, nowUtc);
+            var processScore = InternshipGradeCalculator.ComputeProcessScore(missingCount, lateCount, submittedWeekCount, weeklyQualityLevelsByInternship.GetValueOrDefault(intern.Id), eval.HasCreativeProduct);
+            var (average, classification) = InternshipGradeCalculator.ComputeAverage(true, processScore, eval.OralExamScore);
+            gradeCounts[classification]++;
         }
-        gradeCounts["Không thực tập"] = notInterning;
+        // "Không thực tập" = SV không đủ điều kiện dự thi + SV không có kỳ thực tập.
+        gradeCounts["Không thực tập"] += notInterning;
 
         int totalForPercent = totalStudents > 0 ? totalStudents : 1;
 
@@ -272,14 +221,15 @@ public class InternshipReportService : IInternshipReportService
             ["{{START_DATE}}"] = startDateStr,
             ["{{END_DATE}}"] = endDateStr,
             ["{{DEPARTMENT}}"] = !string.IsNullOrWhiteSpace(department) ? department : "TOÀN HỆ THỐNG",
-            ["{{RESULTS}}"] = lecturerSummary?.Results ?? string.Empty,
-            ["{{DIFFICULTIES}}"] = lecturerSummary?.Difficulties ?? string.Empty,
-            ["{{RECOMMENDATIONS}}"] = lecturerSummary?.Recommendations ?? string.Empty,
-            ["{{CONCLUSION}}"] = lecturerSummary?.Conclusion ?? string.Empty,
-            ["{{SUMMARY_RESULTS}}"] = lecturerSummary?.Results ?? string.Empty,
-            ["{{SUMMARY_DIFFICULTIES}}"] = lecturerSummary?.Difficulties ?? string.Empty,
-            ["{{SUMMARY_RECOMMENDATIONS}}"] = lecturerSummary?.Recommendations ?? string.Empty,
-            ["{{SUMMARY_CONCLUSION}}"] = lecturerSummary?.Conclusion ?? string.Empty,
+            ["{{DEPARTMENT_ID}}"] = departmentId?.ToString() ?? string.Empty,
+            ["{{RESULTS}}"] = summaryResults ?? string.Empty,
+            ["{{DIFFICULTIES}}"] = summaryDifficulties ?? string.Empty,
+            ["{{RECOMMENDATIONS}}"] = summaryRecommendations ?? string.Empty,
+            ["{{CONCLUSION}}"] = summaryConclusion ?? string.Empty,
+            ["{{SUMMARY_RESULTS}}"] = summaryResults ?? string.Empty,
+            ["{{SUMMARY_DIFFICULTIES}}"] = summaryDifficulties ?? string.Empty,
+            ["{{SUMMARY_RECOMMENDATIONS}}"] = summaryRecommendations ?? string.Empty,
+            ["{{SUMMARY_CONCLUSION}}"] = summaryConclusion ?? string.Empty,
         };
 
         // Grade stats placeholders
@@ -292,9 +242,9 @@ public class InternshipReportService : IInternshipReportService
                 "Xuất sắc" => "EXCELLENT",
                 "Giỏi" => "GOOD",
                 "Khá" => "FAIR",
-                "Trung bình khá" => "AVERAGE_GOOD",
                 "Trung bình" => "AVERAGE",
-                "Yếu" => "WEAK",
+                "Không đạt" => "WEAK",
+                "Chưa chốt" => "PENDING",
                 "Không thực tập" => "NO_INTERNSHIP",
                 _ => cat.ToUpper()
             };
@@ -333,7 +283,8 @@ public class InternshipReportService : IInternshipReportService
             UpdateInstitutionalParagraphs(body, department, startDateStr, endDateStr, totalCompanies, interning, completedCount, incompleteCount);
 
             // ── Update Grade Statistics Table ───────────────────────────────
-            UpdateGradeStatisticsTable(body, gradeCounts, totalStudents);
+            // Mốc % theo khóa thực tập của kỳ (đề xuất P1); gradeCounts đã chứa "Không thực tập" → không cộng thêm.
+            UpdateGradeStatisticsTable(body, gradeCounts, totalStudents, notInterning, includeNotInterningInCounts: false);
 
             // ── Populate the incomplete students table ──────────────────────
             PopulateIncompleteStudentsTable(body, incompleteStudents);
@@ -347,6 +298,58 @@ public class InternshipReportService : IInternshipReportService
     // ────────────────────────────────────────────────────────────────────────
     // Word document helpers
     // ────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Nạp ngữ cảnh chấm điểm dùng chung cho mọi xuất báo cáo:
+    /// (1) số tuần VẮNG theo điểm danh (hệ thống độc lập với nộp bài) để đánh giá điều kiện dự thi;
+    /// (2) mức rubric chất lượng từng tuần (WeeklyQualityJson) để tính Điểm QT.
+    /// Cùng nguồn dữ liệu với màn hình chấm điểm (InternshipGradingService) và Excel C23 (ExcelExportService).
+    /// </summary>
+    private async Task<(Dictionary<Guid, int> absentWeeksByInternship, Dictionary<Guid, List<decimal?>> weeklyQualityLevelsByInternship)> LoadGradingContextAsync(
+        List<Domain.Entities.Internship> internships,
+        Guid? semesterId,
+        Dictionary<Guid, Domain.Entities.Evaluation> evaluations)
+    {
+        // (1) Số tuần vắng theo ĐIỂM DANH buổi hẹn.
+        var studentIds = internships.Select(i => i.StudentId).ToList();
+        var absenceQuery = _db.AttendanceRecords
+            .AsNoTracking()
+            .Where(a => studentIds.Contains(a.StudentId) && !a.IsDeleted
+                && a.Status == AttendanceStatus.Absent
+                && !a.AttendanceSession.IsDeleted
+                && !a.AttendanceSession.IsLecturerOnly);
+        if (semesterId.HasValue)
+            absenceQuery = absenceQuery.Where(a => a.AttendanceSession.SemesterId == semesterId.Value);
+        var absenceRows = await absenceQuery
+            .Select(a => new { a.StudentId, a.AttendanceSession.WeekNumber })
+            .ToListAsync();
+        var absentWeeksByStudent = absenceRows
+            .GroupBy(a => a.StudentId)
+            .ToDictionary(g => g.Key, g => g.Select(x => x.WeekNumber).Distinct().Count());
+        var absentWeeksByInternship = internships.ToDictionary(
+            i => i.Id,
+            i => absentWeeksByStudent.GetValueOrDefault(i.StudentId));
+
+        // (2) Mức rubric từng tuần (WeeklyQualityJson) cho Điểm QT.
+        var weeklyQualityLevelsByInternship = new Dictionary<Guid, List<decimal?>>();
+        foreach (var (internshipId, evaluation) in evaluations)
+        {
+            var levels = new List<decimal?>();
+            if (!string.IsNullOrWhiteSpace(evaluation.WeeklyQualityJson))
+            {
+                try
+                {
+                    var parsed = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, decimal>>(evaluation.WeeklyQualityJson);
+                    if (parsed != null) levels.AddRange(parsed.Values.Select(v => (decimal?)v));
+                }
+                catch (System.Text.Json.JsonException) { }
+            }
+            if (levels.Count == 0 && evaluation.QualityLevel.HasValue) levels.Add(evaluation.QualityLevel);
+            weeklyQualityLevelsByInternship[internshipId] = levels;
+        }
+
+        return (absentWeeksByInternship, weeklyQualityLevelsByInternship);
+    }
 
     private static void UpdateInstitutionalParagraphs(
         DocumentFormat.OpenXml.Wordprocessing.Body body,
@@ -415,7 +418,9 @@ public class InternshipReportService : IInternshipReportService
     private static void UpdateGradeStatisticsTable(
         DocumentFormat.OpenXml.Wordprocessing.Body body,
         Dictionary<string, int> gradeCounts,
-        int totalStudents)
+        int totalStudents,
+        int notInterning,
+        bool includeNotInterningInCounts = true)
     {
         var tables = body.Descendants<Table>().ToList();
         Table? statsTable = null;
@@ -441,11 +446,16 @@ public class InternshipReportService : IInternshipReportService
 
             var rowLabel = string.Concat(cells[0].Descendants<Text>().Select(t => t.Text)).Trim();
 
+            // Khi includeNotInterningInCounts = false, gradeCounts đã chứa "Không thực tập"
+            // (gồm SV không đủ điều kiện dự thi + SV cùng khóa chưa đăng ký) → không cộng thêm.
+            var isNotInterningRow = rowLabel.Equals("Không thực tập", StringComparison.OrdinalIgnoreCase);
+            var effectiveCountOffset = isNotInterningRow && !includeNotInterningInCounts ? notInterning : 0;
+
             foreach (var kvp in gradeCounts)
             {
                 if (rowLabel.Equals(kvp.Key, StringComparison.OrdinalIgnoreCase))
                 {
-                    var count = kvp.Value;
+                    var count = kvp.Value + effectiveCountOffset;
                     var pct = Math.Round(count * 100.0 / totalForPct, 1);
                     SetCellText(cells[1], count.ToString());
                     SetCellText(cells[2], $"{pct}%");
@@ -657,323 +667,19 @@ public class InternshipReportService : IInternshipReportService
     // Sheet builders
     // ────────────────────────────────────────────────────────────────────────
 
-    private static void BuildDanhSachSheet(
-        IXLWorksheet ws,
-        List<Domain.Entities.Internship> internships,
-        Dictionary<Guid, Domain.Entities.Evaluation> evaluations,
-        List<Domain.Entities.Student> studentsWithoutInternship,
-        int totalWeeks)
-    {
-        // ── Title rows ─────────────────────────────────────────────────────
-        ws.Range(1, 1, 1, 18 + totalWeeks).Merge();
-        var titleCell = ws.Cell(1, 1);
-        titleCell.Value = "DANH SÁCH THỰC TẬP TỐT NGHIỆP";
-        titleCell.Style.Font.Bold = true;
-        titleCell.Style.Font.FontSize = 16;
-        titleCell.Style.Font.FontName = "Times New Roman";
-        titleCell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-        ws.Row(1).Height = 30;
 
-        ws.Range(2, 1, 2, 18 + totalWeeks).Merge();
-        var subCell = ws.Cell(2, 1);
-        subCell.Value = $"Ngày xuất: {DateTime.Now:dd/MM/yyyy} | Khoa Công nghệ thông tin";
-        subCell.Style.Font.Italic = true;
-        subCell.Style.Font.FontSize = 10;
-        subCell.Style.Font.FontName = "Times New Roman";
-        subCell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
 
-        // ── Column headers (row 4) ─────────────────────────────────────────
-        int headerRow = 4;
-        var headers = new[]
-        {
-            "STT", "HỌ", "TÊN", "LỚP", "PHỤ TRÁCH CÔNG TY", "GV HƯỚNG DẪN THỰC TẬP",
-            "GHI CHÚ", "Điểm tham gia", "Điểm QT", "Thi", "Điểm TB", "Kết quả xếp loại",
-            "HD CHUNG"
-        };
-
-        int col = 1;
-        foreach (var h in headers)
-        {
-            var cell = ws.Cell(headerRow, col);
-            cell.Value = h;
-            StyleHeaderCell(cell);
-            col++;
-        }
-
-        // Weekly columns: TUẦN 1..6
-        for (int w = 1; w <= totalWeeks; w++)
-        {
-            var cell = ws.Cell(headerRow, col);
-            cell.Value = $"TUẦN {w}";
-            StyleHeaderCell(cell);
-            col++;
-        }
-
-        // NỘP BC, TỔNG
-        var nbcCell = ws.Cell(headerRow, col);
-        nbcCell.Value = "NỘP BC";
-        StyleHeaderCell(nbcCell);
-        col++;
-
-        var tongCell = ws.Cell(headerRow, col);
-        tongCell.Value = "TỔNG";
-        StyleHeaderCell(tongCell);
-        int totalCols = col;
-
-        ws.Row(headerRow).Height = 28;
-
-        // ── Data rows ──────────────────────────────────────────────────────
-        int row = headerRow + 1;
-        int stt = 1;
-
-        foreach (var intern in internships)
-        {
-            var student = intern.Student;
-            var nameParts = SplitName(student.FullName);
-            var evaluation = evaluations.GetValueOrDefault(intern.Id);
-            var weeklyReports = intern.WeeklyReports?.OrderBy(r => r.WeekNumber).ToList() ?? [];
-
-            col = 1;
-            ws.Cell(row, col++).Value = stt;
-            ws.Cell(row, col++).Value = nameParts.Ho;
-            ws.Cell(row, col++).Value = nameParts.Ten;
-            ws.Cell(row, col++).Value = student.Class ?? "—";
-            ws.Cell(row, col++).Value = intern.Company?.CompanyName ?? "Chưa có";
-            ws.Cell(row, col++).Value = intern.Lecturer?.FullName ?? "Chưa phân công";
-            ws.Cell(row, col++).Value = intern.Notes ?? "";
-
-            // Scores
-            if (evaluation != null)
-            {
-                decimal diemThamGia = evaluation.InitiativeScore;
-                decimal diemQT = (evaluation.TechnicalScore + evaluation.CommunicationScore + evaluation.TeamworkScore) / 3.0m;
-                decimal thi = evaluation.FinalGrade;
-                decimal diemTB = Math.Round((diemThamGia + diemQT + thi) / 3.0m, 2);
-
-                ws.Cell(row, col++).Value = Math.Round(diemThamGia, 1);
-                ws.Cell(row, col++).Value = Math.Round(diemQT, 1);
-                ws.Cell(row, col++).Value = Math.Round(thi, 1);
-                ws.Cell(row, col++).Value = Math.Round(diemTB, 1);
-                ws.Cell(row, col++).Value = ClassifyGrade(diemTB);
-            }
-            else
-            {
-                col += 5; // skip score columns
-            }
-
-            // HD CHUNG: overall guidance status
-            bool hasAllWeeks = weeklyReports.Count >= totalWeeks;
-            ws.Cell(row, col++).Value = hasAllWeeks ? "Đủ" : "Thiếu";
-
-            // Weekly report status (TUẦN 1..6)
-            for (int w = 1; w <= totalWeeks; w++)
-            {
-                var report = weeklyReports.FirstOrDefault(r => r.WeekNumber == w);
-                var wCell = ws.Cell(row, col++);
-                if (report != null)
-                {
-                    wCell.Value = report.Status switch
-                    {
-                        WeeklyReportStatus.Approved => "✓",
-                        WeeklyReportStatus.Reviewed => "✓",
-                        WeeklyReportStatus.Submitted => "Đã nộp",
-                        WeeklyReportStatus.Draft => "Nháp",
-                        _ => "—"
-                    };
-                    if (report.Status == WeeklyReportStatus.Approved || report.Status == WeeklyReportStatus.Reviewed)
-                        wCell.Style.Font.FontColor = XLColor.Green;
-                }
-                else
-                {
-                    wCell.Value = "—";
-                    wCell.Style.Font.FontColor = XLColor.Red;
-                }
-            }
-
-            // NỘP BC
-            bool hasSubmission = intern.Status == InternshipStatus.Completed || intern.Status == InternshipStatus.Graded;
-            ws.Cell(row, col++).Value = hasSubmission ? "Đã nộp" : "Chưa";
-
-            // TỔNG - Đủ điều kiện / Không đủ điều kiện
-            bool eligible = hasAllWeeks && hasSubmission && evaluation != null;
-            var tongDataCell = ws.Cell(row, col);
-            tongDataCell.Value = eligible ? "Đủ điều kiện" : "Không đủ điều kiện";
-            if (!eligible)
-            {
-                tongDataCell.Style.Font.FontColor = XLColor.Red;
-                tongDataCell.Style.Font.Bold = true;
-            }
-
-            // Zebra striping
-            if (stt % 2 == 0)
-            {
-                for (int c = 1; c <= totalCols; c++)
-                    ws.Cell(row, c).Style.Fill.BackgroundColor = XLColor.FromHtml("#F8FAFC");
-            }
-
-            // Apply borders and font to entire row
-            for (int c = 1; c <= totalCols; c++)
-            {
-                ws.Cell(row, c).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
-                ws.Cell(row, c).Style.Border.OutsideBorderColor = XLColor.FromHtml("#D1D5DB");
-                ws.Cell(row, c).Style.Font.FontName = "Times New Roman";
-                ws.Cell(row, c).Style.Font.FontSize = 10;
-            }
-
-            stt++;
-            row++;
-        }
-
-        // Add students without internship as "Không thực tập"
-        foreach (var student in studentsWithoutInternship)
-        {
-            var nameParts = SplitName(student.FullName);
-            col = 1;
-            ws.Cell(row, col++).Value = stt;
-            ws.Cell(row, col++).Value = nameParts.Ho;
-            ws.Cell(row, col++).Value = nameParts.Ten;
-            ws.Cell(row, col++).Value = student.Class ?? "—";
-            // Skip remaining columns, mark as Không thực tập
-            ws.Cell(row, 12).Value = "không thực tập";
-            ws.Cell(row, 12).Style.Font.FontColor = XLColor.Red;
-            ws.Cell(row, totalCols).Value = "Không đủ điều kiện";
-            ws.Cell(row, totalCols).Style.Font.FontColor = XLColor.Red;
-
-            for (int c = 1; c <= totalCols; c++)
-            {
-                ws.Cell(row, c).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
-                ws.Cell(row, c).Style.Border.OutsideBorderColor = XLColor.FromHtml("#D1D5DB");
-                ws.Cell(row, c).Style.Font.FontName = "Times New Roman";
-                ws.Cell(row, c).Style.Font.FontSize = 10;
-            }
-
-            stt++;
-            row++;
-        }
-
-        // Auto-fit
-        ws.Columns(1, totalCols).AdjustToContents();
-        ws.Column(1).Width = 5;  // STT
-        ws.Column(2).Width = 15; // HỌ
-        ws.Column(3).Width = 10; // TÊN
-        ws.Column(5).Width = 25; // CÔNG TY
-        ws.Column(6).Width = 22; // GVHD
-    }
-
-    private static void BuildDatabaseSheet(
-        IXLWorksheet ws,
-        List<Domain.Entities.Internship> internships,
-        List<Domain.Entities.Student> studentsWithoutInternship)
-    {
-        var headers = new[] { "STT", "HỌ TÊN", "LỚP", "CÔNG TY THỰC TẬP" };
-        int col = 1;
-        foreach (var h in headers)
-        {
-            StyleHeaderCell(ws.Cell(1, col));
-            ws.Cell(1, col).Value = h;
-            col++;
-        }
-        ws.Row(1).Height = 26;
-
-        int row = 2;
-        int stt = 1;
-        foreach (var intern in internships)
-        {
-            ws.Cell(row, 1).Value = stt;
-            ws.Cell(row, 2).Value = intern.Student.FullName;
-            ws.Cell(row, 3).Value = intern.Student.Class ?? "—";
-            ws.Cell(row, 4).Value = intern.Company?.CompanyName ?? "Chưa có";
-
-            for (int c = 1; c <= 4; c++)
-            {
-                ws.Cell(row, c).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
-                ws.Cell(row, c).Style.Font.FontName = "Times New Roman";
-                ws.Cell(row, c).Style.Font.FontSize = 10;
-            }
-            stt++;
-            row++;
-        }
-
-        foreach (var student in studentsWithoutInternship)
-        {
-            ws.Cell(row, 1).Value = stt;
-            ws.Cell(row, 2).Value = student.FullName;
-            ws.Cell(row, 3).Value = student.Class ?? "—";
-            ws.Cell(row, 4).Value = "Không thực tập";
-            ws.Cell(row, 4).Style.Font.FontColor = XLColor.Red;
-
-            for (int c = 1; c <= 4; c++)
-            {
-                ws.Cell(row, c).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
-                ws.Cell(row, c).Style.Font.FontName = "Times New Roman";
-                ws.Cell(row, c).Style.Font.FontSize = 10;
-            }
-            stt++;
-            row++;
-        }
-
-        ws.Columns(1, 4).AdjustToContents();
-        ws.Column(1).Width = 5;
-        ws.Column(2).Width = 25;
-        ws.Column(4).Width = 30;
-    }
-
-    private static void BuildCompanySheet(
-        IXLWorksheet ws,
-        List<Domain.Entities.Company> companies,
-        List<Domain.Entities.Internship> internships)
-    {
-        var headers = new[] { "STT", "Tên Công Ty", "Địa Chỉ", "Số Lượng", "Điện thoại / Liên Hệ" };
-        int col = 1;
-        foreach (var h in headers)
-        {
-            StyleHeaderCell(ws.Cell(1, col));
-            ws.Cell(1, col).Value = h;
-            col++;
-        }
-        ws.Row(1).Height = 26;
-
-        // Count students per company
-        var companyCounts = internships
-            .Where(i => i.CompanyId.HasValue)
-            .GroupBy(i => i.CompanyId!.Value)
-            .ToDictionary(g => g.Key, g => g.Count());
-
-        int row = 2;
-        int stt = 1;
-        foreach (var company in companies)
-        {
-            ws.Cell(row, 1).Value = stt;
-            ws.Cell(row, 2).Value = company.CompanyName;
-            ws.Cell(row, 3).Value = company.Address ?? "—";
-            ws.Cell(row, 4).Value = companyCounts.GetValueOrDefault(company.Id, 0);
-            ws.Cell(row, 5).Value = string.IsNullOrWhiteSpace(company.ContactPhone)
-                ? (company.ContactPerson ?? "—")
-                : $"{company.ContactPerson} - {company.ContactPhone}";
-
-            for (int c = 1; c <= 5; c++)
-            {
-                ws.Cell(row, c).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
-                ws.Cell(row, c).Style.Font.FontName = "Times New Roman";
-                ws.Cell(row, c).Style.Font.FontSize = 10;
-            }
-            stt++;
-            row++;
-        }
-
-        ws.Columns(1, 5).AdjustToContents();
-        ws.Column(1).Width = 5;
-        ws.Column(2).Width = 30;
-        ws.Column(3).Width = 35;
-        ws.Column(5).Width = 30;
-    }
 
     private static void BuildC22ASummarySheet(
         IXLWorksheet ws,
         List<Domain.Entities.Internship> internships,
         Dictionary<Guid, Domain.Entities.Evaluation> evaluations,
         int totalStudents,
-        int totalCompanies)
+        int totalCompanies,
+        Dictionary<Guid, int> absentWeeksByInternship,
+        Dictionary<Guid, List<decimal?>> weeklyQualityLevelsByInternship,
+        Dictionary<int, Domain.Entities.SemesterReportSchedule> reportScheduleByWeek,
+        DateTime nowUtc)
     {
         ws.Style.Font.FontName = "Times New Roman";
         ws.Style.Font.FontSize = 12;
@@ -1029,30 +735,38 @@ public class InternshipReportService : IInternshipReportService
         WriteMerged("II. BẢNG TỔNG HỢP KẾT QUẢ XẾP LOẠI:");
         row++;
 
-        // Classification based on evaluations
-        var gradeCategories = new[] { "Xuất sắc", "Giỏi", "Khá", "Trung bình khá", "Trung bình", "Yếu", "Không thực tập" };
+        // Classification — DÙNG CHUẨN DUY NHẤT InternshipGradeCalculator (khớp màn hình chấm điểm + Excel C23):
+        // SV chưa có Điểm thi → "Chưa chốt"; không đủ điều kiện dự thi → "không thực tập".
+        const string pendingClassification = "Chưa chốt";
+        var gradeCategories = new[] { "Xuất sắc", "Giỏi", "Khá", "Trung bình", "Không đạt", pendingClassification, "Không thực tập" };
         var gradeCounts = new Dictionary<string, int>();
         foreach (var cat in gradeCategories) gradeCounts[cat] = 0;
 
         foreach (var intern in internships)
         {
-            if (evaluations.TryGetValue(intern.Id, out var eval))
+            var hasFinalReport = intern.Status == InternshipStatus.Completed || intern.Status == InternshipStatus.Graded
+                || intern.Submissions.Any(s => !s.IsDeleted && s.Type == SubmissionType.FinalReport && s.Status != SubmissionStatus.Rejected);
+            var (isEligible, _) = InternshipGradeCalculator.EvaluateEligibility(hasFinalReport, absentWeeksByInternship.GetValueOrDefault(intern.Id));
+
+            if (!isEligible)
             {
-                decimal avg = eval.FinalGrade;
-                var classification = ClassifyGrade(avg);
-                if (gradeCounts.ContainsKey(classification))
-                    gradeCounts[classification]++;
-                else
-                    gradeCounts["Trung bình"]++;
+                // Xếp loại "không thực tập" theo quy định → gộp vào dòng "Không thực tập" của bảng tổng kết.
+                gradeCounts["Không thực tập"]++;
+                continue;
             }
-            else
+            if (!evaluations.TryGetValue(intern.Id, out var eval) || !eval.OralExamScore.HasValue)
             {
-                // No evaluation — check if completed
-                if (intern.Status == InternshipStatus.Completed || intern.Status == InternshipStatus.Graded)
-                    gradeCounts["Trung bình"]++;
+                gradeCounts[pendingClassification]++;
+                continue;
             }
+
+            var (missingCount, lateCount, submittedWeekCount) = CountSubmissionStats(intern, reportScheduleByWeek, nowUtc);
+            var processScore = InternshipGradeCalculator.ComputeProcessScore(missingCount, lateCount, submittedWeekCount, weeklyQualityLevelsByInternship.GetValueOrDefault(intern.Id), eval.HasCreativeProduct);
+            var (_, classification) = InternshipGradeCalculator.ComputeAverage(true, processScore, eval.OralExamScore);
+            gradeCounts[classification]++;
         }
-        gradeCounts["Không thực tập"] = notInterning;
+        // "Không thực tập" = SV không đủ điều kiện dự thi + SV không có kỳ thực tập.
+        gradeCounts["Không thực tập"] += notInterning;
 
         int totalForPercent = totalStudents > 0 ? totalStudents : 1;
 
@@ -1169,6 +883,99 @@ public class InternshipReportService : IInternshipReportService
     // Helpers
     // ────────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Lịch nộp báo cáo tuần (các tuần 1..totalWeeks đang mở nộp) — dùng để thống kê bài thiếu/trễ
+    /// cho Điểm QT, khớp cách tính của ExcelExportService (C23) và InternshipGradingService.
+    /// </summary>
+    private async Task<Dictionary<int, Domain.Entities.SemesterReportSchedule>> LoadReportScheduleByWeekAsync(Guid? semesterId, int totalWeeks)
+    {
+        if (totalWeeks <= 0) return new Dictionary<int, Domain.Entities.SemesterReportSchedule>();
+
+        return await _db.SemesterReportSchedules
+            .AsNoTracking()
+            .Where(s => !s.IsDeleted && s.IsSubmissionOpen
+                && (!semesterId.HasValue || s.SemesterId == semesterId.Value)
+                && s.WeekNumber >= 1 && s.WeekNumber <= totalWeeks)
+            .OrderBy(s => s.WeekNumber)
+            .ToDictionaryAsync(s => s.WeekNumber);
+    }
+
+    /// <summary>
+    /// Mốc thống kê tổng kết theo KHÓA THỰC TẬP CỦA KỲ (đề xuất P1 của báo cáo rà soát):
+    /// - TotalStudents = số SV đăng ký thực tập kỳ này + SV cùng khóa (class) chưa đăng ký.
+    /// - NotInterning = SV thuộc khóa (class) đang thực tập kỳ này nhưng chưa có internship.
+    /// Xác định "khóa" qua tập class của các SV có internship trong kỳ — tránh phình số liệu
+    /// "Không thực tập" khi khoa còn SV các khóa khác chưa đến kỳ thực tập.
+    /// </summary>
+    private async Task<(int TotalStudents, int NotInterning)> ComputeCohortStatsAsync(
+        List<Domain.Entities.Internship> internships,
+        string? department,
+        Guid? departmentId)
+    {
+        var interningStudentIds = internships.Select(i => i.StudentId).ToHashSet();
+        var cohortClasses = internships
+            .Select(i => i.Student?.Class?.Trim())
+            .Where(c => !string.IsNullOrWhiteSpace(c))
+            .Select(c => c!)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var khoaStudentsQuery = _db.Students.AsNoTracking().Where(s => !s.IsDeleted);
+        if (!string.IsNullOrWhiteSpace(department))
+            khoaStudentsQuery = khoaStudentsQuery.Where(s => s.Department == department);
+        if (departmentId.HasValue)
+            khoaStudentsQuery = khoaStudentsQuery.Where(s => s.DepartmentId == departmentId.Value);
+
+        var khoaStudentClassRows = await khoaStudentsQuery
+            .Select(s => new { s.Id, s.Class })
+            .ToListAsync();
+
+        var notInterning = khoaStudentClassRows.Count(s =>
+            !interningStudentIds.Contains(s.Id)
+            && !string.IsNullOrWhiteSpace(s.Class)
+            && cohortClasses.Contains(s.Class!.Trim()));
+
+        return (internships.Count + notInterning, notInterning);
+    }
+
+    /// <summary>
+    /// Thống kê nộp bài của một internship: (số tuần thiếu, số tuần trễ, số tuần đã nộp).
+    /// Chỉ tính từ NỘP BÀI theo lịch báo cáo của kỳ — không liên quan điểm danh.
+    /// </summary>
+    private static (int MissingCount, int LateCount, int SubmittedWeekCount) CountSubmissionStats(
+        Domain.Entities.Internship intern,
+        Dictionary<int, Domain.Entities.SemesterReportSchedule> reportScheduleByWeek,
+        DateTime nowUtc)
+    {
+        var reports = intern.WeeklyReports?
+            .Where(r => !r.IsDeleted && r.Status != WeeklyReportStatus.Draft)
+            .ToList() ?? new List<WeeklyReport>();
+
+        var submittedWeekCount = reports
+            .Where(r => r.SubmittedAt.HasValue)
+            .Select(r => r.WeekNumber)
+            .Distinct()
+            .Count();
+
+        var missingCount = 0;
+        var lateCount = 0;
+        foreach (var (week, schedule) in reportScheduleByWeek)
+        {
+            var report = reports.FirstOrDefault(r => r.WeekNumber == week && r.SubmittedAt.HasValue);
+            if (report == null)
+            {
+                // Chưa nộp quá hạn → tính thiếu bài (chỉ ảnh hưởng Điểm QT).
+                if (schedule.DueDate < nowUtc)
+                    missingCount++;
+            }
+            else if (report.SubmittedAt!.Value > schedule.DueDate)
+            {
+                lateCount++;
+            }
+        }
+
+        return (missingCount, lateCount, submittedWeekCount);
+    }
+
     private static void StyleHeaderCell(IXLCell cell)
     {
         cell.Style.Font.Bold = true;
@@ -1181,33 +988,5 @@ public class InternshipReportService : IInternshipReportService
         cell.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
     }
 
-    private static (string Ho, string Ten) SplitName(string fullName)
-    {
-        if (string.IsNullOrWhiteSpace(fullName))
-            return ("", "");
 
-        var parts = fullName.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length <= 1)
-            return ("", fullName.Trim());
-
-        var ten = parts[^1];
-        var ho = string.Join(' ', parts[..^1]);
-        return (ho, ten);
-    }
-
-    /// <summary>
-    /// Classify final grade into Vietnamese categories matching C23 template.
-    /// </summary>
-    private static string ClassifyGrade(decimal average)
-    {
-        return average switch
-        {
-            >= 9.0m => "Xuất sắc",
-            >= 8.0m => "Giỏi",
-            >= 7.0m => "Khá",
-            >= 6.0m => "Trung bình khá",
-            >= 5.0m => "Trung bình",
-            _ => "Yếu"
-        };
-    }
 }

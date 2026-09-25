@@ -649,11 +649,20 @@ public class CompanyServiceTests
         result.FailedCount.Should().Be(0);
         result.Errors.Should().BeEmpty();
 
-        var company = await db.Companies.FirstOrDefaultAsync(c => c.CompanyCode == "12");
+        // Dữ liệu mẫu hiện tại của template: 1 công ty (DN_FPT) × 3 vị trí
+        // (VT_FPT_01=4 + VT_FPT_02=3 + VT_FPT_03=3 → Capacity = 10, row-per-position layout).
+        var company = await db.Companies.FirstOrDefaultAsync(c => c.CompanyCode == "DN_FPT");
         company.Should().NotBeNull();
-        company!.CompanyName.Should().Be("FPT Software");
-        company.Industry.Should().Be("Cong nghe thong tin");
+        company!.CompanyName.Should().Be("Công ty TNHH FPT Software");
+        company.Industry.Should().Be("Công nghệ thông tin");
         company.Capacity.Should().Be(10);
+        result.PositionsCreatedCount.Should().Be(3);
+
+        var positions = await db.CompanyPositions.Where(p => p.CompanyId == company.Id).ToListAsync();
+        positions.Should().HaveCount(3);
+        positions.Should().Contain(p => p.PositionCode == "VT_FPT_01" && p.Slots == 4);
+        positions.Should().Contain(p => p.PositionCode == "VT_FPT_02" && p.Slots == 3);
+        positions.Should().Contain(p => p.PositionCode == "VT_FPT_03" && p.Slots == 3);
     }
 
     [Fact]

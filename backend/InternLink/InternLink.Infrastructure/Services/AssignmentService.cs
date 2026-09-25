@@ -17,6 +17,12 @@ public class AssignmentService : IAssignmentService
     public const string AutoAssignNotePrefix = "Phân công tự động";
     public const int DefaultMaxCapacity = 40;
 
+    /// <summary>
+    /// Khoảng cách thời gian tối đa giữa hai bản ghi được coi là CÙNG lô phân công
+    /// trong lịch sử (AssignedAt chênh nhau <= ngưỡng này và cùng một GV).
+    /// </summary>
+    internal static readonly TimeSpan HistoryBatchGapThreshold = TimeSpan.FromMinutes(10);
+
     private readonly AppDbContext _db;
     private readonly INotificationService _notificationService;
 
@@ -41,7 +47,8 @@ public class AssignmentService : IAssignmentService
                 throw new InvalidOperationException("Giảng viên không thuộc khoa của bạn");
         }
 
-        // Validate or fallback semester
+        // Validate or fallback semester — fallback ƯU TIÊN kỳ thuộc khoa của admin,
+        // rồi đến kỳ dùng chung (DepartmentId = null); tránh gán nhầm SV vào kỳ của khoa khác.
         Guid targetSemesterId;
         if (request.SemesterId.HasValue && request.SemesterId.Value != Guid.Empty)
         {
@@ -52,12 +59,20 @@ public class AssignmentService : IAssignmentService
         }
         else
         {
-            var activeSemester = await _db.Semesters
-                .FirstOrDefaultAsync(s => s.Status == SemesterStatus.Active && !s.IsDeleted)
-                ?? await _db.Semesters.FirstOrDefaultAsync(s => !s.IsDeleted);
+            var activeSemesterQuery = _db.Semesters.Where(s => s.Status == SemesterStatus.Active && !s.IsDeleted);
+            if (departmentId.HasValue)
+                activeSemesterQuery = activeSemesterQuery.Where(s => s.DepartmentId == departmentId.Value || s.DepartmentId == null);
+            var activeSemester = await activeSemesterQuery
+                .OrderBy(s => s.DepartmentId == null) // ưu tiên kỳ riêng của khoa trước kỳ dùng chung
+                .FirstOrDefaultAsync()
+                ?? (departmentId.HasValue
+                    ? null
+                    : await _db.Semesters.FirstOrDefaultAsync(s => !s.IsDeleted));
 
             if (activeSemester == null)
-                throw new InvalidOperationException("No active semester found for assignment");
+                throw new InvalidOperationException(departmentId.HasValue
+                    ? "Khoa của bạn chưa có học kỳ đang hoạt động. Hãy bắt đầu một học kỳ trước khi phân công."
+                    : "No active semester found for assignment");
 
             targetSemesterId = activeSemester.Id;
         }
@@ -108,6 +123,7 @@ public class AssignmentService : IAssignmentService
                     SemesterId = targetSemesterId,
                     CompanyId = null,
                     LecturerId = request.LecturerId,
+                    AssignedAt = DateTime.UtcNow,
                     Status = targetSemesterIsActive ? InternshipStatus.InProgress : InternshipStatus.NotStarted,
                     Notes = request.Note ?? "Phân công giảng viên — chờ gán doanh nghiệp",
                     CreatedAt = DateTime.UtcNow
@@ -117,6 +133,9 @@ public class AssignmentService : IAssignmentService
             }
             else
             {
+                // Đổi GV (hoặc gán lần đầu) → ghi nhận thời điểm phân công mới.
+                if (internship.LecturerId != request.LecturerId)
+                    internship.AssignedAt = DateTime.UtcNow;
                 internship.LecturerId = request.LecturerId;
                 if (!string.IsNullOrWhiteSpace(request.Note))
                     internship.Notes = request.Note;
@@ -281,32 +300,62 @@ public class AssignmentService : IAssignmentService
         }
 
         var internships = await query
-            .OrderByDescending(i => i.UpdatedAt ?? i.CreatedAt)
+            .OrderByDescending(i => i.AssignedAt ?? i.CreatedAt)
             .Take(Math.Min(limit * 20, 1000))
             .ToListAsync();
 
-        return internships
-            .GroupBy(i => new
+        // Chia nhóm theo LÔ PHÂN CÔNG (đề xuất P1/P2 — thay bucket theo phút dễ tách nhóm sai):
+        // một lô = các bản ghi của CÙNG giảng viên, cách nhau không quá BatchGapThreshold.
+        // Quét tuần tự theo thời gian giảm dần: cùng GV và cách mốc đầu lô <= 10 phút → chung lô;
+        // khác GV hoặc quá 10 phút → mở lô mới. Tránh trường hợp bulk assign kéo dài vài phút
+        // bị cắt thành nhiều dòng lịch sử chỉ vì lệch giây/phút.
+        var items = internships
+            .Select(i => new { Item = i, LecturerId = i.LecturerId, Assigned = i.AssignedAt ?? i.CreatedAt })
+            .OrderByDescending(x => x.Assigned)
+            .ToList();
+
+        var batches = new List<List<(Domain.Entities.Internship Item, DateTime Assigned)>>();
+        var current = new List<(Domain.Entities.Internship Item, DateTime Assigned)>();
+        Guid? currentLecturerId = null;
+        DateTime batchStart = default;
+
+        foreach (var x in items)
+        {
+            var sameBatch = current.Count > 0
+                && currentLecturerId == x.LecturerId
+                && batchStart - x.Assigned <= HistoryBatchGapThreshold;
+
+            if (!sameBatch)
             {
-                i.LecturerId,
-                LecturerName = i.Lecturer!.FullName,
-                Bucket = (i.UpdatedAt ?? i.CreatedAt).ToString("yyyy-MM-dd HH:mm"),
-            })
-            .OrderByDescending(g => g.Max(x => x.UpdatedAt ?? x.CreatedAt))
+                if (current.Count > 0)
+                    batches.Add(current);
+                current = new List<(Domain.Entities.Internship, DateTime)>();
+                currentLecturerId = x.LecturerId;
+                batchStart = x.Assigned;
+            }
+
+            current.Add((x.Item, x.Assigned));
+        }
+        if (current.Count > 0)
+            batches.Add(current);
+
+        return batches
             .Take(limit)
-            .Select(g =>
+            .Select(batch =>
             {
-                var isAuto = g.Any(x =>
-                    x.Notes != null &&
-                    x.Notes.Contains(AutoAssignNotePrefix, StringComparison.Ordinal));
+                var first = batch[0].Item;
+                var batchStart2 = batch.Max(x => x.Assigned);
+                var isAuto = batch.Any(x =>
+                    x.Item.Notes != null &&
+                    x.Item.Notes.Contains(AutoAssignNotePrefix, StringComparison.Ordinal));
                 return new AssignmentHistoryItemDto
                 {
-                    Id = $"{g.Key.LecturerId}-{g.Key.Bucket}",
-                    LecturerName = g.Key.LecturerName,
-                    StudentCount = g.Count(),
-                    Timestamp = g.Max(x => x.UpdatedAt ?? x.CreatedAt),
-                    ClassGroups = g
-                        .Select(x => x.Student?.Class)
+                    Id = $"{first.LecturerId}-{batchStart2:yyyy-MM-dd HH:mm}",
+                    LecturerName = first.Lecturer?.FullName,
+                    StudentCount = batch.Count,
+                    Timestamp = batchStart2,
+                    ClassGroups = batch
+                        .Select(x => x.Item.Student?.Class)
                         .Where(c => !string.IsNullOrWhiteSpace(c))
                         .Distinct()
                         .Cast<string>()
@@ -378,9 +427,10 @@ public class AssignmentService : IAssignmentService
                 internship?.Company?.CompanyName == UnassignedCompanyName
                     ? "Chưa có DN"
                     : internship?.Company?.CompanyName ?? "";
+            // "Ngày phân công" = AssignedAt (đề xuất P2) — UpdatedAt đổi khi sửa bất kỳ trường nào.
             sheet.Cell(row, 8).Value = internship == null
                 ? ""
-                : (internship.UpdatedAt ?? internship.CreatedAt).ToString("dd/MM/yyyy");
+                : (internship.AssignedAt ?? internship.CreatedAt).ToString("dd/MM/yyyy");
             sheet.Cell(row, 9).Value = internship == null
                 ? "Chưa phân công"
                 : internship.Status.ToString();
@@ -454,6 +504,37 @@ public class AssignmentService : IAssignmentService
         if (unassigned.Count == 0)
             return new AutoAssignResultDto();
 
+        // Fallback ƯU TIÊN kỳ thuộc khoa của admin, rồi đến kỳ dùng chung (DepartmentId = null).
+        var activeSemesterQuery = _db.Semesters.AsNoTracking().Where(s => !s.IsDeleted);
+        if (request.SemesterId.HasValue && request.SemesterId.Value != Guid.Empty)
+        {
+            activeSemesterQuery = activeSemesterQuery.Where(s => s.Id == request.SemesterId.Value);
+        }
+        else
+        {
+            activeSemesterQuery = activeSemesterQuery.Where(s => s.Status == SemesterStatus.Active);
+            if (departmentId.HasValue)
+                activeSemesterQuery = activeSemesterQuery.Where(s => s.DepartmentId == departmentId.Value || s.DepartmentId == null);
+        }
+        var activeSemester = await activeSemesterQuery
+            .OrderBy(s => s.DepartmentId == null) // ưu tiên kỳ riêng của khoa trước kỳ dùng chung
+            .FirstOrDefaultAsync()
+            ?? (request.SemesterId.HasValue
+                ? null
+                : departmentId.HasValue
+                    ? null
+                    : await _db.Semesters.FirstOrDefaultAsync(s => !s.IsDeleted));
+
+        if (activeSemester == null)
+            throw new InvalidOperationException(departmentId.HasValue
+                ? "Khoa của bạn chưa có học kỳ đang hoạt động. Hãy bắt đầu một học kỳ trước khi phân công tự động."
+                : "No active semester found for auto assignment");
+
+        // Sức chứa tối đa mỗi GV theo cấu hình của kỳ (fallback 40 nếu cấu hình <= 0).
+        var maxPerLecturer = activeSemester.MaxStudentsPerLecturer > 0
+            ? activeSemester.MaxStudentsPerLecturer
+            : DefaultMaxCapacity;
+
         var batches = new Dictionary<Guid, List<Guid>>();
         var note = strategy == "department"
             ? $"{AutoAssignNotePrefix} — ghép theo bộ môn"
@@ -468,11 +549,11 @@ public class AssignmentService : IAssignmentService
         foreach (var student in unassigned)
         {
             var lecturerId = strategy == "department"
-                ? PickLecturerByDepartment(student, lecturers, lecturerCounts)
+                ? PickLecturerByDepartment(student, lecturers, lecturerCounts, maxPerLecturer)
                 : strategy == "random"
-                    ? PickLecturerRandom(randomLecturers, lecturerCounts)
+                    ? PickLecturerRandom(randomLecturers, lecturerCounts, maxPerLecturer)
                     : null;
-            lecturerId ??= PickLecturerEven(lecturers, lecturerCounts);
+            lecturerId ??= PickLecturerEven(lecturers, lecturerCounts, maxPerLecturer);
             if (lecturerId == null)
                 break;
 
@@ -486,14 +567,6 @@ public class AssignmentService : IAssignmentService
             lecturerCounts[lecturerId.Value] = lecturerCounts.GetValueOrDefault(lecturerId.Value) + 1;
         }
 
-        var activeSemester = request.SemesterId.HasValue
-            ? await _db.Semesters.FirstOrDefaultAsync(s => s.Id == request.SemesterId.Value && !s.IsDeleted)
-            : await _db.Semesters.FirstOrDefaultAsync(s => s.Status == SemesterStatus.Active && !s.IsDeleted)
-                ?? await _db.Semesters.FirstOrDefaultAsync(s => !s.IsDeleted);
-
-        if (activeSemester == null)
-            throw new InvalidOperationException("No active semester found for auto assignment");
-
         var result = new AutoAssignResultDto { LecturersUsed = batches.Count };
         foreach (var (lecturerId, studentIds) in batches)
         {
@@ -503,7 +576,7 @@ public class AssignmentService : IAssignmentService
                 SemesterId = activeSemester.Id,
                 StudentIds = studentIds,
                 Note = note,
-            });
+            }, departmentId);
             result.TotalAssigned += bulk.AssignedCount;
             result.TotalFailed += bulk.FailedCount;
         }
@@ -513,11 +586,12 @@ public class AssignmentService : IAssignmentService
 
     private static Guid? PickLecturerEven(
         IReadOnlyList<Lecturer> lecturers,
-        Dictionary<Guid, int> lecturerCounts)
+        Dictionary<Guid, int> lecturerCounts,
+        int maxPerLecturer)
     {
         return lecturers
             .Select(l => new { l.Id, Count = lecturerCounts.GetValueOrDefault(l.Id) })
-            .Where(x => x.Count < DefaultMaxCapacity)
+            .Where(x => x.Count < maxPerLecturer)
             .OrderBy(x => x.Count)
             .ThenBy(x => x.Id)
             .Select(x => (Guid?)x.Id)
@@ -526,10 +600,11 @@ public class AssignmentService : IAssignmentService
 
     private static Guid? PickLecturerRandom(
         IReadOnlyList<Lecturer> lecturers,
-        Dictionary<Guid, int> lecturerCounts)
+        Dictionary<Guid, int> lecturerCounts,
+        int maxPerLecturer)
     {
         var available = lecturers
-            .Where(l => lecturerCounts.GetValueOrDefault(l.Id) < DefaultMaxCapacity)
+            .Where(l => lecturerCounts.GetValueOrDefault(l.Id) < maxPerLecturer)
             .ToList();
         return available.Count == 0 ? null : available[Random.Shared.Next(available.Count)].Id;
     }
@@ -537,7 +612,8 @@ public class AssignmentService : IAssignmentService
     private static Guid? PickLecturerByDepartment(
         Student student,
         IReadOnlyList<Lecturer> lecturers,
-        Dictionary<Guid, int> lecturerCounts)
+        Dictionary<Guid, int> lecturerCounts,
+        int maxPerLecturer)
     {
         var major = student.Major?.Trim();
         if (string.IsNullOrWhiteSpace(major))
@@ -553,7 +629,7 @@ public class AssignmentService : IAssignmentService
                     || dept.Contains(major, StringComparison.OrdinalIgnoreCase);
             })
             .Select(l => new { l.Id, Count = lecturerCounts.GetValueOrDefault(l.Id) })
-            .Where(x => x.Count < DefaultMaxCapacity)
+            .Where(x => x.Count < maxPerLecturer)
             .OrderBy(x => x.Count)
             .Select(x => (Guid?)x.Id)
             .FirstOrDefault();
@@ -1217,6 +1293,7 @@ public class AssignmentService : IAssignmentService
                     StudentId = matchedStudent.Id,
                     SemesterId = targetSemesterId,
                     LecturerId = matchedLecturer.Id,
+                    AssignedAt = DateTime.UtcNow,
                     Status = targetSemesterIsActive ? InternshipStatus.InProgress : InternshipStatus.NotStarted,
                     Notes = $"Phân công GVHD: {matchedLecturer.FullName}",
                     CreatedAt = DateTime.UtcNow
@@ -1226,6 +1303,8 @@ public class AssignmentService : IAssignmentService
             }
             else
             {
+                if (internship.LecturerId != matchedLecturer.Id)
+                    internship.AssignedAt = DateTime.UtcNow;
                 internship.LecturerId = matchedLecturer.Id;
                 internship.UpdatedAt = DateTime.UtcNow;
             }

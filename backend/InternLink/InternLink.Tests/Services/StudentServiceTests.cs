@@ -566,7 +566,8 @@ public class StudentServiceTests
         using var stream = CreateStudentExcel(
             ("2421160099", "Import User", "DH24TIN06", "CNTT", "import@test.com", "0903333333", "sv.import99"));
 
-        var result = await service.ImportStudentsFromExcelAsync(stream);
+        // grantAccount: true — import chỉ tạo tài khoản khi admin bật tùy chọn này (opt-in qua query string).
+        var result = await service.ImportStudentsFromExcelAsync(stream, grantAccount: true);
 
         result.SuccessCount.Should().Be(1);
         result.EmailSentCount.Should().Be(1);
@@ -590,7 +591,8 @@ public class StudentServiceTests
         using var stream = CreateStudentExcel(
             ("2421160088", "No Mail Student", "DH24TIN06", "CNTT", null, null, "sv.nomail"));
 
-        var result = await service.ImportStudentsFromExcelAsync(stream);
+        // grantAccount: true — bài test này verify cảnh báo "no email" khi tạo tài khoản.
+        var result = await service.ImportStudentsFromExcelAsync(stream, grantAccount: true);
 
         result.SuccessCount.Should().Be(1);
         result.EmailSentCount.Should().Be(0);
@@ -615,7 +617,8 @@ public class StudentServiceTests
         using var stream = CreateStudentExcel(
             ("2421160077", "Email Only", "DH24TIN06", "CNTT", "only@test.com", "0904444444", null));
 
-        var result = await service.ImportStudentsFromExcelAsync(stream);
+        // grantAccount: true — username mặc định = MSSV khi không có cột Username.
+        var result = await service.ImportStudentsFromExcelAsync(stream, grantAccount: true);
 
         result.SuccessCount.Should().Be(1);
         result.EmailSentCount.Should().Be(1);
@@ -706,10 +709,13 @@ public class StudentServiceTests
 
         // The physical template has separate Họ (col C) and Tên (col D) headers;
         // the sample row must be combined into a single full name (regression for
-        // the bug where the Họ column was dropped and only "A" was stored).
-        var student = await db.Students.FirstOrDefaultAsync(s => s.StudentCode == "2421160052");
+        // the bug where the Họ column was dropped and only "Anh" was stored).
+        // Dữ liệu mẫu hiện tại: 2421160001 / Phạm Thị Hồng Anh / C23A.TH1.
+        var student = await db.Students.FirstOrDefaultAsync(s => s.StudentCode == "2421160001");
         student.Should().NotBeNull();
-        student!.FullName.Should().Be("Nguyen Van A");
+        student!.FullName.Should().Be("Phạm Thị Hồng Anh");
+        student.Class.Should().Be("C23A.TH1");
+        student.Email.Should().Be("honganh170421@gmail.com");
     }
 
     [Fact]

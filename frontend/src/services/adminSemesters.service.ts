@@ -48,7 +48,39 @@ export interface UpdateSemesterRequest {
   internshipStartWeek?: number;
 }
 
+export interface FacultySemesterSummaryDto {
+  semesterId: string;
+  results: string;
+  difficulties: string;
+  recommendations: string;
+  conclusion: string;
+  updatedAt?: string | null;
+}
+
+export interface SaveFacultySemesterSummaryRequest {
+  results: string;
+  difficulties: string;
+  recommendations: string;
+  conclusion: string;
+}
+
 export const adminSemestersService = {
+  /** Nội dung báo cáo tổng kết công tác thực tập CẤP KHOA của một học kỳ. */
+  getFacultySummary(semesterId: string): Promise<FacultySemesterSummaryDto> {
+    return apiRequest<FacultySemesterSummaryDto>(`/api/Admin/semesters/${semesterId}/faculty-summary`, {
+      skipCache: true,
+    });
+  },
+
+  /** Lưu nội dung báo cáo tổng kết cấp khoa (inject vào template Word C22A khi admin xuất). */
+  saveFacultySummary(semesterId: string, body: SaveFacultySemesterSummaryRequest): Promise<FacultySemesterSummaryDto> {
+    return apiRequest<FacultySemesterSummaryDto>(`/api/Admin/semesters/${semesterId}/faculty-summary`, {
+      method: "PUT",
+      body,
+      skipCache: true,
+    });
+  },
+
   getAll(departmentId?: string, backendRole?: string | null): Promise<BackendSemesterDto[]> {
     const qs = departmentId && departmentId !== "all" ? `?departmentId=${departmentId}` : "";
     const route = backendRole === "SuperAdmin" ? "/api/SuperAdmin/semesters" : "/api/Admin/semesters";

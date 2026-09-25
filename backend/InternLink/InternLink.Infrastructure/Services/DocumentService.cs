@@ -524,6 +524,29 @@ public class DocumentService : IDocumentService
         return await DeleteDocumentAsync(id, null);
     }
 
+    /// <summary>
+    /// Kiểm tra người dùng là DepartmentAdmin của khoa sở hữu document/template này.
+    /// So khớp qua Department.Code (Document.Department lưu mã khoa dạng string);
+    /// template không gắn khoa (null) → chỉ SuperAdmin xóa được (handled by caller).
+    /// </summary>
+    private async Task<bool> IsDepartmentAdminAllowedAsync(Guid actorUserId, string? documentDepartment)
+    {
+        if (string.IsNullOrWhiteSpace(documentDepartment))
+            return false;
+
+        var adminDeptId = await _db.Users
+            .AsNoTracking()
+            .Where(u => u.Id == actorUserId && u.Role == Domain.Enums.Role.DepartmentAdmin && !u.IsDeleted)
+            .Select(u => u.DepartmentId)
+            .FirstOrDefaultAsync();
+        if (adminDeptId == null)
+            return false;
+
+        return await _db.Departments
+            .AsNoTracking()
+            .AnyAsync(d => d.Id == adminDeptId.Value && !d.IsDeleted && d.Code == documentDepartment.Trim());
+    }
+
     public async Task<bool> DeleteDocumentAsync(Guid id, Guid? actorUserId = null)
     {
         var document = await _db.Documents
@@ -535,10 +558,19 @@ public class DocumentService : IDocumentService
 
         if (actorUserId.HasValue)
         {
-            var isAssigned = document.Internship?.Lecturer?.UserId == actorUserId.Value;
             var isSuperAdmin = await _db.Users.AnyAsync(u => u.Id == actorUserId.Value && u.Role == Domain.Enums.Role.SuperAdmin && !u.IsDeleted);
-            if (!isAssigned && !isSuperAdmin)
-                throw new UnauthorizedAccessException("You do not have permission to delete this document");
+            if (!isSuperAdmin)
+            {
+                var isAssigned = document.Internship?.Lecturer?.UserId == actorUserId.Value;
+
+                // DepartmentAdmin được xóa template trong phạm vi khoa của mình — kể cả template
+                // do đồng nghiệp cùng khoa tạo (đề xuất P1/P2: sở hữu thuộc về KHOA, không phải cá nhân).
+                // Template không gắn khoa (legacy, Department = null) chỉ SuperAdmin xóa được.
+                var adminAllowed = await IsDepartmentAdminAllowedAsync(actorUserId.Value, document.Department);
+
+                if (!isAssigned && !adminAllowed)
+                    throw new UnauthorizedAccessException("You do not have permission to delete this document");
+            }
         }
 
         document.IsDeleted = true;

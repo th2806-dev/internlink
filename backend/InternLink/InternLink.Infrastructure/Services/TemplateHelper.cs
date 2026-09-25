@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -7,7 +8,27 @@ namespace InternLink.Infrastructure.Services;
 
 public static class TemplateHelper
 {
+    /// <summary>
+    /// Cache kết quả dò template (đề xuất P2): FindTemplatePath quét tới 5 cấp thư mục mỗi lần
+    /// gọi (mỗi lần xuất file) — cache theo tên file để lần sau tra cứu O(1).
+    /// Value rỗng = đã dò nhưng không thấy (tránh dò lại vô ích); nếu file bị xóa, cache tự bỏ qua.
+    /// </summary>
+    private static readonly ConcurrentDictionary<string, string> PathCache = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Xóa cache đường dẫn template (dùng khi template được nạp/thay lúc runtime).</summary>
+    public static void ClearTemplatePathCache() => PathCache.Clear();
+
     public static string? FindTemplatePath(string templateFileName)
+    {
+        if (PathCache.TryGetValue(templateFileName, out var cached))
+            return File.Exists(cached) ? cached : null;
+
+        var resolved = ResolveTemplatePath(templateFileName);
+        PathCache[templateFileName] = resolved ?? string.Empty;
+        return resolved;
+    }
+
+    private static string? ResolveTemplatePath(string templateFileName)
     {
         var result = FindSingleTemplatePath(templateFileName);
         if (result != null) return result;

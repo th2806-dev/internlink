@@ -16,6 +16,12 @@ public class Internship : BaseEntity
     public Guid? LecturerId { get; set; }
     public Lecturer? Lecturer { get; set; }
 
+    /// <summary>
+    /// Thời điểm được phân công giảng viên gần nhất (đề xuất P2: tách khỏi UpdatedAt —
+    /// UpdatedAt đổi khi sửa bất kỳ trường nào, không phản ánh "Ngày phân công").
+    /// </summary>
+    public DateTime? AssignedAt { get; set; }
+
     public Guid? SemesterId { get; set; }
     public Semester? Semester { get; set; }
 

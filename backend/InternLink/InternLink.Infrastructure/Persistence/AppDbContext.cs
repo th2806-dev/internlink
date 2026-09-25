@@ -39,6 +39,7 @@ public class AppDbContext : DbContext
     public DbSet<AttendanceRecord> AttendanceRecords { get; set; } = null!;
     public DbSet<DocumentVersion> DocumentVersions { get; set; } = null!;
     public DbSet<LecturerSemesterSummary> LecturerSemesterSummaries { get; set; } = null!;
+    public DbSet<SemesterFacultySummary> SemesterFacultySummaries { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -164,6 +165,7 @@ public class AppDbContext : DbContext
             b.Property(x => x.SupervisorName).HasMaxLength(200);
             b.Property(x => x.Status).HasDefaultValue(InternshipStatus.NotStarted);
             b.Property(x => x.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
+            b.Property(x => x.AssignedAt).HasColumnName("AssignedAt");
             // NOTE: Student.Internship relationship configured in Student modelBuilder (1:N)
             // Changed: CompanyId now nullable (assigned later by lecturer)
             b.HasOne(x => x.Company).WithMany(x => x.Internships).HasForeignKey(x => x.CompanyId).IsRequired(false);
@@ -341,6 +343,22 @@ public class AppDbContext : DbContext
             b.HasOne(x => x.Semester).WithMany().HasForeignKey(x => x.SemesterId).OnDelete(DeleteBehavior.Cascade);
             b.HasOne(x => x.Lecturer).WithMany().HasForeignKey(x => x.LecturerId).OnDelete(DeleteBehavior.Cascade);
             b.HasIndex(x => new { x.SemesterId, x.LecturerId }).IsUnique();
+        });
+
+        modelBuilder.Entity<SemesterFacultySummary>(b =>
+        {
+            b.ToTable("SemesterFacultySummaries");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).HasColumnName("SemesterFacultySummaryId");
+            b.Property(x => x.Results).IsRequired().HasMaxLength(10000);
+            b.Property(x => x.Difficulties).IsRequired().HasMaxLength(10000);
+            b.Property(x => x.Recommendations).IsRequired().HasMaxLength(10000);
+            b.Property(x => x.Conclusion).IsRequired().HasMaxLength(10000);
+            b.Property(x => x.UpdatedAt).HasDefaultValueSql("GETUTCDATE()");
+            b.HasOne(x => x.Semester).WithMany().HasForeignKey(x => x.SemesterId).OnDelete(DeleteBehavior.Cascade);
+            b.HasOne(x => x.Department).WithMany().HasForeignKey(x => x.DepartmentId).OnDelete(DeleteBehavior.SetNull);
+            // Một báo cáo tổng kết cho mỗi (Kỳ, Khoa). Lưu ý SQL Server: các dòng DepartmentId = NULL
+            // không xung đột nhau trong unique index — chỉ SuperAdmin dùng null nên chấp nhận được.
         });
 
         modelBuilder.Entity<Notification>(b =>

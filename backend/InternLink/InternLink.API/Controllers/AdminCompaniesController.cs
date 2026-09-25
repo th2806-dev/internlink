@@ -46,7 +46,9 @@ public class AdminCompaniesController : ControllerBase
         if (request.Take < 1 || request.Take > 1000)
             return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Take must be between 1 and 1000" }));
 
-        var result = await _companyService.GetCompaniesWithFilterAsync(request);
+        // DepartmentAdmin chỉ tìm kiếm trong DN của khoa mình (SuperAdmin thấy tất cả).
+        var deptIdForSearch = _deptScope.GetCurrentDepartmentId(User);
+        var result = await _companyService.GetCompaniesWithFilterAsync(request, deptIdForSearch);
         return Ok(ApiResponse<PaginatedResponse<CompanyDto>>.Ok(result));
     }
 
@@ -58,7 +60,9 @@ public class AdminCompaniesController : ControllerBase
         if (take < 1 || take > 1000)
             return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Take must be between 1 and 1000" }));
 
-        var companies = await _companyService.GetActiveCompaniesAsync(skip, take, semesterId);
+        // DepartmentAdmin chỉ thấy DN active trong phạm vi khoa mình (SuperAdmin thấy tất cả).
+        var deptIdForActive = _deptScope.GetCurrentDepartmentId(User);
+        var companies = await _companyService.GetActiveCompaniesAsync(skip, take, semesterId, deptIdForActive);
         return Ok(ApiResponse<IEnumerable<CompanyDto>>.Ok(companies));
     }
 

@@ -60,9 +60,36 @@ public class UserManagementService : IUserManagementService
             .Take(filter.Take)
             .ToListAsync();
 
-        var dtos = new List<UserDto>();
-        foreach (var user in users)
-            dtos.Add(await MapUserAsync(user));
+        // Bỏ N+1 (đề xuất P2): MapUserAsync query profile theo từng user.
+        // Ở đây tra mã liên kết (StudentCode/StaffCode) cho CẢ TRANG bằng 2 truy vấn.
+        var userIds = users.Select(u => u.Id).ToList();
+        var studentCodes = await _db.Students
+            .AsNoTracking()
+            .Where(s => !s.IsDeleted && s.UserId != null && userIds.Contains(s.UserId.Value))
+            .Select(s => new { s.UserId, s.StudentCode })
+            .ToDictionaryAsync(x => x.UserId!.Value, x => x.StudentCode);
+        var staffCodes = await _db.Lecturers
+            .AsNoTracking()
+            .Where(l => !l.IsDeleted && l.UserId != null && userIds.Contains(l.UserId.Value))
+            .Select(l => new { l.UserId, l.StaffCode })
+            .ToDictionaryAsync(x => x.UserId!.Value, x => x.StaffCode);
+
+        var dtos = users.Select(user => new UserDto
+        {
+            Id = user.Id,
+            Username = user.Username,
+            FullName = user.FullName,
+            Email = user.Email,
+            Role = user.Role.ToString(),
+            IsActive = user.IsActive,
+            MustChangePassword = user.MustChangePassword,
+            LastLoginAt = user.LastLoginAt,
+            CreatedAt = user.CreatedAt,
+            UpdatedAt = user.UpdatedAt,
+            LinkedStudentCode = studentCodes.GetValueOrDefault(user.Id),
+            LinkedStaffCode = staffCodes.GetValueOrDefault(user.Id),
+            DepartmentId = user.DepartmentId,
+        }).ToList();
 
         return new PaginatedResponse<UserDto>
         {
@@ -125,13 +152,15 @@ public class UserManagementService : IUserManagementService
         await _db.Users.AddAsync(user);
         await LinkProfileAsync(user, request.StudentCode, request.StaffCode, role);
 
-        // Record invitation in-app notification in database
+        // Record invitation in-app notification in database.
+        // Bảo mật: KHÔNG lưu mật khẩu tạm thời vào nội dung notification (DB plaintext) —
+        // mật khẩu chỉ được gửi qua email cho chính người dùng.
         var welcomeNotif = new Notification
         {
             Id = Guid.NewGuid(),
             UserId = user.Id,
             Title = "Thư mời tham gia hệ thống InternLink",
-            Content = $"Chào mừng {user.FullName} ({user.Username}) đã được tạo tài khoản trên hệ thống InternLink. Mật khẩu tạm thời: {tempPassword}",
+            Content = $"Chào mừng {user.FullName} ({user.Username}) đã được tạo tài khoản trên hệ thống InternLink. Mật khẩu tạm thời đã được gửi đến email của bạn.",
             Link = "/login",
             IsRead = false,
             CreatedAt = DateTime.UtcNow
@@ -208,13 +237,15 @@ public class UserManagementService : IUserManagementService
         user.MustChangePassword = true;
         user.UpdatedAt = DateTime.UtcNow;
 
-        // Record reset password notification in database
+        // Record reset password notification in database.
+        // Bảo mật: KHÔNG lưu mật khẩu mới vào nội dung notification (DB plaintext) —
+        // mật khẩu chỉ được gửi qua email cho chính người dùng.
         var resetNotif = new Notification
         {
             Id = Guid.NewGuid(),
             UserId = user.Id,
             Title = "Cấp lại mật khẩu tài khoản InternLink",
-            Content = $"Mật khẩu tài khoản {user.Username} đã được thiết lập lại thành công. Mật khẩu tạm thời mới: {newPassword}",
+            Content = $"Mật khẩu tài khoản {user.Username} đã được thiết lập lại thành công. Mật khẩu tạm thời mới đã được gửi đến email của bạn.",
             Link = "/login",
             IsRead = false,
             CreatedAt = DateTime.UtcNow
@@ -241,8 +272,8 @@ public class UserManagementService : IUserManagementService
         }
         else
         {
-            emailMessage = "User has no email — password reset but notification not sent";
-            _logger.LogWarning("Password reset for {Username} without email notification", user.Username);
+            emailMessage = "Tài khoản chưa có email — mật khẩu mới không thể gửi đi. Hãy cập nhật email cho người dùng rồi cấp lại mật khẩu.";
+            _logger.LogWarning("Password reset for {Username} without email notification (no password in log)", user.Username);
         }
 
         return new ResetPasswordResultDto

@@ -250,6 +250,36 @@ public class AssignmentServiceTests
     }
 
     [Fact]
+    public async Task AutoAssignAsync_ShouldRespectSemesterMaxStudentsPerLecturer()
+    {
+        var (db, semester) = await GetDbWithSemesterAsync();
+        semester.MaxStudentsPerLecturer = 1;
+        await db.SaveChangesAsync();
+
+        // 2 GV × tối đa 1 SV/GV (theo cấu hình kỳ) → chỉ 2 SV đầu được phân công, 2 SV còn lại bỏ trống.
+        var lecturerA = new Lecturer { Id = Guid.NewGuid(), StaffCode = "GVA", FullName = "Lecturer A", CreatedAt = DateTime.UtcNow };
+        var lecturerB = new Lecturer { Id = Guid.NewGuid(), StaffCode = "GVB", FullName = "Lecturer B", CreatedAt = DateTime.UtcNow };
+        var students = Enumerable.Range(1, 4).Select(i => new Student
+        {
+            Id = Guid.NewGuid(),
+            StudentCode = $"SV00{i}",
+            FullName = $"Student {i}",
+            CreatedAt = DateTime.UtcNow,
+        }).ToList();
+
+        await db.Lecturers.AddRangeAsync(lecturerA, lecturerB);
+        await db.Students.AddRangeAsync(students);
+        await db.SaveChangesAsync();
+
+        var service = CreateService(db);
+        var result = await service.AutoAssignAsync(new AutoAssignRequest { Strategy = "even" });
+
+        result.TotalAssigned.Should().Be(2);
+        var assigned = await db.Internships.CountAsync(i => i.LecturerId != null);
+        assigned.Should().Be(2);
+    }
+
+    [Fact]
     public async Task GetHistoryAsync_ShouldGroupByLecturerAndMinute()
     {
         var (db, _) = await GetDbWithSemesterAsync();
@@ -292,6 +322,77 @@ public class AssignmentServiceTests
         history[0].LecturerName.Should().Be("Lecturer A");
         history[0].StudentCount.Should().Be(2);
         history[0].ClassGroups.Should().Contain("20CNTT1");
+    }
+
+    [Fact]
+    public async Task GetHistoryAsync_BulkSpanningSeveralMinutes_ShouldStaySingleBatch()
+    {
+        var (db, _) = await GetDbWithSemesterAsync();
+        var lecturer = new Lecturer { Id = Guid.NewGuid(), StaffCode = "GVB", FullName = "Lecturer B", CreatedAt = DateTime.UtcNow };
+        var t0 = DateTime.UtcNow.AddMinutes(-10);
+        var students = Enumerable.Range(1, 3).Select(i => new Student
+        {
+            Id = Guid.NewGuid(),
+            StudentCode = $"SV1{i:00}",
+            FullName = $"Student {i}",
+            CreatedAt = DateTime.UtcNow,
+        }).ToList();
+
+        await db.Lecturers.AddAsync(lecturer);
+        await db.Students.AddRangeAsync(students);
+        // 3 bản ghi của 1 lô phân công nhưng lệch nhau vài phút — bucket theo phút cũ
+        // sẽ tách thành 3 dòng lịch sử sai nghĩa; chia lô theo cửa sổ 10 phút phải gộp lại.
+        await db.Internships.AddRangeAsync(students.Select((s, i) => new Internship
+        {
+            Id = Guid.NewGuid(),
+            StudentId = s.Id,
+            LecturerId = lecturer.Id,
+            Status = InternshipStatus.NotStarted,
+            AssignedAt = t0.AddMinutes(i * 2), // lệch 0/2/4 phút — cùng lô
+            CreatedAt = t0,
+        }));
+        await db.SaveChangesAsync();
+
+        var service = CreateService(db);
+        var history = await service.GetHistoryAsync(10);
+
+        history.Should().ContainSingle();
+        history[0].StudentCount.Should().Be(3);
+    }
+
+    [Fact]
+    public async Task GetHistoryAsync_SeparateBatchesBeyondGap_ShouldSplit()
+    {
+        var (db, _) = await GetDbWithSemesterAsync();
+        var lecturer = new Lecturer { Id = Guid.NewGuid(), StaffCode = "GVC", FullName = "Lecturer C", CreatedAt = DateTime.UtcNow };
+        var t0 = DateTime.UtcNow.AddHours(-2);
+        var students = Enumerable.Range(1, 2).Select(i => new Student
+        {
+            Id = Guid.NewGuid(),
+            StudentCode = $"SV2{i:00}",
+            FullName = $"Student {i}",
+            CreatedAt = DateTime.UtcNow,
+        }).ToList();
+
+        await db.Lecturers.AddAsync(lecturer);
+        await db.Students.AddRangeAsync(students);
+        await db.Internships.AddRangeAsync(students.Select((s, i) => new Internship
+        {
+            Id = Guid.NewGuid(),
+            StudentId = s.Id,
+            LecturerId = lecturer.Id,
+            Status = InternshipStatus.NotStarted,
+            AssignedAt = i == 0 ? t0 : t0.AddMinutes(-30), // cách nhau 30 phút > ngưỡng 10 phút
+            CreatedAt = t0,
+        }));
+        await db.SaveChangesAsync();
+
+        var service = CreateService(db);
+        var history = await service.GetHistoryAsync(10);
+
+        history.Should().HaveCount(2);
+        history[0].StudentCount.Should().Be(1);
+        history[1].StudentCount.Should().Be(1);
     }
 
     [Fact]

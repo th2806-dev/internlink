@@ -109,9 +109,18 @@ public class CompanyService : ICompanyService
         return dtos;
     }
 
-    public async Task<PaginatedResponse<CompanyDto>> GetCompaniesWithFilterAsync(CompanyFilterRequest filter)
+    public async Task<PaginatedResponse<CompanyDto>> GetCompaniesWithFilterAsync(CompanyFilterRequest filter, Guid? departmentId = null)
     {
         var query = _db.Companies.Where(c => !c.IsDeleted);
+
+        // Department filter (cùng chính sách với GetAllCompaniesAsync): DN cùng khoa,
+        // DN dùng chung (DepartmentId = null) và DN đang nhận SV thực tập của khoa.
+        if (departmentId.HasValue)
+        {
+            query = query.Where(c =>
+                c.DepartmentId == null || c.DepartmentId == departmentId.Value ||
+                c.Internships.Any(i => !i.IsDeleted && i.Student != null && i.Student.DepartmentId == departmentId.Value));
+        }
 
         if (!string.IsNullOrWhiteSpace(filter.Industry))
             query = query.Where(c => c.Industry == filter.Industry);
@@ -207,10 +216,18 @@ public class CompanyService : ICompanyService
         };
     }
 
-    public async Task<IEnumerable<CompanyDto>> GetActiveCompaniesAsync(int skip = 0, int take = 100, Guid? semesterId = null)
+    public async Task<IEnumerable<CompanyDto>> GetActiveCompaniesAsync(int skip = 0, int take = 100, Guid? semesterId = null, Guid? departmentId = null)
     {
         var query = _db.Companies
             .Where(c => c.IsActive && !c.IsDeleted);
+
+        // Department filter (cùng chính sách với GetAllCompaniesAsync).
+        if (departmentId.HasValue)
+        {
+            query = query.Where(c =>
+                c.DepartmentId == null || c.DepartmentId == departmentId.Value ||
+                c.Internships.Any(i => !i.IsDeleted && i.Student != null && i.Student.DepartmentId == departmentId.Value));
+        }
 
         if (semesterId.HasValue && semesterId != Guid.Empty)
         {
