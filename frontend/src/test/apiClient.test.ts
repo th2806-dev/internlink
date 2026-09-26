@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import {
   apiRequest,
   ApiClientError,
+  getApiErrorMessage,
   getStoredToken,
   setStoredToken,
 } from "../lib/apiClient";
@@ -11,6 +12,23 @@ describe("apiClient", () => {
   beforeEach(() => {
     localStorage.clear();
     vi.restoreAllMocks();
+  });
+
+  describe("getApiErrorMessage", () => {
+    it("maps known English backend messages to Vietnamese", () => {
+      expect(getApiErrorMessage(new ApiClientError("Evaluation not found", 404))).toBe(
+        "Không tìm thấy đánh giá.",
+      );
+      expect(getApiErrorMessage(new ApiClientError("Error retrieving evaluations", 500))).toBe(
+        "Đã xảy ra lỗi. Vui lòng thử lại sau.",
+      );
+    });
+
+    it("preserves messages without a known translation", () => {
+      expect(getApiErrorMessage(new Error("Lịch nộp chưa được mở."))).toBe(
+        "Lịch nộp chưa được mở.",
+      );
+    });
   });
 
   afterEach(() => {

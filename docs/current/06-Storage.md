@@ -1,10 +1,10 @@
 # InternLink - Storage and Files
 
-**Verified:** 2026-09-08
+**Verified:** 2026-09-26
 
 ## Storage model
 
-Uploaded bytes are stored on the backend filesystem. SQL Server stores metadata and relative paths. The API does not store file contents in database columns.
+Uploaded bytes are stored only on the backend local filesystem. SQL Server stores metadata and relative paths. The API does not connect to Google Drive or store file contents in database columns.
 
 | Content | Runtime directory |
 |:--|:--|
@@ -12,11 +12,13 @@ Uploaded bytes are stored on the backend filesystem. SQL Server stores metadata 
 | Weekly report files | `/app/uploads/weekly-reports` |
 | Submission files/assets | `/app/uploads/submissions` |
 
-The current Compose file mounts `/app/uploads` to the named volume `internlink_uploads_data`. Recreating containers preserves files as long as this volume is retained.
+The current Compose file mounts `/app/uploads` to the named volume `internlink_uploads_data`. The API writes under its content root, so this volume persists uploaded files when containers are recreated. Keep the volume and database backups together.
 
 ## Database metadata
 
-Documents, weekly reports, submissions and submission assets retain file name/path, MIME type and related ownership/entity identifiers. Physical files should be addressed by generated identifiers and relative paths, not by trusting a client-provided path.
+Documents, weekly reports, submissions and submission assets retain file name/path, MIME type and related ownership/entity identifiers. Physical files are addressed by generated identifiers and relative paths, not by trusting a client-provided path. Legacy `GoogleDriveFileId` columns are retained for schema compatibility but are not read or written by the current application.
+
+Existing rows whose file path is an HTTP(S) Google Drive URL are not available through the local-only runtime. Copy those files into the local upload volume and update their database paths before relying on them; retain backups of both sources during migration.
 
 ## Limits and validation
 
