@@ -32,7 +32,7 @@ public class InternshipGradingService : IInternshipGradingService
         var semester = await _context.Semesters
             .AsNoTracking()
             .FirstOrDefaultAsync(s => s.Id == semesterId && !s.IsDeleted)
-            ?? throw new KeyNotFoundException($"Semester {semesterId} not found");
+            ?? throw new KeyNotFoundException(InternLink.Shared.Responses.ErrorMessage.SemesterNotFoundById(semesterId));
 
         // 1) Lịch báo cáo (tự sinh mặc định nếu chưa có — cùng hành vi với màn hình 1)
         var schedules = await _context.SemesterReportSchedules

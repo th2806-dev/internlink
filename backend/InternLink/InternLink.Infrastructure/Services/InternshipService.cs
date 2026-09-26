@@ -294,12 +294,12 @@ public class InternshipService : IInternshipService
         // Validate student exists
         var student = await _db.Students.FirstOrDefaultAsync(s => s.Id == request.StudentId && !s.IsDeleted);
         if (student == null)
-            throw new InvalidOperationException($"Student with ID {request.StudentId} not found");
+            throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.StudentNotFound);
 
         // Validate company exists
         var company = await _db.Companies.FirstOrDefaultAsync(c => c.Id == request.CompanyId && !c.IsDeleted);
         if (company == null)
-            throw new InvalidOperationException($"Company with ID {request.CompanyId} not found");
+            throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.CompanyNotFound);
 
         // Check if student already has an active internship
         var existingInternship = await _db.Internships
@@ -347,7 +347,7 @@ public class InternshipService : IInternshipService
         {
             var company = await _db.Companies.FirstOrDefaultAsync(c => c.Id == request.CompanyId.Value && !c.IsDeleted);
             if (company == null)
-                throw new InvalidOperationException($"Company with ID {request.CompanyId} not found");
+                throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.CompanyNotFound);
 
             internship.CompanyId = request.CompanyId.Value;
         }

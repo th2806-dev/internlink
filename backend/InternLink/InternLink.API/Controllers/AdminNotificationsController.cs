@@ -55,7 +55,7 @@ public class AdminNotificationsController : ControllerBase
         {
             var deleted = await _adminNotificationService.DeleteCampaignAsync(request);
             if (deleted == 0)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Notification campaign not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.NotificationCampaignNotFound }));
 
             return Ok(ApiResponse<object>.Ok(new { deletedCount = deleted }));
         }

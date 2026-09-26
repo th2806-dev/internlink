@@ -47,7 +47,7 @@ public class AdminAccountRequestsController : ControllerBase
     {
         var item = await _service.GetByIdAsync(id);
         if (item == null)
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Account request not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.AccountRequestNotFound }));
         return Ok(ApiResponse<AccountRequestDto>.Ok(item));
     }
 
@@ -78,7 +78,7 @@ public class AdminAccountRequestsController : ControllerBase
         {
             var item = await _service.ProcessAsync(id, request);
             if (item == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Account request not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.AccountRequestNotFound }));
             return Ok(ApiResponse<AccountRequestDto>.Ok(item));
         }
         catch (InvalidOperationException ex)

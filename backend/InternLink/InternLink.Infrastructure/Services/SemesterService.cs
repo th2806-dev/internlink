@@ -341,7 +341,7 @@ public class SemesterService : ISemesterService
             .FirstOrDefaultAsync(s => s.Id == semesterId && !s.IsDeleted);
 
         if (semester == null)
-            throw new KeyNotFoundException($"Semester with ID {semesterId} not found");
+            throw new KeyNotFoundException(InternLink.Shared.Responses.ErrorMessage.SemesterNotFoundById(semesterId));
 
         var existingSchedules = await _context.SemesterReportSchedules
             .Where(s => s.SemesterId == semesterId && !s.IsDeleted)
@@ -431,7 +431,7 @@ public class SemesterService : ISemesterService
         {
             var semester = await _context.Semesters.FirstOrDefaultAsync(s => s.Id == semesterId && !s.IsDeleted);
             if (semester == null)
-                throw new KeyNotFoundException($"Semester with ID {semesterId} not found");
+                throw new KeyNotFoundException(InternLink.Shared.Responses.ErrorMessage.SemesterNotFoundById(semesterId));
 
             var startDate = (semester.StartDate ?? DateTime.UtcNow)
                 .AddDays((semester.InternshipStartWeek - 1) * 7);

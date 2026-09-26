@@ -16,10 +16,12 @@ namespace InternLink.API.Controllers;
 public class CompanyController : ControllerBase
 {
     private readonly ICompanyService _companyService;
+    private readonly ILogger<CompanyController> _logger;
 
-    public CompanyController(ICompanyService companyService)
+    public CompanyController(ICompanyService companyService, ILogger<CompanyController> logger)
     {
         _companyService = companyService;
+        _logger = logger;
     }
 
     /// <summary>
@@ -41,7 +43,8 @@ public class CompanyController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
+            _logger.LogError(ex, "Failed to get companies");
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError }));
         }
     }
 
@@ -64,7 +67,8 @@ public class CompanyController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
+            _logger.LogError(ex, "Failed to search companies");
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError }));
         }
     }
 
@@ -88,7 +92,8 @@ public class CompanyController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
+            _logger.LogError(ex, "Failed to get active companies");
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError }));
         }
     }
 
@@ -108,7 +113,8 @@ public class CompanyController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
+            _logger.LogError(ex, "Failed to get company {CompanyId}", id);
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError }));
         }
     }
 
@@ -121,7 +127,7 @@ public class CompanyController : ControllerBase
         try
         {
             if (string.IsNullOrWhiteSpace(industry))
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Industry is required" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.IndustryRequired }));
 
             if (skip < 0)
                 return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SkipMustBeNonNegative }));
@@ -134,7 +140,8 @@ public class CompanyController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
+            _logger.LogError(ex, "Failed to get companies by industry {Industry}", industry);
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError }));
         }
     }
 
@@ -147,14 +154,15 @@ public class CompanyController : ControllerBase
         try
         {
             if (string.IsNullOrWhiteSpace(name))
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Company name is required" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.CompanyNameRequired }));
 
             var exists = await _companyService.CompanyNameExistsAsync(name);
             return Ok(ApiResponse<bool>.Ok(exists));
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
+            _logger.LogError(ex, "Failed to check company name {CompanyName}", name);
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError }));
         }
     }
 }

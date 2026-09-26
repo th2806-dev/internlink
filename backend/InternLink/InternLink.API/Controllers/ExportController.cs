@@ -79,8 +79,7 @@ public class ExportController : ControllerBase
             _logger.LogError(ex, "Failed to generate Excel export");
             return StatusCode(500, ApiResponse<object>.Fail(new ApiError
             {
-                Title = "Lỗi khi xuất file Excel",
-                Detail = ex.Message
+                Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError
             }));
         }
     }
@@ -135,8 +134,7 @@ public class ExportController : ControllerBase
             _logger.LogError(ex, "Failed to generate summary report");
             return StatusCode(500, ApiResponse<object>.Fail(new ApiError
             {
-                Title = "Lỗi khi xuất báo cáo tổng kết",
-                Detail = ex.Message
+                Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError
             }));
         }
     }
@@ -176,8 +174,7 @@ public class ExportController : ControllerBase
             _logger.LogError(ex, "Word template not found");
             return StatusCode(500, ApiResponse<object>.Fail(new ApiError
             {
-                Title = "Không tìm thấy mẫu Word",
-                Detail = ex.Message
+                Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError
             }));
         }
         catch (Exception ex)
@@ -185,8 +182,7 @@ public class ExportController : ControllerBase
             _logger.LogError(ex, "Failed to generate Word summary report");
             return StatusCode(500, ApiResponse<object>.Fail(new ApiError
             {
-                Title = "Lỗi khi xuất báo cáo tổng kết Word",
-                Detail = ex.Message
+                Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError
             }));
         }
     }
@@ -244,7 +240,7 @@ public class ExportController : ControllerBase
             if (resolvedLecturerId != null)
                 targetLecturerId = resolvedLecturerId.Value;
             else
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Cần chỉ định mã giảng viên (lecturerId)" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.LecturerIdRequired }));
         }
 
         // DepartmentAdmin chỉ xuất lịch cho học kỳ thuộc khoa của mình.
@@ -286,8 +282,7 @@ public class ExportController : ControllerBase
             _logger.LogError(ex, "Failed to generate guidance schedule Excel");
             return StatusCode(500, ApiResponse<object>.Fail(new ApiError
             {
-                Title = "Lỗi khi xuất lịch hướng dẫn thực tập",
-                Detail = ex.Message
+                Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError
             }));
         }
     }

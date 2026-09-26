@@ -69,7 +69,7 @@ public class AdminStudentsController : ControllerBase
     public async Task<IActionResult> GetByCode(string studentCode)
     {
         if (string.IsNullOrWhiteSpace(studentCode))
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Student number is required" }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.StudentNumberRequired }));
 
         var student = await _studentService.GetStudentByCodeAsync(studentCode);
         if (student == null)
@@ -85,7 +85,7 @@ public class AdminStudentsController : ControllerBase
     public async Task<IActionResult> CheckExists(string studentCode)
     {
         if (string.IsNullOrWhiteSpace(studentCode))
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Student number is required" }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.StudentNumberRequired }));
 
         // Mã SV là UNIQUE TOÀN HỆ THỐNG (index filter IsDeleted=0) → Create sẽ Conflict
         // kể cả khi SV trùng mã thuộc khoa khác. CheckExists phải phản ánh đúng điều đó,
@@ -177,10 +177,10 @@ public class AdminStudentsController : ControllerBase
         try
         {
             if (file == null || file.Length == 0)
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Excel file is required" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.ExcelFileRequired }));
 
             if (!string.Equals(Path.GetExtension(file.FileName), ".xlsx", StringComparison.OrdinalIgnoreCase))
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Only .xlsx files are supported" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.OnlyXlsxSupported }));
 
             var deptId = _deptScope.GetCurrentDepartmentId(User);
             await using var stream = file.OpenReadStream();

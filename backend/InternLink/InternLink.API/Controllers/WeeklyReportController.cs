@@ -13,10 +13,12 @@ namespace InternLink.API.Controllers;
 public class WeeklyReportController : ControllerBase
 {
     private readonly IWeeklyReportService _weeklyReportService;
+    private readonly ILogger<WeeklyReportController> _logger;
 
-    public WeeklyReportController(IWeeklyReportService weeklyReportService)
+    public WeeklyReportController(IWeeklyReportService weeklyReportService, ILogger<WeeklyReportController> logger)
     {
         _weeklyReportService = weeklyReportService;
+        _logger = logger;
     }
 
     [HttpGet("{id:guid}")]
@@ -73,7 +75,8 @@ public class WeeklyReportController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
+            _logger.LogError(ex, "Failed to get weekly reports for internship {InternshipId}", internshipId);
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError }));
         }
     }
 
@@ -218,7 +221,7 @@ public class WeeklyReportController : ControllerBase
             var isLecturerOrAdmin = User.IsInRole("Lecturer") || User.IsInRole("SuperAdmin");
             var file = await _weeklyReportService.DownloadFileAsync(id, userId.Value, isLecturerOrAdmin);
             if (file == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "File not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.FileNotFound }));
 
             return File(file.FileContent, file.MimeType, file.FileName);
         }
@@ -265,7 +268,7 @@ public class WeeklyReportController : ControllerBase
                 userId.Value,
                 User.IsInRole("Lecturer") || User.IsInRole("SuperAdmin"));
             if (file == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "File not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.FileNotFound }));
 
             return File(file.FileContent, file.MimeType, file.FileName);
         }
@@ -373,7 +376,8 @@ public class WeeklyReportController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
+            _logger.LogError(ex, "Failed to delete weekly report {ReportId}", id);
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError }));
         }
     }
 

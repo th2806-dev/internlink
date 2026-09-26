@@ -347,7 +347,7 @@ public class EvaluationService : IEvaluationService
             .Include(i => i.Lecturer)
             .FirstOrDefaultAsync(i => i.Id == request.InternshipId && !i.IsDeleted);
         if (internship == null)
-            throw new InvalidOperationException($"Internship with ID {request.InternshipId} not found");
+            throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.InternshipNotFoundById(request.InternshipId));
 
         var isAssignedLecturer = internship.Lecturer?.UserId == evaluatedById;
         var isSuperAdmin = await _db.Users.AnyAsync(u => u.Id == evaluatedById && u.Role == Role.SuperAdmin && !u.IsDeleted);

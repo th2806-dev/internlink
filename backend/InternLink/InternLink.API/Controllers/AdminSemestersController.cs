@@ -104,13 +104,13 @@ public class AdminSemestersController : ControllerBase
     public async Task<IActionResult> Create([FromBody] CreateSemesterDto dto)
     {
         if (string.IsNullOrWhiteSpace(dto.Name))
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Name is required" }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.NameRequired }));
 
         if (string.IsNullOrWhiteSpace(dto.Term))
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Term is required" }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.TermRequired }));
 
         if (string.IsNullOrWhiteSpace(dto.AcademicYear))
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "AcademicYear is required" }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.AcademicYearRequired }));
 
         // Semesters are department-owned: always force the admin's own department.
         dto.DepartmentId = _deptScope.GetCurrentDepartmentId(User);

@@ -76,7 +76,7 @@ public class AdminAssignmentsController : ControllerBase
         var deptId = _deptScope.GetCurrentDepartmentId(User);
         var ok = await _assignmentService.UnassignAsync(request, deptId);
         if (!ok)
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Assignment not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.AssignmentNotFound }));
 
         return Ok(ApiResponse<object>.Ok(null));
     }
@@ -207,7 +207,7 @@ public class AdminAssignmentsController : ControllerBase
     public async Task<IActionResult> SuggestCompanies([FromBody] CompanySuggestionRequest request, [FromServices] ICompanyService companyService)
     {
         if (request.SemesterId == Guid.Empty)
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "SemesterId is required" }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SemesterIdRequired }));
 
         var suggestions = await companyService.SuggestCompaniesAsync(request);
         return Ok(ApiResponse<IEnumerable<CompanySuggestionDto>>.Ok(suggestions));

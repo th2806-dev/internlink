@@ -1,4 +1,3 @@
-using System.Net;
 using System.Text.Json;
 using InternLink.Shared.Responses;
 
@@ -42,10 +41,11 @@ public class ExceptionMiddleware
             KeyNotFoundException => (StatusCodes.Status404NotFound, exception.Message),
             InvalidOperationException => (StatusCodes.Status400BadRequest, exception.Message),
             ArgumentException => (StatusCodes.Status400BadRequest, exception.Message),
-            _ => (StatusCodes.Status500InternalServerError, "An unexpected error occurred.")
+            _ => (StatusCodes.Status500InternalServerError, ErrorMessage.InternalServerError)
         };
 
-        var error = ApiError.From(title, exception.Message, status);
+        var detail = status == StatusCodes.Status500InternalServerError ? null : exception.Message;
+        var error = ApiError.From(title, detail, status);
         var response = ApiResponse<object>.Fail(error);
         var payload = JsonSerializer.Serialize(response, JsonOptions);
         context.Response.ContentType = "application/json";

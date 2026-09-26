@@ -52,14 +52,14 @@ public class AuthService : IAuthService
         if (user == null || !user.IsActive)
         {
             _logger.LogWarning("Failed login attempt for user {Username}", request.Username);
-            throw new UnauthorizedAccessException("Invalid credentials");
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.InvalidCredentials);
         }
 
         var verification = _hasher.VerifyHashedPassword(user, user.PasswordHash, request.Password);
         if (verification == PasswordVerificationResult.Failed)
         {
             _logger.LogWarning("Failed login attempt for user {Username} - wrong password", request.Username);
-            throw new UnauthorizedAccessException("Invalid credentials");
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.InvalidCredentials);
         }
 
         user.LastLoginAt = DateTime.UtcNow;
@@ -102,13 +102,13 @@ public class AuthService : IAuthService
     {
         if (string.IsNullOrWhiteSpace(request.AccessToken) || string.IsNullOrWhiteSpace(request.RefreshToken))
         {
-            throw new UnauthorizedAccessException("Access token and refresh token are required");
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.AccessTokenAndRefreshTokenRequired);
         }
 
         var principal = _jwt.GetPrincipalFromExpiredToken(request.AccessToken);
         if (principal == null)
         {
-            throw new UnauthorizedAccessException("Invalid access token format or signature");
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.InvalidAccessToken);
         }
 
         var userIdClaim = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value
@@ -118,7 +118,7 @@ public class AuthService : IAuthService
 
         if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
         {
-            throw new UnauthorizedAccessException("Invalid user identity in token");
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.InvalidUserIdentityInToken);
         }
 
         var storedToken = await _db.RefreshTokens
@@ -127,7 +127,7 @@ public class AuthService : IAuthService
 
         if (storedToken == null || storedToken.UserId != userId)
         {
-            throw new UnauthorizedAccessException("Invalid refresh token");
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.InvalidRefreshToken);
         }
 
         // Anti-theft: If a used or revoked refresh token is presented, suspect token theft and revoke all user tokens!
@@ -146,7 +146,7 @@ public class AuthService : IAuthService
             }
 
             await _db.SaveChangesAsync();
-            throw new UnauthorizedAccessException("Session has been terminated due to security violation. Please log in again.");
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.RefreshTokenSecurityViolation);
         }
 
         if (DateTime.UtcNow >= storedToken.ExpiresAt)
@@ -155,19 +155,19 @@ public class AuthService : IAuthService
             storedToken.RevokedAt = DateTime.UtcNow;
             storedToken.RevokedByIp = ipAddress;
             await _db.SaveChangesAsync();
-            throw new UnauthorizedAccessException("Refresh token has expired");
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.RefreshTokenExpired);
         }
 
         if (!string.IsNullOrEmpty(jwtIdClaim) && storedToken.JwtId != jwtIdClaim)
         {
             _logger.LogWarning("JWT ID mismatch on refresh token attempt for user {UserId}", userId);
-            throw new UnauthorizedAccessException("Token identifier mismatch");
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.TokenIdentifierMismatch);
         }
 
         var user = storedToken.User;
         if (user == null || !user.IsActive || user.IsDeleted)
         {
-            throw new UnauthorizedAccessException("User is inactive or deleted");
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.UserInactive);
         }
 
         // Token Rotation: Invalidate current token and replace with new one
@@ -272,13 +272,13 @@ public class AuthService : IAuthService
     public async Task ChangePasswordAsync(Guid userId, ChangePasswordRequest request)
     {
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId && !u.IsDeleted);
-        if (user == null) throw new KeyNotFoundException("User not found");
+        if (user == null) throw new KeyNotFoundException(InternLink.Shared.Responses.ErrorMessage.UserNotFound);
 
         var verification = _hasher.VerifyHashedPassword(user, user.PasswordHash, request.CurrentPassword);
         if (verification == PasswordVerificationResult.Failed)
         {
             _logger.LogWarning("User {UserId} attempted password change with invalid current password", userId);
-            throw new UnauthorizedAccessException("Current password is invalid");
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.CurrentPasswordInvalid);
         }
 
         user.PasswordHash = _hasher.HashPassword(user, request.NewPassword);
@@ -362,7 +362,7 @@ public class AuthService : IAuthService
     public async Task ResetPasswordAsync(string token, string newPassword)
     {
         if (string.IsNullOrWhiteSpace(token))
-            throw new UnauthorizedAccessException("Invalid or expired reset token");
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.InvalidOrExpiredPasswordResetLink);
 
         var tokenHash = ResetTokenGenerator.HashToken(token);
         var resetToken = await _db.PasswordResetTokens
@@ -374,7 +374,7 @@ public class AuthService : IAuthService
                 t.ExpiresAt > DateTime.UtcNow);
 
         if (resetToken?.User == null || resetToken.User.IsDeleted || !resetToken.User.IsActive)
-            throw new UnauthorizedAccessException("Invalid or expired reset token");
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.InvalidOrExpiredPasswordResetLink);
 
         var user = resetToken.User;
         user.PasswordHash = _hasher.HashPassword(user, newPassword);
@@ -421,7 +421,7 @@ public class AuthService : IAuthService
     public async Task UpdateAvatarAsync(Guid userId, string avatarUrl)
     {
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId && !u.IsDeleted);
-        if (user == null) throw new KeyNotFoundException("User not found");
+        if (user == null) throw new KeyNotFoundException(InternLink.Shared.Responses.ErrorMessage.UserNotFound);
         user.AvatarUrl = avatarUrl;
         user.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();

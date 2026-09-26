@@ -22,15 +22,18 @@ public class InternshipController : ControllerBase
     private readonly IInternshipService _internshipService;
     private readonly ILecturerAccessService _lecturerAccessService;
     private readonly IDepartmentScopeService _deptScope;
+    private readonly ILogger<InternshipController> _logger;
 
     public InternshipController(
         IInternshipService internshipService,
         ILecturerAccessService lecturerAccessService,
-        IDepartmentScopeService deptScope)
+        IDepartmentScopeService deptScope,
+        ILogger<InternshipController> logger)
     {
         _internshipService = internshipService;
         _lecturerAccessService = lecturerAccessService;
         _deptScope = deptScope;
+        _logger = logger;
     }
 
     private async Task<(bool isLecturer, Guid? lecturerId)> ResolveLecturerScopeAsync()
@@ -67,7 +70,8 @@ public class InternshipController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
+            _logger.LogError(ex, "Failed to get internships");
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError }));
         }
     }
 
@@ -100,7 +104,8 @@ public class InternshipController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
+            _logger.LogError(ex, "Failed to search internships");
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError }));
         }
     }
 
@@ -138,7 +143,8 @@ public class InternshipController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
+            _logger.LogError(ex, "Failed to get internship {InternshipId}", id);
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError }));
         }
     }
 
@@ -163,7 +169,8 @@ public class InternshipController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
+            _logger.LogError(ex, "Failed to get internships for student {StudentId}", studentId);
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError }));
         }
     }
 
@@ -188,7 +195,8 @@ public class InternshipController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
+            _logger.LogError(ex, "Failed to get internships for company {CompanyId}", companyId);
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError }));
         }
     }
 
@@ -213,7 +221,8 @@ public class InternshipController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
+            _logger.LogError(ex, "Failed to get internships with status {Status}", status);
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError }));
         }
     }
 
@@ -238,7 +247,8 @@ public class InternshipController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
+            _logger.LogError(ex, "Failed to create internship");
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError }));
         }
     }
 
@@ -266,7 +276,8 @@ public class InternshipController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
+            _logger.LogError(ex, "Failed to update internship {InternshipId}", id);
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError }));
         }
     }
 
@@ -294,7 +305,8 @@ public class InternshipController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
+            _logger.LogError(ex, "Failed to update status for internship {InternshipId}", id);
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError }));
         }
     }
 
@@ -326,7 +338,8 @@ public class InternshipController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
+            _logger.LogError(ex, "Failed to assign company for internship {InternshipId}", id);
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError }));
         }
     }
 
@@ -351,7 +364,8 @@ public class InternshipController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
+            _logger.LogError(ex, "Failed to delete internship {InternshipId}", id);
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError }));
         }
     }
 
@@ -375,7 +389,8 @@ public class InternshipController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
+            _logger.LogError(ex, "Failed to get internship statistics");
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError }));
         }
     }
 
@@ -392,7 +407,8 @@ public class InternshipController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
+            _logger.LogError(ex, "Failed to check active internship for student {StudentId}", studentId);
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError }));
         }
     }
 }

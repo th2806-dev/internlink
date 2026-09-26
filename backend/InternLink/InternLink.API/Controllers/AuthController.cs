@@ -37,7 +37,7 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.AccessToken) || string.IsNullOrWhiteSpace(request.RefreshToken))
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "AccessToken and RefreshToken are required" }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.AccessTokenAndRefreshTokenRequired }));
 
         try
         {
@@ -56,7 +56,7 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> RevokeToken([FromBody] RevokeTokenRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.RefreshToken))
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "RefreshToken is required" }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.RefreshTokenRequired }));
 
         var userId = User.GetUserId();
         if (userId == null)
@@ -65,7 +65,7 @@ public class AuthController : ControllerBase
         var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
         var result = await _auth.RevokeTokenAsync(request.RefreshToken, userId.Value, ipAddress);
         if (!result)
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Token not found or already revoked" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.TokenNotFoundOrRevoked }));
 
         return Ok(ApiResponse<object>.Ok(new { message = "Token successfully revoked" }));
     }
@@ -194,11 +194,11 @@ public class AuthController : ControllerBase
         var userId = User.GetUserId();
         if (userId == null) return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
         if (file == null || file.Length == 0)
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Image file is required" }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.ImageFileRequired }));
 
         var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
         if (ext is not (".jpg" or ".jpeg" or ".png" or ".webp"))
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Only .jpg, .png, .webp files are supported" }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.OnlyImageSupported }));
 
         var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "avatars");
         Directory.CreateDirectory(uploadsDir);

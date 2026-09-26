@@ -90,9 +90,9 @@ var jwtSecret = builder.Configuration["Jwt:Secret"];
 if (string.IsNullOrWhiteSpace(jwtSecret) || jwtSecret.Length < 32)
 {
     throw new InvalidOperationException(
-        "Critical Security Error: 'Jwt:Secret' is missing, empty, or shorter than 32 characters. " +
-        "Please configure a strong secret (>= 32 characters) via environment variable (Jwt__Secret), " +
-        "User Secrets (dotnet user-secrets set \"Jwt:Secret\" \"<your-secret>\"), or appsettings.Development.json.");
+        "Lỗi cấu hình bảo mật: 'Jwt:Secret' chưa được khai báo hoặc có độ dài dưới 32 ký tự. " +
+        "Vui lòng cấu hình khóa đủ mạnh qua biến môi trường (Jwt__Secret), " +
+        "User Secrets (dotnet user-secrets set \"Jwt:Secret\" \"<your-secret>\"), hoặc appsettings.Development.json.");
 }
 
 app.UseApiExceptionHandler();

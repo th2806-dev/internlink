@@ -241,7 +241,7 @@ public class ExcelService : IExcelService
             : workbook.Worksheets.FirstOrDefault(w => w.Name.Equals(sheetName, StringComparison.OrdinalIgnoreCase));
 
         if (ws == null)
-            throw new InvalidOperationException("No worksheet found in Excel file");
+            throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.ExcelNoWorksheet);
 
         var dt = new DataTable();
         bool firstRow = true;

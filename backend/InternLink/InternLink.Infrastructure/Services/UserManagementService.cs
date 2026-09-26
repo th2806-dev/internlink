@@ -121,7 +121,7 @@ public class UserManagementService : IUserManagementService
 
             var departmentExists = await _db.Departments.AnyAsync(d => d.Id == request.DepartmentId.Value && !d.IsDeleted && d.IsActive);
             if (!departmentExists)
-                throw new InvalidOperationException("Selected department does not exist or is inactive.");
+                throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.SelectedDepartmentNotFoundOrInactive);
         }
 
         if (await _db.Users.AnyAsync(u => u.Username == request.Username && !u.IsDeleted))
@@ -306,7 +306,7 @@ public class UserManagementService : IUserManagementService
         if (role == Role.Student && !string.IsNullOrWhiteSpace(studentCode))
         {
             var student = await _db.Students.FirstOrDefaultAsync(s => s.StudentCode == studentCode.Trim() && !s.IsDeleted)
-                ?? throw new InvalidOperationException($"Student with code '{studentCode}' not found");
+                ?? throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.NotFound($"sinh viên có mã '{studentCode}'"));
 
             if (student.UserId.HasValue && student.UserId != user.Id)
                 throw new InvalidOperationException($"Student '{studentCode}' is already linked to another user");
@@ -317,7 +317,7 @@ public class UserManagementService : IUserManagementService
         if (role == Role.Lecturer && !string.IsNullOrWhiteSpace(staffCode))
         {
             var lecturer = await _db.Lecturers.FirstOrDefaultAsync(l => l.StaffCode == staffCode.Trim() && !l.IsDeleted)
-                ?? throw new InvalidOperationException($"Lecturer with staff code '{staffCode}' not found");
+                ?? throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.NotFound($"giảng viên có mã '{staffCode}'"));
 
             if (lecturer.UserId.HasValue && lecturer.UserId != user.Id)
                 throw new InvalidOperationException($"Lecturer '{staffCode}' is already linked to another user");

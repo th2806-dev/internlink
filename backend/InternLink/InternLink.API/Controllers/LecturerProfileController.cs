@@ -25,7 +25,7 @@ public class LecturerProfileController : ControllerBase
     public async Task<IActionResult> GetAll([FromQuery] int skip = 0, [FromQuery] int take = 100, [FromQuery] Guid? semesterId = null, [FromQuery] Guid? departmentId = null)
     {
         if (skip < 0 || take < 1 || take > 1000)
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Invalid pagination" }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InvalidPagination }));
 
         var deptId = _deptScope.ResolveEffectiveDepartmentId(User, departmentId);
         var items = await _service.GetAllAsync(skip, take, semesterId, deptId);
@@ -132,10 +132,10 @@ public class LecturerProfileController : ControllerBase
         try
         {
             if (file == null || file.Length == 0)
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Excel file is required" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.ExcelFileRequired }));
 
             if (!string.Equals(Path.GetExtension(file.FileName), ".xlsx", StringComparison.OrdinalIgnoreCase))
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Only .xlsx files are supported" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.OnlyXlsxSupported }));
 
             await using var stream = file.OpenReadStream();
             var deptId = _deptScope.GetCurrentDepartmentId(User);

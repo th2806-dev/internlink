@@ -20,7 +20,6 @@ public class DocumentService : IDocumentService
     private readonly IMapper _mapper;
     private readonly IWebHostEnvironment _env;
     private readonly ILogger<DocumentService> _logger;
-    private readonly IGoogleDriveService? _googleDrive;
 
     private const string UploadFolder = "uploads/documents";
     private static readonly string[] AllowedExtensions =
@@ -40,18 +39,6 @@ public class DocumentService : IDocumentService
         _env = env;
         _logger = logger ?? NullLogger<DocumentService>.Instance;
     }
-
-    public DocumentService(
-        AppDbContext db,
-        IMapper mapper,
-        IWebHostEnvironment env,
-        IGoogleDriveService googleDrive,
-        ILogger<DocumentService>? logger = null)
-        : this(db, mapper, env, logger)
-    {
-        _googleDrive = googleDrive;
-    }
-
 
     public async Task<IEnumerable<DocumentListItemDto>> GetAllDocumentsAsync(int skip = 0, int take = 100)
     {
@@ -273,7 +260,7 @@ public class DocumentService : IDocumentService
             .Include(i => i.Lecturer)
             .FirstOrDefaultAsync(i => i.Id == request.InternshipId && !i.IsDeleted);
         if (internship == null)
-            throw new InvalidOperationException($"Internship with ID {request.InternshipId} not found");
+            throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.InternshipNotFoundById(request.InternshipId));
 
         var isAssignedLecturer = internship.Lecturer?.UserId == userId;
         var isSuperAdmin = await _db.Users.AnyAsync(u => u.Id == userId && u.Role == Domain.Enums.Role.SuperAdmin && !u.IsDeleted);
@@ -288,35 +275,21 @@ public class DocumentService : IDocumentService
         string filePath;
         long fileSize;
         string mimeType;
-        string? googleDriveFileId;
-        if (_googleDrive != null)
-        {
-            var uploaded = await _googleDrive.UploadAsync(fileStream, fileName, GetMimeType(Path.GetExtension(fileName)));
-            filePath = uploaded.WebViewLink;
-            fileSize = uploaded.Size;
-            mimeType = uploaded.ContentType;
-            googleDriveFileId = uploaded.FileId;
-        }
-        else
-        {
-            // Không cấu hình Google Drive → lưu local (đồng bộ cách WeeklyReport/Submission lưu file).
-            var extension = Path.GetExtension(fileName).ToLowerInvariant();
-            if (!AllowedExtensions.Contains(extension))
-                throw new InvalidOperationException($"File type '{extension}' is not allowed");
+        var extension = Path.GetExtension(fileName).ToLowerInvariant();
+        if (!AllowedExtensions.Contains(extension))
+            throw new InvalidOperationException($"File type '{extension}' is not allowed");
 
-            mimeType = GetMimeType(extension);
-            var uploadPath = Path.Combine(GetUploadRoot(), UploadFolder, request.InternshipId.ToString());
-            Directory.CreateDirectory(uploadPath);
-            var uniqueFileName = $"{Guid.NewGuid()}_{Path.GetFileNameWithoutExtension(fileName)}{extension}";
-            var fullPath = Path.Combine(uploadPath, uniqueFileName);
-            await using (var stream = new FileStream(fullPath, FileMode.Create))
-            {
-                await fileStream.CopyToAsync(stream);
-                fileSize = stream.Length;
-            }
-            filePath = Path.Combine(UploadFolder, request.InternshipId.ToString(), uniqueFileName).Replace("\\", "/");
-            googleDriveFileId = null;
+        mimeType = GetMimeType(extension);
+        var uploadPath = Path.Combine(GetUploadRoot(), UploadFolder, request.InternshipId.ToString());
+        Directory.CreateDirectory(uploadPath);
+        var uniqueFileName = $"{Guid.NewGuid()}_{Path.GetFileNameWithoutExtension(fileName)}{extension}";
+        var fullPath = Path.Combine(uploadPath, uniqueFileName);
+        await using (var stream = new FileStream(fullPath, FileMode.Create))
+        {
+            await fileStream.CopyToAsync(stream);
+            fileSize = stream.Length;
         }
+        filePath = Path.Combine(UploadFolder, request.InternshipId.ToString(), uniqueFileName).Replace("\\", "/");
 
         var document = new Document
         {
@@ -329,7 +302,6 @@ public class DocumentService : IDocumentService
             IsRequired = request.IsRequired,
             FileName = fileName,
             FilePath = filePath,
-            GoogleDriveFileId = googleDriveFileId,
             MimeType = mimeType,
             FileSize = fileSize,
             UploadedAt = DateTime.UtcNow,
@@ -345,7 +317,6 @@ public class DocumentService : IDocumentService
             VersionNumber = 1,
             FileName = fileName,
             FilePath = filePath,
-            GoogleDriveFileId = googleDriveFileId,
             FileSize = fileSize,
             MimeType = mimeType,
             UploadedById = lecturerId,
@@ -500,14 +471,9 @@ public class DocumentService : IDocumentService
             }
         }
 
-        if (_googleDrive != null && document.FilePath.StartsWith("http", StringComparison.OrdinalIgnoreCase))
-        {
-            var content = await _googleDrive.DownloadAsync(document.FilePath);
-            document.DownloadCount++;
-            document.UpdatedAt = DateTime.UtcNow;
-            await _db.SaveChangesAsync();
-            return new DocumentDownloadDto { FileContent = content, FileName = document.FileName, MimeType = document.MimeType };
-        }
+        if (Uri.TryCreate(document.FilePath, UriKind.Absolute, out var documentUri) &&
+            (documentUri.Scheme == Uri.UriSchemeHttp || documentUri.Scheme == Uri.UriSchemeHttps))
+            return null;
 
         var normalizedPath = document.FilePath
             .Replace('/', Path.DirectorySeparatorChar)
@@ -515,7 +481,7 @@ public class DocumentService : IDocumentService
             .TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
         string? existingFullPath = null;
-        var roots = new[] { GetUploadRoot(), _env.ContentRootPath }
+        var roots = new[] { GetUploadRoot(), _env.WebRootPath, _env.ContentRootPath }
             .Where(r => !string.IsNullOrWhiteSpace(r))
             .Distinct(StringComparer.OrdinalIgnoreCase);
 
@@ -664,7 +630,7 @@ public class DocumentService : IDocumentService
                 .Replace('\\', Path.DirectorySeparatorChar)
                 .TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
-            var roots = new[] { GetUploadRoot(), _env.ContentRootPath }
+            var roots = new[] { GetUploadRoot(), _env.WebRootPath, _env.ContentRootPath }
                 .Where(root => !string.IsNullOrWhiteSpace(root))
                 .Distinct(StringComparer.OrdinalIgnoreCase);
 
@@ -742,7 +708,7 @@ public class DocumentService : IDocumentService
     }
 
     private string GetUploadRoot() =>
-        string.IsNullOrEmpty(_env.WebRootPath) ? _env.ContentRootPath : _env.WebRootPath;
+        _env.ContentRootPath;
 
     private string GetMimeType(string extension)
     {
@@ -814,7 +780,7 @@ public class DocumentService : IDocumentService
         Guid? lecturerId = lecturer?.Id;
 
         using var stream = request.File.OpenReadStream();
-        var (filePath, fileSize, mimeType, fileId) = await SaveTemplateFileAsync(stream, request.File.FileName, request.Department);
+        var (filePath, fileSize, mimeType) = await SaveTemplateFileAsync(stream, request.File.FileName, request.Department);
 
         var template = new Document
         {
@@ -828,7 +794,6 @@ public class DocumentService : IDocumentService
             Version = string.IsNullOrWhiteSpace(request.Version) ? "1.0" : request.Version.Trim(),
             FileName = request.File.FileName,
             FilePath = filePath,
-            GoogleDriveFileId = fileId,
             FileSize = fileSize,
             MimeType = mimeType,
             IsPublished = request.IsPublished,
@@ -848,7 +813,6 @@ public class DocumentService : IDocumentService
             VersionNumber = 1,
             FileName = request.File.FileName,
             FilePath = filePath,
-            GoogleDriveFileId = fileId,
             FileSize = fileSize,
             MimeType = mimeType,
             UploadedById = lecturerId,
@@ -925,9 +889,8 @@ public class DocumentService : IDocumentService
         if (request.File != null && request.File.Length > 0)
         {
             using var stream = request.File.OpenReadStream();
-            var (filePath, fileSize, mimeType, fileId) = await SaveTemplateFileAsync(stream, request.File.FileName, template.Department);
+            var (filePath, fileSize, mimeType) = await SaveTemplateFileAsync(stream, request.File.FileName, template.Department);
             template.FilePath = filePath;
-            template.GoogleDriveFileId = fileId;
             template.FileName = request.File.FileName;
             template.FileSize = fileSize;
             template.MimeType = mimeType;
@@ -943,7 +906,6 @@ public class DocumentService : IDocumentService
                 VersionNumber = lastVersionNumber + 1,
                 FileName = request.File.FileName,
                 FilePath = filePath,
-                GoogleDriveFileId = fileId,
                 FileSize = fileSize,
                 MimeType = mimeType,
                 UploadedById = template.UploadedById,
@@ -970,7 +932,7 @@ public class DocumentService : IDocumentService
         }
     }
 
-    private async Task<(string FilePath, long FileSize, string MimeType, string? FileId)> SaveTemplateFileAsync(Stream fileStream, string originalFileName, string? department = null)
+    private async Task<(string FilePath, long FileSize, string MimeType)> SaveTemplateFileAsync(Stream fileStream, string originalFileName, string? department = null)
     {
         if (fileStream == null || fileStream.Length == 0)
             throw new ArgumentException(InternLink.Shared.Responses.ErrorMessage.FileEmpty);
@@ -980,12 +942,6 @@ public class DocumentService : IDocumentService
             throw new InvalidOperationException($"File type '{extension}' is not allowed");
 
         var mimeType = GetMimeType(extension);
-        if (_googleDrive != null)
-        {
-            var uploaded = await _googleDrive.UploadAsync(fileStream, originalFileName, mimeType);
-            return (uploaded.WebViewLink, uploaded.Size, uploaded.ContentType, uploaded.FileId);
-        }
-
         var deptFolder = string.IsNullOrWhiteSpace(department) ? "general" : department.Trim().ToLowerInvariant();
         var uploadPath = Path.Combine(GetUploadRoot(), UploadFolder, "templates", deptFolder);
         Directory.CreateDirectory(uploadPath);
@@ -998,7 +954,7 @@ public class DocumentService : IDocumentService
             await fileStream.CopyToAsync(stream);
             fileSize = stream.Length;
         }
-        return (relativePath, fileSize, mimeType, null);
+        return (relativePath, fileSize, mimeType);
     }
 
     public async Task<IReadOnlyList<DocumentVersionDto>> GetDocumentVersionsAsync(Guid documentId)
@@ -1019,15 +975,9 @@ public class DocumentService : IDocumentService
         if (version == null)
             return null;
 
-        if (_googleDrive != null && version.FilePath.StartsWith("http", StringComparison.OrdinalIgnoreCase))
-        {
-            return new DocumentDownloadDto
-            {
-                FileContent = await _googleDrive.DownloadAsync(version.FilePath),
-                FileName = version.FileName,
-                MimeType = version.MimeType
-            };
-        }
+        if (Uri.TryCreate(version.FilePath, UriKind.Absolute, out var versionUri) &&
+            (versionUri.Scheme == Uri.UriSchemeHttp || versionUri.Scheme == Uri.UriSchemeHttps))
+            return null;
 
         var normalizedPath = version.FilePath
             .Replace('/', Path.DirectorySeparatorChar)
@@ -1035,7 +985,7 @@ public class DocumentService : IDocumentService
             .TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
         string? existingFullPath = null;
-        var roots = new[] { GetUploadRoot(), _env.ContentRootPath }
+        var roots = new[] { GetUploadRoot(), _env.WebRootPath, _env.ContentRootPath }
             .Where(r => !string.IsNullOrWhiteSpace(r))
             .Distinct(StringComparer.OrdinalIgnoreCase);
 

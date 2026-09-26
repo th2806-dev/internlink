@@ -50,7 +50,7 @@ public class NotificationController : ControllerBase
 
         var ok = await _notificationService.MarkReadAsync(id, userId.Value);
         if (!ok)
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Notification not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.NotificationNotFound }));
 
         return Ok(ApiResponse<object>.Ok(null));
     }

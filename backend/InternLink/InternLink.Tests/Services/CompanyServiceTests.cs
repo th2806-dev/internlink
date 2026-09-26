@@ -615,10 +615,10 @@ public class CompanyServiceTests
         await db.SaveChangesAsync();
 
         var act = async () => await service.SetCompanySemesterStatusAsync(Guid.NewGuid(), Guid.NewGuid(), isLinked: false);
-        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*Company not found*");
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage($"*{InternLink.Shared.Responses.ErrorMessage.CompanyNotFound}*");
 
         var act2 = async () => await service.SetCompanySemesterStatusAsync(company.Id, Guid.NewGuid(), isLinked: false);
-        await act2.Should().ThrowAsync<InvalidOperationException>().WithMessage("*Semester not found*");
+        await act2.Should().ThrowAsync<InvalidOperationException>().WithMessage($"*{InternLink.Shared.Responses.ErrorMessage.SemesterNotFound}*");
     }
 
     [Fact]

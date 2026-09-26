@@ -262,7 +262,7 @@ public class SubmissionController : ControllerBase
             var isLecturerOrAdmin = User.IsInRole("Lecturer") || User.IsInRole("SuperAdmin");
             var file = await _submissionService.DownloadFileAsync(id, userId.Value, isLecturerOrAdmin);
             if (file == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "File not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.FileNotFound }));
 
             return File(file.FileContent, file.MimeType, file.FileName);
         }
@@ -284,7 +284,7 @@ public class SubmissionController : ControllerBase
             var isLecturerOrAdmin = User.IsInRole("Lecturer") || User.IsInRole("SuperAdmin");
             var file = await _submissionService.DownloadAssetAsync(id, assetId, userId.Value, isLecturerOrAdmin);
             if (file == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Asset not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.AssetNotFound }));
 
             return File(file.FileContent, file.MimeType, file.FileName);
         }

@@ -78,7 +78,7 @@ public class LecturerController : ControllerBase
 
         var me = await _lecturerService.GetMeAsync(userId.Value);
         if (me == null)
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Lecturer profile not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.LecturerProfileNotFound }));
 
         return Ok(ApiResponse<LecturerOverviewDto>.Ok(me));
     }
@@ -94,7 +94,7 @@ public class LecturerController : ControllerBase
 
         var current = await _lecturerProfileService.GetByUserIdAsync(userId.Value);
         if (current == null)
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Lecturer profile not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.LecturerProfileNotFound }));
 
         try
         {
@@ -194,7 +194,7 @@ public class LecturerController : ControllerBase
 
         var detail = await _lecturerService.GetCompanyDetailAsync(companyId, userId.Value, semesterId);
         if (detail == null)
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Company not found for your students" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.CompanyNotForYourStudents }));
 
         return Ok(ApiResponse<CompanyDetailDto>.Ok(detail));
     }
@@ -281,7 +281,7 @@ public class LecturerController : ControllerBase
         {
             var updated = await _lecturerService.UpdateStudentNotesAsync(userId.Value, id, request.Notes);
             if (!updated)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Internship not found or access denied" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternshipNotFoundOrDenied }));
 
             return Ok(ApiResponse<object>.Ok(new { message = "Notes updated successfully" }));
         }
@@ -330,7 +330,7 @@ public class LecturerController : ControllerBase
         {
             var sent = await _lecturerService.RemindStudentAsync(userId.Value, id, request?.Title, request?.Message);
             if (!sent)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Student/Internship not found or access denied" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternshipNotFoundOrDenied }));
 
             return Ok(ApiResponse<object>.Ok(new { message = "Reminder sent successfully" }));
         }
@@ -379,7 +379,7 @@ public class LecturerController : ControllerBase
         {
             var zip = await _submissionService.DownloadZipAsync(request.SubmissionIds, userId.Value);
             if (zip == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "No submission files found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.NoSubmissionFiles }));
             return File(zip.FileContent, "application/zip", zip.FileName);
         }
         catch (UnauthorizedAccessException ex)
@@ -731,7 +731,7 @@ public class LecturerController : ControllerBase
         }
 
         if (created.Count == 0)
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "No valid files were uploaded" }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.NoValidFilesUploaded }));
 
         return Ok(ApiResponse<object>.Ok(new { count = created.Count, documents = created }));
     }

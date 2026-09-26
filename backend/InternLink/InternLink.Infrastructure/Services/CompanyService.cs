@@ -312,11 +312,11 @@ public class CompanyService : ICompanyService
     {
         var companyExists = await _db.Companies.AnyAsync(c => c.Id == companyId && !c.IsDeleted);
         if (!companyExists)
-            throw new InvalidOperationException("Company not found");
+            throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.CompanyNotFound);
 
         var semesterExists = await _db.Semesters.AnyAsync(s => s.Id == semesterId && !s.IsDeleted);
         if (!semesterExists)
-            throw new InvalidOperationException("Semester not found");
+            throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.SemesterNotFound);
 
         var link = await _db.SemesterCompanies
             .FirstOrDefaultAsync(sc => sc.SemesterId == semesterId && sc.CompanyId == companyId);

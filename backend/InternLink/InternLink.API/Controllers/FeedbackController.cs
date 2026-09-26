@@ -30,7 +30,7 @@ public class FeedbackController : ControllerBase
 
             var feedback = await _submissionService.UpdateFeedbackAsync(id, userId.Value, request);
             if (feedback == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Feedback not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.FeedbackNotFound }));
 
             return Ok(ApiResponse<FeedbackDto>.Ok(feedback));
         }

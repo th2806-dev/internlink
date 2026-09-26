@@ -33,7 +33,7 @@ public class StudentPortalController : ControllerBase
 
         var profile = await _studentService.GetPortalProfileByUserIdAsync(userId.Value);
         if (profile == null)
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Student profile not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.StudentProfileNotFound }));
 
         return Ok(ApiResponse<StudentPortalProfileDto>.Ok(profile));
     }
@@ -49,7 +49,7 @@ public class StudentPortalController : ControllerBase
 
         var current = await _studentService.GetStudentByUserIdAsync(userId.Value);
         if (current == null)
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Student profile not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.StudentProfileNotFound }));
 
         try
         {
@@ -89,7 +89,7 @@ public class StudentPortalController : ControllerBase
 
         var profile = await _studentService.GetPortalProfileByUserIdAsync(userId.Value);
         if (profile?.Internship == null)
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Ch\u00F4ng c\xF3 th\xF4ng tin th\u1EF1c t\u1EADp." }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.StudentInternshipMissing }));
 
         try
         {

@@ -59,7 +59,7 @@ public class SemesterPortalController : ControllerBase
         }
 
         return semester == null
-            ? NotFound(ApiResponse<object>.Fail(new ApiError { Title = "No active semester" }))
+            ? NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.NoActiveSemester }))
             : Ok(ApiResponse<SemesterDto>.Ok(semester));
     }
 }

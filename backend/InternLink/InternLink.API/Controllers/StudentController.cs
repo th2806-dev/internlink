@@ -19,13 +19,16 @@ public class StudentController : ControllerBase
 {
     private readonly IStudentService _studentService;
     private readonly ILecturerAccessService _lecturerAccessService;
+    private readonly ILogger<StudentController> _logger;
 
     public StudentController(
         IStudentService studentService,
-        ILecturerAccessService lecturerAccessService)
+        ILecturerAccessService lecturerAccessService,
+        ILogger<StudentController> logger)
     {
         _studentService = studentService;
         _lecturerAccessService = lecturerAccessService;
+        _logger = logger;
     }
 
     private async Task<(bool isLecturer, Guid? lecturerId)> ResolveLecturerScopeAsync()
@@ -64,7 +67,8 @@ public class StudentController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
+            _logger.LogError(ex, "Failed to get students");
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError }));
         }
     }
 
@@ -99,7 +103,8 @@ public class StudentController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
+            _logger.LogError(ex, "Failed to search students");
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError }));
         }
     }
 
@@ -123,7 +128,8 @@ public class StudentController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
+            _logger.LogError(ex, "Failed to get student {StudentId}", id);
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError }));
         }
     }
 
@@ -136,7 +142,7 @@ public class StudentController : ControllerBase
         try
         {
             if (string.IsNullOrWhiteSpace(studentCode))
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Student number is required" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.StudentNumberRequired }));
 
             var (isLecturer, lecturerId) = await ResolveLecturerScopeAsync();
             if (isLecturer && lecturerId == Guid.Empty)
@@ -150,7 +156,8 @@ public class StudentController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
+            _logger.LogError(ex, "Failed to get student with code {StudentCode}", studentCode);
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError }));
         }
     }
 
@@ -164,14 +171,15 @@ public class StudentController : ControllerBase
         try
         {
             if (string.IsNullOrWhiteSpace(studentCode))
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Student number is required" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.StudentNumberRequired }));
 
             var exists = await _studentService.StudentCodeExistsAsync(studentCode);
             return Ok(ApiResponse<bool>.Ok(exists));
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
+            _logger.LogError(ex, "Failed to check student code {StudentCode}", studentCode);
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError }));
         }
     }
 }

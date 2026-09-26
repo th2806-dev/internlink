@@ -133,7 +133,7 @@ public class DocumentController : ControllerBase
         }
 
         if (created.Count == 0)
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "No valid files were uploaded" }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.NoValidFilesUploaded }));
 
         return Ok(ApiResponse<object>.Ok(new { count = created.Count, documents = created }));
     }
@@ -263,17 +263,11 @@ public class DocumentController : ControllerBase
         {
             return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = ex.Message }));
         }
-        catch (FileNotFoundException ex)
-        {
-            _logger.LogError(ex, "Google Drive credentials are not configured for template upload");
-            return StatusCode(StatusCodes.Status503ServiceUnavailable,
-                ApiResponse<object>.Fail(new ApiError { Title = "Google Drive chưa được cấu hình", Detail = "Đặt google-credentials.json cạnh file chạy API và share folder Drive cho Service Account." }));
-        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Template upload failed");
-            return StatusCode(StatusCodes.Status502BadGateway,
-                ApiResponse<object>.Fail(new ApiError { Title = "Không thể tải file lên Google Drive", Detail = ex.Message }));
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError }));
         }
     }
 

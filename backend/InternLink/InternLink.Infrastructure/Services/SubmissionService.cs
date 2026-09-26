@@ -16,7 +16,6 @@ public class SubmissionService : ISubmissionService
     private readonly IMapper _mapper;
     private readonly INotificationService _notificationService;
     private readonly IWebHostEnvironment _env;
-    private readonly IGoogleDriveService? _googleDrive;
 
     private const string UploadFolder = "uploads/submissions";
     private static readonly string[] AllowedExtensions =
@@ -35,17 +34,6 @@ public class SubmissionService : ISubmissionService
         _mapper = mapper;
         _notificationService = notificationService;
         _env = env;
-    }
-
-    public SubmissionService(
-        AppDbContext db,
-        IMapper mapper,
-        INotificationService notificationService,
-        IWebHostEnvironment env,
-        IGoogleDriveService googleDrive)
-        : this(db, mapper, notificationService, env)
-    {
-        _googleDrive = googleDrive;
     }
 
     public async Task<SubmissionDto?> GetByIdAsync(Guid id)
@@ -170,14 +158,12 @@ public class SubmissionService : ISubmissionService
             Description = request.Description,
             FileName = request.FileName,
             FileUrl = request.FileUrl,
-            GoogleDriveFileId = request.GoogleDriveFileId,
             SubmittedAt = DateTime.UtcNow,
             CreatedAt = DateTime.UtcNow
         };
 
         _db.Submissions.Add(submission);
         await _db.SaveChangesAsync();
-
         return (await GetByIdAsync(submission.Id))!;
     }
 
@@ -187,11 +173,10 @@ public class SubmissionService : ISubmissionService
         Stream fileStream,
         string originalFileName)
     {
-        var (relativePath, savedFileName, fileId) = await StoreFileAsync(fileStream, originalFileName, request.InternshipId);
+        var (relativePath, savedFileName) = await SaveSubmissionFileAsync(fileStream, originalFileName, request.InternshipId);
 
         request.FileName = savedFileName;
         request.FileUrl = relativePath;
-        request.GoogleDriveFileId = fileId;
         return await CreateAsync(userId, request);
     }
 
@@ -244,14 +229,13 @@ public class SubmissionService : ISubmissionService
 
         foreach (var file in fileItems)
         {
-            var (relativePath, savedFileName, fileId) = await StoreFileAsync(file.Stream, file.FileName, request.InternshipId, file.ContentType);
+            var (relativePath, savedFileName) = await SaveSubmissionFileAsync(file.Stream, file.FileName, request.InternshipId);
             submission.Assets.Add(new SubmissionAsset
             {
                 Id = Guid.NewGuid(),
                 Label = file.FileName,
                 FileName = savedFileName,
                 FileUrl = relativePath,
-                GoogleDriveFileId = fileId,
                 AssetType = "file",
                 FileSize = file.Length,
                 MimeType = file.ContentType,
@@ -312,7 +296,6 @@ public class SubmissionService : ISubmissionService
             Description = request.Description ?? existing.Description,
             FileName = request.FileName ?? existing.FileName,
             FileUrl = request.FileUrl ?? existing.FileUrl,
-            GoogleDriveFileId = request.GoogleDriveFileId ?? existing.GoogleDriveFileId,
             SubmittedAt = DateTime.UtcNow,
             CreatedAt = DateTime.UtcNow
         };
@@ -338,11 +321,10 @@ public class SubmissionService : ISubmissionService
         if (existing == null)
             return null;
 
-        var (relativePath, savedFileName, fileId) = await StoreFileAsync(fileStream, originalFileName, existing.InternshipId);
+        var (relativePath, savedFileName) = await SaveSubmissionFileAsync(fileStream, originalFileName, existing.InternshipId);
 
         request.FileName = savedFileName;
         request.FileUrl = relativePath;
-        request.GoogleDriveFileId = fileId;
         return await ResubmitAsync(id, userId, request);
     }
 
@@ -376,17 +358,11 @@ public class SubmissionService : ISubmissionService
                 throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessFile);
         }
 
-        if (_googleDrive != null && submission.FileUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase))
-        {
-            return new SubmissionFileDownloadDto
-            {
-                FileContent = await _googleDrive.DownloadAsync(submission.FileUrl),
-                FileName = submission.FileName ?? "submission-file",
-                MimeType = GetMimeType(Path.GetExtension(submission.FileName ?? ""))
-            };
-        }
+        if (Uri.TryCreate(submission.FileUrl, UriKind.Absolute, out var submissionUri) &&
+            (submissionUri.Scheme == Uri.UriSchemeHttp || submissionUri.Scheme == Uri.UriSchemeHttps))
+            return null;
 
-        var fullPath = Path.Combine(GetUploadRoot(), submission.FileUrl.Replace("/", Path.DirectorySeparatorChar.ToString()));
+        var fullPath = ResolveUploadPath(submission.FileUrl);
         if (!File.Exists(fullPath))
             return null;
 
@@ -424,7 +400,7 @@ public class SubmissionService : ISubmissionService
             (isLecturerOrAdmin && !isAssignedLecturer && !ownsInternship && !isSuperAdmin))
             throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessFile);
 
-        var fullPath = Path.Combine(GetUploadRoot(), asset.FileUrl.Replace("/", Path.DirectorySeparatorChar.ToString()));
+        var fullPath = ResolveUploadPath(asset.FileUrl);
         if (!File.Exists(fullPath))
             return null;
 
@@ -450,7 +426,7 @@ public class SubmissionService : ISubmissionService
             .ToListAsync();
 
         if (submissions.Count != ids.Count)
-            throw new InvalidOperationException("One or more submissions were not found");
+            throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.SubmissionNotFound);
         if (!isSuperAdmin && submissions.Any(s => s.Internship.Lecturer?.UserId != userId))
             throw new UnauthorizedAccessException("You can only download submissions assigned to you");
 
@@ -462,7 +438,7 @@ public class SubmissionService : ISubmissionService
                 if (string.IsNullOrWhiteSpace(submission.FileUrl))
                     continue;
 
-                var fullPath = Path.Combine(GetUploadRoot(), submission.FileUrl.Replace("/", Path.DirectorySeparatorChar.ToString()));
+                var fullPath = ResolveUploadPath(submission.FileUrl);
                 if (!File.Exists(fullPath))
                     continue;
 
@@ -556,7 +532,7 @@ public class SubmissionService : ISubmissionService
     public async Task<FeedbackDto?> AddFeedbackAsync(Guid submissionId, Guid userId, CreateFeedbackRequest request)
     {
         var lecturerId = await ResolveLecturerIdAsync(userId)
-            ?? throw new UnauthorizedAccessException("Lecturer profile not found for current user");
+            ?? throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.LecturerProfileMissing);
 
         var submission = await _db.Submissions
             .Include(s => s.Internship)
@@ -721,20 +697,25 @@ public class SubmissionService : ISubmissionService
         return (relativePath, uniqueFileName);
     }
 
-    private async Task<(string RelativePath, string SavedFileName, string? FileId)> StoreFileAsync(
-        Stream fileStream, string originalFileName, Guid internshipId, string? contentType = null)
-    {
-        if (_googleDrive == null)
-        {
-            var local = await SaveSubmissionFileAsync(fileStream, originalFileName, internshipId);
-            return (local.RelativePath, local.SavedFileName, null);
-        }
-        var uploaded = await _googleDrive.UploadAsync(fileStream, originalFileName, contentType);
-        return (uploaded.WebViewLink, uploaded.FileName, uploaded.FileId);
-    }
+    private string GetUploadRoot() => _env.ContentRootPath;
 
-    private string GetUploadRoot() =>
-        string.IsNullOrEmpty(_env.WebRootPath) ? _env.ContentRootPath : _env.WebRootPath;
+    private string ResolveUploadPath(string relativePath)
+    {
+        var normalizedPath = relativePath.Replace('/', Path.DirectorySeparatorChar);
+        var roots = new[] { _env.ContentRootPath, _env.WebRootPath }
+            .Where(root => !string.IsNullOrWhiteSpace(root))
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var root in roots)
+        {
+            var fullRoot = Path.GetFullPath(root!);
+            var fullPath = Path.GetFullPath(Path.Combine(fullRoot, normalizedPath));
+            if (fullPath.StartsWith(fullRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) && File.Exists(fullPath))
+                return fullPath;
+        }
+
+        return Path.Combine(GetUploadRoot(), normalizedPath);
+    }
 
     private static string GetMimeType(string extension) => extension switch
     {

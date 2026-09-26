@@ -36,7 +36,7 @@ public class AssignmentService : IAssignmentService
     {
         var lecturerExists = await _db.Lecturers.AnyAsync(l => l.Id == request.LecturerId && !l.IsDeleted);
         if (!lecturerExists)
-            throw new InvalidOperationException($"Lecturer with ID {request.LecturerId} not found");
+            throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.LecturerNotFound);
 
         // Department scope: DepartmentAdmin may only assign lecturers of their own department.
         if (departmentId.HasValue)
@@ -54,7 +54,7 @@ public class AssignmentService : IAssignmentService
         {
             var semesterExists = await _db.Semesters.AnyAsync(s => s.Id == request.SemesterId.Value && !s.IsDeleted);
             if (!semesterExists)
-                throw new InvalidOperationException($"Semester with ID {request.SemesterId.Value} not found");
+                throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.SemesterNotFoundById(request.SemesterId.Value));
             targetSemesterId = request.SemesterId.Value;
         }
         else
@@ -72,7 +72,7 @@ public class AssignmentService : IAssignmentService
             if (activeSemester == null)
                 throw new InvalidOperationException(departmentId.HasValue
                     ? "Khoa của bạn chưa có học kỳ đang hoạt động. Hãy bắt đầu một học kỳ trước khi phân công."
-                    : "No active semester found for assignment");
+                    : InternLink.Shared.Responses.ErrorMessage.NoActiveSemester);
 
             targetSemesterId = activeSemester.Id;
         }
@@ -91,7 +91,7 @@ public class AssignmentService : IAssignmentService
                 errors.Add(new AssignmentErrorDto
                 {
                     StudentId = studentId,
-                    Message = $"Student with ID {studentId} not found"
+                    Message = InternLink.Shared.Responses.ErrorMessage.StudentNotFound
                 });
                 continue;
             }
@@ -194,7 +194,7 @@ public class AssignmentService : IAssignmentService
     {
         var lecturerExists = await _db.Lecturers.AnyAsync(l => l.Id == lecturerId && !l.IsDeleted);
         if (!lecturerExists)
-            throw new InvalidOperationException($"Lecturer with ID {lecturerId} not found");
+            throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.LecturerNotFound);
 
         // DepartmentAdmin may only view assignments of lecturers in their own department.
         if (departmentId.HasValue)

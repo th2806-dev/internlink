@@ -117,7 +117,7 @@ public class AdminCompaniesController : ControllerBase
     public async Task<IActionResult> GetByIndustry(string industry, [FromQuery] int skip = 0, [FromQuery] int take = 100)
     {
         if (string.IsNullOrWhiteSpace(industry))
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Industry is required" }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.IndustryRequired }));
         if (skip < 0)
             return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SkipMustBeNonNegative }));
         if (take < 1 || take > 1000)
@@ -143,7 +143,7 @@ public class AdminCompaniesController : ControllerBase
     public async Task<IActionResult> CheckExists(string name)
     {
         if (string.IsNullOrWhiteSpace(name))
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Company name is required" }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.CompanyNameRequired }));
 
         var exists = await _companyService.CompanyNameExistsAsync(name);
         return Ok(ApiResponse<bool>.Ok(exists));
@@ -230,10 +230,10 @@ public class AdminCompaniesController : ControllerBase
         try
         {
             if (file == null || file.Length == 0)
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Excel file is required" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.ExcelFileRequired }));
 
             if (!string.Equals(Path.GetExtension(file.FileName), ".xlsx", StringComparison.OrdinalIgnoreCase))
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Only .xlsx files are supported" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.OnlyXlsxSupported }));
 
             await using var stream = file.OpenReadStream();
             var result = await _companyService.ImportCompaniesFromExcelAsync(stream, _deptScope.GetCurrentDepartmentId(User));

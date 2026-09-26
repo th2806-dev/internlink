@@ -62,7 +62,7 @@ public class EvaluationController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving evaluations");
-            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Error retrieving evaluations" });
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = InternLink.Shared.Responses.ErrorMessage.InternalServerError });
         }
     }
 
@@ -86,7 +86,7 @@ public class EvaluationController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error filtering evaluations");
-            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Error filtering evaluations" });
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = InternLink.Shared.Responses.ErrorMessage.InternalServerError });
         }
     }
 
@@ -107,7 +107,7 @@ public class EvaluationController : ControllerBase
             var isLecturerOrAdmin = User.IsInRole("Lecturer") || User.IsInRole("SuperAdmin");
             var evaluation = await _evaluationService.GetEvaluationByIdAsync(id, userId.Value, isLecturerOrAdmin);
             if (evaluation == null)
-                return NotFound(new { message = "Evaluation not found" });
+                return NotFound(new { message = InternLink.Shared.Responses.ErrorMessage.EvaluationNotFound });
 
             return Ok(evaluation);
         }
@@ -118,7 +118,7 @@ public class EvaluationController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving evaluation {EvaluationId}", id);
-            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Error retrieving evaluation" });
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = InternLink.Shared.Responses.ErrorMessage.InternalServerError });
         }
     }
 
@@ -139,7 +139,7 @@ public class EvaluationController : ControllerBase
             var isLecturerOrAdmin = User.IsInRole("Lecturer") || User.IsInRole("SuperAdmin");
             var scores = await _evaluationService.GetEvaluationScoresAsync(id, userId.Value, isLecturerOrAdmin);
             if (scores == null)
-                return NotFound(new { message = "Evaluation not found" });
+                return NotFound(new { message = InternLink.Shared.Responses.ErrorMessage.EvaluationNotFound });
 
             return Ok(scores);
         }
@@ -150,7 +150,7 @@ public class EvaluationController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving evaluation scores {EvaluationId}", id);
-            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Error retrieving evaluation scores" });
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = InternLink.Shared.Responses.ErrorMessage.InternalServerError });
         }
     }
 
@@ -181,7 +181,7 @@ public class EvaluationController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving evaluation for internship {InternshipId}", internshipId);
-            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Error retrieving evaluation" });
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = InternLink.Shared.Responses.ErrorMessage.InternalServerError });
         }
     }
 
@@ -207,7 +207,7 @@ public class EvaluationController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving evaluations for student {StudentId}", studentId);
-            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Error retrieving evaluations" });
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = InternLink.Shared.Responses.ErrorMessage.InternalServerError });
         }
     }
 
@@ -231,7 +231,7 @@ public class EvaluationController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving evaluations for company {CompanyId}", companyId);
-            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Error retrieving evaluations" });
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = InternLink.Shared.Responses.ErrorMessage.InternalServerError });
         }
     }
 
@@ -266,7 +266,7 @@ public class EvaluationController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error creating evaluation");
-            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Error creating evaluation" });
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = InternLink.Shared.Responses.ErrorMessage.InternalServerError });
         }
     }
 
@@ -288,7 +288,7 @@ public class EvaluationController : ControllerBase
 
             var evaluation = await _evaluationService.UpdateEvaluationAsync(id, request, userId.Value);
             if (evaluation == null)
-                return NotFound(new { message = "Evaluation not found" });
+                return NotFound(new { message = InternLink.Shared.Responses.ErrorMessage.EvaluationNotFound });
 
             return Ok(evaluation);
         }
@@ -304,7 +304,7 @@ public class EvaluationController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error updating evaluation {EvaluationId}", id);
-            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Error updating evaluation" });
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = InternLink.Shared.Responses.ErrorMessage.InternalServerError });
         }
     }
 
@@ -325,7 +325,7 @@ public class EvaluationController : ControllerBase
 
             var evaluation = await _evaluationService.FinalizeEvaluationAsync(id, userId.Value);
             if (evaluation == null)
-                return NotFound(new { message = "Evaluation not found" });
+                return NotFound(new { message = InternLink.Shared.Responses.ErrorMessage.EvaluationNotFound });
 
             return Ok(evaluation);
         }
@@ -336,7 +336,7 @@ public class EvaluationController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error finalizing evaluation {EvaluationId}", id);
-            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Error finalizing evaluation" });
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = InternLink.Shared.Responses.ErrorMessage.InternalServerError });
         }
     }
 
@@ -358,7 +358,7 @@ public class EvaluationController : ControllerBase
 
             var result = await _evaluationService.DeleteEvaluationAsync(id, userId.Value);
             if (!result)
-                return NotFound(new { message = "Evaluation not found" });
+                return NotFound(new { message = InternLink.Shared.Responses.ErrorMessage.EvaluationNotFound });
 
             return NoContent();
         }
@@ -374,7 +374,7 @@ public class EvaluationController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error deleting evaluation {EvaluationId}", id);
-            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Error deleting evaluation" });
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = InternLink.Shared.Responses.ErrorMessage.InternalServerError });
         }
     }
 
@@ -398,7 +398,7 @@ public class EvaluationController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting average grade for company {CompanyId}", companyId);
-            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Error getting average grade" });
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = InternLink.Shared.Responses.ErrorMessage.InternalServerError });
         }
     }
 
@@ -426,7 +426,7 @@ public class EvaluationController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error checking evaluation for internship {InternshipId}", internshipId);
-            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Error checking evaluation" });
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = InternLink.Shared.Responses.ErrorMessage.InternalServerError });
         }
     }
 
@@ -474,7 +474,7 @@ public class EvaluationController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting evaluation statistics");
-            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Error getting statistics" });
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = InternLink.Shared.Responses.ErrorMessage.InternalServerError });
         }
     }
 }

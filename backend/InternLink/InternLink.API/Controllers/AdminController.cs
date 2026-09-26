@@ -21,15 +21,18 @@ public class AdminController : ControllerBase
     private readonly IInternshipService _internshipService;
     private readonly IDepartmentScopeService _deptScope;
     private readonly AppDbContext _db;
+    private readonly ILogger<AdminController> _logger;
 
     public AdminController(
         IInternshipService internshipService,
         IDepartmentScopeService deptScope,
-        AppDbContext db)
+        AppDbContext db,
+        ILogger<AdminController> logger)
     {
         _internshipService = internshipService;
         _deptScope = deptScope;
         _db = db;
+        _logger = logger;
     }
 
     /// <summary>
@@ -46,7 +49,8 @@ public class AdminController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
+            _logger.LogError(ex, "Failed to get internship statistics");
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError }));
         }
     }
 

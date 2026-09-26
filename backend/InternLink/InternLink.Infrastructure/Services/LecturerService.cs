@@ -635,7 +635,7 @@ public class LecturerService : ILecturerService
 
         var lecturerId = await ResolveLecturerIdAsync(userId)
 
-            ?? throw new UnauthorizedAccessException("Lecturer profile not found for current user");
+            ?? throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.LecturerProfileMissing);
 
 
 
@@ -1185,7 +1185,7 @@ public class LecturerService : ILecturerService
     public async Task<bool> UpdateStudentNotesAsync(Guid userId, Guid internshipId, string notes)
     {
         var lecturerId = await ResolveLecturerIdAsync(userId)
-            ?? throw new UnauthorizedAccessException("Lecturer profile not found for current user");
+            ?? throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.LecturerProfileMissing);
 
         var internship = await _db.Internships
             .FirstOrDefaultAsync(i => i.Id == internshipId && i.LecturerId == lecturerId && !i.IsDeleted);
@@ -1259,7 +1259,7 @@ public class LecturerService : ILecturerService
     public async Task<int> NotifyAssignedStudentsAsync(Guid userId, string title, string message)
     {
         var lecturerId = await ResolveLecturerIdAsync(userId)
-            ?? throw new UnauthorizedAccessException("Lecturer profile not found for current user");
+            ?? throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.LecturerProfileMissing);
 
         var internships = await _db.Internships
             .Where(i => i.LecturerId == lecturerId && !i.IsDeleted)
@@ -1289,7 +1289,7 @@ public class LecturerService : ILecturerService
     public async Task<bool> RemindStudentAsync(Guid userId, Guid studentOrInternshipId, string? title = null, string? message = null)
     {
         var lecturerId = await ResolveLecturerIdAsync(userId)
-            ?? throw new UnauthorizedAccessException("Lecturer profile not found for current user");
+            ?? throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.LecturerProfileMissing);
 
         var internship = await _db.Internships
             .Include(i => i.Student)
