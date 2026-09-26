@@ -14,10 +14,55 @@ public static class InternshipProgressCalculator
     public const int MaxEvaluationPercent = 20;
 
     /// <summary>
-    /// Tính toán chi tiết tiến độ thực tập dựa trên 5 nguồn dữ liệu thực tế:
-    /// 1-3. Account, profile, and company assignment are procedural prerequisites and contribute 0%.
-    /// 4. Report (80%): Tỷ lệ báo cáo tuần đã nộp / số tuần yêu cầu.
-    /// 5. Evaluation (20%): Đã hoàn tất đánh giá cuối kỳ.
+    /// Sinh viên đã hoàn thành đợt thực tập (để thống kê Word / danh sách chưa hoàn thành).
+    /// Gồm status Graded/Completed, hoặc đã chốt đánh giá / đã có điểm thi (flow chấm điểm mới).
+    /// </summary>
+    public static bool IsInternshipFinished(InternshipStatus? status, Evaluation? evaluation)
+    {
+        if (status is InternshipStatus.Completed or InternshipStatus.Graded)
+            return true;
+        if (evaluation == null)
+            return false;
+        if (evaluation.IsFinalized)
+            return true;
+        return evaluation.OralExamScore.HasValue;
+    }
+
+    /// <summary>
+    /// Tuần báo cáo tuần được yêu cầu cho tiến độ = các lịch trong
+    /// «Cấu hình báo cáo» đang bật (<see cref="SemesterReportSchedule.IsSubmissionOpen"/>),
+    /// loại trừ tuần báo cáo cuối kỳ (WeekNumber &gt; TotalWeeks).
+    /// Nếu chưa có lịch tuần nào → fallback toàn bộ 1..TotalWeeks.
+    /// </summary>
+    public static IReadOnlyList<int> ResolveRequiredWeekNumbers(
+        int totalWeeks,
+        IEnumerable<SemesterReportSchedule>? schedules)
+    {
+        var maxWeekly = totalWeeks > 0 ? totalWeeks : 6;
+
+        if (schedules == null)
+            return Enumerable.Range(1, maxWeekly).ToList();
+
+        var weeklySchedules = schedules
+            .Where(s => !s.IsDeleted && s.WeekNumber >= 1 && s.WeekNumber <= maxWeekly)
+            .ToList();
+
+        if (weeklySchedules.Count == 0)
+            return Enumerable.Range(1, maxWeekly).ToList();
+
+        return weeklySchedules
+            .Where(s => s.IsSubmissionOpen)
+            .Select(s => s.WeekNumber)
+            .Distinct()
+            .OrderBy(w => w)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Tính tiến độ thực tập:
+    /// 1-3. Account / profile / company — thủ tục, 0%.
+    /// 4. Report (80%): tỷ lệ báo cáo tuần đã nộp trên các tuần đang bật trong cấu hình deadline.
+    /// 5. Evaluation (20%): đã có đánh giá / điểm cuối kỳ.
     /// </summary>
     public static ProgressBreakdownDto Calculate(
         User? user,
@@ -25,39 +70,57 @@ public static class InternshipProgressCalculator
         Internship? internship,
         IEnumerable<WeeklyReport>? weeklyReports,
         Evaluation? evaluation,
-        int? semesterTotalWeeks)
+        int? semesterTotalWeeks,
+        IReadOnlyCollection<int>? requiredWeekNumbers = null)
     {
-        // Account activation is a prerequisite only; it does not advance internship progress.
         int accountPercent = 0;
-
-        // Profile completion is a prerequisite only; it does not advance internship progress.
         int profilePercent = 0;
-
-        // Company assignment is a prerequisite only; it does not advance internship progress.
         int companyPercent = 0;
 
-        // Report Progress (80%)
-        // Chỉ tính các báo cáo tuần không bị xóa và đã nộp (Status: Submitted, Approved, RevisionSubmitted).
-        // Báo cáo Draft tuyệt đối không tính.
-        int reportPercent = 0;
-        int requiredWeeks = semesterTotalWeeks.HasValue && semesterTotalWeeks.Value > 0
-            ? semesterTotalWeeks.Value
-            : 6;
+        int requiredWeeks;
+        HashSet<int>? requiredSet = null;
+
+        if (requiredWeekNumbers != null)
+        {
+            requiredSet = requiredWeekNumbers.ToHashSet();
+            requiredWeeks = requiredSet.Count;
+        }
+        else
+        {
+            requiredWeeks = semesterTotalWeeks is > 0 ? semesterTotalWeeks.Value : 6;
+        }
 
         int submittedReportsCount = 0;
         if (weeklyReports != null)
         {
-            submittedReportsCount = weeklyReports.Count(r => !r.IsDeleted && r.Status != WeeklyReportStatus.Draft);
+            var submitted = weeklyReports.Where(r => !r.IsDeleted && r.Status != WeeklyReportStatus.Draft);
+
+            if (requiredSet != null)
+            {
+                // Chỉ đếm tuần đang yêu cầu theo cấu hình; tuần đóng / tuần cuối kỳ không tính.
+                submittedReportsCount = requiredSet.Count == 0
+                    ? 0
+                    : submitted.Count(r => requiredSet.Contains(r.WeekNumber));
+            }
+            else
+            {
+                var maxWeekly = semesterTotalWeeks is > 0 ? semesterTotalWeeks.Value : int.MaxValue;
+                submittedReportsCount = submitted.Count(r => r.WeekNumber >= 1 && r.WeekNumber <= maxWeekly);
+            }
         }
 
-        if (requiredWeeks > 0 && submittedReportsCount > 0)
+        int reportPercent = 0;
+        if (requiredWeeks == 0)
+        {
+            // Không có tuần báo cáo tuần nào được bật → phần báo cáo coi như không yêu cầu.
+            reportPercent = MaxReportPercent;
+        }
+        else if (submittedReportsCount > 0)
         {
             double ratio = Math.Min(1.0, (double)submittedReportsCount / requiredWeeks);
             reportPercent = (int)Math.Round(ratio * MaxReportPercent);
         }
 
-        // 5. Evaluation Progress (20%)
-        // Đã hoàn tất đánh giá cuối kỳ
         int evaluationPercent = 0;
         bool isInternshipCompleted = internship != null && (
             internship.Status == InternshipStatus.Completed ||
@@ -88,7 +151,9 @@ public static class InternshipProgressCalculator
         }
         else
         {
-            summaryText = "Chưa có báo cáo tuần";
+            summaryText = requiredWeeks == 0
+                ? "Không có tuần báo cáo tuần được cấu hình"
+                : "Chưa có báo cáo tuần";
         }
 
         return new ProgressBreakdownDto

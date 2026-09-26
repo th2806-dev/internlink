@@ -219,13 +219,27 @@ public class StudentService : IStudentService
         }
 
         var totalWeeks = internship?.Semester?.TotalWeeks ?? activeSemester?.TotalWeeks;
+        var scheduleSemesterId = internship?.SemesterId ?? activeSemester?.Id;
+        IReadOnlyList<int>? requiredWeeks = null;
+        if (scheduleSemesterId.HasValue)
+        {
+            var schedules = await _db.SemesterReportSchedules
+                .AsNoTracking()
+                .Where(s => s.SemesterId == scheduleSemesterId.Value && !s.IsDeleted)
+                .ToListAsync();
+            requiredWeeks = InternshipProgressCalculator.ResolveRequiredWeekNumbers(
+                totalWeeks ?? 0,
+                schedules);
+        }
+
         var breakdown = InternshipProgressCalculator.Calculate(
             user,
             student,
             internship,
             weeklyReports,
             evaluation,
-            totalWeeks);
+            totalWeeks,
+            requiredWeeks);
 
         return new StudentPortalProfileDto
         {

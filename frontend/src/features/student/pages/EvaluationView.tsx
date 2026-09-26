@@ -1,11 +1,15 @@
 import { Award, CalendarDays, CheckCircle2, ClipboardCheck, FileCheck2, FileText, MessageSquare, Package, UserRound } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useStudentPortal } from "../../../contexts/StudentPortalContext";
 import { useSemester } from "../../../contexts/SemesterContext";
 import { Panel } from "../../../components/common/Panel";
 import { evaluationService } from "../../../services/evaluation.service";
 import { submissionApiService } from "../../../services/submissionApi.service";
 import { weeklyReportService } from "../../../services/weeklyReport.service";
+import {
+  semesterReportScheduleService,
+  type SemesterReportScheduleDto,
+} from "../../../services/semesterReportSchedule.service";
 import type { EvaluationDetailDto, SubmissionDto, WeeklyReportDto } from "../../../types/api";
 
 export const EvaluationView = ({
@@ -14,10 +18,11 @@ export const EvaluationView = ({
   onShowToast: (msg: string) => void;
 }) => {
   const { profile, internshipId } = useStudentPortal();
-  const { selectedSemester } = useSemester();
+  const { selectedSemester, activeSemesterId } = useSemester();
   const [evaluation, setEvaluation] = useState<EvaluationDetailDto | null>(null);
   const [weeklyReports, setWeeklyReports] = useState<WeeklyReportDto[]>([]);
   const [submissions, setSubmissions] = useState<SubmissionDto[]>([]);
+  const [schedules, setSchedules] = useState<SemesterReportScheduleDto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const loadEvaluation = useCallback(async () => {
@@ -25,15 +30,19 @@ export const EvaluationView = ({
       setEvaluation(null);
       setWeeklyReports([]);
       setSubmissions([]);
+      setSchedules([]);
       setIsLoading(false);
       return;
     }
     setIsLoading(true);
     try {
-      const [detailResult, reportsResult, submissionsResult] = await Promise.allSettled([
+      const [detailResult, reportsResult, submissionsResult, schedulesResult] = await Promise.allSettled([
         evaluationService.getByInternship(internshipId),
         weeklyReportService.getMine(),
         submissionApiService.getMine(),
+        activeSemesterId
+          ? semesterReportScheduleService.getSchedules(activeSemesterId)
+          : Promise.resolve([] as SemesterReportScheduleDto[]),
       ]);
       setEvaluation(detailResult.status === "fulfilled" ? detailResult.value : null);
       setWeeklyReports(
@@ -46,35 +55,58 @@ export const EvaluationView = ({
           ? submissionsResult.value.filter((submission) => submission.internshipId === internshipId)
           : [],
       );
+      setSchedules(schedulesResult.status === "fulfilled" ? schedulesResult.value : []);
     } catch {
       setEvaluation(null);
       setWeeklyReports([]);
       setSubmissions([]);
+      setSchedules([]);
     } finally {
       setIsLoading(false);
     }
-  }, [internshipId]);
+  }, [internshipId, activeSemesterId]);
 
   useEffect(() => {
     void loadEvaluation();
   }, [loadEvaluation]);
 
   const currentGrade = evaluation?.finalGrade ?? profile.currentGrade;
-  const totalWeeks = selectedSemester?.totalWeeks || 6;
+  const semesterTotalWeeks = selectedSemester?.totalWeeks || 6;
+  const openWeeklySchedules = useMemo(
+    () =>
+      schedules.filter(
+        (schedule) =>
+          schedule.isSubmissionOpen &&
+          schedule.weekNumber >= 1 &&
+          schedule.weekNumber <= semesterTotalWeeks,
+      ),
+    [schedules, semesterTotalWeeks],
+  );
+  const trackedWeeks =
+    openWeeklySchedules.length > 0
+      ? openWeeklySchedules.map((schedule) => schedule.weekNumber)
+      : Array.from({ length: profile.progressBreakdown?.requiredWeeksCount || semesterTotalWeeks }, (_, index) => index + 1);
   const finalReport = submissions.find((item) => item.type.toLowerCase() === "finalreport" && item.status.toLowerCase() !== "rejected");
   const product = submissions.find((item) => item.type.toLowerCase() === "product" && item.status.toLowerCase() !== "rejected");
   const reportByWeek = new Map(weeklyReports.map((report) => [report.weekNumber, report]));
   const now = new Date();
-  const missingCount = Array.from({ length: totalWeeks }, (_, index) => index + 1).filter((week) => {
+  const missingCount = trackedWeeks.filter((week) => {
     const report = reportByWeek.get(week);
-    return !report && weeklyReports.some((item) => item.weekNumber === week && item.dueDate && new Date(item.dueDate) < now);
+    const schedule = openWeeklySchedules.find((item) => item.weekNumber === week);
+    const due = schedule?.dueDate ?? report?.dueDate;
+    return !report?.submittedAt && due && new Date(due) < now;
   }).length;
-  const lateCount = weeklyReports.filter((report) => report.submittedAt && report.dueDate && new Date(report.submittedAt) > new Date(report.dueDate)).length;
+  const lateCount = trackedWeeks.filter((week) => {
+    const report = reportByWeek.get(week);
+    const schedule = openWeeklySchedules.find((item) => item.weekNumber === week);
+    const due = schedule?.dueDate ?? report?.dueDate;
+    return report?.submittedAt && due && new Date(report.submittedAt) > new Date(due);
+  }).length;
   const ratedQuality = evaluation?.weeklyQualityScores ? Object.values(evaluation.weeklyQualityScores) : [];
   const qualityScore = ratedQuality.length > 0
     ? ratedQuality.reduce((sum, score) => sum + score, 0) / ratedQuality.length
     : evaluation?.qualityLevel ?? null;
-  const submittedWeekCount = weeklyReports.filter((report) => report.submittedAt).length;
+  const submittedWeekCount = trackedWeeks.filter((week) => reportByWeek.get(week)?.submittedAt).length;
   const processScore = Math.min(10, Math.max(0, 2 - missingCount * 0.5) + (submittedWeekCount > 0 ? Math.max(0, 2 - lateCount * 0.5) : 0) + (qualityScore ?? 0) + (evaluation?.hasCreativeProduct ? 1 : 0));
   const classification = currentGrade >= 8.5 ? "Xuất sắc" : currentGrade >= 8 ? "Giỏi" : currentGrade >= 6.5 ? "Khá" : currentGrade >= 5 ? "Trung bình" : currentGrade > 0 ? "Không đạt" : "—";
   const formatDate = (value?: string | null) =>
@@ -178,10 +210,11 @@ export const EvaluationView = ({
           <table className="w-full min-w-[680px] text-sm">
             <thead><tr className="border-b border-slate-200 text-left text-xs uppercase text-slate-500"><th className="px-3 py-2">Tuần</th><th className="px-3 py-2">Báo cáo</th><th className="px-3 py-2">Hạn nộp</th><th className="px-3 py-2">Đã nộp</th><th className="px-3 py-2">Trạng thái</th><th className="px-3 py-2 text-center">Điểm chất lượng</th></tr></thead>
             <tbody className="divide-y divide-slate-100">
-              {Array.from({ length: totalWeeks }, (_, index) => index + 1).map((week) => {
+              {trackedWeeks.map((week) => {
                 const report = reportByWeek.get(week);
+                const schedule = openWeeklySchedules.find((item) => item.weekNumber === week);
                 const score = evaluation?.weeklyQualityScores?.[week];
-                return <tr key={week}><td className="px-3 py-2.5 font-semibold">Tuần {week}</td><td className="px-3 py-2.5">{report?.title || "Chưa nộp"}</td><td className="px-3 py-2.5 text-slate-500">{formatDate(report?.dueDate)}</td><td className="px-3 py-2.5 text-slate-500">{formatDate(report?.submittedAt)}</td><td className="px-3 py-2.5"><span className={`rounded-full px-2 py-1 text-xs ${report ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{report ? statusLabel(report.status) : "Chưa nộp"}</span></td><td className="px-3 py-2.5 text-center font-semibold">{score != null ? `${score}/5` : "—"}</td></tr>;
+                return <tr key={week}><td className="px-3 py-2.5 font-semibold">Tuần {week}</td><td className="px-3 py-2.5">{report?.title || schedule?.title || "Chưa nộp"}</td><td className="px-3 py-2.5 text-slate-500">{formatDate(schedule?.dueDate ?? report?.dueDate)}</td><td className="px-3 py-2.5 text-slate-500">{formatDate(report?.submittedAt)}</td><td className="px-3 py-2.5"><span className={`rounded-full px-2 py-1 text-xs ${report ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{report ? statusLabel(report.status) : "Chưa nộp"}</span></td><td className="px-3 py-2.5 text-center font-semibold">{score != null ? `${score}/5` : "—"}</td></tr>;
               })}
             </tbody>
           </table>

@@ -75,7 +75,12 @@ export const DashboardView = ({
   >([]);
 
   const semesterWeeks = selectedSemester?.totalWeeks || INTERNSHIP_WEEKS;
-  const totalWeeks = Math.max(profile.totalReports, reports.length, semesterWeeks);
+  const totalWeeks = Math.max(
+    profile.progressBreakdown?.requiredWeeksCount ?? 0,
+    profile.totalReports,
+    reports.length,
+    semesterWeeks,
+  );
 
   const loadExtra = useCallback(async () => {
     if (internshipId) {
@@ -308,7 +313,7 @@ export const DashboardView = ({
               title="Tiến độ thực tập"
               value={`${profile.overallProgress}%`}
               icon={Target}
-              footer={`${profile.progressBreakdown?.submittedReportsCount ?? 0} / ${totalWeeks} báo cáo đã nộp`}
+              footer={`${profile.progressBreakdown?.submittedReportsCount ?? 0} / ${profile.progressBreakdown?.requiredWeeksCount ?? totalWeeks} báo cáo đã nộp`}
             />
             <KpiCard
               tone="emerald"

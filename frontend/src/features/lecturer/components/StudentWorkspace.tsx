@@ -65,6 +65,7 @@ export function StudentWorkspace({
   const totalWeeks = selectedSemester?.totalWeeks || INTERNSHIP_WEEKS;
   // Tuần HK nơi Tuần thực tập 1 bắt đầu (vd 14 → TT 1..6 = HK 14..19) — dùng cho timeline.
   const internshipStartWeek = selectedSemester?.internshipStartWeek || 1;
+  const requiredWeeks = assignment?.progressBreakdown?.requiredWeeksCount ?? totalWeeks;
 
   // ---- Derived data ----
   const student = detail?.student;
@@ -225,7 +226,7 @@ export function StudentWorkspace({
           title="Tiến độ thực tập"
           value={`${effectiveProgress}%`}
           icon={Target}
-          footer={finalGrade != null ? "Đã có điểm trung bình — hoàn thành" : `${weeklyReportCount} / ${totalWeeks} tuần đã nộp`}
+          footer={finalGrade != null ? "Đã có điểm trung bình — hoàn thành" : `${weeklyReportCount} / ${requiredWeeks} tuần đã nộp`}
         />
         <KpiCard
           tone="emerald"
@@ -347,8 +348,8 @@ export function StudentWorkspace({
               </div>
             )}
             <div className="grid grid-cols-2 gap-3 text-xs">
-              <MiniStat label="Báo cáo tuần" value={`${weeklyReportCount}/${totalWeeks}`} />
-              <MiniStat label="Đã duyệt" value={`${approvedReportCount}/${totalWeeks}`} />
+              <MiniStat label="Báo cáo tuần" value={`${weeklyReportCount}/${requiredWeeks}`} />
+              <MiniStat label="Đã duyệt" value={`${approvedReportCount}/${requiredWeeks}`} />
               <MiniStat label="Chờ duyệt" value={String(pendingReportCount)} alert={pendingReportCount > 0} />
               <MiniStat label="Bài nộp" value={String(submissionCount)} />
             </div>

@@ -114,6 +114,8 @@ public class LecturerService : ILecturerService
             .ToListAsync();
         var evalDict = evaluations.ToDictionary(e => e.InternshipId);
 
+        var requiredWeeksBySemester = await LoadRequiredWeeksBySemesterAsync(internships);
+
         var total = internships.Count;
         var assignedCompanyCount = internships.Count(i => i.CompanyId.HasValue && i.Company != null);
         var interning = internships.Count(i =>
@@ -124,9 +126,13 @@ public class LecturerService : ILecturerService
                 or InternshipStatus.AwaitingFeedback
                 or InternshipStatus.RequiresRevision);
         var completed = internships.Count(i =>
-            (i.Status == InternshipStatus.NotStarted && i.CompanyId.HasValue
+        {
+            evalDict.TryGetValue(i.Id, out var eval);
+            var effectiveStatus = i.Status == InternshipStatus.NotStarted && i.CompanyId.HasValue
                 ? InternshipStatus.InProgress
-                : i.Status) is InternshipStatus.Completed or InternshipStatus.Graded);
+                : i.Status;
+            return InternshipProgressCalculator.IsInternshipFinished(effectiveStatus, eval);
+        });
         
         var pendingSubmissions = internships.Sum(i => i.Submissions.Count(s => !s.IsDeleted && s.Status == SubmissionStatus.Submitted));
         var pendingReports = internships.Sum(i => i.WeeklyReports.Count(w => !w.IsDeleted && w.Status == WeeklyReportStatus.Submitted));
@@ -149,13 +155,15 @@ public class LecturerService : ILecturerService
             {
                 evalDict.TryGetValue(i.Id, out var eval);
                 if (i.Student == null) return 0;
+                requiredWeeksBySemester.TryGetValue(i.SemesterId, out var requiredWeeks);
                 var bd = InternshipProgressCalculator.Calculate(
                     i.Student.User,
                     i.Student,
                     i,
                     i.WeeklyReports,
                     eval,
-                    i.Semester?.TotalWeeks);
+                    i.Semester?.TotalWeeks,
+                    requiredWeeks);
                 return bd.TotalPercent;
             }));
 
@@ -219,6 +227,8 @@ public class LecturerService : ILecturerService
             .Where(e => !e.IsDeleted && internshipIds.Contains(e.InternshipId))
             .ToDictionaryAsync(e => e.InternshipId);
 
+        var requiredWeeksBySemester = await LoadRequiredWeeksBySemesterAsync(internships);
+
         var result = new List<LecturerStudentListItemDto>();
 
         foreach (var i in internships)
@@ -235,13 +245,15 @@ public class LecturerService : ILecturerService
             int progressPercent = 0;
             if (i.Student != null)
             {
+                requiredWeeksBySemester.TryGetValue(i.SemesterId, out var requiredWeeks);
                 breakdown = InternshipProgressCalculator.Calculate(
                     i.Student.User,
                     i.Student,
                     i,
                     i.WeeklyReports,
                     eval,
-                    i.Semester?.TotalWeeks);
+                    i.Semester?.TotalWeeks,
+                    requiredWeeks);
                 progressPercent = breakdown.TotalPercent;
             }
 
@@ -824,6 +836,48 @@ public class LecturerService : ILecturerService
     }
 
 
+
+    /// <summary>
+    /// Tuần báo cáo tuần đang bật theo «Cấu hình báo cáo» của từng học kỳ.
+    /// </summary>
+    private async Task<Dictionary<Guid?, IReadOnlyList<int>>> LoadRequiredWeeksBySemesterAsync(
+        IEnumerable<Internship> internships)
+    {
+        var semesterIds = internships
+            .Select(i => i.SemesterId)
+            .Distinct()
+            .ToList();
+
+        if (semesterIds.Count == 0)
+            return new Dictionary<Guid?, IReadOnlyList<int>>();
+
+        var totalWeeksBySemester = internships
+            .GroupBy(i => i.SemesterId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(i => i.Semester?.TotalWeeks ?? 0).FirstOrDefault());
+
+        var schedules = await _db.SemesterReportSchedules
+            .AsNoTracking()
+            .Where(s => semesterIds.Contains(s.SemesterId) && !s.IsDeleted)
+            .ToListAsync();
+
+        var schedulesBySemester = schedules
+            .GroupBy(s => (Guid?)s.SemesterId)
+            .ToDictionary(g => g.Key, g => (IEnumerable<SemesterReportSchedule>)g);
+
+        var result = new Dictionary<Guid?, IReadOnlyList<int>>();
+        foreach (var semesterId in semesterIds)
+        {
+            totalWeeksBySemester.TryGetValue(semesterId, out var totalWeeks);
+            schedulesBySemester.TryGetValue(semesterId, out var semesterSchedules);
+            result[semesterId] = InternshipProgressCalculator.ResolveRequiredWeekNumbers(
+                totalWeeks,
+                semesterSchedules);
+        }
+
+        return result;
+    }
 
     private async Task<Guid?> ResolveLecturerIdAsync(Guid userId)
 

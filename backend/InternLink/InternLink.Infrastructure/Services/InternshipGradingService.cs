@@ -127,7 +127,10 @@ public class InternshipGradingService : IInternshipGradingService
 
         var totalWeeks = Math.Max(semester.TotalWeeks, 1);
         var finalReportWeek = totalWeeks + 1;
-        var weekSchedules = schedules.Where(s => s.WeekNumber >= 1 && s.WeekNumber <= totalWeeks).ToList();
+        // Tiến độ / điểm QT chỉ tính tuần báo cáo tuần đang bật trong «Cấu hình báo cáo».
+        var weekSchedules = schedules
+            .Where(s => s.WeekNumber >= 1 && s.WeekNumber <= totalWeeks && s.IsSubmissionOpen)
+            .ToList();
         var finalSchedule = schedules.FirstOrDefault(s => s.WeekNumber == finalReportWeek && s.IsSubmissionOpen);
 
         // 5c) Mức rubric TỪNG TUẦN đã lưu trong Evaluation.WeeklyQualityJson ("{"1":4.0,...}")
@@ -392,6 +395,14 @@ public class InternshipGradingService : IInternshipGradingService
         if (updatedStudent != null)
         {
             evaluation.FinalGrade = updatedStudent.AverageScore ?? 0m;
+            // Chấm xong điểm thi + đủ điều kiện → chốt đánh giá & status Graded
+            // (Word / tiến độ hoàn thành dựa trên status này, không chỉ có điểm trong Evaluation).
+            if (evaluation.OralExamScore.HasValue && updatedStudent.IsEligible)
+            {
+                evaluation.IsFinalized = true;
+                internship.Status = InternshipStatus.Graded;
+                internship.UpdatedAt = DateTime.UtcNow;
+            }
             await _context.SaveChangesAsync();
         }
         return updatedStudent;

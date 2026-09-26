@@ -18,7 +18,7 @@ public sealed class ProgressBreakdownDto
     public int CompanyPercent { get; set; }
 
     /// <summary>
-    /// Tiến độ nộp báo cáo tuần theo thời khóa biểu học kỳ (tối đa 80%).
+    /// Tiến độ nộp báo cáo tuần theo các tuần đang bật trong «Cấu hình báo cáo» (tối đa 80%).
     /// </summary>
     public int ReportPercent { get; set; }
 
@@ -33,12 +33,12 @@ public sealed class ProgressBreakdownDto
     public int TotalPercent { get; set; }
 
     /// <summary>
-    /// Số tuần báo cáo đã nộp hoặc được duyệt (Submitted, Approved, RevisionSubmitted)
+    /// Số tuần báo cáo đã nộp trong các tuần đang yêu cầu (Submitted, Approved, RevisionSubmitted, …)
     /// </summary>
     public int SubmittedReportsCount { get; set; }
 
     /// <summary>
-    /// Tổng số tuần yêu cầu của học kỳ
+    /// Số tuần báo cáo tuần đang bật (IsSubmissionOpen) — không gồm tuần cuối kỳ / tuần đã tắt.
     /// </summary>
     public int RequiredWeeksCount { get; set; }
 

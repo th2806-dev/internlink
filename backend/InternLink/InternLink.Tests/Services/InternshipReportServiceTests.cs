@@ -142,8 +142,23 @@ public class InternshipReportServiceTests
         using var doc = WordprocessingDocument.Open(ms, false);
         doc.MainDocumentPart.Should().NotBeNull();
         var text = doc.MainDocumentPart!.Document.Body!.InnerText;
+
+        // Placeholder mẫu {KEY} được điền
+        text.Should().Contain("01/09/2025");
+        text.Should().Contain("15/12/2025");
+        text.Should().NotContain("{SO_DOANH_NGHIEP}");
+        text.Should().NotContain("{SO_SV_DANG_KY}");
+        text.Should().NotContain("{SL_XUAT_SAC}");
+        text.Should().Contain("3 sinh viên"); // SO_SV_DANG_KY
+        text.Should().Contain("1 đơn vị"); // SO_DOANH_NGHIEP
+
+        // Bảng SV không hoàn thành: tách Họ | Tên theo mẫu
         text.Should().Contain("SV002");
-        text.Should().Contain("Lê Thị C");
+        text.Should().Contain("Lê Thị");
+        text.Should().Contain("C23A.TH1");
+        text.Should().NotContain("{#ds_khong_hoan_thanh}");
+        text.Should().NotContain("{stt}");
+        text.Should().NotContain("{mssv}");
     }
 
     [Fact]
@@ -159,7 +174,9 @@ public class InternshipReportServiceTests
         using var doc = WordprocessingDocument.Open(ms, false);
         var text = doc.MainDocumentPart!.Document.Body!.InnerText;
         text.Should().Contain("SV002");
+        text.Should().Contain("Lê Thị");
         text.Should().NotContain("SV003");
-        text.Should().NotContain("Phạm Văn D");
+        text.Should().NotContain("Phạm Văn");
+        text.Should().NotContain("QTKD01");
     }
 }

@@ -212,4 +212,100 @@ public class InternshipProgressCalculatorTests
         result.EvaluationPercent.Should().Be(20);
         result.TotalPercent.Should().Be(100);
     }
+
+    [Fact]
+    public void ResolveRequiredWeekNumbers_OnlyOpenWeeklySchedules_ExcludesClosedAndFinal()
+    {
+        var schedules = new List<SemesterReportSchedule>
+        {
+            new() { WeekNumber = 1, IsSubmissionOpen = true, Title = "T1" },
+            new() { WeekNumber = 2, IsSubmissionOpen = true, Title = "T2" },
+            new() { WeekNumber = 3, IsSubmissionOpen = true, Title = "T3" },
+            new() { WeekNumber = 4, IsSubmissionOpen = true, Title = "T4" },
+            new() { WeekNumber = 5, IsSubmissionOpen = true, Title = "T5" },
+            new() { WeekNumber = 6, IsSubmissionOpen = false, Title = "T6 đóng — dành BC cuối kỳ" },
+            new() { WeekNumber = 7, IsSubmissionOpen = true, Title = "Báo cáo cuối kỳ" },
+        };
+
+        var required = InternshipProgressCalculator.ResolveRequiredWeekNumbers(6, schedules);
+
+        required.Should().Equal(1, 2, 3, 4, 5);
+    }
+
+    [Fact]
+    public void Calculate_FiveOpenWeeksFullySubmittedAndEvaluated_ShouldReach100Percent()
+    {
+        // Kỳ 6 tuần nhưng GV chỉ bật deadline 5 tuần báo cáo tuần; tuần 6 = cuối kỳ/thi.
+        var user = new User { MustChangePassword = false, LastLoginAt = DateTime.UtcNow };
+        var student = new Student { Id = Guid.NewGuid(), FullName = "A", Phone = "0901", DesiredPosition = "Dev" };
+        var internship = new Internship
+        {
+            Id = Guid.NewGuid(),
+            StudentId = student.Id,
+            CompanyId = Guid.NewGuid(),
+            Status = InternshipStatus.Graded
+        };
+        var reports = Enumerable.Range(1, 5).Select(w => new WeeklyReport
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = internship.Id,
+            WeekNumber = w,
+            Status = WeeklyReportStatus.Approved
+        }).ToList();
+        var eval = new Evaluation
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = internship.Id,
+            FinalGrade = 8.5m,
+            IsFinalized = true
+        };
+        var requiredWeeks = new[] { 1, 2, 3, 4, 5 };
+
+        var result = InternshipProgressCalculator.Calculate(
+            user, student, internship, reports, eval, 6, requiredWeeks);
+
+        result.RequiredWeeksCount.Should().Be(5);
+        result.SubmittedReportsCount.Should().Be(5);
+        result.ReportPercent.Should().Be(80);
+        result.EvaluationPercent.Should().Be(20);
+        result.TotalPercent.Should().Be(100);
+        result.SummaryText.Should().Be("Hoàn thành toàn bộ thực tập");
+    }
+
+    [Fact]
+    public void Calculate_UsesOpenScheduleNotTotalWeeks_WhenPartial()
+    {
+        // 5/5 tuần mở đã nộp nhưng TotalWeeks=6 → không còn kẹt 87%.
+        var user = new User { MustChangePassword = false, LastLoginAt = DateTime.UtcNow };
+        var student = new Student { Id = Guid.NewGuid(), FullName = "A", Phone = "0901", DesiredPosition = "Dev" };
+        var internship = new Internship { Id = Guid.NewGuid(), StudentId = student.Id, CompanyId = Guid.NewGuid() };
+        var reports = Enumerable.Range(1, 5).Select(w => new WeeklyReport
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = internship.Id,
+            WeekNumber = w,
+            Status = WeeklyReportStatus.Approved
+        }).ToList();
+        var eval = new Evaluation { Id = Guid.NewGuid(), InternshipId = internship.Id, FinalGrade = 8m };
+
+        var withSchedule = InternshipProgressCalculator.Calculate(
+            user, student, internship, reports, eval, 6, new[] { 1, 2, 3, 4, 5 });
+        var withTotalWeeksOnly = InternshipProgressCalculator.Calculate(
+            user, student, internship, reports, eval, 6);
+
+        withSchedule.TotalPercent.Should().Be(100);
+        withTotalWeeksOnly.TotalPercent.Should().Be(87);
+    }
+
+    [Fact]
+    public void IsInternshipFinished_WithOralExamScore_ShouldBeTrueEvenIfStatusInProgress()
+    {
+        var eval = new Evaluation { OralExamScore = 8.5m, FinalGrade = 8.0m };
+        InternshipProgressCalculator.IsInternshipFinished(InternshipStatus.InProgress, eval)
+            .Should().BeTrue();
+        InternshipProgressCalculator.IsInternshipFinished(InternshipStatus.InProgress, null)
+            .Should().BeFalse();
+        InternshipProgressCalculator.IsInternshipFinished(InternshipStatus.Graded, null)
+            .Should().BeTrue();
+    }
 }

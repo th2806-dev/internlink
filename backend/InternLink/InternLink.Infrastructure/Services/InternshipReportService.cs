@@ -27,7 +27,7 @@ public class InternshipReportService : IInternshipReportService
     /// <inheritdoc />
 
     /// <inheritdoc />
-    public async Task<byte[]> ExportC22ASummaryReportAsync(Guid? semesterId = null, string? department = null, Guid? departmentId = null)
+    public async Task<byte[]> ExportC22ASummaryReportAsync(Guid? semesterId = null, string? department = null, Guid? departmentId = null, Guid? lecturerId = null)
     {
         // ── Load data ──────────────────────────────────────────────────────
         var internshipsQuery = _db.Internships
@@ -50,6 +50,10 @@ public class InternshipReportService : IInternshipReportService
         // GUID filter overrides the legacy string filter when provided.
         if (departmentId.HasValue)
             internshipsQuery = internshipsQuery.Where(i => i.Student.DepartmentId == departmentId.Value);
+
+        // GV-scoped: chỉ internship do GV này hướng dẫn (controller ép lecturerId từ token).
+        if (lecturerId.HasValue)
+            internshipsQuery = internshipsQuery.Where(i => i.LecturerId == lecturerId.Value);
 
         var internships = await internshipsQuery.ToListAsync();
 
@@ -91,6 +95,7 @@ public class InternshipReportService : IInternshipReportService
             .Include(i => i.Company)
             .Include(i => i.Lecturer)
             .Include(i => i.WeeklyReports)
+            .Include(i => i.Submissions)
             .AsNoTracking();
 
         if (semesterId.HasValue)
@@ -105,6 +110,10 @@ public class InternshipReportService : IInternshipReportService
         // GUID filter overrides the legacy string filter when provided.
         if (departmentId.HasValue)
             internshipsQuery = internshipsQuery.Where(i => i.Student.DepartmentId == departmentId.Value);
+
+        // GV-scoped: chỉ internship do GV này hướng dẫn (controller ép lecturerId từ token).
+        if (lecturerId.HasValue)
+            internshipsQuery = internshipsQuery.Where(i => i.LecturerId == lecturerId.Value);
 
         var internships = await internshipsQuery.ToListAsync();
 
@@ -122,22 +131,23 @@ public class InternshipReportService : IInternshipReportService
 
         // Ưu tiên nội dung tổng kết CẤP KHOA (admin soạn); fallback sang nội dung tổng kết của giảng viên
         // khi xuất theo một GV cụ thể.
+        // Ưu tiên bản ghi tổng kết CẤP KHOA nếu đã từng lưu (kể cả khi một số mục còn trống).
         var facultySummary = semesterId.HasValue
             ? await _db.Set<SemesterFacultySummary>()
                 .AsNoTracking()
                 .FirstOrDefaultAsync(x => x.SemesterId == semesterId.Value && x.DepartmentId == departmentId)
             : null;
-        var lecturerSummary = !string.IsNullOrWhiteSpace(facultySummary?.Results)
-            ? null
-            : semesterId.HasValue && lecturerId.HasValue
-                ? await _db.Set<LecturerSemesterSummary>()
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(x => x.SemesterId == semesterId.Value && x.LecturerId == lecturerId.Value)
-                : null;
-        var summaryResults = !string.IsNullOrWhiteSpace(facultySummary?.Results) ? facultySummary.Results : lecturerSummary?.Results;
-        var summaryDifficulties = !string.IsNullOrWhiteSpace(facultySummary?.Difficulties) ? facultySummary.Difficulties : lecturerSummary?.Difficulties;
-        var summaryRecommendations = !string.IsNullOrWhiteSpace(facultySummary?.Recommendations) ? facultySummary.Recommendations : lecturerSummary?.Recommendations;
-        var summaryConclusion = !string.IsNullOrWhiteSpace(facultySummary?.Conclusion) ? facultySummary.Conclusion : lecturerSummary?.Conclusion;
+        LecturerSemesterSummary? lecturerSummary = null;
+        if (facultySummary == null && semesterId.HasValue && lecturerId.HasValue)
+        {
+            lecturerSummary = await _db.Set<LecturerSemesterSummary>()
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.SemesterId == semesterId.Value && x.LecturerId == lecturerId.Value);
+        }
+        var summaryResults = facultySummary?.Results ?? lecturerSummary?.Results;
+        var summaryDifficulties = facultySummary?.Difficulties ?? lecturerSummary?.Difficulties;
+        var summaryRecommendations = facultySummary?.Recommendations ?? lecturerSummary?.Recommendations;
+        var summaryConclusion = facultySummary?.Conclusion ?? lecturerSummary?.Conclusion;
 
         var semester = semesterId.HasValue
             ? await _db.Semesters.FirstOrDefaultAsync(s => s.Id == semesterId.Value)
@@ -147,31 +157,31 @@ public class InternshipReportService : IInternshipReportService
         var totalWeeks = Math.Max(semester?.TotalWeeks ?? 0, 0);
         var reportScheduleByWeek = await LoadReportScheduleByWeekAsync(semesterId, totalWeeks);
         var nowUtc = DateTime.UtcNow;
+        var reportDate = DateTime.Now;
 
-        var startDateStr = semester?.StartDate?.ToString("dd/MM/yyyy") ?? DateTime.Now.ToString("dd/MM/yyyy");
-        var endDateStr = semester?.EndDate?.ToString("dd/MM/yyyy") ?? DateTime.Now.AddDays(45).ToString("dd/MM/yyyy");
+        var startDateStr = semester?.StartDate?.ToString("dd/MM/yyyy") ?? reportDate.ToString("dd/MM/yyyy");
+        var endDateStr = semester?.EndDate?.ToString("dd/MM/yyyy") ?? reportDate.AddDays(45).ToString("dd/MM/yyyy");
 
         // ── Calculate statistics ────────────────────────────────────────────
         var interning = internships.Count;
         var completedCount = internships.Count(i =>
-            i.Status == InternshipStatus.Completed || i.Status == InternshipStatus.Graded);
+            InternshipProgressCalculator.IsInternshipFinished(
+                i.Status, evaluations.GetValueOrDefault(i.Id)));
         var incompleteCount = interning - completedCount;
 
         // Mốc % theo KHÓA THỰC TẬP CỦA KỲ (đề xuất P1): "Không thực tập" chỉ đếm SV cùng khóa
         // (class) đang thực tập kỳ này nhưng chưa đăng ký — loại SV các khóa chưa đến kỳ thực tập.
         var (totalStudents, notInterning) = await ComputeCohortStatsAsync(internships, department, departmentId);
 
-        // Grade classification — DÙNG CHUẨN DUY NHẤT InternshipGradeCalculator (khớp gradingRules.ts):
-        // TB = QT×0.4 + Thi×0.6; xếp loại ≥8.5 Xuất sắc | ≥8 Giỏi | ≥6.5 Khá | ≥5 Trung bình | <5 Không đạt.
-        // SV chưa chốt điểm (không OralExamScore) hoặc không đủ điều kiện dự thi → "Chưa chốt", KHÔNG rơi vào "Trung bình".
-        const string pendingClassification = "Chưa chốt";
-        var gradeCategories = new[]
+        // Bảng xếp loại theo mẫu Word:
+        // Xuất sắc | Giỏi | Khá | Trung bình khá | Trung bình | Yếu | Không thực tập
+        // Chuẩn chấm điểm hiện tại: ≥8.5 XS | ≥8 Giỏi | ≥6.5 Khá | ≥5 TB | <5 Không đạt.
+        // "Không đạt" map → "Yếu"; "Trung bình khá" giữ 0 (mẫu có dòng, quy chế chưa tách ngưỡng).
+        var templateGradeRows = new[]
         {
-            "Xuất sắc", "Giỏi", "Khá", "Trung bình",
-            "Không đạt", pendingClassification, "Không thực tập"
+            "Xuất sắc", "Giỏi", "Khá", "Trung bình khá", "Trung bình", "Yếu", "Không thực tập"
         };
-        var gradeCounts = new Dictionary<string, int>();
-        foreach (var cat in gradeCategories) gradeCounts[cat] = 0;
+        var gradeCounts = templateGradeRows.ToDictionary(c => c, _ => 0);
 
         foreach (var intern in internships)
         {
@@ -181,76 +191,90 @@ public class InternshipReportService : IInternshipReportService
 
             if (!isEligible)
             {
-                // Xếp loại "không thực tập" theo quy định → gộp vào dòng "Không thực tập" của bảng tổng kết.
                 gradeCounts["Không thực tập"]++;
                 continue;
             }
             if (!evaluations.TryGetValue(intern.Id, out var eval) || !eval.OralExamScore.HasValue)
             {
-                // Đủ điều kiện nhưng chưa có Điểm thi → chưa chốt xếp loại.
-                gradeCounts[pendingClassification]++;
+                // Đủ điều kiện nhưng chưa chốt điểm thi → chưa vào bảng xếp loại (không gộp vào Yếu/TB).
                 continue;
             }
 
             var (missingCount, lateCount, submittedWeekCount) = CountSubmissionStats(intern, reportScheduleByWeek, nowUtc);
             var processScore = InternshipGradeCalculator.ComputeProcessScore(missingCount, lateCount, submittedWeekCount, weeklyQualityLevelsByInternship.GetValueOrDefault(intern.Id), eval.HasCreativeProduct);
-            var (average, classification) = InternshipGradeCalculator.ComputeAverage(true, processScore, eval.OralExamScore);
-            gradeCounts[classification]++;
+            var (_, classification) = InternshipGradeCalculator.ComputeAverage(true, processScore, eval.OralExamScore);
+            var templateLabel = MapClassificationToTemplateRow(classification);
+            if (templateLabel != null)
+                gradeCounts[templateLabel]++;
         }
-        // "Không thực tập" = SV không đủ điều kiện dự thi + SV không có kỳ thực tập.
+        // "Không thực tập" = SV không đủ điều kiện dự thi + SV cùng khóa chưa đăng ký.
         gradeCounts["Không thực tập"] += notInterning;
 
         int totalForPercent = totalStudents > 0 ? totalStudents : 1;
 
-        // Incomplete students
-        var incompleteStudents = internships
-            .Where(i => i.Status != InternshipStatus.Completed && i.Status != InternshipStatus.Graded)
-            .Select(i => i.Student)
+        // Incomplete students — tách Họ / Tên theo mẫu Word (TT | MSSV | Họ | Tên | Lớp | Lý do)
+        // Hoàn thành = Graded/Completed HOẶC đã có điểm thi (không chỉ nhìn status cũ).
+        var incompleteStudentRows = internships
+            .Where(i => !InternshipProgressCalculator.IsInternshipFinished(
+                i.Status, evaluations.GetValueOrDefault(i.Id)))
+            .Select(i =>
+            {
+                var (ho, ten) = SplitHoTen(i.Student.FullName);
+                var hasFinalReport = InternshipProgressCalculator.IsInternshipFinished(
+                        i.Status, evaluations.GetValueOrDefault(i.Id))
+                    || i.Submissions.Any(s => !s.IsDeleted && s.Type == SubmissionType.FinalReport && s.Status != SubmissionStatus.Rejected);
+                var (_, reasons) = InternshipGradeCalculator.EvaluateEligibility(
+                    hasFinalReport, absentWeeksByInternship.GetValueOrDefault(i.Id));
+                var lyDo = reasons.Count > 0
+                    ? string.Join("; ", reasons)
+                    : "Chưa hoàn thành báo cáo / thực tập";
+                return (Mssv: i.Student.StudentCode ?? "", Ho: ho, Ten: ten, Lop: i.Student.Class ?? "—", LyDo: lyDo);
+            })
             .ToList();
 
-        // ── Build placeholder map ──────────────────────────────────────────
-        var placeholders = new Dictionary<string, string>
-        {
-            ["{{REPORT_DATE}}"] = DateTime.Now.ToString("dd/MM/yyyy"),
-            ["{{TOTAL_COMPANIES}}"] = totalCompanies.ToString(),
-            ["{{TOTAL_REGISTERED_STUDENTS}}"] = interning.ToString(),
-            ["{{TOTAL_COMPLETED_STUDENTS}}"] = completedCount.ToString(),
-            ["{{TOTAL_NOT_COMPLETED_STUDENTS}}"] = incompleteCount.ToString(),
-            ["{{TOTAL_STUDENTS}}"] = totalStudents.ToString(),
-            ["{{TOTAL_NOT_INTERNSHIP}}"] = notInterning.ToString(),
-            ["{{START_DATE}}"] = startDateStr,
-            ["{{END_DATE}}"] = endDateStr,
-            ["{{DEPARTMENT}}"] = !string.IsNullOrWhiteSpace(department) ? department : "TOÀN HỆ THỐNG",
-            ["{{DEPARTMENT_ID}}"] = departmentId?.ToString() ?? string.Empty,
-            ["{{RESULTS}}"] = summaryResults ?? string.Empty,
-            ["{{DIFFICULTIES}}"] = summaryDifficulties ?? string.Empty,
-            ["{{RECOMMENDATIONS}}"] = summaryRecommendations ?? string.Empty,
-            ["{{CONCLUSION}}"] = summaryConclusion ?? string.Empty,
-            ["{{SUMMARY_RESULTS}}"] = summaryResults ?? string.Empty,
-            ["{{SUMMARY_DIFFICULTIES}}"] = summaryDifficulties ?? string.Empty,
-            ["{{SUMMARY_RECOMMENDATIONS}}"] = summaryRecommendations ?? string.Empty,
-            ["{{SUMMARY_CONCLUSION}}"] = summaryConclusion ?? string.Empty,
-        };
-
-        // Grade stats placeholders
-        foreach (var cat in gradeCategories)
-        {
-            int count = gradeCounts[cat];
-            double pct = Math.Round(count * 100.0 / totalForPercent, 1);
-            string key = cat switch
+        var tenKhoa = await ResolveDepartmentNameForTemplateAsync(department, departmentId, internships);
+        var noiDungBaoCaoChung = summaryResults ?? string.Empty;
+        var noiDungDiemNoiBatHanChe = string.Join("\n\n", new[]
             {
-                "Xuất sắc" => "EXCELLENT",
-                "Giỏi" => "GOOD",
-                "Khá" => "FAIR",
-                "Trung bình" => "AVERAGE",
-                "Không đạt" => "WEAK",
-                "Chưa chốt" => "PENDING",
-                "Không thực tập" => "NO_INTERNSHIP",
-                _ => cat.ToUpper()
-            };
-            placeholders[$"{{{{{key}_COUNT}}}}"] = count.ToString();
-            placeholders[$"{{{{{key}_PERCENT}}}}"] = $"{pct}%";
-        }
+                summaryDifficulties,
+                summaryRecommendations,
+                summaryConclusion
+            }.Where(s => !string.IsNullOrWhiteSpace(s)));
+
+        // ── Build placeholder map (khớp mẫu .docx: {TEN_KHOA}, {SO_DOANH_NGHIEP}, ...) ──
+        string Pct(int count) => Math.Round(count * 100.0 / totalForPercent, 1).ToString("0.#");
+
+        var placeholders = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["{TEN_KHOA}"] = tenKhoa,
+            ["{NGAY}"] = reportDate.Day.ToString("00"),
+            ["{THANG}"] = reportDate.Month.ToString("00"),
+            ["{NAM}"] = reportDate.Year.ToString(),
+            ["{NGAY_BAT_DAU}"] = startDateStr,
+            ["{NGAY_KET_THUC}"] = endDateStr,
+            ["{SO_DOANH_NGHIEP}"] = totalCompanies.ToString(),
+            ["{SO_SV_DANG_KY}"] = interning.ToString(),
+            ["{SO_SV_HOAN_THANH}"] = completedCount.ToString(),
+            ["{SO_SV_KHONG_HOAN_THANH}"] = incompleteCount.ToString(),
+            ["{SL_XUAT_SAC}"] = gradeCounts["Xuất sắc"].ToString(),
+            ["{TL_XUAT_SAC}"] = Pct(gradeCounts["Xuất sắc"]),
+            ["{SL_GIOI}"] = gradeCounts["Giỏi"].ToString(),
+            ["{TL_GIOI}"] = Pct(gradeCounts["Giỏi"]),
+            ["{SL_KHA}"] = gradeCounts["Khá"].ToString(),
+            ["{TL_KHA}"] = Pct(gradeCounts["Khá"]),
+            ["{SL_TB_KHA}"] = gradeCounts["Trung bình khá"].ToString(),
+            ["{TL_TB_KHA}"] = Pct(gradeCounts["Trung bình khá"]),
+            ["{SL_TRUNG_BINH}"] = gradeCounts["Trung bình"].ToString(),
+            ["{TL_TRUNG_BINH}"] = Pct(gradeCounts["Trung bình"]),
+            ["{SL_YEU}"] = gradeCounts["Yếu"].ToString(),
+            ["{TL_YEU}"] = Pct(gradeCounts["Yếu"]),
+            ["{SL_KHONG_TT}"] = gradeCounts["Không thực tập"].ToString(),
+            ["{TL_KHONG_TT}"] = Pct(gradeCounts["Không thực tập"]),
+            ["{TONG_SL}"] = totalStudents.ToString(),
+            ["{TONG_TL}"] = "100",
+            ["{NOI_DUNG_BAO_CAO_CHUNG}"] = noiDungBaoCaoChung,
+            ["{NOI_DUNG_DIEM_NOI_BAT_HAN_CHE}"] = noiDungDiemNoiBatHanChe,
+        };
 
         // ── Load Word template ─────────────────────────────────────────────
         var templatePath = TemplateHelper.FindTemplatePath("Bao cao tong ket cong tac thuc tap tot nghiep.docx")
@@ -276,23 +300,76 @@ public class InternshipReportService : IInternshipReportService
             if (body == null)
                 throw new InvalidOperationException("Word document has no body.");
 
-            // ── Replace placeholders in paragraphs and tables ───────────────
+            // 1) Nhân bản dòng {#ds_khong_hoan_thanh}…{/ds_khong_hoan_thanh} trước khi replace global
+            PopulateIncompleteStudentsLoop(body, incompleteStudentRows);
+
+            // 2) Thay toàn bộ placeholder {KEY} (kể cả placeholder bị Word tách run)
             ReplacePlaceholdersInBody(body, placeholders);
 
-            // ── Update institutional paragraphs ─────────────────────────────
-            UpdateInstitutionalParagraphs(body, department, startDateStr, endDateStr, totalCompanies, interning, completedCount, incompleteCount);
-
-            // ── Update Grade Statistics Table ───────────────────────────────
-            // Mốc % theo khóa thực tập của kỳ (đề xuất P1); gradeCounts đã chứa "Không thực tập" → không cộng thêm.
-            UpdateGradeStatisticsTable(body, gradeCounts, totalStudents, notInterning, includeNotInterningInCounts: false);
-
-            // ── Populate the incomplete students table ──────────────────────
-            PopulateIncompleteStudentsTable(body, incompleteStudents);
-
-            doc.MainDocumentPart.Document.Save();
+            doc.MainDocumentPart!.Document.Save();
         }
 
         return outputStream.ToArray();
+    }
+
+    /// <summary>
+    /// Map xếp loại chuẩn chấm điểm → nhãn dòng trên mẫu Word.
+    /// "Không đạt" → "Yếu"; "không thực tập" → "Không thực tập".
+    /// </summary>
+    private static string? MapClassificationToTemplateRow(string classification) =>
+        classification switch
+        {
+            "Xuất sắc" => "Xuất sắc",
+            "Giỏi" => "Giỏi",
+            "Khá" => "Khá",
+            "Trung bình khá" => "Trung bình khá",
+            "Trung bình" => "Trung bình",
+            "Yếu" => "Yếu",
+            "Không đạt" => "Yếu",
+            "Không thực tập" => "Không thực tập",
+            var s when string.Equals(s, InternshipGradeCalculator.IneligibleClassification, StringComparison.OrdinalIgnoreCase)
+                => "Không thực tập",
+            _ => null
+        };
+
+    private static (string Ho, string Ten) SplitHoTen(string? fullName)
+    {
+        var parts = (fullName ?? string.Empty)
+            .Trim()
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0) return ("", "");
+        if (parts.Length == 1) return ("", parts[0]);
+        return (string.Join(" ", parts[..^1]), parts[^1]);
+    }
+
+    private async Task<string> ResolveDepartmentNameForTemplateAsync(
+        string? department,
+        Guid? departmentId,
+        List<Domain.Entities.Internship> internships)
+    {
+        string? raw = null;
+        if (departmentId.HasValue)
+        {
+            raw = await _db.Departments.AsNoTracking()
+                .Where(d => d.Id == departmentId.Value)
+                .Select(d => d.Name)
+                .FirstOrDefaultAsync();
+        }
+
+        raw ??= !string.IsNullOrWhiteSpace(department)
+            ? department
+            : internships.Select(i => i.Student?.Department).FirstOrDefault(d => !string.IsNullOrWhiteSpace(d));
+
+        if (string.IsNullOrWhiteSpace(raw))
+            return "CÔNG NGHỆ THÔNG TIN";
+
+        raw = raw.Trim();
+        if (raw.StartsWith("Khoa ", StringComparison.OrdinalIgnoreCase))
+            raw = raw[5..].TrimStart();
+        else if (raw.StartsWith("KHOA ", StringComparison.OrdinalIgnoreCase))
+            raw = raw[5..].TrimStart();
+
+        return raw.ToUpperInvariant();
     }
 
     // ────────────────────────────────────────────────────────────────────────
@@ -475,94 +552,155 @@ public class InternshipReportService : IInternshipReportService
         DocumentFormat.OpenXml.Wordprocessing.Body body,
         Dictionary<string, string> placeholders)
     {
-        // Process all paragraphs
-        foreach (var paragraph in body.Descendants<Paragraph>())
+        // Longer keys first so `{#ds_...}` / `{TL_XUAT_SAC}` không bị cắt bởi key ngắn hơn.
+        var ordered = placeholders
+            .OrderByDescending(kvp => kvp.Key.Length)
+            .ToList();
+
+        foreach (var paragraph in body.Descendants<Paragraph>().ToList())
+            ReplacePlaceholdersInParagraph(paragraph, ordered);
+    }
+
+    private static void ReplacePlaceholdersInParagraph(
+        Paragraph paragraph,
+        Dictionary<string, string> placeholders)
+    {
+        ReplacePlaceholdersInParagraph(
+            paragraph,
+            placeholders.OrderByDescending(kvp => kvp.Key.Length).ToList());
+    }
+
+    private static void ReplacePlaceholdersInParagraph(
+        Paragraph paragraph,
+        List<KeyValuePair<string, string>> orderedPlaceholders)
+    {
+        var fullText = string.Concat(paragraph.Descendants<Text>().Select(t => t.Text));
+        if (string.IsNullOrEmpty(fullText)) return;
+
+        var replaced = false;
+        foreach (var kvp in orderedPlaceholders)
         {
-            var fullText = string.Concat(paragraph.Descendants<Text>().Select(t => t.Text));
-            if (string.IsNullOrEmpty(fullText)) continue;
-
-            bool replaced = false;
-            foreach (var kvp in placeholders)
+            if (fullText.Contains(kvp.Key, StringComparison.Ordinal))
             {
-                if (fullText.Contains(kvp.Key))
-                {
-                    fullText = fullText.Replace(kvp.Key, kvp.Value);
-                    replaced = true;
-                }
-            }
-
-            if (replaced)
-            {
-                // Preserve the first run's formatting
-                var firstRun = paragraph.Descendants<Run>().FirstOrDefault();
-                var rPr = firstRun?.RunProperties?.CloneNode(true) as RunProperties;
-
-                // Clear all runs and texts
-                foreach (var run in paragraph.Descendants<Run>().ToList())
-                    run.Remove();
-                foreach (var child in paragraph.ChildElements
-                    .Where(c => c is not ParagraphProperties).ToList())
-                    child.Remove();
-
-                // Rebuild with the replaced text, preserving formatting
-                var newRun = new Run();
-                if (rPr != null) newRun.Append(rPr);
-                newRun.Append(new Text(fullText) { Space = SpaceProcessingModeValues.Preserve });
-                paragraph.Append(newRun);
+                fullText = fullText.Replace(kvp.Key, kvp.Value ?? string.Empty, StringComparison.Ordinal);
+                replaced = true;
             }
         }
 
-        // Also process tables (cells may contain placeholders)
+        if (!replaced) return;
+
+        var firstRun = paragraph.Descendants<Run>().FirstOrDefault();
+        var rPr = firstRun?.RunProperties?.CloneNode(true) as RunProperties;
+
+        foreach (var run in paragraph.Descendants<Run>().ToList())
+            run.Remove();
+        foreach (var child in paragraph.ChildElements
+            .Where(c => c is not ParagraphProperties).ToList())
+            child.Remove();
+
+        // Hỗ trợ xuống dòng trong nội dung diễn giải (II / III).
+        var lines = fullText.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var newRun = new Run();
+            if (rPr != null) newRun.Append((RunProperties)rPr.CloneNode(true));
+            if (i > 0) newRun.Append(new Break());
+            newRun.Append(new Text(lines[i]) { Space = SpaceProcessingModeValues.Preserve });
+            paragraph.Append(newRun);
+        }
+    }
+
+    /// <summary>
+    /// Nhân bản dòng mẫu có vòng lặp docxtemplater-style:
+    /// <c>{#ds_khong_hoan_thanh}{stt}</c> … <c>{ly_do}{/ds_khong_hoan_thanh}</c>
+    /// (6 cột: TT | MSSV | Họ | Tên | Lớp | Lý do).
+    /// </summary>
+    private static void PopulateIncompleteStudentsLoop(
+        DocumentFormat.OpenXml.Wordprocessing.Body body,
+        List<(string Mssv, string Ho, string Ten, string Lop, string LyDo)> incompleteStudents)
+    {
+        Table? targetTable = null;
+        TableRow? templateRow = null;
+
         foreach (var table in body.Descendants<Table>())
         {
-            foreach (var cell in table.Descendants<TableCell>())
+            foreach (var row in table.Elements<TableRow>())
             {
-                foreach (var paragraph in cell.Descendants<Paragraph>())
+                var rowText = string.Concat(row.Descendants<Text>().Select(t => t.Text));
+                if (rowText.Contains("#ds_khong_hoan_thanh", StringComparison.Ordinal)
+                    || (rowText.Contains("{stt}", StringComparison.Ordinal)
+                        && rowText.Contains("{mssv}", StringComparison.Ordinal)))
                 {
-                    var fullText = string.Concat(
-                        paragraph.Descendants<Text>().Select(t => t.Text));
-                    if (string.IsNullOrEmpty(fullText)) continue;
-
-                    bool replaced = false;
-                    foreach (var kvp in placeholders)
-                    {
-                        if (fullText.Contains(kvp.Key))
-                        {
-                            fullText = fullText.Replace(kvp.Key, kvp.Value);
-                            replaced = true;
-                        }
-                    }
-
-                    if (replaced)
-                    {
-                        var firstRun = paragraph.Descendants<Run>().FirstOrDefault();
-                        var rPr = firstRun?.RunProperties?.CloneNode(true) as RunProperties;
-
-                        foreach (var run in paragraph.Descendants<Run>().ToList())
-                            run.Remove();
-                        foreach (var child in paragraph.ChildElements
-                            .Where(c => c is not ParagraphProperties).ToList())
-                            child.Remove();
-
-                        var newRun = new Run();
-                        if (rPr != null) newRun.Append(rPr);
-                        newRun.Append(new Text(fullText)
-                        {
-                            Space = SpaceProcessingModeValues.Preserve
-                        });
-                        paragraph.Append(newRun);
-                    }
+                    targetTable = table;
+                    templateRow = row;
+                    break;
                 }
             }
+            if (templateRow != null) break;
         }
+
+        if (targetTable == null || templateRow == null) return;
+
+        // Xóa dòng trống thừa ngay sau dòng mẫu (nếu có).
+        var nextSibling = templateRow.NextSibling<TableRow>();
+        if (nextSibling != null)
+        {
+            var nextText = string.Concat(nextSibling.Descendants<Text>().Select(t => t.Text)).Trim();
+            if (string.IsNullOrWhiteSpace(nextText))
+                nextSibling.Remove();
+        }
+
+        if (incompleteStudents.Count == 0)
+        {
+            var emptyPlaceholders = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["{#ds_khong_hoan_thanh}"] = string.Empty,
+                ["{/ds_khong_hoan_thanh}"] = string.Empty,
+                ["{stt}"] = "—",
+                ["{mssv}"] = "Không có sinh viên không hoàn thành",
+                ["{ho}"] = "—",
+                ["{ten}"] = "—",
+                ["{lop}"] = "—",
+                ["{ly_do}"] = "—",
+            };
+            ReplacePlaceholdersInRow(templateRow, emptyPlaceholders);
+            return;
+        }
+
+        templateRow.Remove();
+
+        int stt = 1;
+        foreach (var student in incompleteStudents)
+        {
+            var newRow = (TableRow)templateRow.CloneNode(true);
+            var rowPlaceholders = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["{#ds_khong_hoan_thanh}"] = string.Empty,
+                ["{/ds_khong_hoan_thanh}"] = string.Empty,
+                ["{stt}"] = stt.ToString(),
+                ["{mssv}"] = student.Mssv,
+                ["{ho}"] = student.Ho,
+                ["{ten}"] = student.Ten,
+                ["{lop}"] = student.Lop,
+                ["{ly_do}"] = student.LyDo,
+            };
+            ReplacePlaceholdersInRow(newRow, rowPlaceholders);
+            targetTable.Append(newRow);
+            stt++;
+        }
+    }
+
+    private static void ReplacePlaceholdersInRow(TableRow row, Dictionary<string, string> placeholders)
+    {
+        foreach (var paragraph in row.Descendants<Paragraph>())
+            ReplacePlaceholdersInParagraph(paragraph, placeholders);
     }
 
     private static void PopulateIncompleteStudentsTable(
         DocumentFormat.OpenXml.Wordprocessing.Body body,
         List<Domain.Entities.Student> incompleteStudents)
     {
-        // Find the incomplete students table by its header cells.
-        // The C22A template header is "TT | MSSV | Họ Tên | Lớp | Lý do".
+        // Legacy fallback for older templates (TT | MSSV | Họ Tên | Lớp | Lý do) without loop markers.
         var tables = body.Descendants<Table>().ToList();
         Table? targetTable = null;
 
@@ -570,6 +708,8 @@ public class InternshipReportService : IInternshipReportService
         {
             var tableText = string.Concat(
                 table.Descendants<Text>().Select(t => t.Text));
+            if (tableText.Contains("#ds_khong_hoan_thanh", StringComparison.Ordinal))
+                continue; // Handled by PopulateIncompleteStudentsLoop
             if (tableText.Contains("Lý do") && (tableText.Contains("MSSV") || tableText.Contains("Họ Tên")) ||
                 tableText.Contains("Chưa hoàn thành") ||
                 tableText.Contains("chưa hoàn thành"))
@@ -614,7 +754,17 @@ public class InternshipReportService : IInternshipReportService
             if (newRow == null) continue;
 
             var cells = newRow.Descendants<TableCell>().ToList();
-            if (cells.Count >= 5)
+            var (ho, ten) = SplitHoTen(student.FullName);
+            if (cells.Count >= 6)
+            {
+                SetCellText(cells[0], stt.ToString());
+                SetCellText(cells[1], student.StudentCode);
+                SetCellText(cells[2], ho);
+                SetCellText(cells[3], ten);
+                SetCellText(cells[4], student.Class ?? "—");
+                SetCellText(cells[5], "Chưa hoàn thành báo cáo / thực tập");
+            }
+            else if (cells.Count >= 5)
             {
                 SetCellText(cells[0], stt.ToString());
                 SetCellText(cells[1], student.StudentCode);
@@ -718,7 +868,9 @@ public class InternshipReportService : IInternshipReportService
 
         // ── Summary metrics ────────────────────────────────────────────────
         var interning = internships.Count;
-        var completedCount = internships.Count(i => i.Status == InternshipStatus.Completed || i.Status == InternshipStatus.Graded);
+        var completedCount = internships.Count(i =>
+            InternshipProgressCalculator.IsInternshipFinished(
+                i.Status, evaluations.GetValueOrDefault(i.Id)));
         var incompleteCount = interning - completedCount;
         var notInterning = totalStudents - interning;
 
@@ -816,7 +968,8 @@ public class InternshipReportService : IInternshipReportService
         row++;
 
         var incompleteStudents = internships
-            .Where(i => i.Status != InternshipStatus.Completed && i.Status != InternshipStatus.Graded)
+            .Where(i => !InternshipProgressCalculator.IsInternshipFinished(
+                i.Status, evaluations.GetValueOrDefault(i.Id)))
             .Select(i => i.Student)
             .ToList();
 
@@ -950,8 +1103,10 @@ public class InternshipReportService : IInternshipReportService
             .Where(r => !r.IsDeleted && r.Status != WeeklyReportStatus.Draft)
             .ToList() ?? new List<WeeklyReport>();
 
+        // Chỉ đếm tuần đang bật trong cấu hình — không tính tuần đóng / tuần cuối kỳ.
+        var requiredWeeks = reportScheduleByWeek.Keys.ToHashSet();
         var submittedWeekCount = reports
-            .Where(r => r.SubmittedAt.HasValue)
+            .Where(r => r.SubmittedAt.HasValue && requiredWeeks.Contains(r.WeekNumber))
             .Select(r => r.WeekNumber)
             .Distinct()
             .Count();

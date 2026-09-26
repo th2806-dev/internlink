@@ -122,12 +122,13 @@ public class ExcelExportService : IExcelExportService
                 dto.GvHuongDan = internship.Lecturer?.FullName ?? "Chưa phân công";
                 dto.GhiChu = string.Empty;
 
-                // Count missing/late reports and attendance violations by configured week.
+                // Count missing/late reports and attendance violations by configured open weeks.
                 var reports23 = internship.WeeklyReports
                     .Where(r => !r.IsDeleted && r.Status != WeeklyReportStatus.Draft)
                     .ToList();
+                var requiredWeeks = reportScheduleByWeek.Keys.ToHashSet();
                 var submittedWeekCount = reports23
-                    .Where(r => r.SubmittedAt.HasValue)
+                    .Where(r => r.SubmittedAt.HasValue && requiredWeeks.Contains(r.WeekNumber))
                     .Select(r => r.WeekNumber)
                     .Distinct()
                     .Count();

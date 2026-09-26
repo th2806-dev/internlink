@@ -116,6 +116,13 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
                 const gradesByStudent = new Map(grading.students.map((grade) => [grade.studentId, grade]));
                 return adminRows.map((student) => {
                   const grade = gradesByStudent.get(student.id);
+                  const openWeeks = grade?.weeks ?? [];
+                  const submittedOpenWeeks = openWeeks.filter((week) => week.submittedAt).length;
+                  const requiredOpenWeeks = Math.max(openWeeks.length, 1);
+                  const reportPercent = grade
+                    ? Math.round((submittedOpenWeeks / requiredOpenWeeks) * 80)
+                    : 0;
+                  const evaluationPercent = grade?.averageScore != null || grade?.oralExamScore != null ? 20 : 0;
                   return {
                     studentId: student.id,
                 internshipId: grade?.studentId ?? student.id,
@@ -131,14 +138,14 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
               internshipStatus: grade ? "Đang thực tập" : "Chưa phân công",
               startDate: null,
               endDate: null,
-              weeklyReportCount: grade?.weeks.filter((week) => week.submittedAt).length ?? 0,
+              weeklyReportCount: submittedOpenWeeks,
               pendingReportCount: grade?.missingCount ?? 0,
-              submissionCount: grade?.weeks.filter((week) => week.submittedAt).length ?? 0,
+              submissionCount: submittedOpenWeeks,
               notes: "",
               finalGrade: grade?.averageScore ?? null,
               hasEvaluation: grade != null,
-              isEvaluationFinalized: grade?.averageScore != null,
-              progressPercent: grade ? Math.round((grade.weeks.filter((week) => week.submittedAt).length / Math.max(grade.weeks.length, 1)) * 100) : 0,
+              isEvaluationFinalized: grade?.averageScore != null || grade?.oralExamScore != null,
+              progressPercent: Math.min(100, reportPercent + evaluationPercent),
               progressBreakdown: undefined,
                   };
               }) as LecturerStudentListItemDto[];
@@ -214,9 +221,8 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
   const notesCount = students.filter((student) => student.notes?.trim()).length;
 
   const reportPreview = useMemo(() => {
-    // Phân loại theo NGƯỠNG CHUẨN của gradingRules (classifyScore):
-    // >= 8.5 Xuất sắc | >= 8 Giỏi | >= 6.5 Khá | >= 5 Trung bình | < 5 Không đạt.
-    // Chỉ đếm SV đã có điểm (finalGrade != null); SV chưa chốt điểm KHÔNG rơi vào "Không thực tập".
+    // Khớp mẫu Word: Xuất sắc | Giỏi | Khá | Trung bình khá | Trung bình | Yếu | Không thực tập.
+    // Ngưỡng chấm điểm: ≥8.5 XS | ≥8 Giỏi | ≥6.5 Khá | ≥5 TB | <5 → Yếu. "Trung bình khá" = 0 (mẫu có dòng).
     const graded = students.filter((student) => student.finalGrade != null);
     const gradedCount = graded.length;
     const gradedTotal = students.length;
@@ -224,13 +230,20 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
       graded.filter((student) => predicate(student.finalGrade!)).length;
     const percentOf = (count: number) =>
       gradedTotal > 0 ? Number(((count / gradedTotal) * 100).toFixed(1)) : 0;
+    const xs = shareOf((grade) => grade >= 8.5);
+    const gioi = shareOf((grade) => grade >= 8 && grade < 8.5);
+    const kha = shareOf((grade) => grade >= 6.5 && grade < 8);
+    const tb = shareOf((grade) => grade >= 5 && grade < 6.5);
+    const yeu = shareOf((grade) => grade < 5);
+    const khongTt = gradedTotal - gradedCount;
     const gradeSummary = [
-      { label: "Xuất sắc", quantity: shareOf((grade) => grade >= 8.5), rate: percentOf(shareOf((grade) => grade >= 8.5)) },
-      { label: "Giỏi", quantity: shareOf((grade) => grade >= 8 && grade < 8.5), rate: percentOf(shareOf((grade) => grade >= 8 && grade < 8.5)) },
-      { label: "Khá", quantity: shareOf((grade) => grade >= 6.5 && grade < 8), rate: percentOf(shareOf((grade) => grade >= 6.5 && grade < 8)) },
-      { label: "Trung bình", quantity: shareOf((grade) => grade >= 5 && grade < 6.5), rate: percentOf(shareOf((grade) => grade >= 5 && grade < 6.5)) },
-      { label: "Không đạt", quantity: shareOf((grade) => grade < 5), rate: percentOf(shareOf((grade) => grade < 5)) },
-      { label: "Không thực tập", quantity: gradedTotal - gradedCount, rate: percentOf(gradedTotal - gradedCount) },
+      { label: "Xuất sắc", quantity: xs, rate: percentOf(xs) },
+      { label: "Giỏi", quantity: gioi, rate: percentOf(gioi) },
+      { label: "Khá", quantity: kha, rate: percentOf(kha) },
+      { label: "Trung bình khá", quantity: 0, rate: 0 },
+      { label: "Trung bình", quantity: tb, rate: percentOf(tb) },
+      { label: "Yếu", quantity: yeu, rate: percentOf(yeu) },
+      { label: "Không thực tập", quantity: khongTt, rate: percentOf(khongTt) },
     ];
 
     return buildWordReportPreviewData({
@@ -391,7 +404,7 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
                   <div className="text-[12px] font-bold uppercase">TRƯỜNG CAO ĐẲNG GTVT</div>
                   <div className="text-[12px] font-bold uppercase mt-1">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</div>
                   <div className="mt-3 text-[11px] font-bold">KHOA {reportPreview.header.department.replace(/^KHOA\s+/i, "").toUpperCase()} <span className="font-normal">Độc lập – Tự do – Hạnh phúc</span></div>
-                  <div className="mt-6 text-[11px] italic">Tp. Hồ Chí Minh, {formatWordDate(selectedSemester?.startDate ?? new Date())}</div>
+                  <div className="mt-6 text-[11px] italic">Tp. Hồ Chí Minh, {formatWordDate(new Date())}</div>
                 </div>
 
                 <div className="mt-6 text-center font-bold uppercase text-[12px]">
