@@ -293,9 +293,22 @@ public static class DemoDataSeeder
                 }
             }
 
-            // SV đầu tiên của khoa đã được chấm xong (demo màn kết quả SV + thống kê GV).
+            // SV đầu tiên của khoa đã được chấm xong (demo màn kết quả SV + thống kê GV):
+            // đủ T1..T5 + đã nộp BC cuối kỳ (đủ điều kiện dự thi) + rubric tuần + thưởng sản phẩm.
             // GV chấm live trong demo sẽ chọn SV thứ 2 (nộp T1–T2, có 1 báo cáo chờ duyệt).
             var gradedInternship = internships[0];
+            context.Submissions.Add(new Submission
+            {
+                Id = GuidFor("final-report:" + gradedInternship.Id),
+                InternshipId = gradedInternship.Id,
+                Type = SubmissionType.FinalReport,
+                Status = SubmissionStatus.Submitted,
+                Version = 1,
+                Title = "Báo cáo thực tập tốt nghiệp",
+                Description = "Báo cáo cuối kỳ do GV chấm trước demo.",
+                SubmittedAt = semStart.AddDays(7 * activeSemester.TotalWeeks),
+                CreatedAt = now
+            });
             context.Evaluations.Add(new Evaluation
             {
                 Id = GuidFor("evaluation:" + gradedInternship.Id),
@@ -306,8 +319,10 @@ public static class DemoDataSeeder
                 TeamworkScore = 9,
                 InitiativeScore = 8,
                 OralExamScore = 9,
-                FinalGrade = 8.6m,
+                FinalGrade = 9.2m,
                 IsFinalized = true,
+                HasCreativeProduct = true,
+                WeeklyQualityJson = "{\"1\":5,\"2\":4,\"3\":5,\"4\":4,\"5\":5}",
                 Comments = "Sinh viên tiến bộ nhanh, thái độ nghiêm túc.",
                 Strengths = "Nắm bắt công nghệ mới tốt, chủ động trong công việc.",
                 AreasForImprovement = "Cần rèn thêm kỹ năng viết tài liệu.",
