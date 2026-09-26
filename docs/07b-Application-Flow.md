@@ -1,3 +1,6 @@
+<!-- LEGACY: bộ tài liệu thiết kế ban đầu. Bản CẬP NHẬT theo code nằm ở docs/current/ — ưu tiên dùng docs/current/. -->
+<!-- STATUS: LEGACY -->
+
 # Application Flow
 
 **Project:** InternLink – Internship Management & Collaboration Platform

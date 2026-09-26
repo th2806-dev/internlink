@@ -189,6 +189,9 @@ public class EvaluationController : ControllerBase
     /// </summary>
     [HttpGet("student/{studentId}")]
     [ProducesResponseType(typeof(IEnumerable<EvaluationListItemDto>), StatusCodes.Status200OK)]
+    // Student xem điểm của mình qua StudentPortal / Evaluation per-internship (có guard ownership);
+    // endpoint liệt kê theo studentId chỉ dành cho GV/admin.
+    [Authorize(Policy = "RequireLecturerOrAdmin")]
     public async Task<ActionResult<IEnumerable<EvaluationListItemDto>>> GetEvaluationsByStudent(Guid studentId, [FromQuery] int skip = 0, [FromQuery] int take = 100)
     {
         try

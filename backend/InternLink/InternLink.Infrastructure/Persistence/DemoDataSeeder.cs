@@ -53,6 +53,7 @@ public static class DemoDataSeeder
 
             // ── Lecturers (2 per department) ────────────────────────────
             var lecturers = new List<Lecturer>();
+            var lecturerUserIds = new List<Guid>();
             var lecturerDefs = new (string Code, string Name, string Title)[]
             {
                 ("GV" + dept.Code + "01", "TS. Nguyễn Văn An", "Phó Giáo sư"),
@@ -61,12 +62,30 @@ public static class DemoDataSeeder
 
             foreach (var (code, name, title) in lecturerDefs)
             {
+                // Login account — GV demo đăng nhập bằng username này + Password123!.
+                var lecturerUsername = code.ToLowerInvariant();
+                var lecturerUser = new User
+                {
+                    Id = GuidFor("lecturer-user:" + code),
+                    Username = lecturerUsername,
+                    FullName = name,
+                    Email = lecturerUsername + "@internlink.test",
+                    Role = Role.Lecturer,
+                    IsActive = true,
+                    MustChangePassword = false,
+                    CreatedAt = now
+                };
+                lecturerUser.PasswordHash = hasher.HashPassword(lecturerUser, SeedData.DefaultPassword);
+                context.Users.Add(lecturerUser);
+                lecturerUserIds.Add(lecturerUser.Id);
+
                 var lecturer = new Lecturer
                 {
                     Id = GuidFor("lecturer:" + code),
+                    UserId = lecturerUser.Id,
                     StaffCode = code,
                     FullName = name,
-                    Email = code.ToLowerInvariant() + "@internlink.test",
+                    Email = lecturerUsername + "@internlink.test",
                     Phone = "0900" + code[^2..] + dept.Code.Length + "55" + code[^2..],
                     Department = dept.Name,
                     DepartmentId = dept.Id,
@@ -99,7 +118,7 @@ public static class DemoDataSeeder
                     Role = Role.Student,
                     DepartmentId = dept.Id,
                     IsActive = true,
-                    MustChangePassword = true,
+                    MustChangePassword = false,
                     CreatedAt = now
                 };
                 user.PasswordHash = hasher.HashPassword(user, SeedData.DefaultPassword);
@@ -205,6 +224,97 @@ public static class DemoDataSeeder
                 });
             }
             context.Internships.AddRange(internships);
+
+            // ── Cấu hình báo cáo: 6 tuần + tuần cuối kỳ (T7) ────────────
+            // Kịch bản chuẩn của trường: T1..T5 mở nộp (deadline tương lai),
+            // T6 tắt (dành cho thi/bảo vệ), T7 = Báo cáo cuối kỳ.
+            // Deadline đẩy sang tương lai để demo nộp bài live không báo trễ.
+            var semStart = activeSemester.StartDate ?? now;
+            for (var week = 1; week <= activeSemester.TotalWeeks + 1; week++)
+            {
+                var isFinalReport = week == activeSemester.TotalWeeks + 1;
+                var isClosedWeek = week == activeSemester.TotalWeeks;
+                var isOpen = !isClosedWeek;
+                // Kỳ demo bắt đầu trong quá khứ → deadline gốc đã qua. Với tuần đang mở,
+                // đẩy deadline sang tương lai để demo nộp bài live không bị báo trễ.
+                var dueDate = semStart.AddDays(7 * week - 1).Date.AddHours(23).AddMinutes(59);
+                if (isOpen && dueDate < now)
+                    dueDate = now.AddDays(7);
+                context.SemesterReportSchedules.Add(new SemesterReportSchedule
+                {
+                    Id = GuidFor("schedule:" + activeSemester.Id + ":" + week),
+                    SemesterId = activeSemester.Id,
+                    WeekNumber = week,
+                    Title = isFinalReport ? "Báo cáo cuối kỳ" : $"Báo cáo tuần {week}",
+                    StartDate = semStart.AddDays(7 * (week - 1)),
+                    DueDate = dueDate,
+                    IsSubmissionOpen = isOpen,
+                    AllowLateSubmission = true,
+                    Description = isFinalReport
+                        ? "Báo cáo thực tập tốt nghiệp + bảo vệ trước hội đồng."
+                        : isClosedWeek
+                            ? "Tuần bảo vệ/thi — không nhận báo cáo tuần."
+                            : $"Hạn nộp báo cáo tuần {week}.",
+                    CreatedAt = now
+                });
+            }
+
+            // ── Weekly reports: SV đầu nộp đủ T1..T5, SV khác T1 + T2 ──
+            // → SV đầu đủ điều kiện thi; GV demo chấm điểm live cho SV còn lại.
+            var weeklyContents = new (string Content, string Comment)[]
+            {
+                ("Đã làm quen môi trường, nhận dự án và hoàn thành nhiệm vụ tuần {0}.", "Báo cáo rõ ràng, tuân thủ tiến độ. Tiếp tục phát huy."),
+                ("Hoàn thành module đầu tiên, hỗ trợ kiểm thử và viết tài liệu kỹ thuật.", "Kết quả tốt, chú ý viết unit test đầy đủ hơn."),
+                ("Triển khai tính năng chính, phối hợp với mentor xử lý bug.", "Tiến độ ổn. Cần chú ý deadline của dự án."),
+                ("Hoàn thiện tính năng, tối ưu hiệu năng truy vấn CSDL.", "Có cải tiến đáng kể so với tuần trước."),
+                ("Viết tài liệu, chuẩn bị báo cáo cuối kỳ và tổng hợp số liệu.", null),
+            };
+            for (int i = 0; i < internships.Count; i++)
+            {
+                var internship = internships[i];
+                var maxWeek = i == 0 ? 5 : 2; // SV đầu nộp đủ 5 tuần; SV khác nộp T1–T2
+                for (int w = 1; w <= maxWeek; w++)
+                {
+                    var (content, comment) = weeklyContents[w - 1];
+                    // Chờ duyệt chỉ khi là báo cáo mới nhất của SV chưa bị chấm (để GV duyệt live).
+                    var isAwaitingReview = i != 0 && w == maxWeek;
+                    context.WeeklyReports.Add(new WeeklyReport
+                    {
+                        Id = GuidFor("weekly-report:" + internship.Id + ":" + w),
+                        InternshipId = internship.Id,
+                        WeekNumber = w,
+                        Title = $"Báo cáo tuần {w}",
+                        Content = w <= 5 ? string.Format(content, w) : content,
+                        Status = isAwaitingReview ? WeeklyReportStatus.Submitted : WeeklyReportStatus.Approved,
+                        SubmittedAt = semStart.AddDays(7 * (w - 1) + 2),
+                        LecturerComment = isAwaitingReview ? null : comment,
+                        CreatedAt = now
+                    });
+                }
+            }
+
+            // SV đầu tiên của khoa đã được chấm xong (demo màn kết quả SV + thống kê GV).
+            // GV chấm live trong demo sẽ chọn SV thứ 2 (nộp T1–T2, có 1 báo cáo chờ duyệt).
+            var gradedInternship = internships[0];
+            context.Evaluations.Add(new Evaluation
+            {
+                Id = GuidFor("evaluation:" + gradedInternship.Id),
+                InternshipId = gradedInternship.Id,
+                EvaluatedById = lecturerUserIds[0],
+                TechnicalScore = 9,
+                CommunicationScore = 8,
+                TeamworkScore = 9,
+                InitiativeScore = 8,
+                OralExamScore = 9,
+                FinalGrade = 8.6m,
+                IsFinalized = true,
+                Comments = "Sinh viên tiến bộ nhanh, thái độ nghiêm túc.",
+                Strengths = "Nắm bắt công nghệ mới tốt, chủ động trong công việc.",
+                AreasForImprovement = "Cần rèn thêm kỹ năng viết tài liệu.",
+                EvaluatedAt = now,
+                CreatedAt = now
+            });
+            gradedInternship.Status = InternshipStatus.Graded;
 
             // ── Semester roster (SemesterLecturer) ──────────────────────
             foreach (var lecturer in lecturers)

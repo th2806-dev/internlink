@@ -670,20 +670,12 @@ public class SubmissionService : ISubmissionService
 
     private async Task<Internship?> GetStudentInternshipAsync(Guid userId)
     {
-        var activeSemesterId = await _db.Semesters
-            .Where(s => !s.IsDeleted && s.Status == SemesterStatus.Active)
-            .OrderByDescending(s => s.CreatedAt)
-            .Select(s => (Guid?)s.Id)
-            .FirstOrDefaultAsync();
-
-        var query = _db.Internships
+        // KHÔNG lọc theo "kỳ active tạo sau nhất" toàn hệ thống: nhiều khoa có thể cùng
+        // có kỳ Active, lọc chung sẽ sai kỳ cho SV của khoa kia (không thấy bài nộp của mình).
+        // Lấy internship mới nhất của chính SV theo CreatedAt.
+        return await _db.Internships
             .Include(i => i.Student)
-            .Where(i => !i.IsDeleted && i.Student != null && i.Student.UserId == userId);
-
-        if (activeSemesterId.HasValue)
-            query = query.Where(i => i.SemesterId == activeSemesterId.Value);
-
-        return await query
+            .Where(i => !i.IsDeleted && i.Student != null && i.Student.UserId == userId)
             .OrderByDescending(i => i.CreatedAt)
             .ThenByDescending(i => i.Id)
             .FirstOrDefaultAsync();

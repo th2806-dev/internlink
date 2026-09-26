@@ -1,3 +1,6 @@
+<!-- LEGACY: bộ tài liệu thiết kế ban đầu. Bản CẬP NHẬT theo code nằm ở docs/current/ — ưu tiên dùng docs/current/. -->
+<!-- STATUS: LEGACY -->
+
 # InternLink — Tầm Nhìn & Phạm Vi Dự Án (Vision & Scope)
 
 **Dự án:** InternLink — Nền tảng Quản lý và Giám sát Thực tập Tốt nghiệp  

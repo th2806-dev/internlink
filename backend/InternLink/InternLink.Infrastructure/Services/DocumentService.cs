@@ -285,12 +285,38 @@ public class DocumentService : IDocumentService
             .Select(l => (Guid?)l.Id)
             .FirstOrDefaultAsync();
 
-        var uploaded = _googleDrive != null
-            ? await _googleDrive.UploadAsync(fileStream, fileName, GetMimeType(Path.GetExtension(fileName)))
-            : null;
-        var filePath = uploaded?.WebViewLink ?? "";
-        var fileSize = uploaded?.Size ?? fileStream.Length;
-        var mimeType = uploaded?.ContentType ?? GetMimeType(Path.GetExtension(fileName));
+        string filePath;
+        long fileSize;
+        string mimeType;
+        string? googleDriveFileId;
+        if (_googleDrive != null)
+        {
+            var uploaded = await _googleDrive.UploadAsync(fileStream, fileName, GetMimeType(Path.GetExtension(fileName)));
+            filePath = uploaded.WebViewLink;
+            fileSize = uploaded.Size;
+            mimeType = uploaded.ContentType;
+            googleDriveFileId = uploaded.FileId;
+        }
+        else
+        {
+            // Không cấu hình Google Drive → lưu local (đồng bộ cách WeeklyReport/Submission lưu file).
+            var extension = Path.GetExtension(fileName).ToLowerInvariant();
+            if (!AllowedExtensions.Contains(extension))
+                throw new InvalidOperationException($"File type '{extension}' is not allowed");
+
+            mimeType = GetMimeType(extension);
+            var uploadPath = Path.Combine(GetUploadRoot(), UploadFolder, request.InternshipId.ToString());
+            Directory.CreateDirectory(uploadPath);
+            var uniqueFileName = $"{Guid.NewGuid()}_{Path.GetFileNameWithoutExtension(fileName)}{extension}";
+            var fullPath = Path.Combine(uploadPath, uniqueFileName);
+            await using (var stream = new FileStream(fullPath, FileMode.Create))
+            {
+                await fileStream.CopyToAsync(stream);
+                fileSize = stream.Length;
+            }
+            filePath = Path.Combine(UploadFolder, request.InternshipId.ToString(), uniqueFileName).Replace("\\", "/");
+            googleDriveFileId = null;
+        }
 
         var document = new Document
         {
@@ -303,7 +329,7 @@ public class DocumentService : IDocumentService
             IsRequired = request.IsRequired,
             FileName = fileName,
             FilePath = filePath,
-            GoogleDriveFileId = uploaded?.FileId,
+            GoogleDriveFileId = googleDriveFileId,
             MimeType = mimeType,
             FileSize = fileSize,
             UploadedAt = DateTime.UtcNow,
@@ -319,7 +345,7 @@ public class DocumentService : IDocumentService
             VersionNumber = 1,
             FileName = fileName,
             FilePath = filePath,
-            GoogleDriveFileId = uploaded?.FileId,
+            GoogleDriveFileId = googleDriveFileId,
             FileSize = fileSize,
             MimeType = mimeType,
             UploadedById = lecturerId,

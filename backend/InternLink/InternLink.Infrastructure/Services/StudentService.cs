@@ -196,8 +196,9 @@ public class StudentService : IStudentService
             .Include(i => i.Semester)
             .Where(i => !i.IsDeleted && i.StudentId == student.Id);
 
-        if (activeSemester != null)
-            internshipQuery = internshipQuery.Where(i => i.SemesterId == activeSemester.Id);
+        // KHÔNG lọc theo "kỳ active tạo sau nhất" toàn hệ thống: nhiều khoa có thể cùng
+        // có kỳ Active (CNTT + QTKD), lọc chung sẽ sai kỳ cho SV của khoa kia.
+        // Ưu tiên internship thuộc kỳ Active của chính SV, fallback mới nhất theo CreatedAt.
 
         var internship = await internshipQuery
             .OrderByDescending(i => i.CreatedAt)

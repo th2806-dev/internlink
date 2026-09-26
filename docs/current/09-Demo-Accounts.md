@@ -1,27 +1,35 @@
 # InternLink - Demo Accounts and Fixtures
 
-**Verified:** 2026-09-08
+**Verified:** 2026-09-26
 
-## Seeded account
+## Seeding behavior
 
-The current `SeedData.InitializeAsync` creates or repairs one account:
+Startup seeding differs by environment:
 
-| Username | Password | Role | Email |
-|:--|:--|:--|:--|
-| `admin` | `Password123!` | `SuperAdmin` | `admin@internlink.test` |
+- **Production:** seeds only the SuperAdmin account below. Business data is entered manually via the UI.
+- **Development (fresh DB only):** after seeding SuperAdmin, runs the full seed — departments, department admins,
+  semesters, report schedules, demo lecturers/students/companies/internships, weekly reports and one graded evaluation.
+  The full seed never runs when business data already exists (idempotent, never touches real data).
 
-When the account already exists, startup ensures it is active and has the `SuperAdmin` role but does not reset its password.
+## Seeded accounts (development, fresh DB)
 
-## What is not seeded
+All accounts use password `Password123!` and have `MustChangePassword = false` (no forced password change on login).
 
-The current seed does not create:
+| Portal | Username pattern | Example |
+|:--|:--|:--|
+| SuperAdmin | `admin` | `admin` |
+| DepartmentAdmin | `admin-{dept}` | `admin-cntt` |
+| Lecturer | `gv{dept}01`, `gv{dept}02` | `gvcntt01` |
+| Student | `{dept}sv0001`…`{dept}sv0003` | `cnttsv0001` |
 
-- lecturer accounts such as `gv001` or `lecturer1`;
-- student accounts such as `sv001` or `student1`;
-- lecturer/student profiles;
-- companies, semesters, internships or populated reports/submissions.
+Departments: CNTT, QTKD. Demo data per department: 2 lecturers, 3 students, 2 companies, 3 internships,
+report schedules (T1–T5 open, T6 closed for defense, T7 final report), weekly reports (first student fully
+submitted T1–T5 + graded 8.6; others T1–T2 with one awaiting review), attendance sessions.
 
-Those values may exist in test fixtures or old documentation, but they are not valid assumptions for a fresh database.
+## Reset for a fresh demo
+
+Run `scripts/reset-demo.sql` (wipes business data, keeps nothing), then restart the API so the development
+full seed recreates departments, semesters and demo data. See `docs/Demo-UI-Script.md` for the rehearsal checklist.
 
 ## Test fixtures
 

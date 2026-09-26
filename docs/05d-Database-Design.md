@@ -1,3 +1,6 @@
+<!-- LEGACY: bộ tài liệu thiết kế ban đầu. Bản CẬP NHẬT theo code nằm ở docs/current/ — ưu tiên dùng docs/current/. -->
+<!-- STATUS: LEGACY -->
+
 # InternLink — Thiết Kế Cơ Sở Dữ Liệu SQL Server (Database Design)
 
 **Dự án:** InternLink — Nền tảng Quản lý và Giám sát Thực tập Tốt nghiệp  

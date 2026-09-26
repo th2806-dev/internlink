@@ -43,6 +43,18 @@ public static class ApplicationBuilderExtensions
                 logger.LogInformation("Seeded default SuperAdmin account 'admin'.");
             }
 
+            // Development/demo only: full seed (departments, admins, semesters, demo data)
+            // when the fresh SuperAdmin above was just created. Production seeds nothing extra.
+            var isDevelopment = app.Environment.IsDevelopment();
+            var justSeededAdmin = await context.Users.CountAsync(u => u.Role == Role.SuperAdmin && !u.IsDeleted) == 1
+                && !await context.Departments.AnyAsync();
+            if (isDevelopment && justSeededAdmin)
+            {
+                logger.LogInformation("Development fresh database — running full seed (departments, semesters, demo data)...");
+                await SeedData.InitializeAsync(context);
+                logger.LogInformation("Full development seed completed.");
+            }
+
             logger.LogInformation("Database migration completed successfully.");
         }
         catch (Exception ex)
