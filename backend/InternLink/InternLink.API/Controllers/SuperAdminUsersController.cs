@@ -26,9 +26,9 @@ public class SuperAdminUsersController : ControllerBase
     public async Task<IActionResult> GetAll([FromQuery] UserFilterRequest filter)
     {
         if (filter.Skip < 0)
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Skip must be greater than or equal to 0" }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SkipMustBeNonNegative }));
         if (filter.Take < 1 || filter.Take > 1000)
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Take must be between 1 and 1000" }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.TakeMustBeInRange }));
 
         var result = await _userManagementService.GetUsersAsync(filter);
         return Ok(ApiResponse<PaginatedResponse<UserDto>>.Ok(result));
@@ -39,7 +39,7 @@ public class SuperAdminUsersController : ControllerBase
     {
         var user = await _userManagementService.GetUserByIdAsync(id);
         if (user == null)
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "User not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.UserNotFound }));
 
         return Ok(ApiResponse<UserDto>.Ok(user));
     }
@@ -50,7 +50,7 @@ public class SuperAdminUsersController : ControllerBase
         try
         {
             if (!ModelState.IsValid)
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Invalid input" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InvalidInput }));
 
             var user = await _userManagementService.CreateUserAsync(request);
             return CreatedAtAction(nameof(GetById), new { id = user.Id }, ApiResponse<UserDto>.Ok(user));
@@ -67,11 +67,11 @@ public class SuperAdminUsersController : ControllerBase
         try
         {
             if (!ModelState.IsValid)
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Invalid input" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InvalidInput }));
 
             var user = await _userManagementService.UpdateUserAsync(id, request);
             if (user == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "User not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.UserNotFound }));
 
             return Ok(ApiResponse<UserDto>.Ok(user));
         }
@@ -88,7 +88,7 @@ public class SuperAdminUsersController : ControllerBase
         {
             var result = await _userManagementService.ResetPasswordAsync(id);
             if (result == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "User not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.UserNotFound }));
 
             return Ok(ApiResponse<ResetPasswordResultDto>.Ok(result));
         }
@@ -105,7 +105,7 @@ public class SuperAdminUsersController : ControllerBase
         {
             var deleted = await _userManagementService.DeleteUserAsync(id);
             if (!deleted)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "User not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.UserNotFound }));
 
             return Ok(ApiResponse<object>.Ok(null));
         }

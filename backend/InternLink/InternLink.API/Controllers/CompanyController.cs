@@ -31,17 +31,17 @@ public class CompanyController : ControllerBase
         try
         {
             if (skip < 0)
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Skip must be greater than or equal to 0" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SkipMustBeNonNegative }));
 
             if (take < 1 || take > 1000)
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Take must be between 1 and 1000" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.TakeMustBeInRange }));
 
             var companies = await _companyService.GetAllCompaniesAsync(skip, take);
             return Ok(ApiResponse<IEnumerable<CompanyDto>>.Ok(companies));
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = "Internal server error", Detail = ex.Message }));
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
         }
     }
 
@@ -54,17 +54,17 @@ public class CompanyController : ControllerBase
         try
         {
             if (request.Skip < 0)
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Skip must be greater than or equal to 0" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SkipMustBeNonNegative }));
 
             if (request.Take < 1 || request.Take > 1000)
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Take must be between 1 and 1000" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.TakeMustBeInRange }));
 
             var result = await _companyService.GetCompaniesWithFilterAsync(request);
             return Ok(ApiResponse<PaginatedResponse<CompanyDto>>.Ok(result));
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = "Internal server error", Detail = ex.Message }));
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
         }
     }
 
@@ -78,17 +78,17 @@ public class CompanyController : ControllerBase
         try
         {
             if (skip < 0)
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Skip must be greater than or equal to 0" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SkipMustBeNonNegative }));
 
             if (take < 1 || take > 1000)
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Take must be between 1 and 1000" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.TakeMustBeInRange }));
 
             var companies = await _companyService.GetActiveCompaniesAsync(skip, take, semesterId);
             return Ok(ApiResponse<IEnumerable<CompanyDto>>.Ok(companies));
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = "Internal server error", Detail = ex.Message }));
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
         }
     }
 
@@ -102,13 +102,13 @@ public class CompanyController : ControllerBase
         {
             var company = await _companyService.GetCompanyByIdAsync(id);
             if (company == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Company not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.CompanyNotFound }));
 
             return Ok(ApiResponse<CompanyDto>.Ok(company));
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = "Internal server error", Detail = ex.Message }));
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
         }
     }
 
@@ -124,17 +124,17 @@ public class CompanyController : ControllerBase
                 return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Industry is required" }));
 
             if (skip < 0)
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Skip must be greater than or equal to 0" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SkipMustBeNonNegative }));
 
             if (take < 1 || take > 1000)
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Take must be between 1 and 1000" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.TakeMustBeInRange }));
 
             var companies = await _companyService.GetCompaniesByIndustryAsync(industry, skip, take);
             return Ok(ApiResponse<IEnumerable<CompanyDto>>.Ok(companies));
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = "Internal server error", Detail = ex.Message }));
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
         }
     }
 
@@ -154,7 +154,7 @@ public class CompanyController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = "Internal server error", Detail = ex.Message }));
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
         }
     }
 }

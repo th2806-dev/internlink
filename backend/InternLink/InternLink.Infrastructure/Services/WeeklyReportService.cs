@@ -79,14 +79,14 @@ public class WeeklyReportService : IWeeklyReportService
         var isAssignedLecturer = report.Internship?.Lecturer?.UserId == userId;
 
         if (!isLecturerOrAdmin && !ownsInternship)
-            throw new UnauthorizedAccessException("You do not have access to this weekly report");
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessWeeklyReport);
 
         if (isLecturerOrAdmin && !isAssignedLecturer && !ownsInternship)
         {
             var isSuperAdmin = await _db.Users
                 .AnyAsync(u => u.Id == userId && u.Role == Role.SuperAdmin && !u.IsDeleted);
             if (!isSuperAdmin)
-                throw new UnauthorizedAccessException("You do not have access to this weekly report");
+                throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessWeeklyReport);
         }
 
         return _mapper.Map<WeeklyReportDto>(report);
@@ -142,13 +142,13 @@ public class WeeklyReportService : IWeeklyReportService
             .FirstOrDefaultAsync(i => i.Id == request.InternshipId && !i.IsDeleted);
 
         if (internship == null)
-            throw new InvalidOperationException("Internship not found");
+            throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.InternshipNotFound);
 
         if (internship.Semester?.TotalWeeks > 0 && (request.WeekNumber < 1 || request.WeekNumber > internship.Semester.TotalWeeks))
             throw new InvalidOperationException($"Tuần báo cáo phải nằm trong khoảng 1 đến {internship.Semester.TotalWeeks}.");
 
         if (internship.Student?.UserId != userId)
-            throw new UnauthorizedAccessException("Internship does not belong to the current student");
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NotOwnerInternship);
 
         var duplicate = await _db.WeeklyReports
             .AnyAsync(r => r.InternshipId == request.InternshipId
@@ -186,7 +186,7 @@ public class WeeklyReportService : IWeeklyReportService
         ValidateFile(fileStream, originalFileName, fileSize, mimeType);
         var internship = await GetOwnedInternshipAsync(userId, request.InternshipId);
         if (internship == null)
-            throw new UnauthorizedAccessException("Internship does not belong to the current student");
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NotOwnerInternship);
 
         if (internship.Semester?.TotalWeeks > 0 && (request.WeekNumber < 1 || request.WeekNumber > internship.Semester.TotalWeeks))
             throw new InvalidOperationException($"Tuần báo cáo phải nằm trong khoảng 1 đến {internship.Semester.TotalWeeks}.");
@@ -241,7 +241,7 @@ public class WeeklyReportService : IWeeklyReportService
             return null;
 
         if (report.Status != WeeklyReportStatus.Draft && report.Status != WeeklyReportStatus.RevisionRequested)
-            throw new InvalidOperationException("Only draft or revision-requested reports can be updated");
+            throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.OnlyDraftOrRevisionUpdatable);
 
         if (!string.IsNullOrWhiteSpace(request.Title))
             report.Title = request.Title;
@@ -270,7 +270,7 @@ public class WeeklyReportService : IWeeklyReportService
             return null;
 
         if (report.Status != WeeklyReportStatus.Draft && report.Status != WeeklyReportStatus.RevisionRequested)
-            throw new InvalidOperationException("Only draft or revision-requested reports can be updated");
+            throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.OnlyDraftOrRevisionUpdatable);
 
         var oldFileUrl = report.FileUrl;
         var (relativePath, savedFileName, fileId) = await StoreFileAsync(fileStream, originalFileName, report.InternshipId, mimeType);
@@ -317,13 +317,13 @@ public class WeeklyReportService : IWeeklyReportService
         var ownsInternship = report.Internship.Student?.UserId == userId;
         var isAssignedLecturer = report.Internship.Lecturer?.UserId == userId;
         if (!ownsInternship && !isAssignedLecturer && !isLecturerOrAdmin)
-            throw new UnauthorizedAccessException("You do not have access to this file");
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessFile);
 
         if (isLecturerOrAdmin && !ownsInternship && !isAssignedLecturer)
         {
             var isSuperAdmin = await _db.Users.AnyAsync(u => u.Id == userId && u.Role == Role.SuperAdmin && !u.IsDeleted);
             if (!isSuperAdmin)
-                throw new UnauthorizedAccessException("You do not have access to this file");
+                throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessFile);
         }
 
         if (_googleDrive != null && report.FileUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase))
@@ -413,10 +413,10 @@ public class WeeklyReportService : IWeeklyReportService
 
         // Verify ownership
         if (report.Internship?.Student?.UserId != userId)
-            throw new UnauthorizedAccessException("Internship does not belong to the current student");
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NotOwnerInternship);
 
         if (report.Status != WeeklyReportStatus.Draft && report.Status != WeeklyReportStatus.RevisionRequested)
-            throw new InvalidOperationException("Only draft or revision-requested reports can be submitted");
+            throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.OnlyDraftOrRevisionSubmittable);
 
         if (report.Internship?.SemesterId != null)
         {
@@ -486,12 +486,12 @@ public class WeeklyReportService : IWeeklyReportService
                 var isSuperAdmin = await _db.Users
                     .AnyAsync(u => u.Id == userId && u.Role == Role.SuperAdmin && !u.IsDeleted);
                 if (!isSuperAdmin)
-                    throw new UnauthorizedAccessException("You do not have access to this weekly report");
+                    throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessWeeklyReport);
             }
         }
 
         if (!Enum.TryParse<WeeklyReportStatus>(request.Status, true, out var status))
-            throw new InvalidOperationException($"Invalid status: {request.Status}");
+            throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.InvalidStatusValueDetail(request.Status));
 
         if (status is not (WeeklyReportStatus.Reviewed or WeeklyReportStatus.RevisionRequested or WeeklyReportStatus.Approved))
             throw new InvalidOperationException("Review status must be Reviewed, RevisionRequested, or Approved");
@@ -538,7 +538,7 @@ public class WeeklyReportService : IWeeklyReportService
     public async Task<FeedbackDto?> AddStudentReplyAsync(Guid reportId, Guid studentUserId, string comment)
     {
         if (string.IsNullOrWhiteSpace(comment))
-            throw new InvalidOperationException("Reply comment is required");
+            throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.ReplyCommentRequired);
 
         var report = await _db.WeeklyReports
             .Include(r => r.Internship)
@@ -598,7 +598,7 @@ public class WeeklyReportService : IWeeklyReportService
         var isSuperAdmin = isLecturer && await _db.Users.AnyAsync(u =>
             u.Id == userId && u.Role == Role.SuperAdmin && !u.IsDeleted);
         if ((!isLecturer && !owns) || (isLecturer && !assigned && !isSuperAdmin))
-            throw new UnauthorizedAccessException("You do not have access to this feedback thread");
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessFeedback);
 
         var now = DateTime.UtcNow;
         foreach (var feedback in report.Feedbacks.Where(f => !f.IsDeleted))
@@ -648,7 +648,7 @@ public class WeeklyReportService : IWeeklyReportService
         var ownsInternship = report.Internship.Student?.UserId == userId;
         var isAssignedLecturer = report.Internship.Lecturer?.UserId == userId;
         if (!ownsInternship && !isAssignedLecturer && !isLecturerOrAdmin)
-            throw new UnauthorizedAccessException("You do not have access to this weekly report");
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessWeeklyReport);
     }
 
     private async Task EnsureInternshipAccessAsync(Guid internshipId, Guid userId, bool isLecturerOrAdmin)
@@ -659,20 +659,20 @@ public class WeeklyReportService : IWeeklyReportService
             .FirstOrDefaultAsync(i => i.Id == internshipId && !i.IsDeleted);
 
         if (internship == null)
-            throw new UnauthorizedAccessException("You do not have access to this weekly report");
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessWeeklyReport);
 
         var ownsInternship = internship.Student?.UserId == userId;
         var isAssignedLecturer = internship.Lecturer?.UserId == userId;
 
         if (!isLecturerOrAdmin && !ownsInternship)
-            throw new UnauthorizedAccessException("You do not have access to this weekly report");
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessWeeklyReport);
 
         if (isLecturerOrAdmin && !isAssignedLecturer && !ownsInternship)
         {
             var isSuperAdmin = await _db.Users
                 .AnyAsync(u => u.Id == userId && u.Role == Role.SuperAdmin && !u.IsDeleted);
             if (!isSuperAdmin)
-                throw new UnauthorizedAccessException("You do not have access to this weekly report");
+                throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessWeeklyReport);
         }
     }
 

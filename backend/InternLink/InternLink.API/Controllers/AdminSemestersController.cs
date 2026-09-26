@@ -46,7 +46,7 @@ public class AdminSemestersController : ControllerBase
     {
         var semester = await _semesterService.GetSemesterByIdAsync(id);
         if (semester == null || !_deptScope.HasAccess(User, semester.DepartmentId))
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Semester not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SemesterNotFound }));
 
         var deptId = _deptScope.GetCurrentDepartmentId(User);
         var summary = await _summaryService.GetAsync(id, deptId)
@@ -64,16 +64,16 @@ public class AdminSemestersController : ControllerBase
     {
         var semester = await _semesterService.GetSemesterByIdAsync(id);
         if (semester == null)
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Semester not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SemesterNotFound }));
 
         // DepartmentAdmin chỉ lưu cho khoa của mình; kỳ legacy (DepartmentId = null) là read-only.
         if (semester.DepartmentId == null || !_deptScope.HasAccess(User, semester.DepartmentId))
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Semester not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SemesterNotFound }));
 
         var deptId = _deptScope.GetCurrentDepartmentId(User);
         var saved = await _summaryService.SaveAsync(id, deptId, request);
         if (saved == null)
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Semester not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SemesterNotFound }));
 
         return Ok(ApiResponse<LecturerSemesterSummaryDto>.Ok(saved));
     }
@@ -91,10 +91,10 @@ public class AdminSemestersController : ControllerBase
     {
         var semester = await _semesterService.GetSemesterByIdAsync(id);
         if (semester == null)
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Semester not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SemesterNotFound }));
 
         if (!_deptScope.HasAccess(User, semester.DepartmentId))
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Semester not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SemesterNotFound }));
 
         return Ok(ApiResponse<SemesterDto>.Ok(semester));
     }
@@ -125,14 +125,14 @@ public class AdminSemestersController : ControllerBase
     {
         var existing = await _semesterService.GetSemesterByIdAsync(id);
         if (existing == null)
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Semester not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SemesterNotFound }));
 
         if (!_deptScope.HasAccess(User, existing.DepartmentId))
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Semester not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SemesterNotFound }));
 
         var updated = await _semesterService.UpdateSemesterAsync(id, dto);
         if (updated == null)
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Semester not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SemesterNotFound }));
 
         return Ok(ApiResponse<SemesterDto>.Ok(updated));
     }
@@ -142,11 +142,11 @@ public class AdminSemestersController : ControllerBase
     public async Task<IActionResult> Close(Guid id)
     {
         if (!await _deptCanAccessSemester(id))
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Semester not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SemesterNotFound }));
 
         var success = await _semesterService.CloseSemesterAsync(id);
         if (!success)
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Semester not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SemesterNotFound }));
 
         return Ok(ApiResponse<object>.Ok(new { message = "Semester closed and student accounts archived successfully" }));
     }
@@ -156,13 +156,13 @@ public class AdminSemestersController : ControllerBase
     public async Task<IActionResult> Start(Guid id)
     {
         if (!await _deptCanAccessSemester(id))
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Semester not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SemesterNotFound }));
 
         try
         {
             var started = await _semesterService.StartSemesterAsync(id);
             if (started == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Semester not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SemesterNotFound }));
 
             return Ok(ApiResponse<SemesterDto>.Ok(started));
         }
@@ -177,11 +177,11 @@ public class AdminSemestersController : ControllerBase
     public async Task<IActionResult> Delete(Guid id)
     {
         if (!await _deptCanAccessSemester(id))
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Semester not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SemesterNotFound }));
 
         var success = await _semesterService.DeleteSemesterAsync(id);
         if (!success)
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Semester not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SemesterNotFound }));
 
         return Ok(ApiResponse<object>.Ok(new { message = "Semester deleted successfully" }));
     }

@@ -74,7 +74,7 @@ public class LecturerController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         var me = await _lecturerService.GetMeAsync(userId.Value);
         if (me == null)
@@ -88,7 +88,7 @@ public class LecturerController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
         if (string.IsNullOrWhiteSpace(request.FullName))
             return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Họ tên không được để trống" }));
 
@@ -116,7 +116,7 @@ public class LecturerController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         var stats = await _lecturerService.GetDashboardStatsAsync(userId.Value, semesterId);
         return Ok(ApiResponse<LecturerDashboardStatsDto>.Ok(stats));
@@ -130,7 +130,7 @@ public class LecturerController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         var trend = await _lecturerService.GetWeeklyTrendAsync(userId.Value, semesterId);
         return Ok(ApiResponse<List<WeeklyTrendDto>>.Ok(trend));
@@ -144,7 +144,7 @@ public class LecturerController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         var distribution = await _lecturerService.GetGradeDistributionAsync(userId.Value, semesterId);
         return Ok(ApiResponse<GradeDistributionDto>.Ok(distribution));
@@ -158,7 +158,7 @@ public class LecturerController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         var stats = await _lecturerService.GetCompanyStatsAsync(userId.Value, semesterId);
         return Ok(ApiResponse<List<CompanyStatsDto>>.Ok(stats));
@@ -172,7 +172,7 @@ public class LecturerController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         var stats = await _lecturerService.GetActivityStatsAsync(userId.Value, semesterId);
         return Ok(ApiResponse<LecturerActivityStatsDto>.Ok(stats));
@@ -190,7 +190,7 @@ public class LecturerController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         var detail = await _lecturerService.GetCompanyDetailAsync(companyId, userId.Value, semesterId);
         if (detail == null)
@@ -211,7 +211,7 @@ public class LecturerController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         var students = await _lecturerService.GetAssignedStudentsAsync(userId.Value, search, status, semesterId);
         return Ok(ApiResponse<IEnumerable<LecturerStudentListItemDto>>.Ok(students));
@@ -225,7 +225,7 @@ public class LecturerController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         var companies = await _lecturerService.GetAssignedCompaniesAsync(userId.Value, semesterId);
         return Ok(ApiResponse<IEnumerable<LecturerCompanySummaryDto>>.Ok(companies));
@@ -243,7 +243,7 @@ public class LecturerController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         var internships = await _lecturerService.GetInternshipsAsync(userId.Value, semesterId);
         return Ok(ApiResponse<IEnumerable<InternshipDto>>.Ok(internships));
@@ -257,11 +257,11 @@ public class LecturerController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         var internship = await _lecturerService.GetInternshipAsync(id, userId.Value);
         if (internship == null)
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Internship not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternshipNotFound }));
 
         return Ok(ApiResponse<InternshipDetailDto>.Ok(internship));
     }
@@ -275,7 +275,7 @@ public class LecturerController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         try
         {
@@ -285,9 +285,9 @@ public class LecturerController : ControllerBase
 
             return Ok(ApiResponse<object>.Ok(new { message = "Notes updated successfully" }));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
     }
 
@@ -300,16 +300,16 @@ public class LecturerController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         try
         {
             var count = await _lecturerService.NotifyAssignedStudentsAsync(userId.Value, request.Title, request.Message);
             return Ok(ApiResponse<object>.Ok(new { notifiedCount = count }));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
     }
 
@@ -324,7 +324,7 @@ public class LecturerController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         try
         {
@@ -334,9 +334,9 @@ public class LecturerController : ControllerBase
 
             return Ok(ApiResponse<object>.Ok(new { message = "Reminder sent successfully" }));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
     }
 
@@ -348,7 +348,7 @@ public class LecturerController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         var submissions = await _lecturerService.GetAssignedSubmissionsAsync(userId.Value, semesterId);
         return Ok(ApiResponse<IEnumerable<SubmissionDto>>.Ok(submissions));
@@ -362,7 +362,7 @@ public class LecturerController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         var submissions = await _lecturerService.GetSubmissionsByInternshipAsync(id, userId.Value);
         return Ok(ApiResponse<IEnumerable<SubmissionDto>>.Ok(submissions));
@@ -373,7 +373,7 @@ public class LecturerController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         try
         {
@@ -382,9 +382,9 @@ public class LecturerController : ControllerBase
                 return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "No submission files found" }));
             return File(zip.FileContent, "application/zip", zip.FileName);
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
         catch (InvalidOperationException ex)
         {
@@ -401,19 +401,19 @@ public class LecturerController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         try
         {
             var feedback = await _lecturerService.AddFeedbackAsync(id, userId.Value, request);
             if (feedback == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Submission not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SubmissionNotFound }));
 
             return Ok(ApiResponse<FeedbackDto>.Ok(feedback));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
         catch (InvalidOperationException ex)
         {
@@ -439,7 +439,7 @@ public class LecturerController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         if (internshipId.HasValue)
         {
@@ -448,10 +448,10 @@ public class LecturerController : ControllerBase
                 var reports = await _weeklyReportService.GetByInternshipAsync(internshipId.Value, userId.Value, isLecturerOrAdmin: true);
                 return Ok(ApiResponse<IEnumerable<WeeklyReportDto>>.Ok(reports));
             }
-            catch (UnauthorizedAccessException)
-            {
-                return Forbid();
-            }
+            catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
+        }
         }
 
         var allReports = await _lecturerService.GetAssignedWeeklyReportsAsync(userId.Value, new WeeklyReportFilterRequest
@@ -473,19 +473,19 @@ public class LecturerController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         try
         {
             var report = await _weeklyReportService.GetByIdAsync(id, userId.Value, isLecturerOrAdmin: true);
             if (report == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Weekly report not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.WeeklyReportNotFound }));
 
             return Ok(ApiResponse<WeeklyReportDto>.Ok(report));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
     }
 
@@ -498,19 +498,19 @@ public class LecturerController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         try
         {
             var report = await _weeklyReportService.ReviewAsync(id, userId.Value, request);
             if (report == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Weekly report not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.WeeklyReportNotFound }));
 
             return Ok(ApiResponse<WeeklyReportDto>.Ok(report));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
         catch (InvalidOperationException ex)
         {
@@ -544,7 +544,7 @@ public class LecturerController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         try
         {
@@ -554,9 +554,9 @@ public class LecturerController : ControllerBase
 
             return Ok(ApiResponse<EvaluationDetailDto>.Ok(eval));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
     }
 
@@ -569,16 +569,16 @@ public class LecturerController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         try
         {
             var evaluation = await _evaluationService.CreateEvaluationAsync(request, userId.Value);
             return Ok(ApiResponse<EvaluationDetailDto>.Ok(evaluation));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
         catch (InvalidOperationException ex)
         {
@@ -595,19 +595,19 @@ public class LecturerController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         try
         {
             var evaluation = await _evaluationService.UpdateEvaluationAsync(id, request, userId.Value);
             if (evaluation == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Evaluation not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.EvaluationNotFound }));
 
             return Ok(ApiResponse<EvaluationDetailDto>.Ok(evaluation));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
         catch (InvalidOperationException ex)
         {
@@ -624,19 +624,19 @@ public class LecturerController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         try
         {
             var evaluation = await _evaluationService.FinalizeEvaluationAsync(id, userId.Value);
             if (evaluation == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Evaluation not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.EvaluationNotFound }));
 
             return Ok(ApiResponse<EvaluationDetailDto>.Ok(evaluation));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
     }
 
@@ -646,19 +646,19 @@ public class LecturerController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         try
         {
             var evaluation = await _evaluationService.UpdateDefenseAsync(id, request, userId.Value);
             if (evaluation == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Evaluation not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.EvaluationNotFound }));
 
             return Ok(ApiResponse<EvaluationDetailDto>.Ok(evaluation));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
     }
 
@@ -674,7 +674,7 @@ public class LecturerController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         var documents = await _documentService.GetAllDocumentsAsync(skip, take, userId.Value, isLecturerOrAdmin: true);
         return Ok(ApiResponse<IEnumerable<DocumentListItemDto>>.Ok(documents));
@@ -690,11 +690,11 @@ public class LecturerController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         var files = form.Files?.ToList() ?? new List<IFormFile>();
         if (files.Count == 0 || files.All(f => f.Length == 0))
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "File is required" }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.FileRequired }));
 
         var created = new List<DocumentDetailDto>();
 
@@ -720,10 +720,10 @@ public class LecturerController : ControllerBase
                 var document = await _documentService.UploadDocumentAsync(createRequest, stream, file.FileName, userId.Value);
                 created.Add(document);
             }
-            catch (UnauthorizedAccessException)
-            {
-                return Forbid();
-            }
+            catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
+        }
             catch (InvalidOperationException ex)
             {
                 return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = ex.Message }));
@@ -744,19 +744,19 @@ public class LecturerController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         try
         {
             var document = await _documentService.DownloadDocumentAsync(id, userId.Value, isLecturerOrAdmin: true);
             if (document == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Document not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.DocumentNotFound }));
 
             return File(document.FileContent, document.MimeType, document.FileName);
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
     }
 
@@ -793,7 +793,7 @@ public class LecturerController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         var bytes = await _lecturerService.ExportEndOfTermExcelAsync(userId.Value);
         var fileName = $"Tong-ket-cuoi-ky-{DateTime.UtcNow:yyyyMMdd-HHmmss}.xlsx";
@@ -808,7 +808,7 @@ public class LecturerController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         try
         {
@@ -830,7 +830,7 @@ public class LecturerController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         try
         {
@@ -857,7 +857,7 @@ public class LecturerController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         // AI comment generation using template-based approach
         var comment = GenerateCommentFromTemplate(request);

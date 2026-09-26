@@ -78,14 +78,14 @@ public class SubmissionService : ISubmissionService
         var isAssignedLecturer = submission.Internship.Lecturer?.UserId == userId;
 
         if (!isLecturerOrAdmin && !ownsInternship)
-            throw new UnauthorizedAccessException("You do not have access to this submission");
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessSubmission);
 
         if (isLecturerOrAdmin && !isAssignedLecturer && !ownsInternship)
         {
             var isSuperAdmin = await _db.Users
                 .AnyAsync(u => u.Id == userId && u.Role == Role.SuperAdmin && !u.IsDeleted);
             if (!isSuperAdmin)
-                throw new UnauthorizedAccessException("You do not have access to this submission");
+                throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessSubmission);
         }
 
         return _mapper.Map<SubmissionDto>(submission);
@@ -129,13 +129,13 @@ public class SubmissionService : ISubmissionService
             .FirstOrDefaultAsync(i => i.Id == request.InternshipId && !i.IsDeleted);
 
         if (internship == null)
-            throw new InvalidOperationException("Internship not found");
+            throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.InternshipNotFound);
 
         if (internship.Student?.UserId != userId)
-            throw new UnauthorizedAccessException("Internship does not belong to the current student");
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NotOwnerInternship);
 
         if (!Enum.TryParse<SubmissionType>(request.Type, true, out var type))
-            throw new InvalidOperationException($"Invalid submission type: {request.Type}");
+            throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.InvalidSubmissionTypeDetail(request.Type));
 
         if (type == SubmissionType.Product && !await _db.Submissions.AnyAsync(s =>
             s.InternshipId == request.InternshipId &&
@@ -202,15 +202,15 @@ public class SubmissionService : ISubmissionService
         IEnumerable<SubmissionAssetInput> links)
     {
         if (!Enum.TryParse<SubmissionType>(request.Type, true, out var type))
-            throw new InvalidOperationException($"Invalid submission type: {request.Type}");
+            throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.InvalidSubmissionTypeDetail(request.Type));
 
         var internship = await _db.Internships
             .Include(i => i.Student)
             .FirstOrDefaultAsync(i => i.Id == request.InternshipId && !i.IsDeleted);
         if (internship == null)
-            throw new InvalidOperationException("Internship not found");
+            throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.InternshipNotFound);
         if (internship.Student?.UserId != userId)
-            throw new UnauthorizedAccessException("Internship does not belong to the current student");
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NotOwnerInternship);
 
         var fileItems = files.ToList();
         var linkItems = links
@@ -290,7 +290,7 @@ public class SubmissionService : ISubmissionService
             return null;
 
         if (existing.Internship.Student?.UserId != userId)
-            throw new UnauthorizedAccessException("Submission does not belong to the current student");
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NotOwnerSubmission);
 
         if (existing.Status != SubmissionStatus.RevisionRequested)
             throw new InvalidOperationException("Resubmit is only allowed when status is RevisionRequested");
@@ -365,7 +365,7 @@ public class SubmissionService : ISubmissionService
         var isAssignedLecturer = submission.Internship.Lecturer?.UserId == userId;
 
         if (!isLecturerOrAdmin && !ownsInternship)
-            throw new UnauthorizedAccessException("You do not have access to this file");
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessFile);
 
         if (isLecturerOrAdmin && !isAssignedLecturer && !ownsInternship)
         {
@@ -373,7 +373,7 @@ public class SubmissionService : ISubmissionService
             var isSuperAdmin = await _db.Users
                 .AnyAsync(u => u.Id == userId && u.Role == Role.SuperAdmin && !u.IsDeleted);
             if (!isSuperAdmin)
-                throw new UnauthorizedAccessException("You do not have access to this file");
+                throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessFile);
         }
 
         if (_googleDrive != null && submission.FileUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase))
@@ -422,7 +422,7 @@ public class SubmissionService : ISubmissionService
             u.Id == userId && u.Role == Role.SuperAdmin && !u.IsDeleted);
         if ((!isLecturerOrAdmin && !ownsInternship) ||
             (isLecturerOrAdmin && !isAssignedLecturer && !ownsInternship && !isSuperAdmin))
-            throw new UnauthorizedAccessException("You do not have access to this asset");
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessFile);
 
         var fullPath = Path.Combine(GetUploadRoot(), asset.FileUrl.Replace("/", Path.DirectorySeparatorChar.ToString()));
         if (!File.Exists(fullPath))
@@ -497,7 +497,7 @@ public class SubmissionService : ISubmissionService
             await EnsureSubmissionActorAccessAsync(submission, actorUserId.Value);
 
         if (!Enum.TryParse<SubmissionStatus>(request.Status, true, out var status))
-            throw new InvalidOperationException($"Invalid status: {request.Status}");
+            throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.InvalidStatusValueDetail(request.Status));
 
         submission.Status = status;
         submission.UpdatedAt = DateTime.UtcNow;
@@ -545,7 +545,7 @@ public class SubmissionService : ISubmissionService
         {
             var ownsInternship = submission.Internship.Student?.UserId == userId;
             if (!ownsInternship)
-                throw new UnauthorizedAccessException("You do not have access to this submission's feedback");
+                throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessFeedback);
 
             feedbacks = feedbacks.Where(f => f.IsPublic);
         }
@@ -616,7 +616,7 @@ public class SubmissionService : ISubmissionService
             return null;
 
         if (feedback.Lecturer?.UserId != userId)
-            throw new UnauthorizedAccessException("You can only update your own feedback");
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.OnlyOwnFeedback);
 
         feedback.Comment = request.Comment;
         feedback.UpdatedAt = DateTime.UtcNow;
@@ -633,7 +633,7 @@ public class SubmissionService : ISubmissionService
             .FirstOrDefaultAsync(i => i.Id == internshipId && !i.IsDeleted);
 
         if (internship == null)
-            throw new UnauthorizedAccessException("You do not have access to submissions for this internship");
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessInternshipDocuments);
 
         await EnsureInternshipActorAccessAsync(internship, userId, isLecturerOrAdmin);
     }
@@ -649,14 +649,14 @@ public class SubmissionService : ISubmissionService
         var isAssignedLecturer = internship.Lecturer?.UserId == userId;
 
         if (!isLecturerOrAdmin && !ownsInternship)
-            throw new UnauthorizedAccessException("You do not have access to this submission");
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessSubmission);
 
         if (isLecturerOrAdmin && !isAssignedLecturer && !ownsInternship)
         {
             var isSuperAdmin = await _db.Users
                 .AnyAsync(u => u.Id == userId && u.Role == Role.SuperAdmin && !u.IsDeleted);
             if (!isSuperAdmin)
-                throw new UnauthorizedAccessException("You do not have access to this submission");
+                throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessSubmission);
         }
     }
 
@@ -687,7 +687,7 @@ public class SubmissionService : ISubmissionService
             return SubmissionStatus.RevisionRequested;
 
         if (!Enum.TryParse<SubmissionStatus>(newStatus, true, out var status))
-            throw new InvalidOperationException($"Invalid status: {newStatus}");
+            throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.InvalidStatusValueDetail(newStatus));
 
         return status;
     }
@@ -698,7 +698,7 @@ public class SubmissionService : ISubmissionService
         Guid internshipId)
     {
         if (fileStream == null || fileStream.Length == 0)
-            throw new ArgumentException("File is required and must not be empty");
+            throw new ArgumentException(InternLink.Shared.Responses.ErrorMessage.FileEmpty);
 
         var extension = Path.GetExtension(originalFileName).ToLowerInvariant();
         if (!AllowedExtensions.Contains(extension))
@@ -754,7 +754,7 @@ public class SubmissionService : ISubmissionService
     public async Task<FeedbackDto?> AddStudentReplyAsync(Guid submissionId, Guid studentUserId, string comment)
     {
         if (string.IsNullOrWhiteSpace(comment))
-            throw new InvalidOperationException("Reply comment is required");
+            throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.ReplyCommentRequired);
 
         var submission = await _db.Submissions
             .Include(s => s.Internship)
@@ -817,7 +817,7 @@ public class SubmissionService : ISubmissionService
         var isSuperAdmin = isLecturer && await _db.Users.AnyAsync(u =>
             u.Id == userId && u.Role == Role.SuperAdmin && !u.IsDeleted);
         if ((!isLecturer && !owns) || (isLecturer && !assigned && !isSuperAdmin))
-            throw new UnauthorizedAccessException("You do not have access to this feedback thread");
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessFeedback);
 
         var now = DateTime.UtcNow;
         foreach (var feedback in submission.Feedbacks.Where(f => !f.IsDeleted))

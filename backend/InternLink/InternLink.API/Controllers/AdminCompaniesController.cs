@@ -29,9 +29,9 @@ public class AdminCompaniesController : ControllerBase
     public async Task<IActionResult> GetAll([FromQuery] int skip = 0, [FromQuery] int take = 100, [FromQuery] Guid? semesterId = null, [FromQuery] Guid? departmentId = null)
     {
         if (skip < 0)
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Skip must be greater than or equal to 0" }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SkipMustBeNonNegative }));
         if (take < 1 || take > 1000)
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Take must be between 1 and 1000" }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.TakeMustBeInRange }));
 
         var deptId = _deptScope.ResolveEffectiveDepartmentId(User, departmentId);
         var companies = await _companyService.GetAllCompaniesAsync(skip, take, semesterId, deptId);
@@ -42,9 +42,9 @@ public class AdminCompaniesController : ControllerBase
     public async Task<IActionResult> Search([FromBody] CompanyFilterRequest request)
     {
         if (request.Skip < 0)
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Skip must be greater than or equal to 0" }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SkipMustBeNonNegative }));
         if (request.Take < 1 || request.Take > 1000)
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Take must be between 1 and 1000" }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.TakeMustBeInRange }));
 
         // DepartmentAdmin chỉ tìm kiếm trong DN của khoa mình (SuperAdmin thấy tất cả).
         var deptIdForSearch = _deptScope.GetCurrentDepartmentId(User);
@@ -56,9 +56,9 @@ public class AdminCompaniesController : ControllerBase
     public async Task<IActionResult> GetActive([FromQuery] int skip = 0, [FromQuery] int take = 100, [FromQuery] Guid? semesterId = null)
     {
         if (skip < 0)
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Skip must be greater than or equal to 0" }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SkipMustBeNonNegative }));
         if (take < 1 || take > 1000)
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Take must be between 1 and 1000" }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.TakeMustBeInRange }));
 
         // DepartmentAdmin chỉ thấy DN active trong phạm vi khoa mình (SuperAdmin thấy tất cả).
         var deptIdForActive = _deptScope.GetCurrentDepartmentId(User);
@@ -78,7 +78,7 @@ public class AdminCompaniesController : ControllerBase
         {
             // IDOR guard: không cho ngưng liên kết DN của khoa khác.
             if (!await _companyService.HasCompanyAccessAsync(id, _deptScope.GetCurrentDepartmentId(User)))
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Company not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.CompanyNotFound }));
 
             await _companyService.SetCompanySemesterStatusAsync(id, semesterId, request.IsLinked);
             return Ok(ApiResponse<object>.Ok(new { isLinked = request.IsLinked }));
@@ -94,7 +94,7 @@ public class AdminCompaniesController : ControllerBase
     {
         var company = await _companyService.GetCompanyByIdAsync(id);
         if (company == null || !await _companyService.HasCompanyAccessAsync(id, _deptScope.GetCurrentDepartmentId(User)))
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Company not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.CompanyNotFound }));
 
         return Ok(ApiResponse<CompanyDto>.Ok(company));
     }
@@ -104,11 +104,11 @@ public class AdminCompaniesController : ControllerBase
     {
         // IDOR guard (rà lỗ hổng ngoài báo cáo): admin khoa chỉ thấy detail DN trong phạm vi khoa mình.
         if (!await _companyService.HasCompanyAccessAsync(id, _deptScope.GetCurrentDepartmentId(User)))
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Company not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.CompanyNotFound }));
 
         var detail = await _companyService.GetAdminCompanyDetailAsync(id);
         if (detail == null)
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Company not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.CompanyNotFound }));
 
         return Ok(ApiResponse<AdminCompanyDetailDto>.Ok(detail));
     }
@@ -119,9 +119,9 @@ public class AdminCompaniesController : ControllerBase
         if (string.IsNullOrWhiteSpace(industry))
             return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Industry is required" }));
         if (skip < 0)
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Skip must be greater than or equal to 0" }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SkipMustBeNonNegative }));
         if (take < 1 || take > 1000)
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Take must be between 1 and 1000" }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.TakeMustBeInRange }));
 
         var deptId = _deptScope.GetCurrentDepartmentId(User);
         var all = await _companyService.GetCompaniesByIndustryAsync(industry, skip, take);
@@ -156,7 +156,7 @@ public class AdminCompaniesController : ControllerBase
         try
         {
             if (!ModelState.IsValid)
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Invalid input" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InvalidInput }));
 
             var company = await _companyService.CreateCompanyAsync(request, _deptScope.GetCurrentDepartmentId(User));
             return CreatedAtAction(nameof(GetById), new { id = company.Id }, ApiResponse<CompanyDto>.Ok(company));
@@ -174,15 +174,15 @@ public class AdminCompaniesController : ControllerBase
         try
         {
             if (!ModelState.IsValid)
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Invalid input" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InvalidInput }));
 
             // IDOR guard: chỉ sửa DN trong phạm vi khoa mình.
             if (!await _companyService.HasCompanyAccessAsync(id, _deptScope.GetCurrentDepartmentId(User)))
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Company not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.CompanyNotFound }));
 
             var company = await _companyService.UpdateCompanyAsync(id, request);
             if (company == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Company not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.CompanyNotFound }));
 
             return Ok(ApiResponse<CompanyDto>.Ok(company));
         }
@@ -200,11 +200,11 @@ public class AdminCompaniesController : ControllerBase
         {
             // IDOR guard: chỉ xóa DN trong phạm vi khoa mình.
             if (!await _companyService.HasCompanyAccessAsync(id, _deptScope.GetCurrentDepartmentId(User)))
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Company not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.CompanyNotFound }));
 
             var ok = await _companyService.DeleteCompanyAsync(id);
             if (!ok)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Company not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.CompanyNotFound }));
 
             return Ok(ApiResponse<object>.Ok(null));
         }
@@ -265,7 +265,7 @@ public class AdminCompaniesController : ControllerBase
     {
         // IDOR guard: positions theo DN — admin khoa chỉ thấy DN trong phạm vi khoa mình.
         if (!await _companyService.HasCompanyAccessAsync(id, _deptScope.GetCurrentDepartmentId(User)))
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Company not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.CompanyNotFound }));
 
         var positions = await _companyService.GetPositionsAsync(id, semesterId);
         return Ok(ApiResponse<IEnumerable<CompanyPositionDto>>.Ok(positions));
@@ -295,7 +295,7 @@ public class AdminCompaniesController : ControllerBase
         {
             // IDOR guard: không tạo position trên DN của khoa khác.
             if (!await _companyService.HasCompanyAccessAsync(id, _deptScope.GetCurrentDepartmentId(User)))
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Company not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.CompanyNotFound }));
 
             var position = await _companyService.CreatePositionAsync(id, request);
             return CreatedAtAction(nameof(GetPositionById), new { positionId = position.Id }, ApiResponse<CompanyPositionDto>.Ok(position));

@@ -184,14 +184,14 @@ public class EvaluationService : IEvaluationService
         var isAssignedLecturer = evaluation.Internship?.Lecturer?.UserId == userId;
 
         if (!isLecturerOrAdmin && !ownsInternship)
-            throw new UnauthorizedAccessException("You do not have access to this evaluation");
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessEvaluation);
 
         if (isLecturerOrAdmin && !isAssignedLecturer && !ownsInternship)
         {
             var isSuperAdmin = await _db.Users
                 .AnyAsync(u => u.Id == userId && u.Role == Domain.Enums.Role.SuperAdmin && !u.IsDeleted);
             if (!isSuperAdmin)
-                throw new UnauthorizedAccessException("You do not have access to this evaluation");
+                throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessEvaluation);
         }
 
         return MapToDetailDto(evaluation);
@@ -257,14 +257,14 @@ public class EvaluationService : IEvaluationService
         var isAssignedLecturer = evaluation.Internship?.Lecturer?.UserId == userId;
 
         if (!isLecturerOrAdmin && !ownsInternship)
-            throw new UnauthorizedAccessException("You do not have access to this evaluation");
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessEvaluation);
 
         if (isLecturerOrAdmin && !isAssignedLecturer && !ownsInternship)
         {
             var isSuperAdmin = await _db.Users
                 .AnyAsync(u => u.Id == userId && u.Role == Domain.Enums.Role.SuperAdmin && !u.IsDeleted);
             if (!isSuperAdmin)
-                throw new UnauthorizedAccessException("You do not have access to this evaluation");
+                throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessEvaluation);
         }
 
         return MapToDetailDto(evaluation);
@@ -352,13 +352,13 @@ public class EvaluationService : IEvaluationService
         var isAssignedLecturer = internship.Lecturer?.UserId == evaluatedById;
         var isSuperAdmin = await _db.Users.AnyAsync(u => u.Id == evaluatedById && u.Role == Role.SuperAdmin && !u.IsDeleted);
         if (!isAssignedLecturer && !isSuperAdmin)
-            throw new UnauthorizedAccessException("You can only evaluate internships assigned to you");
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.OnlyEvaluateAssigned);
 
         // Check if evaluation already exists for this internship
         var existingEvaluation = await _db.Evaluations
             .FirstOrDefaultAsync(e => e.InternshipId == request.InternshipId && !e.IsDeleted);
         if (existingEvaluation != null)
-            throw new InvalidOperationException($"An evaluation already exists for this internship");
+            throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.EvaluationAlreadyExists);
 
         var evaluation = new Evaluation
         {
@@ -621,14 +621,14 @@ public class EvaluationService : IEvaluationService
         var isAssignedLecturer = internship.Lecturer?.UserId == userId;
 
         if (!isLecturerOrAdmin && !ownsInternship)
-            throw new UnauthorizedAccessException("You do not have access to this internship evaluation");
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessEvaluation);
 
         if (isLecturerOrAdmin && !isAssignedLecturer && !ownsInternship)
         {
             var isSuperAdmin = await _db.Users
                 .AnyAsync(u => u.Id == userId && u.Role == Domain.Enums.Role.SuperAdmin && !u.IsDeleted);
             if (!isSuperAdmin)
-                throw new UnauthorizedAccessException("You do not have access to this internship evaluation");
+                throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessEvaluation);
         }
 
         return await _db.Evaluations.AnyAsync(e => e.InternshipId == internshipId && !e.IsDeleted);

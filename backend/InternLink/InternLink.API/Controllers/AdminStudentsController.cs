@@ -30,9 +30,9 @@ public class AdminStudentsController : ControllerBase
     public async Task<IActionResult> GetAll([FromQuery] int skip = 0, [FromQuery] int take = 100, [FromQuery] Guid? semesterId = null, [FromQuery] Guid? departmentId = null)
     {
         if (skip < 0)
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Skip must be greater than or equal to 0" }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SkipMustBeNonNegative }));
         if (take < 1 || take > 1000)
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Take must be between 1 and 1000" }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.TakeMustBeInRange }));
 
         var deptId = _deptScope.ResolveEffectiveDepartmentId(User, departmentId);
         var students = await _studentService.GetAllStudentsAsync(skip, take, semesterId: semesterId, departmentId: deptId);
@@ -43,9 +43,9 @@ public class AdminStudentsController : ControllerBase
     public async Task<IActionResult> Search([FromBody] StudentFilterRequest request)
     {
         if (request.Skip < 0)
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Skip must be greater than or equal to 0" }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SkipMustBeNonNegative }));
         if (request.Take < 1 || request.Take > 1000)
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Take must be between 1 and 1000" }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.TakeMustBeInRange }));
 
         var deptId = _deptScope.ResolveEffectiveDepartmentId(User, request.DepartmentId);
         var result = await _studentService.GetStudentsWithFilterAsync(request, departmentId: deptId);
@@ -57,10 +57,10 @@ public class AdminStudentsController : ControllerBase
     {
         var student = await _studentService.GetStudentByIdAsync(id);
         if (student == null)
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Student not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.StudentNotFound }));
 
         if (!_deptScope.HasAccess(User, student.DepartmentId))
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Student not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.StudentNotFound }));
 
         return Ok(ApiResponse<StudentDto>.Ok(student));
     }
@@ -73,10 +73,10 @@ public class AdminStudentsController : ControllerBase
 
         var student = await _studentService.GetStudentByCodeAsync(studentCode);
         if (student == null)
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Student not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.StudentNotFound }));
 
         if (!_deptScope.HasAccess(User, student.DepartmentId))
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Student not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.StudentNotFound }));
 
         return Ok(ApiResponse<StudentDto>.Ok(student));
     }
@@ -101,7 +101,7 @@ public class AdminStudentsController : ControllerBase
         try
         {
             if (!ModelState.IsValid)
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Invalid input" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InvalidInput }));
 
             // DepartmentAdmin creates within their own department; SuperAdmin's records start unassigned.
             var student = await _studentService.CreateStudentAsync(request, _deptScope.GetCurrentDepartmentId(User));
@@ -120,16 +120,16 @@ public class AdminStudentsController : ControllerBase
         try
         {
             if (!ModelState.IsValid)
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Invalid input" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InvalidInput }));
 
             // Check access BEFORE mutating (avoid writing another department's record).
             var target = await _studentService.GetStudentByIdAsync(id);
             if (target == null || !_deptScope.HasAccess(User, target.DepartmentId))
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Student not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.StudentNotFound }));
 
             var student = await _studentService.UpdateStudentAsync(id, request);
             if (student == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Student not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.StudentNotFound }));
 
             return Ok(ApiResponse<StudentDto>.Ok(student));
         }
@@ -145,13 +145,13 @@ public class AdminStudentsController : ControllerBase
     {
         var target = await _studentService.GetStudentByIdAsync(id);
         if (target == null || !_deptScope.HasAccess(User, target.DepartmentId))
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Student not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.StudentNotFound }));
 
         try
         {
             var ok = await _studentService.DeleteStudentAsync(id);
             if (!ok)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Student not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.StudentNotFound }));
 
             return Ok(ApiResponse<object>.Ok(null));
         }

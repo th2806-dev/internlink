@@ -29,7 +29,7 @@ public class AdminAssignmentsController : ControllerBase
         try
         {
             if (!ModelState.IsValid)
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Invalid input" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InvalidInput }));
 
             var deptId = _deptScope.GetCurrentDepartmentId(User);
             var result = await _assignmentService.BulkAssignAsync(request, deptId);
@@ -71,7 +71,7 @@ public class AdminAssignmentsController : ControllerBase
     public async Task<IActionResult> Unassign([FromBody] UnassignRequest request)
     {
         if (!ModelState.IsValid)
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Invalid input" }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InvalidInput }));
 
         var deptId = _deptScope.GetCurrentDepartmentId(User);
         var ok = await _assignmentService.UnassignAsync(request, deptId);

@@ -26,7 +26,7 @@ public class FeedbackController : ControllerBase
         {
             var userId = User.GetUserId();
             if (userId == null)
-                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
             var feedback = await _submissionService.UpdateFeedbackAsync(id, userId.Value, request);
             if (feedback == null)
@@ -34,9 +34,9 @@ public class FeedbackController : ControllerBase
 
             return Ok(ApiResponse<FeedbackDto>.Ok(feedback));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
         catch (InvalidOperationException ex)
         {

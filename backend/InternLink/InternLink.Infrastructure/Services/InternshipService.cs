@@ -188,14 +188,14 @@ public class InternshipService : IInternshipService
         var isAssignedLecturer = internship.Lecturer?.UserId == userId;
 
         if (!isLecturerOrAdmin && !ownsInternship)
-            throw new UnauthorizedAccessException("You do not have access to this internship");
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessInternship);
 
         if (isLecturerOrAdmin && !isAssignedLecturer && !ownsInternship)
         {
             var isSuperAdmin = await _db.Users
                 .AnyAsync(u => u.Id == userId && u.Role == Role.SuperAdmin && !u.IsDeleted);
             if (!isSuperAdmin)
-                throw new UnauthorizedAccessException("You do not have access to this internship");
+                throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessInternship);
         }
 
         return MapToDetailFullDto(internship);

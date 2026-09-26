@@ -1,4 +1,5 @@
 using InternLink.API.Extensions;
+using InternLink.Shared.Responses;
 using InternLink.Application.DTOs;
 using InternLink.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -101,7 +102,7 @@ public class EvaluationController : ControllerBase
         {
             var userId = User.GetUserId();
             if (userId == null)
-                return Unauthorized(new { message = "Unauthorized" });
+                return Unauthorized(InternLink.Shared.Responses.ErrorMessage.Unauthorized);
 
             var isLecturerOrAdmin = User.IsInRole("Lecturer") || User.IsInRole("SuperAdmin");
             var evaluation = await _evaluationService.GetEvaluationByIdAsync(id, userId.Value, isLecturerOrAdmin);
@@ -110,9 +111,9 @@ public class EvaluationController : ControllerBase
 
             return Ok(evaluation);
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
         catch (Exception ex)
         {
@@ -133,7 +134,7 @@ public class EvaluationController : ControllerBase
         {
             var userId = User.GetUserId();
             if (userId == null)
-                return Unauthorized(new { message = "Unauthorized" });
+                return Unauthorized(InternLink.Shared.Responses.ErrorMessage.Unauthorized);
 
             var isLecturerOrAdmin = User.IsInRole("Lecturer") || User.IsInRole("SuperAdmin");
             var scores = await _evaluationService.GetEvaluationScoresAsync(id, userId.Value, isLecturerOrAdmin);
@@ -142,9 +143,9 @@ public class EvaluationController : ControllerBase
 
             return Ok(scores);
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
         catch (Exception ex)
         {
@@ -164,7 +165,7 @@ public class EvaluationController : ControllerBase
         {
             var userId = User.GetUserId();
             if (userId == null)
-                return Unauthorized(new { message = "Unauthorized" });
+                return Unauthorized(InternLink.Shared.Responses.ErrorMessage.Unauthorized);
 
             var isLecturerOrAdmin = User.IsInRole("Lecturer") || User.IsInRole("SuperAdmin");
             var evaluation = await _evaluationService.GetEvaluationByInternshipAsync(internshipId, userId.Value, isLecturerOrAdmin);
@@ -173,9 +174,9 @@ public class EvaluationController : ControllerBase
 
             return Ok(evaluation);
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
         catch (Exception ex)
         {
@@ -248,14 +249,14 @@ public class EvaluationController : ControllerBase
         {
             var userId = User.GetUserId();
             if (userId == null)
-                return Unauthorized(new { message = "User ID not found in token" });
+                return Unauthorized(InternLink.Shared.Responses.ErrorMessage.Unauthorized);
 
             var evaluation = await _evaluationService.CreateEvaluationAsync(request, userId.Value);
             return CreatedAtAction(nameof(GetEvaluationById), new { id = evaluation.Id }, evaluation);
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
         catch (InvalidOperationException ex)
         {
@@ -283,7 +284,7 @@ public class EvaluationController : ControllerBase
         {
             var userId = User.GetUserId();
             if (userId == null)
-                return Unauthorized(new { message = "User ID not found in token" });
+                return Unauthorized(InternLink.Shared.Responses.ErrorMessage.Unauthorized);
 
             var evaluation = await _evaluationService.UpdateEvaluationAsync(id, request, userId.Value);
             if (evaluation == null)
@@ -291,9 +292,9 @@ public class EvaluationController : ControllerBase
 
             return Ok(evaluation);
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
         catch (InvalidOperationException ex)
         {
@@ -320,7 +321,7 @@ public class EvaluationController : ControllerBase
         {
             var userId = User.GetUserId();
             if (userId == null)
-                return Unauthorized(new { message = "User ID not found in token" });
+                return Unauthorized(InternLink.Shared.Responses.ErrorMessage.Unauthorized);
 
             var evaluation = await _evaluationService.FinalizeEvaluationAsync(id, userId.Value);
             if (evaluation == null)
@@ -328,9 +329,9 @@ public class EvaluationController : ControllerBase
 
             return Ok(evaluation);
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
         catch (Exception ex)
         {
@@ -353,7 +354,7 @@ public class EvaluationController : ControllerBase
         {
             var userId = User.GetUserId();
             if (userId == null)
-                return Unauthorized(new { message = "User ID not found in token" });
+                return Unauthorized(InternLink.Shared.Responses.ErrorMessage.Unauthorized);
 
             var result = await _evaluationService.DeleteEvaluationAsync(id, userId.Value);
             if (!result)
@@ -361,9 +362,9 @@ public class EvaluationController : ControllerBase
 
             return NoContent();
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
         catch (InvalidOperationException ex)
         {
@@ -412,15 +413,15 @@ public class EvaluationController : ControllerBase
         {
             var userId = User.GetUserId();
             if (userId == null)
-                return Unauthorized(new { message = "Unauthorized" });
+                return Unauthorized(InternLink.Shared.Responses.ErrorMessage.Unauthorized);
 
             var isLecturerOrAdmin = User.IsInRole("Lecturer") || User.IsInRole("SuperAdmin");
             var hasEvaluation = await _evaluationService.HasEvaluationAsync(internshipId, userId.Value, isLecturerOrAdmin);
             return Ok(hasEvaluation);
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
         catch (Exception ex)
         {

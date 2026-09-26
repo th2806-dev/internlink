@@ -124,7 +124,7 @@ public class InternshipServiceTests
         var act = async () => await service.GetInternshipByIdAsync(internship.Id, strangerUser.Id, isLecturerOrAdmin: false);
 
         await act.Should().ThrowAsync<UnauthorizedAccessException>()
-            .WithMessage("*access*");
+            .WithMessage("*quyền truy cập*");
     }
 
     [Fact]
@@ -149,7 +149,7 @@ public class InternshipServiceTests
         var act = async () => await service.GetInternshipByIdAsync(internship.Id, otherLecturer.Id, isLecturerOrAdmin: true);
 
         await act.Should().ThrowAsync<UnauthorizedAccessException>()
-            .WithMessage("*access*");
+            .WithMessage("*quyền truy cập*");
     }
 
     [Fact]

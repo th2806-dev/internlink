@@ -27,18 +27,18 @@ public class SubmissionController : ControllerBase
         {
             var userId = User.GetUserId();
             if (userId == null)
-                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
             var isLecturerOrAdmin = User.IsInRole("Lecturer") || User.IsInRole("SuperAdmin");
             var submission = await _submissionService.GetByIdAsync(id, userId.Value, isLecturerOrAdmin);
             if (submission == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Submission not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SubmissionNotFound }));
 
             return Ok(ApiResponse<SubmissionDto>.Ok(submission));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
     }
 
@@ -50,15 +50,15 @@ public class SubmissionController : ControllerBase
         {
             var userId = User.GetUserId();
             if (userId == null)
-                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
             var isLecturerOrAdmin = User.IsInRole("Lecturer") || User.IsInRole("SuperAdmin");
             var submissions = await _submissionService.GetByInternshipAsync(internshipId, userId.Value, isLecturerOrAdmin);
             return Ok(ApiResponse<IEnumerable<SubmissionDto>>.Ok(submissions));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
     }
 
@@ -68,7 +68,7 @@ public class SubmissionController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         var submissions = await _submissionService.GetMineAsync(userId.Value);
         return Ok(ApiResponse<IEnumerable<SubmissionDto>>.Ok(submissions));
@@ -82,14 +82,14 @@ public class SubmissionController : ControllerBase
         {
             var userId = User.GetUserId();
             if (userId == null)
-                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
             var submission = await _submissionService.CreateAsync(userId.Value, request);
             return CreatedAtAction(nameof(GetById), new { id = submission.Id }, ApiResponse<SubmissionDto>.Ok(submission));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
         catch (InvalidOperationException ex)
         {
@@ -105,11 +105,11 @@ public class SubmissionController : ControllerBase
         try
         {
             if (form.File == null || form.File.Length == 0)
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "File is required" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.FileRequired }));
 
             var userId = User.GetUserId();
             if (userId == null)
-                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
             var createRequest = new CreateSubmissionRequest
             {
@@ -128,9 +128,9 @@ public class SubmissionController : ControllerBase
 
             return CreatedAtAction(nameof(GetById), new { id = submission.Id }, ApiResponse<SubmissionDto>.Ok(submission));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
         catch (InvalidOperationException ex)
         {
@@ -147,7 +147,7 @@ public class SubmissionController : ControllerBase
         {
             var userId = User.GetUserId();
             if (userId == null)
-                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
             var links = string.IsNullOrWhiteSpace(form.LinksJson)
                 ? new List<SubmissionAssetInput>()
@@ -171,9 +171,9 @@ public class SubmissionController : ControllerBase
 
             return CreatedAtAction(nameof(GetById), new { id = submission.Id }, ApiResponse<SubmissionDto>.Ok(submission));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
         catch (InvalidOperationException ex)
         {
@@ -189,17 +189,17 @@ public class SubmissionController : ControllerBase
         {
             var userId = User.GetUserId();
             if (userId == null)
-                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
             var submission = await _submissionService.ResubmitAsync(id, userId.Value, request);
             if (submission == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Submission not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SubmissionNotFound }));
 
             return Ok(ApiResponse<SubmissionDto>.Ok(submission));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
         catch (InvalidOperationException ex)
         {
@@ -215,11 +215,11 @@ public class SubmissionController : ControllerBase
         try
         {
             if (form.File == null || form.File.Length == 0)
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "File is required" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.FileRequired }));
 
             var userId = User.GetUserId();
             if (userId == null)
-                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
             var resubmitRequest = new ResubmitRequest
             {
@@ -236,13 +236,13 @@ public class SubmissionController : ControllerBase
                 form.File.FileName);
 
             if (submission == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Submission not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SubmissionNotFound }));
 
             return Ok(ApiResponse<SubmissionDto>.Ok(submission));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
         catch (InvalidOperationException ex)
         {
@@ -257,7 +257,7 @@ public class SubmissionController : ControllerBase
         {
             var userId = User.GetUserId();
             if (userId == null)
-                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
             var isLecturerOrAdmin = User.IsInRole("Lecturer") || User.IsInRole("SuperAdmin");
             var file = await _submissionService.DownloadFileAsync(id, userId.Value, isLecturerOrAdmin);
@@ -266,9 +266,9 @@ public class SubmissionController : ControllerBase
 
             return File(file.FileContent, file.MimeType, file.FileName);
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
     }
 
@@ -279,7 +279,7 @@ public class SubmissionController : ControllerBase
         {
             var userId = User.GetUserId();
             if (userId == null)
-                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
             var isLecturerOrAdmin = User.IsInRole("Lecturer") || User.IsInRole("SuperAdmin");
             var file = await _submissionService.DownloadAssetAsync(id, assetId, userId.Value, isLecturerOrAdmin);
@@ -288,9 +288,9 @@ public class SubmissionController : ControllerBase
 
             return File(file.FileContent, file.MimeType, file.FileName);
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
     }
 
@@ -302,17 +302,17 @@ public class SubmissionController : ControllerBase
         {
             var userId = User.GetUserId();
             if (userId == null)
-                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
             var submission = await _submissionService.UpdateStatusAsync(id, request, userId.Value);
             if (submission == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Submission not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SubmissionNotFound }));
 
             return Ok(ApiResponse<SubmissionDto>.Ok(submission));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
         catch (InvalidOperationException ex)
         {
@@ -328,17 +328,17 @@ public class SubmissionController : ControllerBase
         {
             var userId = User.GetUserId();
             if (userId == null)
-                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
             var deleted = await _submissionService.SoftDeleteAsync(id, userId.Value);
             if (!deleted)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Submission not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SubmissionNotFound }));
 
             return Ok(ApiResponse<object>.Ok(null));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
     }
 
@@ -349,15 +349,15 @@ public class SubmissionController : ControllerBase
         {
             var userId = User.GetUserId();
             if (userId == null)
-                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
             var isLecturer = User.IsInRole("Lecturer") || User.IsInRole("SuperAdmin");
             var feedbacks = await _submissionService.GetFeedbacksAsync(id, userId.Value, isLecturer);
             return Ok(ApiResponse<IEnumerable<FeedbackDto>>.Ok(feedbacks));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
     }
 
@@ -369,11 +369,11 @@ public class SubmissionController : ControllerBase
         {
             var userId = User.GetUserId();
             if (userId == null)
-                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
             var feedback = await _submissionService.AddFeedbackAsync(id, userId.Value, request);
             if (feedback == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Submission not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SubmissionNotFound }));
 
             return Ok(ApiResponse<FeedbackDto>.Ok(feedback));
         }
@@ -391,17 +391,17 @@ public class SubmissionController : ControllerBase
         {
             var userId = User.GetUserId();
             if (userId == null)
-                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
             var feedback = await _submissionService.AddStudentReplyAsync(id, userId.Value, request.Comment);
             if (feedback == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Submission not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SubmissionNotFound }));
 
             return Ok(ApiResponse<FeedbackDto>.Ok(feedback));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
         catch (InvalidOperationException ex)
         {
@@ -417,15 +417,15 @@ public class SubmissionController : ControllerBase
         {
             var userId = User.GetUserId();
             if (userId == null)
-                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
             var isLecturer = User.IsInRole("Lecturer") || User.IsInRole("SuperAdmin");
             var updated = await _submissionService.MarkFeedbacksReadAsync(id, userId.Value, isLecturer);
-            return updated ? NoContent() : NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Submission not found" }));
+            return updated ? NoContent() : NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SubmissionNotFound }));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
     }
 }

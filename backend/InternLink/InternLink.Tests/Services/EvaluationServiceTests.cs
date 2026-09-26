@@ -133,7 +133,7 @@ public class EvaluationServiceTests
         var act = async () => await service.GetEvaluationByIdAsync(evaluation.Id, strangerUser.Id, isLecturerOrAdmin: false);
 
         await act.Should().ThrowAsync<UnauthorizedAccessException>()
-            .WithMessage("*access*");
+            .WithMessage("*quyền truy cập*");
     }
 
     [Fact]
@@ -158,7 +158,7 @@ public class EvaluationServiceTests
         var act = async () => await service.GetEvaluationByIdAsync(evaluation.Id, otherLecturer.Id, isLecturerOrAdmin: true);
 
         await act.Should().ThrowAsync<UnauthorizedAccessException>()
-            .WithMessage("*access*");
+            .WithMessage("*quyền truy cập*");
     }
 
     [Fact]

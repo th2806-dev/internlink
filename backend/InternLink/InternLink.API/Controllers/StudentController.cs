@@ -50,10 +50,10 @@ public class StudentController : ControllerBase
         try
         {
             if (skip < 0)
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Skip must be greater than or equal to 0" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SkipMustBeNonNegative }));
 
             if (take < 1 || take > 1000)
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Take must be between 1 and 1000" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.TakeMustBeInRange }));
 
             var (isLecturer, lecturerId) = await ResolveLecturerScopeAsync();
             if (isLecturer && lecturerId == Guid.Empty)
@@ -64,7 +64,7 @@ public class StudentController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = "Internal server error", Detail = ex.Message }));
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
         }
     }
 
@@ -77,10 +77,10 @@ public class StudentController : ControllerBase
         try
         {
             if (request.Skip < 0)
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Skip must be greater than or equal to 0" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SkipMustBeNonNegative }));
 
             if (request.Take < 1 || request.Take > 1000)
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Take must be between 1 and 1000" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.TakeMustBeInRange }));
 
             var (isLecturer, lecturerId) = await ResolveLecturerScopeAsync();
             if (isLecturer && lecturerId == Guid.Empty)
@@ -99,7 +99,7 @@ public class StudentController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = "Internal server error", Detail = ex.Message }));
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
         }
     }
 
@@ -113,17 +113,17 @@ public class StudentController : ControllerBase
         {
             var (isLecturer, lecturerId) = await ResolveLecturerScopeAsync();
             if (isLecturer && lecturerId == Guid.Empty)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Student not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.StudentNotFound }));
 
             var student = await _studentService.GetStudentByIdAsync(id, lecturerId);
             if (student == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Student not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.StudentNotFound }));
 
             return Ok(ApiResponse<StudentDto>.Ok(student));
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = "Internal server error", Detail = ex.Message }));
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
         }
     }
 
@@ -140,17 +140,17 @@ public class StudentController : ControllerBase
 
             var (isLecturer, lecturerId) = await ResolveLecturerScopeAsync();
             if (isLecturer && lecturerId == Guid.Empty)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Student not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.StudentNotFound }));
 
             var student = await _studentService.GetStudentByCodeAsync(studentCode, lecturerId);
             if (student == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Student not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.StudentNotFound }));
 
             return Ok(ApiResponse<StudentDto>.Ok(student));
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = "Internal server error", Detail = ex.Message }));
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
         }
     }
 
@@ -171,7 +171,7 @@ public class StudentController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = "Internal server error", Detail = ex.Message }));
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
         }
     }
 }

@@ -58,9 +58,9 @@ public class SemesterReportScheduleController : ControllerBase
             var schedules = await _semesterService.GenerateDefaultSchedulesAsync(semesterId);
             return Ok(ApiResponse<IEnumerable<SemesterReportScheduleDto>>.Ok(schedules));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
         catch (KeyNotFoundException ex)
         {
@@ -81,9 +81,9 @@ public class SemesterReportScheduleController : ControllerBase
             var updated = await _semesterService.UpdateReportScheduleAsync(semesterId, weekNumber, request);
             return Ok(ApiResponse<SemesterReportScheduleDto>.Ok(updated));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
         catch (KeyNotFoundException ex)
         {

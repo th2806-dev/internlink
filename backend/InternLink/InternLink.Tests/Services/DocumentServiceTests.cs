@@ -138,7 +138,7 @@ public class DocumentServiceTests
         var act = async () => await service.GetDocumentByIdAsync(docWithInternship.Id, strangerUser.Id, isLecturerOrAdmin: false);
 
         await act.Should().ThrowAsync<UnauthorizedAccessException>()
-            .WithMessage("*access*");
+            .WithMessage("*quyền truy cập*");
     }
 
     [Fact]
@@ -163,7 +163,7 @@ public class DocumentServiceTests
         var act = async () => await service.GetDocumentByIdAsync(docWithInternship.Id, otherLecturer.Id, isLecturerOrAdmin: true);
 
         await act.Should().ThrowAsync<UnauthorizedAccessException>()
-            .WithMessage("*access*");
+            .WithMessage("*quyền truy cập*");
     }
 
     [Fact]

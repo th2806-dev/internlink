@@ -36,7 +36,7 @@ public class AdminNotificationsController : ControllerBase
         try
         {
             if (!ModelState.IsValid)
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Invalid input" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InvalidInput }));
 
             var result = await _adminNotificationService.BroadcastAsync(request, _deptScope.GetCurrentDepartmentId(User));
             return Ok(ApiResponse<AdminBroadcastNotificationResultDto>.Ok(result));

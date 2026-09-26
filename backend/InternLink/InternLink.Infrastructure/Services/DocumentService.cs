@@ -209,14 +209,14 @@ public class DocumentService : IDocumentService
         var isUploader = document.UploadedBy?.UserId == userId;
 
         if (!isLecturerOrAdmin && !ownsInternship)
-            throw new UnauthorizedAccessException("You do not have access to this document");
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessDocument);
 
         if (isLecturerOrAdmin && !isAssignedLecturer && !isUploader && !ownsInternship)
         {
             var isSuperAdmin = await _db.Users
                 .AnyAsync(u => u.Id == userId && u.Role == Domain.Enums.Role.SuperAdmin && !u.IsDeleted);
             if (!isSuperAdmin)
-                throw new UnauthorizedAccessException("You do not have access to this document");
+                throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessDocument);
         }
 
         return _mapper.Map<DocumentDetailDto>(document);
@@ -243,10 +243,10 @@ public class DocumentService : IDocumentService
                 var assigned = internship.Lecturer?.UserId == userId.Value;
 
                 if (!isLecturerOrAdmin && !owns)
-                    throw new UnauthorizedAccessException("You do not have access to documents for this internship");
+                    throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessInternshipDocuments);
 
                 if (isLecturerOrAdmin && !assigned && !owns)
-                    throw new UnauthorizedAccessException("You do not have access to documents for this internship");
+                    throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessInternshipDocuments);
             }
         }
 
@@ -488,14 +488,14 @@ public class DocumentService : IDocumentService
                 var isUploader = document.UploadedBy?.UserId == userId;
 
                 if (!isLecturerOrAdmin && !ownsInternship)
-                    throw new UnauthorizedAccessException("You do not have access to this document");
+                    throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessDocument);
 
                 if (isLecturerOrAdmin && !isAssignedLecturer && !isUploader && !ownsInternship)
                 {
                     var isSuperAdmin = await _db.Users
                         .AnyAsync(u => u.Id == userId && u.Role == Domain.Enums.Role.SuperAdmin && !u.IsDeleted);
                     if (!isSuperAdmin)
-                        throw new UnauthorizedAccessException("You do not have access to this document");
+                        throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessDocument);
                 }
             }
         }
@@ -622,7 +622,7 @@ public class DocumentService : IDocumentService
     public async Task<(string FilePath, long FileSize, string MimeType)> SaveFileAsync(Stream fileStream, string originalFileName, Guid internshipId)
     {
         if (fileStream == null || fileStream.Length == 0)
-            throw new ArgumentException("File is required and must not be empty");
+            throw new ArgumentException(InternLink.Shared.Responses.ErrorMessage.FileEmpty);
 
         // Validate file extension
         var extension = Path.GetExtension(originalFileName).ToLowerInvariant();
@@ -717,10 +717,10 @@ public class DocumentService : IDocumentService
                 var assigned = internship.Lecturer?.UserId == userId.Value;
 
                 if (!isLecturerOrAdmin && !owns)
-                    throw new UnauthorizedAccessException("You do not have access to documents for this internship");
+                    throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessInternshipDocuments);
 
                 if (isLecturerOrAdmin && !assigned && !owns)
-                    throw new UnauthorizedAccessException("You do not have access to documents for this internship");
+                    throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessInternshipDocuments);
             }
         }
 
@@ -973,7 +973,7 @@ public class DocumentService : IDocumentService
     private async Task<(string FilePath, long FileSize, string MimeType, string? FileId)> SaveTemplateFileAsync(Stream fileStream, string originalFileName, string? department = null)
     {
         if (fileStream == null || fileStream.Length == 0)
-            throw new ArgumentException("File is required and must not be empty");
+            throw new ArgumentException(InternLink.Shared.Responses.ErrorMessage.FileEmpty);
 
         var extension = Path.GetExtension(originalFileName).ToLowerInvariant();
         if (!AllowedExtensions.Contains(extension))

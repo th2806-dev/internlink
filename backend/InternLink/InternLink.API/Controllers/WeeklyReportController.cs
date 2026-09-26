@@ -26,18 +26,18 @@ public class WeeklyReportController : ControllerBase
         {
             var userId = User.GetUserId();
             if (userId == null)
-                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
             var isLecturerOrAdmin = User.IsInRole("Lecturer") || User.IsInRole("SuperAdmin");
             var report = await _weeklyReportService.GetByIdAsync(id, userId.Value, isLecturerOrAdmin);
             if (report == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Weekly report not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.WeeklyReportNotFound }));
 
             return Ok(ApiResponse<WeeklyReportDto>.Ok(report));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
     }
 
@@ -47,7 +47,7 @@ public class WeeklyReportController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         var reports = await _weeklyReportService.GetMineAsync(userId.Value);
         return Ok(ApiResponse<IEnumerable<WeeklyReportDto>>.Ok(reports));
@@ -61,19 +61,19 @@ public class WeeklyReportController : ControllerBase
         {
             var userId = User.GetUserId();
             if (userId == null)
-                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
             var isLecturerOrAdmin = User.IsInRole("Lecturer") || User.IsInRole("SuperAdmin");
             var reports = await _weeklyReportService.GetByInternshipAsync(internshipId, userId.Value, isLecturerOrAdmin);
             return Ok(ApiResponse<IEnumerable<WeeklyReportDto>>.Ok(reports));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = "Internal server error", Detail = ex.Message }));
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
         }
     }
 
@@ -85,14 +85,14 @@ public class WeeklyReportController : ControllerBase
         {
             var userId = User.GetUserId();
             if (userId == null)
-                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
             var report = await _weeklyReportService.CreateDraftAsync(userId.Value, request);
             return CreatedAtAction(nameof(GetById), new { id = report.Id }, ApiResponse<WeeklyReportDto>.Ok(report));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
         catch (InvalidOperationException ex)
         {
@@ -108,11 +108,11 @@ public class WeeklyReportController : ControllerBase
         try
         {
             if (form.File == null || form.File.Length == 0)
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "File is required" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.FileRequired }));
 
             var userId = User.GetUserId();
             if (userId == null)
-                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
             var request = new CreateWeeklyReportRequest
             {
@@ -132,9 +132,9 @@ public class WeeklyReportController : ControllerBase
                 form.File.ContentType);
             return CreatedAtAction(nameof(GetById), new { id = report.Id }, ApiResponse<WeeklyReportDto>.Ok(report));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
         catch (InvalidOperationException ex)
         {
@@ -150,17 +150,17 @@ public class WeeklyReportController : ControllerBase
         {
             var userId = User.GetUserId();
             if (userId == null)
-                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
             var report = await _weeklyReportService.UpdateDraftAsync(id, userId.Value, request);
             if (report == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Weekly report not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.WeeklyReportNotFound }));
 
             return Ok(ApiResponse<WeeklyReportDto>.Ok(report));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
         catch (InvalidOperationException ex)
         {
@@ -176,11 +176,11 @@ public class WeeklyReportController : ControllerBase
         try
         {
             if (form.File == null || form.File.Length == 0)
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "File is required" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.FileRequired }));
 
             var userId = User.GetUserId();
             if (userId == null)
-                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
             await using var stream = form.File.OpenReadStream();
             var report = await _weeklyReportService.UpdateDraftWithFileAsync(
@@ -192,13 +192,13 @@ public class WeeklyReportController : ControllerBase
                 form.File.Length,
                 form.File.ContentType);
             if (report == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Weekly report not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.WeeklyReportNotFound }));
 
             return Ok(ApiResponse<WeeklyReportDto>.Ok(report));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
         catch (InvalidOperationException ex)
         {
@@ -213,7 +213,7 @@ public class WeeklyReportController : ControllerBase
         {
             var userId = User.GetUserId();
             if (userId == null)
-                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
             var isLecturerOrAdmin = User.IsInRole("Lecturer") || User.IsInRole("SuperAdmin");
             var file = await _weeklyReportService.DownloadFileAsync(id, userId.Value, isLecturerOrAdmin);
@@ -222,9 +222,9 @@ public class WeeklyReportController : ControllerBase
 
             return File(file.FileContent, file.MimeType, file.FileName);
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
     }
 
@@ -236,7 +236,7 @@ public class WeeklyReportController : ControllerBase
         {
             var userId = User.GetUserId();
             if (userId == null)
-                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
             var versions = await _weeklyReportService.GetVersionsAsync(
                 id,
@@ -244,9 +244,9 @@ public class WeeklyReportController : ControllerBase
                 User.IsInRole("Lecturer") || User.IsInRole("SuperAdmin"));
             return Ok(ApiResponse<IReadOnlyList<WeeklyReportVersionDto>>.Ok(versions));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
     }
 
@@ -258,7 +258,7 @@ public class WeeklyReportController : ControllerBase
         {
             var userId = User.GetUserId();
             if (userId == null)
-                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
             var file = await _weeklyReportService.DownloadVersionAsync(
                 versionId,
@@ -269,9 +269,9 @@ public class WeeklyReportController : ControllerBase
 
             return File(file.FileContent, file.MimeType, file.FileName);
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
     }
 
@@ -283,17 +283,17 @@ public class WeeklyReportController : ControllerBase
         {
             var userId = User.GetUserId();
             if (userId == null)
-                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
             var report = await _weeklyReportService.SubmitAsync(id, userId.Value);
             if (report == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Weekly report not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.WeeklyReportNotFound }));
 
             return Ok(ApiResponse<WeeklyReportDto>.Ok(report));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
         catch (InvalidOperationException ex)
         {
@@ -309,17 +309,17 @@ public class WeeklyReportController : ControllerBase
         {
             var userId = User.GetUserId();
             if (userId == null)
-                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
             var feedback = await _weeklyReportService.AddStudentReplyAsync(id, userId.Value, request.Comment);
             if (feedback == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Weekly report not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.WeeklyReportNotFound }));
 
             return Ok(ApiResponse<FeedbackDto>.Ok(feedback));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
         catch (InvalidOperationException ex)
         {
@@ -335,15 +335,15 @@ public class WeeklyReportController : ControllerBase
         {
             var userId = User.GetUserId();
             if (userId == null)
-                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
             var isLecturer = User.IsInRole("Lecturer") || User.IsInRole("SuperAdmin");
             var updated = await _weeklyReportService.MarkFeedbacksReadAsync(id, userId.Value, isLecturer);
-            return updated ? NoContent() : NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Weekly report not found" }));
+            return updated ? NoContent() : NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.WeeklyReportNotFound }));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
     }
 
@@ -355,17 +355,17 @@ public class WeeklyReportController : ControllerBase
         {
             var userId = User.GetUserId();
             if (userId == null)
-                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
             var report = await _weeklyReportService.ReviewAsync(id, userId.Value, request);
             if (report == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Weekly report not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.WeeklyReportNotFound }));
 
             return Ok(ApiResponse<WeeklyReportDto>.Ok(report));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
         catch (InvalidOperationException ex)
         {
@@ -373,7 +373,7 @@ public class WeeklyReportController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = "Internal server error", Detail = ex.Message }));
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
         }
     }
 
@@ -385,17 +385,17 @@ public class WeeklyReportController : ControllerBase
         {
             var userId = User.GetUserId();
             if (userId == null)
-                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
             var deleted = await _weeklyReportService.SoftDeleteAsync(id, userId.Value);
             if (!deleted)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Weekly report not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.WeeklyReportNotFound }));
 
             return Ok(ApiResponse<object>.Ok(null));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
         catch (InvalidOperationException ex)
         {

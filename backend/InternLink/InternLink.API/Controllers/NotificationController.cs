@@ -24,7 +24,7 @@ public class NotificationController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         var notifications = await _notificationService.GetMineAsync(userId.Value, limit);
         return Ok(ApiResponse<IEnumerable<NotificationDto>>.Ok(notifications));
@@ -35,7 +35,7 @@ public class NotificationController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         var count = await _notificationService.GetUnreadCountAsync(userId.Value);
         return Ok(ApiResponse<int>.Ok(count));
@@ -46,7 +46,7 @@ public class NotificationController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         var ok = await _notificationService.MarkReadAsync(id, userId.Value);
         if (!ok)
@@ -60,7 +60,7 @@ public class NotificationController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         var count = await _notificationService.MarkAllReadAsync(userId.Value);
         return Ok(ApiResponse<int>.Ok(count));

@@ -37,7 +37,7 @@ public class LecturerProfileController : ControllerBase
     {
         var item = await _service.GetByIdAsync(id);
         if (item == null)
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Lecturer not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.LecturerNotFound }));
 
         return Ok(ApiResponse<LecturerDto>.Ok(item));
     }
@@ -48,11 +48,11 @@ public class LecturerProfileController : ControllerBase
     {
         var lecturer = await _service.GetByIdAsync(id);
         if (lecturer == null || !_deptScope.HasAccess(User, lecturer.DepartmentId))
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Lecturer not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.LecturerNotFound }));
 
         var overview = await _service.GetOverviewAsync(id);
         if (overview == null)
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Lecturer not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.LecturerNotFound }));
 
         return Ok(ApiResponse<LecturerOverviewDto>.Ok(overview));
     }
@@ -80,11 +80,11 @@ public class LecturerProfileController : ControllerBase
         {
             var existing = await _service.GetByIdAsync(id);
             if (existing == null || !_deptScope.HasAccess(User, existing.DepartmentId))
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Lecturer not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.LecturerNotFound }));
 
             var updated = await _service.UpdateAsync(id, request);
             if (updated == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Lecturer not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.LecturerNotFound }));
 
             return Ok(ApiResponse<LecturerDto>.Ok(updated));
         }
@@ -102,11 +102,11 @@ public class LecturerProfileController : ControllerBase
         {
             var existing = await _service.GetByIdAsync(id);
             if (existing == null || !_deptScope.HasAccess(User, existing.DepartmentId))
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Lecturer not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.LecturerNotFound }));
 
             var ok = await _service.DeleteAsync(id);
             if (!ok)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Lecturer not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.LecturerNotFound }));
 
             return Ok(ApiResponse<object>.Ok(null));
         }

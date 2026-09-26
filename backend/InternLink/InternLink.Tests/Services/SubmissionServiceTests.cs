@@ -142,7 +142,7 @@ public class SubmissionServiceTests
         var act = async () => await service.GetByIdAsync(submission.Id, strangerUser.Id, isLecturerOrAdmin: false);
 
         await act.Should().ThrowAsync<UnauthorizedAccessException>()
-            .WithMessage("*access*");
+            .WithMessage("*quyền truy cập*");
     }
 
     [Fact]
@@ -167,7 +167,7 @@ public class SubmissionServiceTests
         var act = async () => await service.GetByIdAsync(submission.Id, otherLecturerUser.Id, isLecturerOrAdmin: true);
 
         await act.Should().ThrowAsync<UnauthorizedAccessException>()
-            .WithMessage("*access*");
+            .WithMessage("*quyền truy cập*");
     }
 
     [Fact]

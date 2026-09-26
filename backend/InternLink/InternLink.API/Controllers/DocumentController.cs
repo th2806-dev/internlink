@@ -27,7 +27,7 @@ public class DocumentController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
         var isLecturerOrAdmin = User.IsInRole("Lecturer") || User.IsInRole("SuperAdmin");
         var documents = await _documentService.GetAllDocumentsAsync(skip, take, userId.Value, isLecturerOrAdmin);
         return Ok(ApiResponse<IEnumerable<DocumentListItemDto>>.Ok(documents));
@@ -38,7 +38,7 @@ public class DocumentController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
         var isLecturerOrAdmin = User.IsInRole("Lecturer") || User.IsInRole("SuperAdmin");
         var result = await _documentService.GetDocumentsWithFilterAsync(filter, userId.Value, isLecturerOrAdmin);
         return Ok(ApiResponse<PaginatedResponse<DocumentListItemDto>>.Ok(result));
@@ -49,20 +49,20 @@ public class DocumentController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         try
         {
             var isLecturerOrAdmin = User.IsInRole("Lecturer") || User.IsInRole("SuperAdmin");
             var document = await _documentService.GetDocumentByIdAsync(id, userId.Value, isLecturerOrAdmin);
             if (document == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Document not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.DocumentNotFound }));
 
             return Ok(ApiResponse<DocumentDetailDto>.Ok(document));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
     }
 
@@ -71,7 +71,7 @@ public class DocumentController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         try
         {
@@ -79,9 +79,9 @@ public class DocumentController : ControllerBase
             var documents = await _documentService.GetDocumentsByInternshipAsync(internshipId, skip, take, userId.Value, isLecturerOrAdmin);
             return Ok(ApiResponse<IEnumerable<DocumentListItemDto>>.Ok(documents));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
     }
 
@@ -92,11 +92,11 @@ public class DocumentController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         var files = form.Files?.ToList() ?? new List<IFormFile>();
         if (files.Count == 0 || files.All(f => f.Length == 0))
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "File is required" }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.FileRequired }));
 
         var created = new List<DocumentDetailDto>();
 
@@ -122,10 +122,10 @@ public class DocumentController : ControllerBase
                 var document = await _documentService.UploadDocumentAsync(createRequest, stream, file.FileName, userId.Value);
                 created.Add(document);
             }
-            catch (UnauthorizedAccessException)
-            {
-                return Forbid();
-            }
+            catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
+        }
             catch (InvalidOperationException ex)
             {
                 return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = ex.Message }));
@@ -144,19 +144,19 @@ public class DocumentController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         try
         {
             var document = await _documentService.UpdateDocumentAsync(id, request, userId.Value);
             if (document == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Document not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.DocumentNotFound }));
 
             return Ok(ApiResponse<DocumentDetailDto>.Ok(document));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
     }
 
@@ -165,20 +165,20 @@ public class DocumentController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         try
         {
             var isLecturerOrAdmin = User.IsInRole("Lecturer") || User.IsInRole("SuperAdmin");
             var document = await _documentService.DownloadDocumentAsync(id, userId.Value, isLecturerOrAdmin);
             if (document == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Document not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.DocumentNotFound }));
 
             return File(document.FileContent, document.MimeType, document.FileName);
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
     }
 
@@ -188,19 +188,19 @@ public class DocumentController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         try
         {
             var result = await _documentService.DeleteDocumentAsync(id, userId.Value);
             if (!result)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Document not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.DocumentNotFound }));
 
             return Ok(ApiResponse<object>.Ok(null));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
     }
 
@@ -214,9 +214,9 @@ public class DocumentController : ControllerBase
             var count = await _documentService.GetDocumentCountByInternshipAsync(internshipId, userId, isLecturerOrAdmin);
             return Ok(ApiResponse<int>.Ok(count));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
     }
 
@@ -249,7 +249,7 @@ public class DocumentController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         if (form.File == null || form.File.Length == 0)
             return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Tệp đính kèm không được để trống" }));
@@ -284,7 +284,7 @@ public class DocumentController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         try
         {
@@ -306,7 +306,7 @@ public class DocumentController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         try
         {
@@ -316,9 +316,9 @@ public class DocumentController : ControllerBase
 
             return Ok(ApiResponse<object>.Ok(null));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
     }
 
@@ -327,7 +327,7 @@ public class DocumentController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         var versions = await _documentService.GetDocumentVersionsAsync(id);
         return Ok(ApiResponse<IEnumerable<DocumentVersionDto>>.Ok(versions));
@@ -338,7 +338,7 @@ public class DocumentController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         try
         {

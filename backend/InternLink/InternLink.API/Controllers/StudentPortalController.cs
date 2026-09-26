@@ -29,7 +29,7 @@ public class StudentPortalController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         var profile = await _studentService.GetPortalProfileByUserIdAsync(userId.Value);
         if (profile == null)
@@ -43,7 +43,7 @@ public class StudentPortalController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
         if (string.IsNullOrWhiteSpace(request.FullName))
             return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Họ tên không được để trống" }));
 
@@ -85,7 +85,7 @@ public class StudentPortalController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         var profile = await _studentService.GetPortalProfileByUserIdAsync(userId.Value);
         if (profile?.Internship == null)

@@ -55,7 +55,7 @@ public class InternshipController : ControllerBase
         try
         {
             if (skip < 0 || take < 1 || take > 1000)
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Invalid pagination parameters" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InvalidPagination }));
 
             var (isLecturer, lecturerId) = await ResolveLecturerScopeAsync();
             if (isLecturer && lecturerId == Guid.Empty)
@@ -67,7 +67,7 @@ public class InternshipController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = "Internal server error", Detail = ex.Message }));
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
         }
     }
 
@@ -80,7 +80,7 @@ public class InternshipController : ControllerBase
         try
         {
             if (request.Skip < 0 || request.Take < 1 || request.Take > 1000)
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Invalid pagination parameters" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InvalidPagination }));
 
             var (isLecturer, lecturerId) = await ResolveLecturerScopeAsync();
             if (isLecturer && lecturerId == Guid.Empty)
@@ -100,7 +100,7 @@ public class InternshipController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = "Internal server error", Detail = ex.Message }));
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
         }
     }
 
@@ -114,13 +114,13 @@ public class InternshipController : ControllerBase
         {
             var userId = User.GetUserId();
             if (userId == null)
-                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
             // DepartmentAdmin: scoped to their own department's internships.            if (User.IsInRole("DepartmentAdmin"))
             {
                 var adminInternship = await _internshipService.GetInternshipByIdForDepartmentAdminAsync(id, _deptScope.GetCurrentDepartmentId(User));
                 if (adminInternship == null)
-                    return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Internship not found" }));
+                    return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternshipNotFound }));
 
                 return Ok(ApiResponse<InternshipDetailFullDto>.Ok(adminInternship));
             }
@@ -128,17 +128,17 @@ public class InternshipController : ControllerBase
             var isLecturerOrAdmin = User.IsInRole("Lecturer") || User.IsInRole("SuperAdmin");
             var internship = await _internshipService.GetInternshipByIdAsync(id, userId.Value, isLecturerOrAdmin);
             if (internship == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Internship not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternshipNotFound }));
 
             return Ok(ApiResponse<InternshipDetailFullDto>.Ok(internship));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            return Forbid();
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = "Internal server error", Detail = ex.Message }));
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
         }
     }
 
@@ -151,7 +151,7 @@ public class InternshipController : ControllerBase
         try
         {
             if (skip < 0 || take < 1 || take > 1000)
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Invalid pagination parameters" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InvalidPagination }));
 
             var (isLecturer, lecturerId) = await ResolveLecturerScopeAsync();
             if (isLecturer && lecturerId == Guid.Empty)
@@ -163,7 +163,7 @@ public class InternshipController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = "Internal server error", Detail = ex.Message }));
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
         }
     }
 
@@ -176,7 +176,7 @@ public class InternshipController : ControllerBase
         try
         {
             if (skip < 0 || take < 1 || take > 1000)
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Invalid pagination parameters" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InvalidPagination }));
 
             var (isLecturer, lecturerId) = await ResolveLecturerScopeAsync();
             if (isLecturer && lecturerId == Guid.Empty)
@@ -188,7 +188,7 @@ public class InternshipController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = "Internal server error", Detail = ex.Message }));
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
         }
     }
 
@@ -201,7 +201,7 @@ public class InternshipController : ControllerBase
         try
         {
             if (skip < 0 || take < 1 || take > 1000)
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Invalid pagination parameters" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InvalidPagination }));
 
             var (isLecturer, lecturerId) = await ResolveLecturerScopeAsync();
             if (isLecturer && lecturerId == Guid.Empty)
@@ -213,7 +213,7 @@ public class InternshipController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = "Internal server error", Detail = ex.Message }));
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
         }
     }
 
@@ -227,7 +227,7 @@ public class InternshipController : ControllerBase
         try
         {
             if (!ModelState.IsValid)
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Invalid input" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InvalidInput }));
 
             var internship = await _internshipService.CreateInternshipAsync(request);
             return CreatedAtAction(nameof(GetInternshipById), new { id = internship.Id }, ApiResponse<InternshipDetailFullDto>.Ok(internship));
@@ -238,7 +238,7 @@ public class InternshipController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = "Internal server error", Detail = ex.Message }));
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
         }
     }
 
@@ -252,11 +252,11 @@ public class InternshipController : ControllerBase
         try
         {
             if (!ModelState.IsValid)
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Invalid input" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InvalidInput }));
 
             var internship = await _internshipService.UpdateInternshipAsync(id, request);
             if (internship == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Internship not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternshipNotFound }));
 
             return Ok(ApiResponse<InternshipDetailFullDto>.Ok(internship));
         }
@@ -266,7 +266,7 @@ public class InternshipController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = "Internal server error", Detail = ex.Message }));
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
         }
     }
 
@@ -280,11 +280,11 @@ public class InternshipController : ControllerBase
         try
         {
             if (!ModelState.IsValid)
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Invalid input" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InvalidInput }));
 
             var internship = await _internshipService.UpdateInternshipStatusAsync(id, request);
             if (internship == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Internship not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternshipNotFound }));
 
             return Ok(ApiResponse<InternshipDetailFullDto>.Ok(internship));
         }
@@ -294,7 +294,7 @@ public class InternshipController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = "Internal server error", Detail = ex.Message }));
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
         }
     }
 
@@ -308,7 +308,7 @@ public class InternshipController : ControllerBase
         try
         {
             if (!ModelState.IsValid)
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Invalid input" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InvalidInput }));
 
             var (isLecturer, lecturerId) = await ResolveLecturerScopeAsync();
             if (isLecturer && lecturerId == Guid.Empty)
@@ -316,7 +316,7 @@ public class InternshipController : ControllerBase
 
             var internship = await _internshipService.AssignCompanyAsync(id, request, lecturerId);
             if (internship == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Internship not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternshipNotFound }));
 
             return Ok(ApiResponse<InternshipDetailFullDto>.Ok(internship));
         }
@@ -326,7 +326,7 @@ public class InternshipController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = "Internal server error", Detail = ex.Message }));
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
         }
     }
 
@@ -341,7 +341,7 @@ public class InternshipController : ControllerBase
         {
             var result = await _internshipService.DeleteInternshipAsync(id);
             if (!result)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Internship not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternshipNotFound }));
 
             return Ok(ApiResponse<object>.Ok(null));
         }
@@ -351,7 +351,7 @@ public class InternshipController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = "Internal server error", Detail = ex.Message }));
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
         }
     }
 
@@ -375,7 +375,7 @@ public class InternshipController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = "Internal server error", Detail = ex.Message }));
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
         }
     }
 
@@ -392,7 +392,7 @@ public class InternshipController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = "Internal server error", Detail = ex.Message }));
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError, Detail = ex.Message }));
         }
     }
 }

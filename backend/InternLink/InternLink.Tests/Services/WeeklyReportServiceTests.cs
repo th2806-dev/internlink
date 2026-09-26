@@ -131,7 +131,7 @@ public class WeeklyReportServiceTests
         var act = async () => await service.GetByIdAsync(report.Id, strangerUser.Id, isLecturerOrAdmin: false);
 
         await act.Should().ThrowAsync<UnauthorizedAccessException>()
-            .WithMessage("*access*");
+            .WithMessage("*quyền truy cập*");
     }
 
     [Fact]
@@ -156,7 +156,7 @@ public class WeeklyReportServiceTests
         var act = async () => await service.GetByIdAsync(report.Id, otherLecturer.Id, isLecturerOrAdmin: true);
 
         await act.Should().ThrowAsync<UnauthorizedAccessException>()
-            .WithMessage("*access*");
+            .WithMessage("*quyền truy cập*");
     }
 
     [Fact]

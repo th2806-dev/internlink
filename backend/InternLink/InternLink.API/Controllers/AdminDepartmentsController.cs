@@ -30,9 +30,9 @@ public class AdminDepartmentsController : ControllerBase
     public async Task<IActionResult> GetAll([FromQuery] int skip = 0, [FromQuery] int take = 100)
     {
         if (skip < 0)
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Skip must be greater than or equal to 0" }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SkipMustBeNonNegative }));
         if (take < 1 || take > 1000)
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Take must be between 1 and 1000" }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.TakeMustBeInRange }));
 
         var departments = await _departmentService.GetAllAsync();
         return Ok(ApiResponse<IEnumerable<DepartmentDto>>.Ok(departments));
@@ -43,7 +43,7 @@ public class AdminDepartmentsController : ControllerBase
     {
         var department = await _departmentService.GetByIdAsync(id);
         if (department == null)
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Department not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.DepartmentNotFound }));
 
         return Ok(ApiResponse<DepartmentDto>.Ok(department));
     }
@@ -55,7 +55,7 @@ public class AdminDepartmentsController : ControllerBase
         try
         {
             if (!ModelState.IsValid)
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Invalid input" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InvalidInput }));
 
             var department = await _departmentService.CreateAsync(request);
             return CreatedAtAction(nameof(GetById), new { id = department.Id }, ApiResponse<DepartmentDto>.Ok(department));
@@ -73,11 +73,11 @@ public class AdminDepartmentsController : ControllerBase
         try
         {
             if (!ModelState.IsValid)
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Invalid input" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InvalidInput }));
 
             var department = await _departmentService.UpdateAsync(id, request);
             if (department == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Department not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.DepartmentNotFound }));
 
             return Ok(ApiResponse<DepartmentDto>.Ok(department));
         }
@@ -95,7 +95,7 @@ public class AdminDepartmentsController : ControllerBase
         {
             var ok = await _departmentService.DeleteAsync(id);
             if (!ok)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Department not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.DepartmentNotFound }));
 
             return Ok(ApiResponse<object>.Ok(new { message = "Department deleted successfully" }));
         }

@@ -38,7 +38,7 @@ public class SuperAdminSemestersController : ControllerBase
     {
         var semester = await _semesterService.GetSemesterByIdAsync(id);
         if (semester == null)
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Semester not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SemesterNotFound }));
 
         return Ok(ApiResponse<SemesterDto>.Ok(semester));
     }

@@ -31,9 +31,9 @@ public class AdminUsersController : ControllerBase
     public async Task<IActionResult> GetAll([FromQuery] UserFilterRequest filter)
     {
         if (filter.Skip < 0)
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Skip must be greater than or equal to 0" }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SkipMustBeNonNegative }));
         if (filter.Take < 1 || filter.Take > 1000)
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Take must be between 1 and 1000" }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.TakeMustBeInRange }));
 
         var deptId = _deptScope.GetCurrentDepartmentId(User);
         var result = await _userManagementService.GetUsersAsync(filter, departmentId: deptId);
@@ -45,10 +45,10 @@ public class AdminUsersController : ControllerBase
     {
         var user = await _userManagementService.GetUserByIdAsync(id);
         if (user == null)
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "User not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.UserNotFound }));
 
         if (!_deptScope.HasAccess(User, user.DepartmentId))
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "User not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.UserNotFound }));
 
         return Ok(ApiResponse<UserDto>.Ok(user));
     }
@@ -59,7 +59,7 @@ public class AdminUsersController : ControllerBase
         try
         {
             if (!ModelState.IsValid)
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Invalid input" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InvalidInput }));
 
             var creatorDepartmentId = _deptScope.GetCurrentDepartmentId(User);
             var user = await _userManagementService.CreateUserAsync(request, creatorDepartmentId);
@@ -77,16 +77,16 @@ public class AdminUsersController : ControllerBase
         try
         {
             if (!ModelState.IsValid)
-                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Invalid input" }));
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InvalidInput }));
 
             // Check access BEFORE mutating (avoid writing another department's record).
             var target = await _userManagementService.GetUserByIdAsync(id);
             if (target == null || !_deptScope.HasAccess(User, target.DepartmentId))
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "User not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.UserNotFound }));
 
             var user = await _userManagementService.UpdateUserAsync(id, request);
             if (user == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "User not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.UserNotFound }));
 
             return Ok(ApiResponse<UserDto>.Ok(user));
         }
@@ -101,13 +101,13 @@ public class AdminUsersController : ControllerBase
     {
         var target = await _userManagementService.GetUserByIdAsync(id);
         if (target == null || !_deptScope.HasAccess(User, target.DepartmentId))
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "User not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.UserNotFound }));
 
         try
         {
             var result = await _userManagementService.ResetPasswordAsync(id);
             if (result == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "User not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.UserNotFound }));
 
             return Ok(ApiResponse<ResetPasswordResultDto>.Ok(result));
         }
@@ -122,13 +122,13 @@ public class AdminUsersController : ControllerBase
     {
         var target = await _userManagementService.GetUserByIdAsync(id);
         if (target == null || !_deptScope.HasAccess(User, target.DepartmentId))
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "User not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.UserNotFound }));
 
         try
         {
             var ok = await _userManagementService.DeleteUserAsync(id);
             if (!ok)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "User not found" }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.UserNotFound }));
 
             return Ok(ApiResponse<object>.Ok(null));
         }

@@ -28,7 +28,7 @@ public class SuperAdminEmailController : ControllerBase
     public async Task<IActionResult> TestEmail([FromBody] TestEmailRequest request, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid)
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Invalid input" }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InvalidInput }));
 
         var invitation = new InvitationEmailRequest
         {

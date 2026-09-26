@@ -60,7 +60,7 @@ public class AuthController : ControllerBase
 
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
         var result = await _auth.RevokeTokenAsync(request.RefreshToken, userId.Value, ipAddress);
@@ -76,7 +76,7 @@ public class AuthController : ControllerBase
     {
         var userId = User.GetUserId();
         if (userId == null)
-            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
         await _auth.RevokeAllTokensForUserAsync(userId.Value, ipAddress);
@@ -88,7 +88,7 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> Logout()
     {
         var userId = User.GetUserId();
-        if (userId == null) return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+        if (userId == null) return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
         await _auth.LogoutAsync(userId.Value);
         return Ok(ApiResponse<object>.Ok(null));
     }
@@ -98,9 +98,9 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> Me()
     {
         var userId = User.GetUserId();
-        if (userId == null) return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+        if (userId == null) return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
         var user = await _auth.GetCurrentUserAsync(userId.Value);
-        if (user == null) return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "User not found" }));
+        if (user == null) return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.UserNotFound }));
         return Ok(ApiResponse<CurrentUserResponse>.Ok(user));
     }
 
@@ -109,7 +109,7 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> Sessions()
     {
         var userId = User.GetUserId();
-        if (userId == null) return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+        if (userId == null) return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         var tokens = await _db.RefreshTokens
             .AsNoTracking()
@@ -134,7 +134,7 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> Activity([FromQuery] int limit = 30)
     {
         var userId = User.GetUserId();
-        if (userId == null) return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+        if (userId == null) return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
         var tokens = await _db.RefreshTokens
             .AsNoTracking()
@@ -158,7 +158,7 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
     {
         var userId = User.GetUserId();
-        if (userId == null) return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+        if (userId == null) return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
         await _auth.ChangePasswordAsync(userId.Value, request);
         return Ok(ApiResponse<object>.Ok(null));
     }
@@ -168,7 +168,7 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
     {
         if (!ModelState.IsValid)
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Invalid input" }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InvalidInput }));
 
         await _auth.ForgotPasswordAsync(request.Email);
         return Ok(ApiResponse<object>.Ok(null));
@@ -179,7 +179,7 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
     {
         if (!ModelState.IsValid)
-            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Invalid input" }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InvalidInput }));
 
         await _auth.ResetPasswordAsync(request.Token, request.NewPassword);
         return Ok(ApiResponse<object>.Ok(null));
@@ -192,7 +192,7 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> UploadAvatar(IFormFile file)
     {
         var userId = User.GetUserId();
-        if (userId == null) return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Unauthorized" }));
+        if (userId == null) return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
         if (file == null || file.Length == 0)
             return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Image file is required" }));
 

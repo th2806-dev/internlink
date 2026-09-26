@@ -43,7 +43,7 @@ public class DepartmentAdminDepartmentsController : ControllerBase
         var departmentId = _deptScope.GetCurrentDepartmentId(User);
         var department = await _departmentService.GetByIdAsync(id, departmentId);
         if (department == null)
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Department not found" }));
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.DepartmentNotFound }));
 
         return Ok(ApiResponse<DepartmentDto>.Ok(department));
     }
