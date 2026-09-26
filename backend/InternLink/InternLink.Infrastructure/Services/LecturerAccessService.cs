@@ -47,4 +47,29 @@ public class LecturerAccessService : ILecturerAccessService
         if (!ok)
             throw new UnauthorizedAccessException("You do not have access to this internship");
     }
+
+    public async Task<bool> CanManageSemesterAsync(Guid semesterId, Guid userId)
+    {
+        // SuperAdmin quản lý toàn hệ thống.
+        if (await _db.Users.AnyAsync(u => u.Id == userId && u.Role == Role.SuperAdmin && !u.IsDeleted))
+            return true;
+
+        // 1) Được phân công hướng dẫn ít nhất 1 internship trong kỳ.
+        var hasInternship = await _db.Internships
+            .AnyAsync(i => i.SemesterId == semesterId
+                && i.Lecturer != null && i.Lecturer.UserId == userId && !i.IsDeleted);
+        if (hasInternship)
+            return true;
+
+        // 2) Có trong danh sách giảng viên của kỳ (SemesterLecturers).
+        return await _db.SemesterLecturers
+            .AnyAsync(sl => sl.SemesterId == semesterId
+                && sl.Lecturer.UserId == userId && !sl.IsDeleted);
+    }
+
+    public async Task EnsureCanManageSemesterAsync(Guid semesterId, Guid userId)
+    {
+        if (!await CanManageSemesterAsync(semesterId, userId))
+            throw new UnauthorizedAccessException("Bạn không được phân công vào học kỳ này");
+    }
 }

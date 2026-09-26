@@ -8,8 +8,9 @@ public interface IInternshipReportService
 {
     /// <summary>
     /// Export "Báo cáo tổng kết công tác thực tập tốt nghiệp" as Excel (fallback).
+    /// lecturerId khác null → chỉ thống kê internship do GV đó hướng dẫn (bảo mật GV-scoped).
     /// </summary>
-    Task<byte[]> ExportC22ASummaryReportAsync(Guid? semesterId = null, string? department = null, Guid? departmentId = null);
+    Task<byte[]> ExportC22ASummaryReportAsync(Guid? semesterId = null, string? department = null, Guid? departmentId = null, Guid? lecturerId = null);
 
     /// <summary>
     /// Export "Báo cáo tổng kết công tác thực tập tốt nghiệp" as Word (.docx)

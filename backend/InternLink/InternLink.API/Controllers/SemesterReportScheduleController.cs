@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using InternLink.API.Extensions;
 using InternLink.Application.DTOs;
 using InternLink.Application.Interfaces;
 using InternLink.Shared.Responses;
@@ -14,10 +15,27 @@ namespace InternLink.API.Controllers;
 public class SemesterReportScheduleController : ControllerBase
 {
     private readonly ISemesterService _semesterService;
+    private readonly ILecturerAccessService _lecturerAccessService;
 
-    public SemesterReportScheduleController(ISemesterService semesterService)
+    public SemesterReportScheduleController(ISemesterService semesterService, ILecturerAccessService lecturerAccessService)
     {
         _semesterService = semesterService;
+        _lecturerAccessService = lecturerAccessService;
+    }
+
+    /// <summary>
+    /// DepartmentAdmin có DepartmentId claim; Lecturer/SuperAdmin đi qua kiểm tra phân công theo kỳ.
+    /// </summary>
+    private async Task EnsureSemesterWriteAccessAsync(Guid semesterId)
+    {
+        if (User.IsInRole("DepartmentAdmin"))
+            return;
+
+        var userId = User.GetUserId();
+        if (userId == null)
+            throw new UnauthorizedAccessException("Unauthorized");
+
+        await _lecturerAccessService.EnsureCanManageSemesterAsync(semesterId, userId.Value);
     }
 
     [HttpGet]
@@ -36,8 +54,13 @@ public class SemesterReportScheduleController : ControllerBase
     {
         try
         {
+            await EnsureSemesterWriteAccessAsync(semesterId);
             var schedules = await _semesterService.GenerateDefaultSchedulesAsync(semesterId);
             return Ok(ApiResponse<IEnumerable<SemesterReportScheduleDto>>.Ok(schedules));
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
         }
         catch (KeyNotFoundException ex)
         {
@@ -54,8 +77,13 @@ public class SemesterReportScheduleController : ControllerBase
     {
         try
         {
+            await EnsureSemesterWriteAccessAsync(semesterId);
             var updated = await _semesterService.UpdateReportScheduleAsync(semesterId, weekNumber, request);
             return Ok(ApiResponse<SemesterReportScheduleDto>.Ok(updated));
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
         }
         catch (KeyNotFoundException ex)
         {

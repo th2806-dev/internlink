@@ -111,9 +111,18 @@ public class ExportController : ControllerBase
     {
         try
         {
+            Guid? lecturerId = null;
+            if (User.IsInRole("Lecturer"))
+            {
+                var userId = User.GetUserId();
+                if (userId == null) return Unauthorized();
+                lecturerId = await _lecturerAccessService.ResolveLecturerIdAsync(userId.Value);
+                if (lecturerId == null) return Forbid();
+            }
+
             var deptId = _deptScope.ResolveEffectiveDepartmentId(User, departmentId);
             _logger.LogInformation("Admin initiated summary report export for semester: {SemesterId}, Department: {Department}, DepartmentId: {DepartmentId}", semesterId, department, deptId);
-            var fileBytes = await _reportService.ExportC22ASummaryReportAsync(semesterId, department, deptId);
+            var fileBytes = await _reportService.ExportC22ASummaryReportAsync(semesterId, department, deptId, lecturerId);
             var fileName = $"Bao-cao-tong-ket-thuc-tap-{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
 
             return File(
@@ -152,6 +161,7 @@ public class ExportController : ControllerBase
                 var userId = User.GetUserId();
                 if (userId == null) return Unauthorized();
                 lecturerId = await _lecturerAccessService.ResolveLecturerIdAsync(userId.Value);
+                if (lecturerId == null) return Forbid();
             }
             var fileBytes = await _reportService.ExportC22AWordReportAsync(semesterId, department, deptId, lecturerId);
             var fileName = $"Bao-cao-tong-ket-thuc-tap-{DateTime.Now:yyyyMMdd_HHmmss}.docx";

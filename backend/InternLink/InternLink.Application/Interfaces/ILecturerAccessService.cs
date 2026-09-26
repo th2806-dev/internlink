@@ -14,4 +14,14 @@ public interface ILecturerAccessService
 
     /// <summary>Throws UnauthorizedAccessException when the lecturer is not assigned.</summary>
     Task EnsureAssignedLecturerAsync(Guid internshipId, Guid userId);
+
+    /// <summary>
+    /// Giảng viên được ghi dữ liệu theo học kỳ (Cấu hình báo cáo) khi:
+    /// được phân công hướng dẫn ít nhất 1 internship trong kỳ đó, HOẶC có trong danh sách
+    /// «Cấu hình báo cáo» của kỳ (<see cref="Domain.Entities.SemesterLecturer"/>), HOẶC là SuperAdmin.
+    /// </summary>
+    Task<bool> CanManageSemesterAsync(Guid semesterId, Guid userId);
+
+    /// <summary>Throws UnauthorizedAccessException khi giảng viên không thuộc học kỳ.</summary>
+    Task EnsureCanManageSemesterAsync(Guid semesterId, Guid userId);
 }
