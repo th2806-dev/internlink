@@ -79,17 +79,21 @@ dotnet ef migrations add <MigrationName> --project InternLink.Infrastructure --s
 
 **Connection string (Development):** `appsettings.Development.json` → LocalDB `InternLink`.
 
-Seed dữ liệu demo chạy tự động khi API khởi động (`SeedData.InitializeAsync`).
+Seed chạy tự động khi API khởi động: DB mới luôn được tạo SuperAdmin `admin` (mọi môi trường); **bộ dữ liệu demo đầy đủ** (khoa, admin khoa, kỳ, GV/SV) **chỉ chạy ở môi trường Development** — Docker (Production) chỉ seed SuperAdmin.
 
 ---
 
 ## Seed credentials (demo)
 
-| Username | Password | Role |
-|----------|----------|------|
-| `superadmin` | `Password123!` | SuperAdmin |
-| `lecturer1` | `Password123!` | Lecturer |
-| `student1` | `Password123!` | Student |
+| Username | Password | Role | Xuất hiện khi |
+|----------|----------|------|----------------|
+| `admin` | `Password123!` | SuperAdmin | DB mới (mọi môi trường, gồm Docker Production) |
+| `admin-cntt`, `admin-qtkd` | `Password123!` | DepartmentAdmin | DB mới + Development |
+| `gvcntt01/02`, `gvqtkd01/02` | `Password123!` | Lecturer | DB mới + Development |
+| `cnttsv0001–0003`, `qtkdsv0001–0003` | `Password123!` | Student | DB mới + Development |
+
+- Docker (Production) **chỉ seed `admin`** — 3 vai trò còn lại tạo qua UI / Import Excel (xem [README — Quy trình demo 4 phân quyền](../README.md)).
+- Tài khoản tạo mới qua UI/import nhận **mật khẩu tạm 8 ký tự** (gửi email hoặc ghi log), lần đăng nhập đầu bắt buộc đổi mật khẩu.
 
 ---
 

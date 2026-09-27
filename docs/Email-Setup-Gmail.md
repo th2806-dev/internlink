@@ -44,7 +44,7 @@ dotnet user-secrets list
 ## 3. Giá trị đã có trong appsettings
 
 `appsettings.json` / Development đã set sẵn SMTP Gmail + địa chỉ.  
-Mặc định **`Email:Enabled=false`** (log ra Serilog) cho tới khi bạn bật bằng user-secrets như trên.
+Mặc định **`Email:Enabled=true`** với SMTP đã trỏ sẵn (App Password còn để trống). Đặt **`Email:Enabled=false`** khi không cần gửi thật — mọi email (kèm mật khẩu tạm) sẽ được ghi ra log Serilog thay vì gửi đi.
 
 | Key | Value |
 |-----|--------|
@@ -59,7 +59,7 @@ Mặc định **`Email:Enabled=false`** (log ra Serilog) cho tới khi bạn b�
 ## 4. Kiểm tra nhanh
 
 1. `dotnet run --project InternLink.API`
-2. Login `superadmin`
+2. Login `admin` (mật khẩu `Password123!`)
 3. `POST /api/Admin/email/test` với body:
 
 ```json
@@ -80,4 +80,4 @@ Nếu `Enabled=false` → xem log trong `InternLink.API/Logs/`.
 
 - Không commit App Password vào git
 - Import hàng loạt: gửi từng lô nhỏ để tránh quota Gmail
-- Production: dùng biến môi trường hoặc secrets trên server, không hardcode
+- Production (Docker): đặt trong file `.env` ở thư mục gốc — `EMAIL_ENABLED`, `EMAIL_USERNAME`, `EMAIL_PASSWORD` (docker compose tự nạp vào container), không hardcode

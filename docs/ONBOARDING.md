@@ -1,7 +1,7 @@
 # InternLink — Hướng Dẫn Nhập Môn (Onboarding)
 
-**Phiên bản:** 4.0  
-**Ngày cập nhật:** Tháng 9/2026
+**Phiên bản:** 4.1  
+**Ngày cập nhật:** 27/09/2026
 
 ---
 
@@ -9,10 +9,10 @@
 
 | Thành phần | Phiên bản |
 |:---|:---|
-| .NET SDK | 8.x |
+| .NET SDK | 10.x |
 | Node.js | 20.x |
 | SQL Server | 2022 Express/Developer |
-| Docker Desktop | 4.x (tùy chọn) |
+| Docker Desktop | 4.x (khuyên dùng — xem [README](../README.md)) |
 
 ---
 
@@ -20,7 +20,7 @@
 
 ```bash
 # Clone repository
-git clone <repo-url>
+git clone https://github.com/th2806-dev/internlink.git
 cd internlink
 
 # Backend setup
@@ -41,9 +41,11 @@ npm run dev
 
 | Service | URL |
 |:---|:---|
-| Frontend | http://localhost:5173 |
+| Frontend (Vite) | http://localhost:3000 |
 | Backend API | http://localhost:7109 |
 | Swagger | http://localhost:7109/swagger |
+
+> Chạy bằng Docker (`docker compose up -d --build`) thì web + API đều qua **http://localhost:3000** — xem [README](../README.md).
 
 ---
 
@@ -51,9 +53,14 @@ npm run dev
 
 | Username | Password | Role |
 |:---|:---|:---|
-| `admin` | `Admin123!` | SuperAdmin |
-| `gv001` | `Password123!` | Lecturer |
-| `sv001` | `Password123!` | Student |
+| `admin` | `Password123!` | SuperAdmin — **seed sẵn** khi database mới |
+| `admin-cntt` (ví dụ) | mật khẩu tạm | DepartmentAdmin — tạo qua menu **Người dùng** |
+| `gvcntt01` (ví dụ) | mật khẩu tạm | Lecturer — tạo qua **Import Excel** |
+| `cnttsv0001` (ví dụ) | mật khẩu tạm | Student — tạo qua **Import Excel** |
+
+- Docker (Production) chỉ seed sẵn tài khoản **`admin`** — 3 vai trò còn lại do bạn tạo theo [README — Quy trình demo 4 phân quyền](../README.md).
+- **Mật khẩu tạm** 8 ký tự được gửi qua email người dùng; nếu đặt `Email:Enabled=false` thì xem trong log backend (`docker compose logs backend --tail 300`).
+- Tài khoản tạo mới **bắt buộc đổi mật khẩu** ở lần đăng nhập đầu tiên.
 
 ---
 
@@ -73,16 +80,16 @@ npm run dev
 # 1. Login Admin
 curl -X POST http://localhost:7109/api/Auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"Admin123!"}'
+  -d '{"username":"admin","password":"Password123!"}'
 
 # 2. Lấy JWT token từ response, rồi gọi:
 curl http://localhost:7109/api/Admin/students \
   -H "Authorization: Bearer <token>"
 
-# 3. Login Lecturer
+# 3. Login Lecturer (chỉ chạy sau khi đã tạo tài khoản GV — username/mật khẩu tạm lấy từ email hoặc log)
 curl -X POST http://localhost:7109/api/Auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"gv001","password":"Password123!"}'
+  -d '{"username":"<gv-username>","password":"<mat-khau-tam>"}'
 
 # 4. Gọi API giảng viên
 curl http://localhost:7109/api/Lecturer/internships \
@@ -93,5 +100,6 @@ curl http://localhost:7109/api/Lecturer/internships \
 
 ## 7. Cấu Hình Email (Tùy chọn)
 
-- Mặc định: `Email:Enabled=false` (log ra console)
-- Bật Gmail SMTP: Xem `Email-Setup-Gmail.md`
+- Mặc định: `Email:Enabled=true` (Gmail SMTP, cần `Email:Password` là App Password)
+- Demo không cần Gmail: đặt `Email:Enabled=false` → mọi email (kèm mật khẩu tạm) được ghi ra console/log
+- Hướng dẫn cấu hình SMTP: Xem [`Email-Setup-Gmail.md`](Email-Setup-Gmail.md)

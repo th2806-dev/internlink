@@ -41,9 +41,9 @@
 | 11 | [`07b-Application-Flow.md`](07b-Application-Flow.md) | Luồng Hoạt động Ứng dụng | 4.0 |
 | 12 | [`08-API-Specification.md`](08-API-Specification.md) | Đặc tả RESTful API (25 Controllers) | 4.0 |
 | 13 | [`09-System-DevOps-Guide.md`](09-System-DevOps-Guide.md) | Hướng dẫn Vận hành & Docker | 4.0 |
-| 14 | [`Demo-UI-Script.md`](Demo-UI-Script.md) | Kịch bản Demo 15 phút | 4.0 |
+| 14 | [`Demo-UI-Script.md`](Demo-UI-Script.md) | Kịch bản Demo 15 phút | 5.1 |
 | 15 | [`Email-Setup-Gmail.md`](Email-Setup-Gmail.md) | Cấu hình SMTP Gmail | 3.0 |
-| 16 | [`ONBOARDING.md`](ONBOARDING.md) | Hướng dẫn Nhập môn Dev | 4.0 |
+| 16 | [`ONBOARDING.md`](ONBOARDING.md) | Hướng dẫn Nhập môn Dev | 4.1 |
 
 ---
 
