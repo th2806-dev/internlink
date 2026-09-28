@@ -30,7 +30,7 @@ import type { CreateStudentFormPayload } from "../components/modals/CreateStuden
 import { EditStudentModal } from "../components/modals/EditStudentModal";
 import type { EditStudentFormPayload } from "../components/modals/EditStudentModal";
 import { ImportStudentsModal } from "../components/modals/ImportStudentsModal";
-import type { AdminStudentRow } from "../../../hooks/useAdminStudentsPage";
+import type { AdminStudentRow } from "../../../hooks/useAdminStudentsQuery";
 import { PageHeader } from "../../../components/common/PageHeader";
 import { ConfirmDialog } from "../../../components/common/ConfirmDialog";
 import { Panel } from "../../../components/common/Panel";
@@ -43,7 +43,7 @@ import { mapStudentDtoToRow } from "../../../lib/adminMappers";
 import { adminStudentsService } from "../../../services/adminStudents.service";
 import { adminUsersService } from "../../../services/adminUsers.service";
 import { exportService } from "../../../services/export.service";
-import { useAdminStudentsPage } from "../../../hooks/useAdminStudentsPage";
+import { useAdminStudentsQuery } from "../../../hooks/useAdminStudentsQuery";
 import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
 import { useSemester, toApiSemesterId, toApiDepartmentId } from "../../../contexts/SemesterContext";
 import type { ToastType } from "../../../contexts/ToastContext";
@@ -56,12 +56,35 @@ export const StudentsView = ({
 }) => {
   const { selectedSemester, selectedDepartmentId } = useSemester();
   const { canMutateOps, isSuperAdmin } = useAdminCapabilities();
-  const [searchParams] = useSearchParams();
-  const apiPage = useAdminStudentsPage(
-    toApiSemesterId(selectedSemester?.id),
-    onShowToast,
-    toApiDepartmentId(selectedDepartmentId),
-  );
+  const [searchParams, setSearchParams] = useSearchParams();
+  const apiPage = useAdminStudentsQuery({
+    semesterId: toApiSemesterId(selectedSemester?.id),
+    departmentId: toApiDepartmentId(selectedDepartmentId),
+    onError: (msg) => onShowToast(msg, "danger"),
+  });
+  const {
+    students,
+    counts,
+    isCountsPending,
+    classOptions,
+    isPending: isLoadingApi,
+    isError,
+    error,
+    isFetching,
+    isPlaceholderData,
+    refetch,
+    pagination,
+    filter,
+    setSearch,
+    applySearch,
+    setClassFilter,
+    setAccountStatusFilter,
+    setInternshipStatusFilter,
+    setSortBy,
+    clearFilters,
+    goToPage,
+  } = apiPage;
+  const reloadStudents = refetch;
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<AdminStudentRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AdminStudentRow | null>(null);
@@ -70,37 +93,38 @@ export const StudentsView = ({
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isGenerateAccountsModalOpen, setIsGenerateAccountsModalOpen] =
     useState(false);
-  const students = apiPage.students;
-  const setStudents = apiPage.setStudents;
-  const isLoadingApi = apiPage.isLoading;
-  const reloadStudents = apiPage.reload;
-  const [searchQuery, setSearchQuery] = useState(
-    () => searchParams.get("q") ?? "",
-  );
-  const [classFilter, setClassFilter] = useState("all");
-  const [accountStatusFilter, setAccountStatusFilter] = useState("all");
-  const [internshipFilter, setInternshipFilter] = useState("all");
-  const [sortBy, setSortBy] = useState("ten");
-  const [selectedIds, setSelectedIds] = useState([]);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [searchInput, setSearchInput] = useState(() => searchParams.get("q") ?? "");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  /* ── URL ⇄ hook (q/class/status/internship/sort/page) ──────────────── */
   useEffect(() => {
     const q = searchParams.get("q");
-    if (q != null) {
-      setSearchQuery(q);
-      setCurrentPage(1);
+    if (q != null && q !== filter.search) {
+      setSearchInput(q);
+      setSearch(q);
+      goToPage(1);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
-  const [pageSize, setPageSize] = useState(10);
 
-  const classOptions = useMemo(() => {
-    return Array.from(
-      new Set(
-        students
-          .map((s) => s.classCode)
-          .filter((c) => c && c !== "—"),
-      ),
-    ).sort();
-  }, [students]);
+  useEffect(() => {
+    const next = new URLSearchParams();
+    if (filter.search) next.set("q", filter.search);
+    if (filter.class !== "all") next.set("class", filter.class);
+    if (filter.accountStatus !== "all") next.set("status", filter.accountStatus);
+    if (filter.internshipStatus !== "all") next.set("internship", filter.internshipStatus);
+    if (filter.sortBy !== "ten") next.set("sort", filter.sortBy);
+    if (filter.page > 1) next.set("page", String(filter.page));
+    setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    filter.search,
+    filter.class,
+    filter.accountStatus,
+    filter.internshipStatus,
+    filter.sortBy,
+    filter.page,
+  ]);
 
   const handleAddStudent = async (payload: CreateStudentFormPayload) => {
     try {
@@ -183,59 +207,17 @@ export const StudentsView = ({
     }
   };
 
-  const totalStudents = students.length;
-  const activeStudents = students.filter(
-    (s) => s.accountStatus === "active",
-  ).length;
-  const pendingAccounts = students.filter(
-    (s) => s.accountStatus === "pending",
-  ).length;
-  const interningStudents = students.filter(
-    (s) =>
-      s.internshipStatus === "interning" ||
-      (s.companyName !== "Chưa có DN" && s.companyName !== "Chưa có"),
-  ).length;
-  const filteredStudents = useMemo(() => {
-    return students.filter((s) => {
-      const matchSearch =
-        s.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        s.mssv.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        s.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        s.companyName.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchClass = classFilter === "all" || s.classCode === classFilter;
-      const matchAccount =
-        accountStatusFilter === "all" ||
-        s.accountStatus === accountStatusFilter;
-      const matchIntern =
-        internshipFilter === "all" || s.internshipStatus === internshipFilter;
-      return matchSearch && matchClass && matchAccount && matchIntern;
-    }).sort((a, b) => {
-      if (sortBy === "mssv") {
-        return a.mssv.localeCompare(b.mssv, undefined, {
-          numeric: true,
-        });
-      }
-      if (sortBy === "class") {
-        const byClass = a.classCode.localeCompare(b.classCode, "vi");
-        if (byClass !== 0) return byClass;
-      }
-      // Mặc định: A-Z theo TÊN (tên gọi), rồi đến họ — như cách sắp xếp thông thường.
-      return (a.ten || a.fullName).localeCompare(b.ten || b.fullName, "vi") ||
-        (a.ho || "").localeCompare(b.ho || "", "vi");
-    });
-  }, [
-    students,
-    searchQuery,
-    classFilter,
-    accountStatusFilter,
-    internshipFilter,
-    sortBy,
-  ]);
-  const totalPages = Math.ceil(filteredStudents.length / pageSize) || 1;
-  const paginatedStudents = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
-    return filteredStudents.slice(start, start + pageSize);
-  }, [filteredStudents, currentPage, pageSize]);
+  // KPI đếm trên TOÀN BỘ kỳ từ server (không phụ thuộc trang/bộ lọc hiện tại).
+  const totalStudents = counts.total;
+  const activeStudents = counts.active;
+  const pendingAccounts = counts.pending;
+  const interningStudents = counts.hasCompany;
+  // Filter/sort/phân trang là server-side → danh sách hiển thị là dữ liệu trang hiện tại.
+  const filteredStudents = students;
+  const paginatedStudents = students;
+  const totalPages = pagination.totalPages;
+  const currentPage = pagination.page;
+  const pageSize = pagination.pageSize;
   const isAllPageSelected =
     paginatedStudents.length > 0 &&
     paginatedStudents.every((s) => selectedIds.includes(s.id));
@@ -466,22 +448,24 @@ export const StudentsView = ({
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
               <input
                 type="text"
-                value={searchQuery}
+                value={searchInput}
                 onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  setCurrentPage(1);
+                  setSearchInput(e.target.value);
+                  setSearch(e.target.value);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") applySearch();
                 }}
                 placeholder="Tìm tên, MSSV, Email, Doanh nghiệp..."
+                aria-label="Tìm sinh viên"
                 className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-medium outline-none focus:bg-white focus:border-blue-500"
               />
             </div>
 
             <select
-              value={classFilter}
-              onChange={(e) => {
-                setClassFilter(e.target.value);
-                setCurrentPage(1);
-              }}
+              value={filter.class}
+              onChange={(e) => setClassFilter(e.target.value)}
+              aria-label="Lọc theo lớp"
               className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-500 cursor-pointer"
             >
               <option value="all">Tất cả Lớp</option>
@@ -493,11 +477,9 @@ export const StudentsView = ({
             </select>
 
             <select
-              value={accountStatusFilter}
-              onChange={(e) => {
-                setAccountStatusFilter(e.target.value);
-                setCurrentPage(1);
-              }}
+              value={filter.accountStatus}
+              onChange={(e) => setAccountStatusFilter(e.target.value)}
+              aria-label="Lọc theo trạng thái tài khoản"
               className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-500 cursor-pointer"
             >
               <option value="all">Tất cả trạng thái TK</option>
@@ -507,11 +489,23 @@ export const StudentsView = ({
             </select>
 
             <select
-              value={sortBy}
-              onChange={(e) => {
-                setSortBy(e.target.value);
-                setCurrentPage(1);
-              }}
+              value={filter.internshipStatus}
+              onChange={(e) => setInternshipStatusFilter(e.target.value)}
+              aria-label="Lọc theo trạng thái thực tập"
+              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-500 cursor-pointer"
+            >
+              <option value="all">Tất cả tiến độ</option>
+              <option value="registered">Chưa có đợt thực tập</option>
+              <option value="preparing">Chuẩn bị</option>
+              <option value="interning">Đang thực tập</option>
+              <option value="completed">Hoàn thành</option>
+              <option value="hasCompany">Đã có DN</option>
+            </select>
+
+            <select
+              value={filter.sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              aria-label="Sắp xếp"
               className="px-3 py-2 bg-blue-50/80 border border-blue-200 rounded-md font-bold text-blue-900 outline-none focus:bg-white focus:border-blue-500 cursor-pointer"
             >
               <option value="ten">Sắp xếp: Tên A-Z</option>
@@ -588,9 +582,8 @@ export const StudentsView = ({
                       action={{
                         label: "Xóa bộ lọc tìm kiếm",
                         onClick: () => {
-                          setSearchQuery("");
-                          setClassFilter("all");
-                          setAccountStatusFilter("all");
+                          setSearchInput("");
+                          clearFilters();
                         },
                       }}
                     />
@@ -765,42 +758,25 @@ export const StudentsView = ({
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs pt-1 border-t border-slate-100">
           <div className="flex items-center gap-3">
             <span className="text-slate-500 font-medium">
-              Hiển thị {paginatedStudents.length} / {filteredStudents.length}{" "}
-              sinh viên
+              Hiển thị {pagination.from}
+              –{pagination.to} / {pagination.total} sinh viên
             </span>
-            <div className="flex items-center gap-1.5 text-slate-600 font-medium">
-              <span>Số dòng:</span>
-              <select
-                value={pageSize}
-                onChange={(e) => {
-                  setPageSize(Number(e.target.value));
-                  setCurrentPage(1);
-                }}
-                className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-500 cursor-pointer text-xs"
-              >
-                <option value={5}>5 dòng</option>
-                <option value={10}>10 dòng</option>
-                <option value={20}>20 dòng</option>
-              </select>
-            </div>
           </div>
 
           <div className="flex items-center gap-1.5 font-bold">
             <button
-              onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-              disabled={currentPage === 1}
+              onClick={() => goToPage(pagination.page - 1)}
+              disabled={!pagination.hasPrev}
               className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg disabled:opacity-40 transition-colors cursor-pointer"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
             <span className="px-2.5 py-1 bg-slate-50 rounded-lg border border-slate-200 text-slate-800">
-              {currentPage} / {totalPages}
+              {pagination.page} / {pagination.totalPages}
             </span>
             <button
-              onClick={() =>
-                setCurrentPage((prev) => Math.min(prev + 1, totalPages))
-              }
-              disabled={currentPage === totalPages}
+              onClick={() => goToPage(pagination.page + 1)}
+              disabled={!pagination.hasNext}
               className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg disabled:opacity-40 transition-colors cursor-pointer"
             >
               <ChevronRight className="w-4 h-4" />

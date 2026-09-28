@@ -41,6 +41,59 @@ public class StudentFilterRequest : PaginationRequest
     /// DepartmentAdmins are always re-scoped to their own department server-side.
     /// </summary>
     public Guid? DepartmentId { get; set; }
+
+    /// <summary>
+    /// Term scope — identical to GET /Admin/students (same-term internships + not-yet-enrolled students).
+    /// </summary>
+    public Guid? SemesterId { get; set; }
+
+    /// <summary>
+    /// Account state derived from the linked user: active | pending | locked.
+    /// </summary>
+    public string? AccountStatus { get; set; }
+
+    /// <summary>
+    /// Internship progress derived from the student's internship in the selected term:
+    /// registered (no internship) | preparing (NotStarted) | interning | completed | hasCompany.
+    /// </summary>
+    public string? InternshipStatus { get; set; }
+
+    /// <summary>
+    /// Sorting: name (default) | studentCode | class.
+    /// </summary>
+    public string? SortBy { get; set; }
+}
+
+/// <summary>
+/// Filtering for the paginated lecturer directory (GET /LecturerProfile/paged).
+/// </summary>
+public class LecturerFilterRequest : PaginationRequest
+{
+    /// <summary>
+    /// Matches full name, staff code or email (contains, case-insensitive).
+    /// </summary>
+    public string? SearchTerm { get; set; }
+
+    /// <summary>
+    /// Account state derived from the linked user: active (has account) | pending (no account).
+    /// </summary>
+    public string? AccountStatus { get; set; }
+
+    /// <summary>
+    /// Term scope (same rule as GET /LecturerProfile).
+    /// </summary>
+    public Guid? SemesterId { get; set; }
+
+    /// <summary>
+    /// Department scope (DepartmentAdmins are re-scoped server-side).
+    /// </summary>
+    public Guid? DepartmentId { get; set; }
+
+    /// <summary>
+    /// When true, only lecturers guiding at least one internship in scope are returned
+    /// (used by the "đang hướng dẫn" KPI count).
+    /// </summary>
+    public bool? HasGuidance { get; set; }
 }
 
 /// <summary>

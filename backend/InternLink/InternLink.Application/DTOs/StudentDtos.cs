@@ -90,6 +90,15 @@ public class StudentDto
     public DateTime? UpdatedAt { get; set; }
     /// <summary>Department this student belongs to (null = global/unassigned).</summary>
     public Guid? DepartmentId { get; set; }
+
+    /// <summary>
+    /// Active state of the linked account (null = student has no account yet).
+    /// Lets the admin list render active/locked/pending WITHOUT bulk-loading all user rows.
+    /// </summary>
+    public bool? AccountIsActive { get; set; }
+
+    /// <summary>Last login of the linked account (null when never logged in / no account).</summary>
+    public DateTime? AccountLastLoginAt { get; set; }
 }
 
 /// <summary>

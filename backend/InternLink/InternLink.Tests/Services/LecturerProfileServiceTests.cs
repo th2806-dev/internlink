@@ -444,6 +444,106 @@ public class LecturerProfileServiceTests
         (await db.Lecturers.SingleAsync(l => l.StaffCode == "GV501")).IsDeleted.Should().BeFalse();
     }
 
+    [Fact]
+    public async Task GetPagedAsync_ShouldSearchAndPaginateWithTotal()
+    {
+        var db = GetDb();
+        var service = CreateService(db);
+
+        db.Lecturers.AddRange(
+            new Lecturer { Id = Guid.NewGuid(), StaffCode = "GV001", FullName = "Nguyen Van A", Email = "a@uni.edu.vn", CreatedAt = DateTime.UtcNow },
+            new Lecturer { Id = Guid.NewGuid(), StaffCode = "GV002", FullName = "Tran Van B", Email = "b@uni.edu.vn", CreatedAt = DateTime.UtcNow },
+            new Lecturer { Id = Guid.NewGuid(), StaffCode = "GV003", FullName = "Le Van C", Email = "c@uni.edu.vn", CreatedAt = DateTime.UtcNow });
+        await db.SaveChangesAsync();
+
+        var found = await service.GetPagedAsync(new LecturerFilterRequest { SearchTerm = "nguyen" });
+        found.Total.Should().Be(1);
+        found.Items.Should().ContainSingle().Which.StaffCode.Should().Be("GV001");
+
+        var byEmail = await service.GetPagedAsync(new LecturerFilterRequest { SearchTerm = "c@uni" });
+        byEmail.Items.Should().ContainSingle().Which.StaffCode.Should().Be("GV003");
+
+        var page1 = await service.GetPagedAsync(new LecturerFilterRequest { Skip = 0, Take = 2 });
+        page1.Total.Should().Be(3);
+        page1.Items.Should().HaveCount(2);
+
+        var page2 = await service.GetPagedAsync(new LecturerFilterRequest { Skip = 2, Take = 2 });
+        page2.Total.Should().Be(3);
+        page2.Items.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public async Task GetPagedAsync_ShouldFilterByAccountStatus()
+    {
+        var db = GetDb();
+        var service = CreateService(db);
+
+        var linkedUser = new User { Id = Guid.NewGuid(), Username = "gv.active", PasswordHash = "hash", Email = "gv@uni.edu.vn", Role = Role.Lecturer, FullName = "Linked", CreatedAt = DateTime.UtcNow };
+        db.Users.Add(linkedUser);
+        db.Lecturers.AddRange(
+            new Lecturer { Id = Guid.NewGuid(), UserId = linkedUser.Id, StaffCode = "GV100", FullName = "Has Account", CreatedAt = DateTime.UtcNow },
+            new Lecturer { Id = Guid.NewGuid(), StaffCode = "GV200", FullName = "No Account", CreatedAt = DateTime.UtcNow });
+        await db.SaveChangesAsync();
+
+        var active = await service.GetPagedAsync(new LecturerFilterRequest { AccountStatus = "active" });
+        var pending = await service.GetPagedAsync(new LecturerFilterRequest { AccountStatus = "pending" });
+
+        active.Items.Should().ContainSingle().Which.StaffCode.Should().Be("GV100");
+        pending.Items.Should().ContainSingle().Which.StaffCode.Should().Be("GV200");
+    }
+
+    [Fact]
+    public async Task GetPagedAsync_ShouldFilterHasGuidanceWithinSemester()
+    {
+        var db = GetDb();
+        var service = CreateService(db);
+
+        var semester = Guid.NewGuid();
+        var otherSemester = Guid.NewGuid();
+
+        var guiding = new Lecturer { Id = Guid.NewGuid(), StaffCode = "GV301", FullName = "Guiding", CreatedAt = DateTime.UtcNow };
+        var guidingElsewhere = new Lecturer { Id = Guid.NewGuid(), StaffCode = "GV302", FullName = "Guiding Elsewhere", CreatedAt = DateTime.UtcNow };
+        var idle = new Lecturer { Id = Guid.NewGuid(), StaffCode = "GV303", FullName = "Idle", CreatedAt = DateTime.UtcNow };
+
+        db.Lecturers.AddRange(guiding, guidingElsewhere, idle);
+        db.Internships.AddRange(
+            new Internship { Id = Guid.NewGuid(), LecturerId = guiding.Id, SemesterId = semester, Status = InternshipStatus.InProgress, CreatedAt = DateTime.UtcNow },
+            new Internship { Id = Guid.NewGuid(), LecturerId = guidingElsewhere.Id, SemesterId = otherSemester, Status = InternshipStatus.InProgress, CreatedAt = DateTime.UtcNow });
+        await db.SaveChangesAsync();
+
+        // Không lọc kỳ: mọi giảng viên có ít nhất 1 thực tập.
+        var hasGuidance = await service.GetPagedAsync(new LecturerFilterRequest { HasGuidance = true });
+        hasGuidance.Items.Select(l => l.StaffCode).Should().BeEquivalentTo(new[] { "GV301", "GV302" });
+
+        var noGuidance = await service.GetPagedAsync(new LecturerFilterRequest { HasGuidance = false });
+        noGuidance.Items.Select(l => l.StaffCode).Should().BeEquivalentTo(new[] { "GV303" });
+
+        // Có lọc kỳ: chỉ giảng viên thuộc kỳ và đang hướng dẫn trong kỳ đó được đếm
+        // (GV302 hướng dẫn ở kỳ khác, GV303 không thuộc kỳ → không tính).
+        var inTerm = await service.GetPagedAsync(new LecturerFilterRequest { HasGuidance = true, SemesterId = semester });
+        inTerm.Items.Should().ContainSingle().Which.StaffCode.Should().Be("GV301");
+
+        var idleInTerm = await service.GetPagedAsync(new LecturerFilterRequest { HasGuidance = false, SemesterId = semester });
+        idleInTerm.Items.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetPagedAsync_ShouldOrderByFullName()
+    {
+        var db = GetDb();
+        var service = CreateService(db);
+
+        db.Lecturers.AddRange(
+            new Lecturer { Id = Guid.NewGuid(), StaffCode = "GV900", FullName = "Tran Van C", CreatedAt = DateTime.UtcNow },
+            new Lecturer { Id = Guid.NewGuid(), StaffCode = "GV901", FullName = "Nguyen Van A", CreatedAt = DateTime.UtcNow },
+            new Lecturer { Id = Guid.NewGuid(), StaffCode = "GV902", FullName = "Bui Van B", CreatedAt = DateTime.UtcNow });
+        await db.SaveChangesAsync();
+
+        var result = await service.GetPagedAsync(new LecturerFilterRequest { Skip = 0, Take = 10 });
+
+        result.Items.Select(l => l.FullName).Should().ContainInOrder("Bui Van B", "Nguyen Van A", "Tran Van C");
+    }
+
     private static MemoryStream CreateExcel(params (string Code, string Name, string? Email, string? Phone, string? Dept, string? Username)[] rows)
     {
         using var workbook = new ClosedXML.Excel.XLWorkbook();

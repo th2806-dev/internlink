@@ -38,8 +38,16 @@ public class UserManagementService : IUserManagementService
         if (departmentId.HasValue)
             query = query.Where(u => u.DepartmentId == departmentId.Value);
 
-        if (!string.IsNullOrWhiteSpace(filter.Role) && Enum.TryParse<Role>(filter.Role, true, out var role))
-            query = query.Where(u => u.Role == role);
+        // Hỗ trợ nhiều role cách nhau dấu phẩy (vd "SuperAdmin,DepartmentAdmin" cho bộ lọc "Admin").
+        var roles = (filter.Role ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(r => Enum.TryParse<Role>(r, ignoreCase: true, out var parsed) ? parsed : (Role?)null)
+            .Where(r => r.HasValue)
+            .Select(r => r!.Value)
+            .Distinct()
+            .ToList();
+        if (roles.Count > 0)
+            query = query.Where(u => roles.Contains(u.Role));
 
         if (filter.IsActive.HasValue)
             query = query.Where(u => u.IsActive == filter.IsActive.Value);

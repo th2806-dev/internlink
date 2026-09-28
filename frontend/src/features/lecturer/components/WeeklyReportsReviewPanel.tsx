@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FileCheck2, Check, RotateCcw, Download, Eye, X, Loader2, AlertCircle } from "lucide-react";
+import { FileCheck2, Check, RotateCcw, Download, Eye, X, Loader2 } from "lucide-react";
 import { Panel } from "../../../components/common/Panel";
 import {
   mapWeeklyReportStatusToUi,
@@ -17,12 +17,18 @@ type WeeklyReportsReviewPanelProps = {
   ) => void | Promise<void>;
   /** Toast của portal (bắt buộc để báo lỗi thay vì im lặng/alert). */
   onShowToast?: (msg: string, type?: "success" | "error" | "info") => void;
+  /** Mutation duyệt đang chạy — khóa nút chống double-submit (Mutation Guard). */
+  isReviewing?: boolean;
+  /** Đang giữ dữ liệu trang trước khi trang mới về — không bấm hành động trên dữ liệu cũ. */
+  isPlaceholderData?: boolean;
 };
 
 export function WeeklyReportsReviewPanel({
   reports,
   onReview,
   onShowToast,
+  isReviewing = false,
+  isPlaceholderData = false,
 }: WeeklyReportsReviewPanelProps) {
   const [commentById, setCommentById] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -35,7 +41,17 @@ export function WeeklyReportsReviewPanel({
 
   const pending = reports.filter((r) => r.status === "Submitted");
 
-  if (pending.length === 0) return null;
+  // Trang có dữ liệu nhưng không có bản ghi chờ duyệt (ví dụ đang lọc "Đã duyệt").
+  if (pending.length === 0) {
+    return (
+      <Panel className="text-center">
+        <p className="text-sm font-semibold text-slate-600">Không có báo cáo nào chờ duyệt</p>
+        <p className="text-xs text-slate-500 mt-1">
+          Các báo cáo đã được xử lý sẽ xuất hiện theo bộ lọc trạng thái tương ứng.
+        </p>
+      </Panel>
+    );
+  }
 
   const handleReview = async (id: string, uiStatus: string) => {
     setBusyId(id);
@@ -134,7 +150,7 @@ export function WeeklyReportsReviewPanel({
                 )}
                 <button
                   type="button"
-                  disabled={busyId === r.id}
+                  disabled={busyId === r.id || isReviewing || isPlaceholderData}
                   onClick={() => handleReview(r.id, "Yêu cầu sửa")}
                   className="il-btn il-btn-secondary text-xs"
                 >
@@ -143,7 +159,7 @@ export function WeeklyReportsReviewPanel({
                 </button>
                 <button
                   type="button"
-                  disabled={busyId === r.id}
+                  disabled={busyId === r.id || isReviewing || isPlaceholderData}
                   onClick={() => handleReview(r.id, "Đã duyệt")}
                   className="il-btn il-btn-primary text-xs"
                 >

@@ -21,10 +21,16 @@ export const adminAssignmentsService = {
     });
   },
 
-  getAll(semesterId?: string, departmentId?: string) {
+  getAll(
+    semesterId?: string,
+    departmentId?: string,
+    /** Chỉ lấy phân công của các sinh viên này (join đúng trang danh sách paged). */
+    studentIds?: string[],
+  ) {
     const params = new URLSearchParams();
     if (semesterId && semesterId !== "all") params.set("semesterId", semesterId);
     if (departmentId && departmentId !== "all") params.set("departmentId", departmentId);
+    if (studentIds && studentIds.length > 0) params.set("studentIds", studentIds.join(","));
     const qs = params.toString() ? `?${params.toString()}` : "";
     return apiRequest<LecturerAssignmentItemDto[]>(
       `/api/Admin/assignments${qs}`,

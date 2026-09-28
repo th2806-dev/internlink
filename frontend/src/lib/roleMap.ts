@@ -24,6 +24,26 @@ export function mapBackendRoleToAdminUserRole(
   return mapped;
 }
 
+/**
+ * Map FE admin filter role → backend role value(s) for `GET /users?role=`.
+ * Backend parse bằng `Enum.TryParse<Role>`, nên "admin" (gộp SuperAdmin +
+ * DepartmentAdmin) cần gửi nhiều giá trị cách nhau dấu phẩy.
+ */
+export function mapAdminUserRoleToBackendRoles(
+  role: "all" | "admin" | "lecturer" | "student" | undefined,
+): string | undefined {
+  switch (role) {
+    case "admin":
+      return "SuperAdmin,DepartmentAdmin";
+    case "lecturer":
+      return "Lecturer";
+    case "student":
+      return "Student";
+    default:
+      return undefined;
+  }
+}
+
 /** FE display label for backend role string. */
 export function backendRoleLabel(role: string): string {
   switch (role) {

@@ -52,6 +52,17 @@ public class AdminStudentsController : ControllerBase
         return Ok(ApiResponse<PaginatedResponse<StudentDto>>.Ok(result));
     }
 
+    /// <summary>
+    /// Distinct class names for the list filter dropdown (no bulk student fetch needed).
+    /// </summary>
+    [HttpGet("classes")]
+    public async Task<IActionResult> GetClassOptions([FromQuery] Guid? semesterId = null, [FromQuery] Guid? departmentId = null)
+    {
+        var deptId = _deptScope.ResolveEffectiveDepartmentId(User, departmentId);
+        var classes = await _studentService.GetClassOptionsAsync(semesterId, deptId);
+        return Ok(ApiResponse<IEnumerable<string>>.Ok(classes));
+    }
+
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById(Guid id)
     {

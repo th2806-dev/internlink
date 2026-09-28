@@ -301,14 +301,14 @@ public class SemesterService : ISemesterService
         return true;
     }
 
-    public async Task<IEnumerable<SemesterReportScheduleDto>> GetReportSchedulesAsync(Guid semesterId)
+    public async Task<IEnumerable<SemesterReportScheduleDto>> GetReportSchedulesAsync(Guid semesterId, Guid? lecturerId = null)
     {
-        var schedules = await _context.SemesterReportSchedules
-            .Where(s => s.SemesterId == semesterId && !s.IsDeleted)
-            .OrderBy(s => s.WeekNumber)
+        var allSchedules = await _context.SemesterReportSchedules
+            .Include(s => s.Semester)
+            .Where(s => s.SemesterId == semesterId && !s.IsDeleted && (s.LecturerId == lecturerId || s.LecturerId == null))
             .ToListAsync();
 
-        if (schedules.Count == 0)
+        if (allSchedules.Count == 0 && !lecturerId.HasValue)
         {
             var semester = await _context.Semesters.FirstOrDefaultAsync(s => s.Id == semesterId && !s.IsDeleted);
             if (semester != null)
@@ -317,10 +317,17 @@ public class SemesterService : ISemesterService
             }
         }
 
+        var schedules = allSchedules
+            .GroupBy(s => s.WeekNumber)
+            .Select(g => g.OrderByDescending(s => s.LecturerId == lecturerId && lecturerId.HasValue).First())
+            .OrderBy(s => s.WeekNumber)
+            .ToList();
+
         return schedules.Select(s => new SemesterReportScheduleDto
         {
             Id = s.Id,
             SemesterId = s.SemesterId,
+            LecturerId = s.LecturerId,
             WeekNumber = s.WeekNumber,
             Title = s.Title,
             StartDate = s.StartDate,
@@ -334,7 +341,7 @@ public class SemesterService : ISemesterService
 
     private const int C23_DEFAULT_TOTAL_WEEKS = 6;
 
-    public async Task<IEnumerable<SemesterReportScheduleDto>> GenerateDefaultSchedulesAsync(Guid semesterId)
+    public async Task<IEnumerable<SemesterReportScheduleDto>> GenerateDefaultSchedulesAsync(Guid semesterId, Guid? lecturerId = null)
     {
         var semester = await _context.Semesters
             .Include(s => s.ReportSchedules)
@@ -344,7 +351,7 @@ public class SemesterService : ISemesterService
             throw new KeyNotFoundException(InternLink.Shared.Responses.ErrorMessage.SemesterNotFoundById(semesterId));
 
         var existingSchedules = await _context.SemesterReportSchedules
-            .Where(s => s.SemesterId == semesterId && !s.IsDeleted)
+            .Where(s => s.SemesterId == semesterId && s.LecturerId == lecturerId && !s.IsDeleted)
             .ToListAsync();
 
         var existingWeeks = existingSchedules.Select(s => s.WeekNumber).ToHashSet();
@@ -361,6 +368,7 @@ public class SemesterService : ISemesterService
                 {
                     Id = Guid.NewGuid(),
                     SemesterId = semesterId,
+                    LecturerId = lecturerId,
                     WeekNumber = week,
                     Title = $"Báo cáo tuần {week}",
                     StartDate = startDate.AddDays((week - 1) * 7).Date,
@@ -383,6 +391,7 @@ public class SemesterService : ISemesterService
             {
                 Id = Guid.NewGuid(),
                 SemesterId = semesterId,
+                LecturerId = lecturerId,
                 WeekNumber = finalWeek,
                 Title = "Báo cáo cuối kỳ",
                 StartDate = startDate.AddDays((totalWeeks - 1) * 7).Date,
@@ -401,31 +410,13 @@ public class SemesterService : ISemesterService
             await _context.SaveChangesAsync();
         }
 
-        var allSchedules = await _context.SemesterReportSchedules
-            .Include(s => s.Semester)
-            .Where(s => s.SemesterId == semesterId && !s.IsDeleted)
-            .OrderBy(s => s.WeekNumber)
-            .ToListAsync();
-
-        return allSchedules.Select(s => new SemesterReportScheduleDto
-        {
-            Id = s.Id,
-            SemesterId = s.SemesterId,
-            WeekNumber = s.WeekNumber,
-            Title = s.Title,
-            StartDate = s.StartDate,
-            DueDate = s.DueDate,
-            IsSubmissionOpen = s.IsSubmissionOpen,
-            AllowLateSubmission = s.AllowLateSubmission,
-            Description = s.Description,
-            IsFinalReport = s.WeekNumber > (s.Semester?.TotalWeeks ?? C23_DEFAULT_TOTAL_WEEKS)
-        });
+        return await GetReportSchedulesAsync(semesterId, lecturerId);
     }
 
-    public async Task<SemesterReportScheduleDto> UpdateReportScheduleAsync(Guid semesterId, int weekNumber, UpdateReportScheduleRequest request)
+    public async Task<SemesterReportScheduleDto> UpdateReportScheduleAsync(Guid semesterId, int weekNumber, UpdateReportScheduleRequest request, Guid? lecturerId = null)
     {
         var schedule = await _context.SemesterReportSchedules
-            .FirstOrDefaultAsync(s => s.SemesterId == semesterId && s.WeekNumber == weekNumber && !s.IsDeleted);
+            .FirstOrDefaultAsync(s => s.SemesterId == semesterId && s.WeekNumber == weekNumber && s.LecturerId == lecturerId && !s.IsDeleted);
 
         if (schedule == null)
         {
@@ -433,19 +424,24 @@ public class SemesterService : ISemesterService
             if (semester == null)
                 throw new KeyNotFoundException(InternLink.Shared.Responses.ErrorMessage.SemesterNotFoundById(semesterId));
 
+            // Kế thừa mốc từ default schedule nếu GV tạo mới đè lên default
+            var defaultSchedule = await _context.SemesterReportSchedules
+                .FirstOrDefaultAsync(s => s.SemesterId == semesterId && s.WeekNumber == weekNumber && s.LecturerId == null && !s.IsDeleted);
+
             var startDate = (semester.StartDate ?? DateTime.UtcNow)
                 .AddDays((semester.InternshipStartWeek - 1) * 7);
             schedule = new SemesterReportSchedule
             {
                 Id = Guid.NewGuid(),
                 SemesterId = semesterId,
+                LecturerId = lecturerId,
                 WeekNumber = weekNumber,
-                Title = request.Title ?? (weekNumber > C23_DEFAULT_TOTAL_WEEKS ? "Báo cáo cuối kỳ" : $"Báo cáo tuần {weekNumber}"),
-                StartDate = request.StartDate ?? startDate.AddDays((weekNumber - 1) * 7).Date,
-                DueDate = request.DueDate ?? startDate.AddDays(weekNumber * 7).Date.AddHours(23).AddMinutes(59).AddSeconds(59),
-                IsSubmissionOpen = request.IsSubmissionOpen ?? true,
-                AllowLateSubmission = request.AllowLateSubmission ?? true,
-                Description = request.Description,
+                Title = request.Title ?? defaultSchedule?.Title ?? (weekNumber > C23_DEFAULT_TOTAL_WEEKS ? "Báo cáo cuối kỳ" : $"Báo cáo tuần {weekNumber}"),
+                StartDate = request.StartDate ?? defaultSchedule?.StartDate ?? startDate.AddDays((weekNumber - 1) * 7).Date,
+                DueDate = request.DueDate ?? defaultSchedule?.DueDate ?? startDate.AddDays(weekNumber * 7).Date.AddHours(23).AddMinutes(59).AddSeconds(59),
+                IsSubmissionOpen = request.IsSubmissionOpen ?? defaultSchedule?.IsSubmissionOpen ?? true,
+                AllowLateSubmission = request.AllowLateSubmission ?? defaultSchedule?.AllowLateSubmission ?? true,
+                Description = request.Description ?? defaultSchedule?.Description,
                 CreatedAt = DateTime.UtcNow
             };
             _context.SemesterReportSchedules.Add(schedule);
@@ -467,13 +463,15 @@ public class SemesterService : ISemesterService
         {
             Id = schedule.Id,
             SemesterId = schedule.SemesterId,
+            LecturerId = schedule.LecturerId,
             WeekNumber = schedule.WeekNumber,
             Title = schedule.Title,
             StartDate = schedule.StartDate,
             DueDate = schedule.DueDate,
             IsSubmissionOpen = schedule.IsSubmissionOpen,
             AllowLateSubmission = schedule.AllowLateSubmission,
-            Description = schedule.Description
+            Description = schedule.Description,
+            IsFinalReport = schedule.WeekNumber > (schedule.Semester?.TotalWeeks ?? C23_DEFAULT_TOTAL_WEEKS)
         };
     }
 

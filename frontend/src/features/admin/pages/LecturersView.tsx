@@ -22,6 +22,7 @@ import {
   Check,
   UserSearch,
 } from "lucide-react";
+import { useAdminLecturersQuery } from "../../../hooks/useAdminLecturersQuery";
 import { CreateLecturerModal } from "../components/modals/CreateLecturerModal";
 import type { CreateLecturerFormPayload } from "../components/modals/CreateLecturerModal";
 import { EditLecturerModal } from "../components/modals/EditLecturerModal";
@@ -49,67 +50,48 @@ import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
 import type { ToastType } from "../../../contexts/ToastContext";
 export const LecturersView = ({
   onShowToast,
-  onNavigateTab,
+  onNavigateTab: _onNavigateTab,
 }: {
   onShowToast: (msg: string, type?: ToastType) => void;
   onNavigateTab?: (tab: string) => void;
 }) => {
   const { selectedSemester, selectedDepartmentId } = useSemester();
-  const { canMutateOps, isSuperAdmin } = useAdminCapabilities();
-  const [isLoadingApi, setIsLoadingApi] = useState(false);
+  const { canMutateOps } = useAdminCapabilities();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingLecturer, setEditingLecturer] = useState<LecturerRowForEdit | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<LecturerRowForEdit | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [selectedLecturer, setSelectedLecturer] = useState<
-    (typeof lecturers)[number] | null
-  >(null);
+  const [selectedLecturer, setSelectedLecturer] = useState<LecturerRowForEdit | null>(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isGenerateAccountsModalOpen, setIsGenerateAccountsModalOpen] =
     useState(false);
-  const [lecturers, setLecturers] = useState<any[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [deptFilter, setDeptFilter] = useState("all");
-  const [accountStatusFilter, setAccountStatusFilter] = useState("all");
-  const [selectedIds, setSelectedIds] = useState([]);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [searchInput, setSearchInput] = useState("");
 
-  const fetchLecturerRows = async () => {
-    const semesterId = toApiSemesterId(selectedSemester?.id);
-    const departmentId = toApiDepartmentId(selectedDepartmentId);
-    const [dtos, allAssignments] = await Promise.all([
-      adminLecturersService.getAll(0, 500, semesterId, departmentId),
-      adminAssignmentsService.getAll(semesterId, departmentId).catch(() => []),
-    ]);
-    const { lecturerCounts } = buildAssignmentMaps(dtos, allAssignments);
-    return dtos.map((l) =>
-      mapLecturerDtoToRow(l, lecturerCounts.get(l.id) ?? 0),
-    );
-  };
+  const lecturersQuery = useAdminLecturersQuery({
+    semesterId: toApiSemesterId(selectedSemester?.id),
+    departmentId: toApiDepartmentId(selectedDepartmentId),
+    onError: (msg) => onShowToast(msg, "danger"),
+  });
+  const {
+    lecturers,
+    counts,
+    isPending: isLoadingApi,
+    isError,
+    error,
+    refetch,
+    pagination,
+    filter,
+    setSearch,
+    applySearch,
+    setAccountStatusFilter,
+    setHasGuidanceFilter,
+    clearFilters,
+    goToPage,
+  } = lecturersQuery;
+  const reloadLecturers = refetch;
 
-  const reloadLecturers = async () => {
-    const rows = await fetchLecturerRows();
-    setLecturers(rows);
-  };
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setIsLoadingApi(true);
-      try {
-        const rows = await fetchLecturerRows();
-        if (!cancelled) setLecturers(rows);
-      } catch (err) {
-        onShowToast(getApiErrorMessage(err));
-      } finally {
-        if (!cancelled) setIsLoadingApi(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [onShowToast, selectedSemester?.id, selectedDepartmentId]);
+  // (fetch/reload thủ công đã thay bằng useAdminLecturersQuery + invalidation)
 
   const handleAddLecturer = async (payload: CreateLecturerFormPayload) => {
 
@@ -177,32 +159,17 @@ export const LecturersView = ({
     }
   };
 
-  const totalLecturers = lecturers.length;
-  const activeLecturers = lecturers.filter(
-    (l) => l.accountStatus === "active",
-  ).length;
-  const pendingAccounts = lecturers.filter(
-    (l) => l.accountStatus === "pending",
-  ).length;
-  const guidingLecturers = lecturers.filter((l) => l.currentCount > 0).length;
-  const filteredLecturers = useMemo(() => {
-    return lecturers.filter((l) => {
-      const matchSearch =
-        l.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        l.employeeId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        l.email.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchDept = deptFilter === "all" || l.department === deptFilter;
-      const matchAccount =
-        accountStatusFilter === "all" ||
-        l.accountStatus === accountStatusFilter;
-      return matchSearch && matchDept && matchAccount;
-    });
-  }, [lecturers, searchQuery, deptFilter, accountStatusFilter]);
-  const totalPages = Math.ceil(filteredLecturers.length / pageSize) || 1;
-  const paginatedLecturers = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
-    return filteredLecturers.slice(start, start + pageSize);
-  }, [filteredLecturers, currentPage, pageSize]);
+  // KPI đếm trên TOÀN BỘ kỳ từ server (không phụ thuộc trang/bộ lọc hiện tại).
+  const totalLecturers = counts.total;
+  const activeLecturers = counts.active;
+  const pendingAccounts = Math.max(0, counts.total - counts.active);
+  const guidingLecturers = counts.guiding;
+  // Filter/pagination là server-side → danh sách hiển thị là dữ liệu trang hiện tại.
+  const filteredLecturers = lecturers;
+  const paginatedLecturers = lecturers;
+  const totalPages = pagination.totalPages;
+  const currentPage = pagination.page;
+  const pageSize = pagination.pageSize;
   const isAllPageSelected =
     paginatedLecturers.length > 0 &&
     paginatedLecturers.every((l) => selectedIds.includes(l.id));
@@ -312,9 +279,8 @@ export const LecturersView = ({
         email: lec.email !== "—" ? lec.email : undefined,
         isActive: newStatus === "active",
       });
-      setLecturers((prev) =>
-        prev.map((l) => (l.id === id ? { ...l, accountStatus: newStatus } : l)),
-      );
+      // Invalidate danh sách giảng viên để trạng thái TK đồng bộ lại từ server.
+      await reloadLecturers();
       onShowToast(
         `Đã ${newStatus === "locked" ? "khóa" : "mở khóa"} tài khoản của ${lec.fullName}`,
       );
@@ -393,43 +359,41 @@ export const LecturersView = ({
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
               <input
                 type="text"
-                value={searchQuery}
+                value={searchInput}
                 onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  setCurrentPage(1);
+                  setSearchInput(e.target.value);
+                  setSearch(e.target.value);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") applySearch();
                 }}
                 placeholder="Tìm tên, MSGV, Email..."
+                aria-label="Tìm giảng viên"
                 className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-medium outline-none focus:bg-white focus:border-blue-500"
               />
             </div>
 
+            {/* Bộ lọc bộ môn giờ do Header department filter đảm nhiệm (server-side departmentId). */}
             <select
-              value={deptFilter}
-              onChange={(e) => {
-                setDeptFilter(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-500 cursor-pointer"
-            >
-              <option value="all">Tất cả Bộ môn</option>
-              <option value="Công nghệ Phần mềm">Bộ môn CNPM</option>
-              <option value="Mạng máy tính & TTTT">Bộ môn MMT</option>
-              <option value="Hệ thống Thông tin">Bộ môn HTTT</option>
-              <option value="Khoa học Máy tính">Bộ môn KHMT</option>
-            </select>
-
-            <select
-              value={accountStatusFilter}
-              onChange={(e) => {
-                setAccountStatusFilter(e.target.value);
-                setCurrentPage(1);
-              }}
+              value={filter.accountStatus}
+              onChange={(e) => setAccountStatusFilter(e.target.value)}
+              aria-label="Lọc theo trạng thái tài khoản"
               className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-500 cursor-pointer"
             >
               <option value="all">Tất cả trạng thái TK</option>
               <option value="active">Đã cấp tài khoản</option>
               <option value="pending">Chưa cấp tài khoản</option>
-              <option value="locked">Tài khoản bị khóa</option>
+            </select>
+
+            <select
+              value={filter.hasGuidance}
+              onChange={(e) => setHasGuidanceFilter(e.target.value as typeof filter.hasGuidance)}
+              aria-label="Lọc theo trạng thái hướng dẫn"
+              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-500 cursor-pointer"
+            >
+              <option value="all">Mọi trạng thái hướng dẫn</option>
+              <option value="yes">Đang hướng dẫn</option>
+              <option value="no">Chưa có SV</option>
             </select>
 
             {canMutateOps && selectedIds.length > 0 && (
@@ -482,8 +446,8 @@ export const LecturersView = ({
                       action={{
                         label: "Xóa bộ lọc tìm kiếm",
                         onClick: () => {
-                          setSearchQuery("");
-                          setAccountStatusFilter("all");
+                          setSearchInput("");
+                          clearFilters();
                         },
                       }}
                     />
@@ -513,7 +477,7 @@ export const LecturersView = ({
                         <div className="flex items-center gap-2.5">
                           <InitialsAvatar
                             name={lec.fullName}
-                            seed={lec.lecturerCode || lec.email || lec.fullName}
+                            seed={lec.employeeId || lec.email || lec.fullName}
                             size={32}
                           />
                           <div>
@@ -657,44 +621,27 @@ export const LecturersView = ({
 
         {/* Table Pagination */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs pt-1 border-t border-slate-100">
-          <div className="flex items-center gap-3">
-            <span className="text-slate-500 font-medium">
-              Hiển thị {paginatedLecturers.length} / {filteredLecturers.length}{" "}
-              giảng viên
+          <div className="flex items-center gap-1.5 text-slate-600 font-medium">
+            <span>
+              Hiển thị {pagination.from}
+              –{pagination.to} / {pagination.total} giảng viên
             </span>
-            <div className="flex items-center gap-1.5 text-slate-600 font-medium">
-              <span>Số dòng:</span>
-              <select
-                value={pageSize}
-                onChange={(e) => {
-                  setPageSize(Number(e.target.value));
-                  setCurrentPage(1);
-                }}
-                className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-500 cursor-pointer text-xs"
-              >
-                <option value={5}>5 dòng</option>
-                <option value={10}>10 dòng</option>
-                <option value={20}>20 dòng</option>
-              </select>
-            </div>
           </div>
 
           <div className="flex items-center gap-1.5 font-bold">
             <button
-              onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-              disabled={currentPage === 1}
+              onClick={() => goToPage(pagination.page - 1)}
+              disabled={!pagination.hasPrev}
               className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg disabled:opacity-40 transition-colors cursor-pointer"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
             <span className="px-2.5 py-1 bg-slate-50 rounded-lg border border-slate-200 text-slate-800">
-              {currentPage} / {totalPages}
+              {pagination.page} / {pagination.totalPages}
             </span>
             <button
-              onClick={() =>
-                setCurrentPage((prev) => Math.min(prev + 1, totalPages))
-              }
-              disabled={currentPage === totalPages}
+              onClick={() => goToPage(pagination.page + 1)}
+              disabled={!pagination.hasNext}
               className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg disabled:opacity-40 transition-colors cursor-pointer"
             >
               <ChevronRight className="w-4 h-4" />
@@ -793,7 +740,6 @@ export const LecturersView = ({
                   {selectedLecturer.employeeId}
                 </p>
                 <p className="text-xs text-slate-500 font-medium">
-                  {selectedLecturer.academicDegree} •{" "}
                   {selectedLecturer.department}
                 </p>
               </div>
@@ -803,9 +749,9 @@ export const LecturersView = ({
             <div className="space-y-3 text-xs">
               <div className="p-3 bg-slate-50 rounded-md space-y-2 font-medium text-slate-700">
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Khoa:</span>
+                  <span className="text-slate-400">Bộ môn:</span>
                   <span className="font-bold text-slate-900">
-                    {selectedLecturer.faculty}
+                    {selectedLecturer.department}
                   </span>
                 </div>
                 <div className="flex justify-between">
@@ -840,42 +786,11 @@ export const LecturersView = ({
                   SV phân công
                 </span>
                 <p className="text-xl font-bold text-blue-950 mt-1">
-                  {selectedLecturer.currentCount}
+                  {selectedLecturer.currentCount ?? 0}
                 </p>
-              </div>
-
-              {/* List of Assigned Students */}
-              <div className="space-y-2 pt-2">
-                <span className="font-bold text-slate-900 text-xs block">
-                  Danh sách Sinh viên đang hướng dẫn (
-                  {selectedLecturer.assignedStudents?.length || 0})
-                </span>
-
-                {selectedLecturer.assignedStudents &&
-                selectedLecturer.assignedStudents.length > 0 ? (
-                  <div className="space-y-1.5 max-h-48 overflow-y-auto">
-                    {selectedLecturer.assignedStudents.map((st, idx) => (
-                      <div
-                        key={idx}
-                        className="p-2.5 bg-slate-50 border border-slate-200/80 rounded-md flex items-center justify-between text-xs"
-                      >
-                        <div>
-                          <p className="font-bold text-slate-900">{st.name}</p>
-                          <p className="text-[10px] text-slate-500">
-                            {st.studentId} • Lớp {st.classCode}
-                          </p>
-                        </div>
-                        <span className="text-[10px] font-bold text-slate-600">
-                          {st.company}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="p-4 text-center text-slate-400 italic bg-slate-50 rounded-md">
-                    Chưa có sinh viên nào được phân công.
-                  </p>
-                )}
+                <p className="text-[10px] text-blue-700/70 mt-1">
+                  Danh sách chi tiết xem tại tab Phân công hoặc Workspace của từng sinh viên.
+                </p>
               </div>
             </div>
 

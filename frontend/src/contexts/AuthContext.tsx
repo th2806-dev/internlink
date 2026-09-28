@@ -7,6 +7,7 @@ import {
   ReactNode,
 } from "react";
 import { getStoredToken, setStoredToken, clearAuthTokens } from "../lib/apiClient";
+import { queryClient } from "../lib/queryClient";
 import { mapBackendRole } from "../lib/roleMap";
 import { authService } from "../services/auth.service";
 import type { CurrentUserDto } from "../types/api";
@@ -88,6 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
+    queryClient.clear();
     if (getStoredToken()) {
       try {
         await authService.logout();
@@ -129,6 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const handleUnauthorized = () => {
+      queryClient.clear();
       clearAuthTokens();
       setIsLoggedIn(false);
       setUser(null);

@@ -29,6 +29,8 @@ export const weeklyReportService = {
     take?: number;
     status?: string;
     searchTerm?: string;
+    /** Nhận AbortSignal từ TanStack Query để hủy request cũ khi đổi bộ lọc. */
+    signal?: AbortSignal;
   } = {}): Promise<PaginatedResponse<WeeklyReportDto>> {
     const query = new URLSearchParams();
     if (params.semesterId) query.set("semesterId", params.semesterId);
@@ -36,7 +38,9 @@ export const weeklyReportService = {
     query.set("take", String(params.take ?? 20));
     if (params.status) query.set("status", params.status);
     if (params.searchTerm?.trim()) query.set("searchTerm", params.searchTerm.trim());
-    return apiRequest<PaginatedResponse<WeeklyReportDto>>(`/api/Lecturer/weekly-reports?${query.toString()}`);
+    return apiRequest<PaginatedResponse<WeeklyReportDto>>(`/api/Lecturer/weekly-reports?${query.toString()}`, {
+      signal: params.signal,
+    });
   },
 
   create(body: CreateWeeklyReportRequestDto): Promise<WeeklyReportDto> {

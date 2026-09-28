@@ -10,6 +10,8 @@ export interface LecturerRowForEdit {
   email: string;
   phone: string;
   accountStatus: string;
+  /** Số SV đang hướng dẫn (đếm server-side theo trang). */
+  currentCount?: number;
 }
 
 export interface EditLecturerFormPayload {

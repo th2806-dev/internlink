@@ -222,7 +222,7 @@ public class AssignmentService : IAssignmentService
         return internships.Select(MapAssignmentItem).ToList();
     }
 
-    public async Task<IReadOnlyList<LecturerAssignmentItemDto>> GetAllAssignmentsAsync(Guid? semesterId = null, Guid? departmentId = null)
+    public async Task<IReadOnlyList<LecturerAssignmentItemDto>> GetAllAssignmentsAsync(Guid? semesterId = null, Guid? departmentId = null, IReadOnlyCollection<Guid>? studentIds = null)
     {
         var query = _db.Internships
             .AsNoTracking()
@@ -236,6 +236,13 @@ public class AssignmentService : IAssignmentService
         if (semesterId.HasValue && semesterId.Value != Guid.Empty)
         {
             query = query.Where(i => i.SemesterId == semesterId.Value);
+        }
+
+        // Giới hạn theo trang hiện tại của danh sách sinh viên (paged list join).
+        if (studentIds != null && studentIds.Count > 0)
+        {
+            var ids = studentIds.Distinct().ToList();
+            query = query.Where(i => ids.Contains(i.StudentId));
         }
 
         var internships = await query

@@ -7,6 +7,12 @@ public class SemesterReportSchedule : BaseEntity
     public Guid SemesterId { get; set; }
     public Semester Semester { get; set; } = null!;
 
+    /// <summary>
+    /// Giảng viên sở hữu lịch hạn nộp này. Null = Lịch khung mặc định của Khoa/Kỳ.
+    /// </summary>
+    public Guid? LecturerId { get; set; }
+    public Lecturer? Lecturer { get; set; }
+
     public int WeekNumber { get; set; }
     public string Title { get; set; } = null!;
 

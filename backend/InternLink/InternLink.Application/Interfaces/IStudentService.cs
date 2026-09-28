@@ -18,6 +18,11 @@ public interface IStudentService
     Task<PaginatedResponse<StudentDto>> GetStudentsWithFilterAsync(StudentFilterRequest filter, Guid? lecturerId = null, Guid? departmentId = null);
 
     /// <summary>
+    /// Distinct class names for the admin filter dropdown (scoped by term/department).
+    /// </summary>
+    Task<IEnumerable<string>> GetClassOptionsAsync(Guid? semesterId = null, Guid? departmentId = null);
+
+    /// <summary>
     /// Get a student by ID
     /// </summary>
     Task<StudentDto?> GetStudentByIdAsync(Guid id, Guid? lecturerId = null);

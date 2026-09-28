@@ -4,6 +4,7 @@ public class SemesterReportScheduleDto
 {
     public Guid Id { get; set; }
     public Guid SemesterId { get; set; }
+    public Guid? LecturerId { get; set; }
     public int WeekNumber { get; set; }
     public string Title { get; set; } = null!;
     public DateTime? StartDate { get; set; }

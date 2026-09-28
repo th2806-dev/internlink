@@ -430,16 +430,14 @@ export function AppRoutes() {
                   element={
                     <LecturerReportsView
                       submissions={appState.assignedSubmissions}
-                      weeklyReports={appState.weeklyReports}
-                      weeklyReportPage={appState.weeklyReportPage}
-                      weeklyReportTotals={appState.weeklyReportTotals}
-                      weeklyReportQuery={appState.weeklyReportQuery}
-                      onQueryWeeklyReports={appState.queryWeeklyReports}
-                      isLoading={appState.isLecturerLoading}
-                      error={appState.lecturerError}
-                      onRetry={appState.refresh}
+                      isSubmissionsLoading={appState.isLecturerLoading}
+                      semesterId={
+                        selectedSemesterId && selectedSemesterId !== "all"
+                          ? selectedSemesterId
+                          : undefined
+                      }
                       onUpdateSubmissionStatus={appState.handleUpdateSubmissionStatus}
-                      onReviewWeeklyReport={appState.handleReviewWeeklyReport}
+                      onRefresh={appState.refresh}
                       showToast={showToast}
                     />
                   }

@@ -5,6 +5,7 @@ namespace InternLink.Application.Interfaces;
 public interface ILecturerProfileService
 {
     Task<IEnumerable<LecturerDto>> GetAllAsync(int skip = 0, int take = 100, Guid? semesterId = null, Guid? departmentId = null);
+    Task<PaginatedResponse<LecturerDto>> GetPagedAsync(LecturerFilterRequest filter, Guid? departmentId = null);
     Task<LecturerDto?> GetByIdAsync(Guid id);
     Task<LecturerDto?> GetByUserIdAsync(Guid userId);
     Task<LecturerDto> CreateAsync(CreateLecturerRequest request, Guid? departmentId = null);

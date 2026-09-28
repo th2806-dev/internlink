@@ -98,6 +98,10 @@ export interface StudentDto {
   resumeUrl?: string | null;
   /** Department this student belongs to (null = global/unassigned). */
   departmentId?: string | null;
+  /** Trạng thái tài khoản ghép từ User (null = chưa cấp TK). Chỉ `/search` trả về. */
+  accountIsActive?: boolean | null;
+  /** Lần đăng nhập gần nhất của tài khoản liên kết (null = chưa đăng nhập/chưa cấp TK). */
+  accountLastLoginAt?: string | null;
   createdAt: string;
   updatedAt?: string | null;
 }

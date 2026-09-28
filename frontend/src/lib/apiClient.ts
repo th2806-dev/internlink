@@ -147,8 +147,12 @@ export async function apiRequest<T>(
   const isGet = method === "GET";
   const url = resolveApiUrl(path);
   const cacheKey = `${url}|auth=${Boolean(options.auth !== false)}`;
+  // Khi caller truyền AbortSignal (TanStack Query) → cache/dedup cục bộ bị TẮT:
+  // mỗi observer có vòng đời request riêng, hủy request không được làm hỏng promise
+  // của observer khác, và staleTime do TanStack Query quản lý thay cho cache 20s này.
+  const canUseLocalCache = isGet && !options.skipCache && !options.signal;
 
-  if (isGet && !options.skipCache) {
+  if (canUseLocalCache) {
     const cached = apiGetCache.get(cacheKey);
     if (cached && Date.now() < cached.expiresAt) {
       return cached.data as T;
@@ -225,7 +229,7 @@ export async function apiRequest<T>(
 
     const result = payload.data as T;
 
-    if (isGet && !options.skipCache) {
+    if (canUseLocalCache) {
       apiGetCache.set(cacheKey, {
         data: result,
         expiresAt: Date.now() + DEFAULT_GET_CACHE_TTL,
@@ -238,7 +242,7 @@ export async function apiRequest<T>(
     return result;
   };
 
-  if (isGet && !options.skipCache) {
+  if (canUseLocalCache) {
     const promise = performFetch().finally(() => {
       inFlightGetRequests.delete(cacheKey);
     });

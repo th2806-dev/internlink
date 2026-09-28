@@ -522,10 +522,14 @@ public class AppDbContext : DbContext
             b.Property(x => x.AllowLateSubmission).HasDefaultValue(true);
             b.Property(x => x.IsSubmissionOpen).HasDefaultValue(true);
             b.Property(x => x.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
-            b.HasIndex(x => new { x.SemesterId, x.WeekNumber }).IsUnique();
+            b.HasIndex(x => new { x.SemesterId, x.WeekNumber, x.LecturerId }).IsUnique();
             b.HasOne(x => x.Semester)
                 .WithMany(s => s.ReportSchedules)
                 .HasForeignKey(x => x.SemesterId)
+                .OnDelete(DeleteBehavior.Cascade);
+            b.HasOne(x => x.Lecturer)
+                .WithMany()
+                .HasForeignKey(x => x.LecturerId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

@@ -43,10 +43,20 @@ public class AdminAssignmentsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll([FromQuery] Guid? semesterId = null, [FromQuery] Guid? departmentId = null)
+    public async Task<IActionResult> GetAll([FromQuery] Guid? semesterId = null, [FromQuery] Guid? departmentId = null, [FromQuery] string? studentIds = null)
     {
         var deptId = _deptScope.ResolveEffectiveDepartmentId(User, departmentId);
-        var items = await _assignmentService.GetAllAssignmentsAsync(semesterId, deptId);
+        // Hỗ trợ lọc theo trang danh sách sinh viên: ?studentIds=guid1,guid2
+        IReadOnlyCollection<Guid>? studentIdFilter = null;
+        if (!string.IsNullOrWhiteSpace(studentIds))
+        {
+            studentIdFilter = studentIds
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(s => Guid.TryParse(s, out _))
+                .Select(Guid.Parse)
+                .ToList();
+        }
+        var items = await _assignmentService.GetAllAssignmentsAsync(semesterId, deptId, studentIdFilter);
         return Ok(ApiResponse<IReadOnlyList<LecturerAssignmentItemDto>>.Ok(items));
     }
 

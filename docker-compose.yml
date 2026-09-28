@@ -24,14 +24,15 @@ services:
       - Email__Username=${EMAIL_USERNAME:-internlink.cntt@gmail.com}
       - Email__Password=${EMAIL_PASSWORD:-}
       - Email__FromAddress=${EMAIL_USERNAME:-internlink.cntt@gmail.com}
-      - Email__PortalUrl=${PORTAL_URL:-http://localhost:3000}
-      - Cors__AllowedOrigins__0=${PORTAL_URL:-http://localhost:3000}
-      - Cors__AllowedOrigins__1=http://localhost:5173
+      - Email__PortalUrl=${PORTAL_URL:-https://unwithholding-lieselotte-unapprovingly.ngrok-free.dev}
+      - Cors__AllowedOrigins__0=${PORTAL_URL:-https://unwithholding-lieselotte-unapprovingly.ngrok-free.dev}
+      - Cors__AllowedOrigins__1=http://localhost:3000
+      - Cors__AllowedOrigins__2=http://localhost:5173
       # LAN: cho phép máy khác trong mạng gọi API trực tiếp
-      - Cors__AllowedOrigins__2=http://${HOST_IP:-localhost}:3000
-      - Cors__AllowedOrigins__3=http://${HOST_IP:-localhost}:7109
-      # Ngrok: cho phép truy cập từ internet
-      - Cors__AllowedOrigins__4=${NGROK_URL:-https://db60-2402-9d80-3d2-b2af-c895-7f0e-ec9d-8f9c.ngrok-free.app}
+      - Cors__AllowedOrigins__3=http://${HOST_IP:-localhost}:3000
+      - Cors__AllowedOrigins__4=http://${HOST_IP:-localhost}:7109
+      # Ngrok: cho phép truy cập từ internet qua domain tĩnh
+      - Cors__AllowedOrigins__5=${NGROK_URL:-https://unwithholding-lieselotte-unapprovingly.ngrok-free.dev}
     # Publish port ra LAN — Swagger: http://<HOST_IP>:7109/swagger
     ports:
       - "0.0.0.0:7109:8080"

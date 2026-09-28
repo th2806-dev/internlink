@@ -83,6 +83,7 @@ public class StudentService : IStudentService
     public async Task<PaginatedResponse<StudentDto>> GetStudentsWithFilterAsync(StudentFilterRequest filter, Guid? lecturerId = null, Guid? departmentId = null)
     {
         var query = _db.Students.Where(s => !s.IsDeleted);
+        query = ApplySemesterScope(query, filter.SemesterId);
         query = ApplyLecturerScope(query, lecturerId);
         query = ApplyDepartmentScope(query, departmentId);
 
@@ -97,14 +98,29 @@ public class StudentService : IStudentService
             var searchLower = filter.SearchTerm.ToLower();
             query = query.Where(s =>
                 s.FullName.ToLower().Contains(searchLower) ||
-                s.StudentCode.ToLower().Contains(searchLower)
+                s.StudentCode.ToLower().Contains(searchLower) ||
+                (s.Email != null && s.Email.ToLower().Contains(searchLower)) ||
+                s.Internships.Any(i =>
+                    !i.IsDeleted && i.Company != null &&
+                    i.Company.CompanyName.ToLower().Contains(searchLower))
             );
         }
 
+        query = ApplyAccountStatusFilter(query, filter.AccountStatus);
+        query = ApplyInternshipStatusFilter(query, filter.InternshipStatus, filter.SemesterId);
+
         var total = await query.CountAsync();
 
-        var students = await query
-            .OrderBy(s => s.FullName)
+        IOrderedQueryable<Student> ordered = (filter.SortBy ?? "name").Trim().ToLowerInvariant() switch
+        {
+            "mssv" or "studentcode" => query.OrderBy(s => s.StudentCode),
+            "class" => query.OrderBy(s => s.Class ?? string.Empty).ThenBy(s => s.FullName),
+            _ => query.OrderBy(s => s.FullName)
+        };
+
+        // Include(User) so AccountIsActive/AccountLastLoginAt are populated without a bulk users fetch.
+        var students = await ordered
+            .Include(s => s.User)
             .Skip(filter.Skip)
             .Take(filter.Take)
             .ToListAsync();
@@ -116,6 +132,77 @@ public class StudentService : IStudentService
             Skip = filter.Skip,
             Take = filter.Take
         };
+    }
+
+    public async Task<IEnumerable<string>> GetClassOptionsAsync(Guid? semesterId = null, Guid? departmentId = null)
+    {
+        var query = _db.Students.Where(s => !s.IsDeleted);
+        query = ApplySemesterScope(query, semesterId);
+        query = ApplyDepartmentScope(query, departmentId);
+
+        return await query
+            .Where(s => s.Class != null && s.Class != "")
+            .Select(s => s.Class!)
+            .Distinct()
+            .OrderBy(c => c)
+            .ToListAsync();
+    }
+
+    /// <summary>
+    /// active = linked & enabled account, pending = no account yet, locked = linked but disabled.
+    /// </summary>
+    private static IQueryable<Student> ApplyAccountStatusFilter(IQueryable<Student> query, string? accountStatus)
+    {
+        return (accountStatus ?? "").Trim().ToLowerInvariant() switch
+        {
+            "pending" => query.Where(s => s.UserId == null),
+            "locked" => query.Where(s => s.UserId != null && s.User != null && !s.User.IsActive),
+            "active" => query.Where(s => s.UserId != null && (s.User == null || s.User.IsActive)),
+            _ => query
+        };
+    }
+
+    /// <summary>
+    /// Mirrors the UI mapping: registered (no internship) / preparing (NotStarted) /
+    /// interning (active states) / completed (Completed|Graded) / hasCompany.
+    /// When a term is selected only internships of that term count.
+    /// </summary>
+    private static IQueryable<Student> ApplyInternshipStatusFilter(
+        IQueryable<Student> query,
+        string? internshipStatus,
+        Guid? semesterId)
+    {
+        var status = (internshipStatus ?? "").Trim().ToLowerInvariant();
+        if (status.Length == 0) return query;
+
+        var scoped = semesterId.HasValue && semesterId.Value != Guid.Empty;
+
+        switch (status)
+        {
+            case "registered":
+                return query.Where(s => !s.Internships.Any(i =>
+                    !i.IsDeleted && (!scoped || i.SemesterId == semesterId)));
+            case "preparing":
+                return query.Where(s => s.Internships.Any(i =>
+                    !i.IsDeleted && (!scoped || i.SemesterId == semesterId) &&
+                    i.Status == InternshipStatus.NotStarted));
+            case "interning":
+                return query.Where(s => s.Internships.Any(i =>
+                    !i.IsDeleted && (!scoped || i.SemesterId == semesterId) &&
+                    (i.Status == InternshipStatus.InProgress ||
+                     i.Status == InternshipStatus.BehindSchedule ||
+                     i.Status == InternshipStatus.AwaitingFeedback ||
+                     i.Status == InternshipStatus.RequiresRevision)));
+            case "completed":
+                return query.Where(s => s.Internships.Any(i =>
+                    !i.IsDeleted && (!scoped || i.SemesterId == semesterId) &&
+                    (i.Status == InternshipStatus.Completed || i.Status == InternshipStatus.Graded)));
+            case "hascompany":
+                return query.Where(s => s.Internships.Any(i =>
+                    !i.IsDeleted && (!scoped || i.SemesterId == semesterId) && i.CompanyId != null));
+            default:
+                return query;
+        }
     }
 
     public async Task<StudentDto?> GetStudentByIdAsync(Guid id, Guid? lecturerId = null)

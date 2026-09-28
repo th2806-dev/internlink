@@ -18,7 +18,7 @@ public interface ISemesterService
     Task<SemesterDto?> StartSemesterAsync(Guid id);
     Task<bool> CloseSemesterAsync(Guid id);
     Task<bool> DeleteSemesterAsync(Guid id);
-    Task<IEnumerable<SemesterReportScheduleDto>> GetReportSchedulesAsync(Guid semesterId);
-    Task<IEnumerable<SemesterReportScheduleDto>> GenerateDefaultSchedulesAsync(Guid semesterId);
-    Task<SemesterReportScheduleDto> UpdateReportScheduleAsync(Guid semesterId, int weekNumber, UpdateReportScheduleRequest request);
+    Task<IEnumerable<SemesterReportScheduleDto>> GetReportSchedulesAsync(Guid semesterId, Guid? lecturerId = null);
+    Task<IEnumerable<SemesterReportScheduleDto>> GenerateDefaultSchedulesAsync(Guid semesterId, Guid? lecturerId = null);
+    Task<SemesterReportScheduleDto> UpdateReportScheduleAsync(Guid semesterId, int weekNumber, UpdateReportScheduleRequest request, Guid? lecturerId = null);
 }

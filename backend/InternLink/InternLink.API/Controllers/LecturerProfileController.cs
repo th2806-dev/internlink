@@ -32,6 +32,20 @@ public class LecturerProfileController : ControllerBase
         return Ok(ApiResponse<IEnumerable<LecturerDto>>.Ok(items));
     }
 
+    /// <summary>
+    /// Server-side paged directory: search + account/guidance filters + total count.
+    /// </summary>
+    [HttpGet("paged")]
+    public async Task<IActionResult> GetPaged([FromQuery] LecturerFilterRequest filter)
+    {
+        if (filter.Skip < 0 || filter.Take < 1 || filter.Take > 1000)
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InvalidPagination }));
+
+        var deptId = _deptScope.ResolveEffectiveDepartmentId(User, filter.DepartmentId);
+        var result = await _service.GetPagedAsync(filter, deptId);
+        return Ok(ApiResponse<PaginatedResponse<LecturerDto>>.Ok(result));
+    }
+
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById(Guid id)
     {

@@ -82,6 +82,68 @@ public class LecturerProfileService : ILecturerProfileService
         return _mapper.Map<List<LecturerDto>>(items);
     }
 
+    /// <summary>
+    /// Server-side paged directory: search + account/guidance filters + total count,
+    /// so the admin UI never bulk-loads the whole lecturer list.
+    /// </summary>
+    public async Task<PaginatedResponse<LecturerDto>> GetPagedAsync(LecturerFilterRequest filter, Guid? departmentId = null)
+    {
+        var query = _db.Lecturers.Where(l => !l.IsDeleted);
+
+        if (departmentId.HasValue)
+            query = query.Where(l => l.DepartmentId == departmentId.Value);
+
+        var semesterId = filter.SemesterId;
+        if (semesterId.HasValue && semesterId.Value != Guid.Empty)
+        {
+            query = query.Where(l =>
+                l.SemesterLecturers.Any(sl => sl.SemesterId == semesterId && !sl.IsDeleted) ||
+                l.Internships.Any(i => !i.IsDeleted && i.SemesterId == semesterId));
+        }
+
+        if (!string.IsNullOrWhiteSpace(filter.SearchTerm))
+        {
+            var term = filter.SearchTerm.ToLower();
+            query = query.Where(l =>
+                l.FullName.ToLower().Contains(term) ||
+                l.StaffCode.ToLower().Contains(term) ||
+                (l.Email != null && l.Email.ToLower().Contains(term)));
+        }
+
+        var accountStatus = (filter.AccountStatus ?? string.Empty).Trim().ToLowerInvariant();
+        if (accountStatus == "active")
+            query = query.Where(l => l.UserId != null);
+        else if (accountStatus == "pending")
+            query = query.Where(l => l.UserId == null);
+
+        if (filter.HasGuidance.HasValue)
+        {
+            var hasGuidance = filter.HasGuidance.Value;
+            query = hasGuidance
+                ? query.Where(l => l.Internships.Any(i =>
+                    !i.IsDeleted && (!semesterId.HasValue || i.SemesterId == semesterId)))
+                : query.Where(l => !l.Internships.Any(i =>
+                    !i.IsDeleted && (!semesterId.HasValue || i.SemesterId == semesterId)));
+        }
+
+        var total = await query.CountAsync();
+
+        var items = await query
+            .OrderBy(l => l.FullName)
+            .ThenBy(l => l.StaffCode)
+            .Skip(filter.Skip)
+            .Take(filter.Take)
+            .ToListAsync();
+
+        return new PaginatedResponse<LecturerDto>
+        {
+            Items = _mapper.Map<List<LecturerDto>>(items),
+            Total = total,
+            Skip = filter.Skip,
+            Take = filter.Take
+        };
+    }
+
     public async Task<LecturerDto?> GetByIdAsync(Guid id)
     {
         var lecturer = await _db.Lecturers.FirstOrDefaultAsync(l => l.Id == id && !l.IsDeleted);

@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Users,
   Search,
@@ -10,7 +11,6 @@ import {
   UserCheck,
   UserPlus,
   Trash2,
-  RefreshCw,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -18,9 +18,12 @@ import { PageHeader } from "../../../components/common/PageHeader";
 import { ConfirmDialog } from "../../../components/common/ConfirmDialog";
 import { Panel } from "../../../components/common/Panel";
 import { Toolbar } from "../../../components/common/Toolbar";
-import type { AdminUser, AdminUserRole, AdminUserStatus } from "../../../types/user";
-import { getApiErrorMessage } from "../../../lib/apiClient";
-import { useAdminUsers } from "../../../hooks/useAdminUsers";
+import { EmptyState } from "../../../components/common/EmptyState";
+import { TableSkeleton } from "../../../components/common/SkeletonLoader";
+import { RequestErrorState } from "../../../components/common/RequestErrorState";
+import type { AdminUser } from "../../../types/user";
+import { getApiErrorMessage, ApiClientError } from "../../../lib/apiClient";
+import { useAdminUsersQuery, USERS_PAGE_SIZE_OPTIONS } from "../../../hooks/useAdminUsersQuery";
 import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
 import {
   CreateUserModal,
@@ -28,19 +31,19 @@ import {
   type CreateUserRole,
 } from "../components/modals/CreateUserModal";
 
-const ROLE_LABEL: Record<AdminUserRole, string> = {
+const ROLE_LABEL: Record<"admin" | "lecturer" | "student", string> = {
   admin: "Admin",
   lecturer: "Giảng viên",
   student: "Sinh viên",
 };
 
-const STATUS_STYLE: Record<AdminUserStatus, string> = {
+const STATUS_STYLE: Record<"active" | "locked" | "pending", string> = {
   active: "bg-emerald-50 text-emerald-800 border-emerald-200",
   locked: "bg-rose-50 text-rose-800 border-rose-200",
   pending: "bg-amber-50 text-amber-800 border-amber-200",
 };
 
-const STATUS_LABEL: Record<AdminUserStatus, string> = {
+const STATUS_LABEL: Record<"active" | "locked" | "pending", string> = {
   active: "Hoạt động",
   locked: "Đã khóa",
   pending: "Chờ kích hoạt",
@@ -52,16 +55,8 @@ export const UsersView = ({
 }: {
   onShowToast: (msg: string, type?: ToastType) => void;
 }) => {
-  const {
-    users,
-    loading: isLoadingApi,
-    refetch,
-    createUser,
-    toggleLock: toggleUserLock,
-    resetPassword: resetUserPassword,
-    deleteUser: removeUser,
-  } = useAdminUsers();
   const { isSuperAdmin, isDepartmentAdmin } = useAdminCapabilities();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const allowedCreateRoles: CreateUserRole[] = isSuperAdmin
     ? ["DepartmentAdmin"]
@@ -70,76 +65,87 @@ export const UsersView = ({
   const canMutateUser = (u: AdminUser) =>
     isSuperAdmin ? u.role === "admin" : u.role === "student" || u.role === "lecturer";
 
-  const [search, setSearch] = useState("");
-  const [roleFilter, setRoleFilter] = useState<"all" | AdminUserRole>("all");
-  const [statusFilter, setStatusFilter] = useState<"all" | AdminUserStatus>(
-    "all",
-  );
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  /* ── Filter/pagination đồng bộ URL (?q=&role=&status=&page=) ────────── */
+  const q = searchParams.get("q") ?? "";
+  const roleParam = (searchParams.get("role") ?? "all") as
+    | "all" | "admin" | "lecturer" | "student";
+  const statusParam = (searchParams.get("status") ?? "all") as
+    | "all" | "active" | "locked";
+  const pageParam = Math.max(1, Number(searchParams.get("page")) || 1);
+
+  const usersQuery = useAdminUsersQuery({
+    pageSize: USERS_PAGE_SIZE_OPTIONS[0],
+    onError: (msg) => onShowToast(msg, "danger"),
+  });
+  const {
+    users,
+    pagination,
+    counts,
+    isPending,
+    isError,
+    error,
+    isFetching,
+    refetch,
+    filter,
+    setSearch,
+    applySearch,
+    setRole,
+    setStatus,
+    clearFilters,
+    goToPage,
+    createUser,
+    toggleLock: toggleUserLock,
+    resetPassword: resetUserPassword,
+    deleteUser: removeUser,
+    isDeleting,
+    isResetting,
+  } = usersQuery;
+
+  const [searchInput, setSearchInput] = useState(q);
   const [resetTarget, setResetTarget] = useState<AdminUser | null>(null);
-  const [isResetting, setIsResetting] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
+
+  // URL → hook (khi vào từ link/share hoặc back/forward).
+  useEffect(() => {
+    setRole(roleParam);
+  }, [roleParam, setRole]);
+  useEffect(() => {
+    setStatus(statusParam);
+  }, [statusParam, setStatus]);
+  useEffect(() => {
+    if (q !== filter.search) {
+      setSearchInput(q);
+      // Áp dụng ngay từ URL (link/share) — không chờ debounce.
+      setSearch(q);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q]);
+  useEffect(() => {
+    if (pageParam !== filter.page) goToPage(pageParam);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageParam]);
+
+  // hook → URL (ghi đè lịch sử, không spam history stack).
+  useEffect(() => {
+    const next = new URLSearchParams();
+    if (filter.search) next.set("q", filter.search);
+    if (filter.role !== "all") next.set("role", filter.role);
+    if (filter.status !== "all") next.set("status", filter.status);
+    if (filter.page > 1) next.set("page", String(filter.page));
+    setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter.search, filter.role, filter.status, filter.page]);
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
-    setIsDeleting(true);
     try {
       await removeUser(deleteTarget.id);
       onShowToast(`Đã xóa tài khoản ${deleteTarget.fullName} khỏi hệ thống.`);
       setDeleteTarget(null);
     } catch (err) {
       onShowToast(getApiErrorMessage(err));
-    } finally {
-      setIsDeleting(false);
     }
-  };
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return users.filter((u) => {
-      const matchQ =
-        !q ||
-        u.fullName.toLowerCase().includes(q) ||
-        u.code.toLowerCase().includes(q) ||
-        u.email.toLowerCase().includes(q);
-      const matchRole = roleFilter === "all" || u.role === roleFilter;
-      const matchStatus = statusFilter === "all" || u.status === statusFilter;
-      return matchQ && matchRole && matchStatus;
-    });
-  }, [users, search, roleFilter, statusFilter]);
-
-  const counts = useMemo(
-    () => ({
-      total: users.length,
-      locked: users.filter((u) => u.status === "locked").length,
-      pending: users.filter((u) => u.status === "pending").length,
-    }),
-    [users],
-  );
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const visiblePage = Math.min(currentPage, totalPages);
-  const paginatedUsers = useMemo(() => {
-    const start = (visiblePage - 1) * pageSize;
-    return filtered.slice(start, start + pageSize);
-  }, [filtered, pageSize, visiblePage]);
-
-  const updateSearch = (value: string) => {
-    setSearch(value);
-    setCurrentPage(1);
-  };
-
-  const updateRoleFilter = (value: "all" | AdminUserRole) => {
-    setRoleFilter(value);
-    setCurrentPage(1);
-  };
-
-  const updateStatusFilter = (value: "all" | AdminUserStatus) => {
-    setStatusFilter(value);
-    setCurrentPage(1);
   };
 
   const toggleLock = async (u: AdminUser) => {
@@ -153,7 +159,6 @@ export const UsersView = ({
 
   const confirmReset = async () => {
     if (!resetTarget) return;
-    setIsResetting(true);
     try {
       const res = await resetUserPassword(resetTarget.id);
       onShowToast(
@@ -164,8 +169,6 @@ export const UsersView = ({
       setResetTarget(null);
     } catch (err) {
       onShowToast(getApiErrorMessage(err));
-    } finally {
-      setIsResetting(false);
     }
   };
 
@@ -216,10 +219,11 @@ export const UsersView = ({
           <p className="text-xs text-slate-500 font-medium">
             <span className="font-bold text-slate-800">{counts.total}</span>{" "}
             tài khoản ·{" "}
-            <span className="font-bold text-amber-700">{counts.pending}</span>{" "}
-            chờ kích hoạt ·{" "}
             <span className="font-bold text-rose-700">{counts.locked}</span>{" "}
             đang khóa
+            {isFetching && (
+              <span className="ml-2 text-blue-600 font-semibold">· Đang tải…</span>
+            )}
           </p>
         }
       />
@@ -228,7 +232,7 @@ export const UsersView = ({
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-3">
           <div>
             <h2 className="text-base font-bold text-slate-900 tracking-tight">
-              Danh sách tài khoản ({filtered.length})
+              Danh sách tài khoản ({pagination.total})
             </h2>
             <p className="text-xs text-slate-500 font-medium">
               Gộp quản lý Admin / Giảng viên / Sinh viên
@@ -238,15 +242,23 @@ export const UsersView = ({
             <div className="relative">
               <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
-                value={search}
-                onChange={(e) => updateSearch(e.target.value)}
+                value={searchInput}
+                onChange={(e) => {
+                  setSearchInput(e.target.value);
+                  setSearch(e.target.value);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") applySearch();
+                }}
                 placeholder="Tìm mã, tên, email…"
+                aria-label="Tìm tài khoản"
                 className="pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-md bg-slate-50 focus:bg-white focus:border-blue-500 outline-none w-52"
               />
             </div>
             <select
-              value={roleFilter}
-              onChange={(e) => updateRoleFilter(e.target.value as "all" | AdminUserRole)}
+              value={filter.role}
+              onChange={(e) => setRole(e.target.value as typeof filter.role)}
+              aria-label="Lọc theo vai trò"
               className="px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-slate-50 font-medium outline-none cursor-pointer"
             >
               <option value="all">Mọi vai trò</option>
@@ -255,20 +267,38 @@ export const UsersView = ({
               <option value="student">Sinh viên</option>
             </select>
             <select
-              value={statusFilter}
-              onChange={(e) => updateStatusFilter(e.target.value as "all" | AdminUserStatus)}
+              value={filter.status}
+              onChange={(e) => setStatus(e.target.value as typeof filter.status)}
+              aria-label="Lọc theo trạng thái"
               className="px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-slate-50 font-medium outline-none cursor-pointer"
             >
               <option value="all">Mọi trạng thái</option>
               <option value="active">Hoạt động</option>
-              <option value="pending">Chờ kích hoạt</option>
               <option value="locked">Đã khóa</option>
             </select>
           </div>
         </div>
 
+        {/* ── LỖI: không bao giờ hiển thị nhầm là "không có dữ liệu" ── */}
+        {isError && (
+          <RequestErrorState
+            title="Không thể tải danh sách tài khoản"
+            message={error instanceof Error ? error.message : undefined}
+            status={error instanceof ApiClientError ? error.status : undefined}
+            onRetry={() => void refetch()}
+            retrying={isFetching}
+          />
+        )}
+
+        {/* ── ĐANG TẢI LẦN ĐẦU: skeleton giữ bố cục bảng ── */}
+        {isPending && !isError && <TableSkeleton rows={6} columns={6} />}
+
+        {!isPending && !isError && (
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          <table
+            className={`w-full text-left text-xs transition-opacity duration-150 ${isFetching ? "opacity-60" : ""}`}
+            aria-busy={isFetching}
+          >
             <thead>
               <tr className="border-b border-slate-100 text-[10px] uppercase tracking-wider text-slate-400 font-bold">
                 <th className="py-2.5 pr-3">Người dùng</th>
@@ -280,7 +310,7 @@ export const UsersView = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {paginatedUsers.map((u) => {
+              {users.map((u) => {
                 const RoleIcon =
                   u.role === "admin"
                     ? Shield
@@ -356,57 +386,46 @@ export const UsersView = ({
                   </tr>
                 );
               })}
-              {filtered.length === 0 && (
+              {users.length === 0 && (
                 <tr>
-                  <td
-                    colSpan={6}
-                    className="py-10 text-center text-slate-400 font-medium"
-                  >
-                    Không có tài khoản khớp bộ lọc
+                  <td colSpan={6} className="p-4">
+                    <EmptyState
+                      title="Không có tài khoản khớp bộ lọc"
+                      description="Thử đổi từ khóa tìm kiếm, vai trò hoặc trạng thái khác."
+                      action={{ label: "Xóa bộ lọc", onClick: clearFilters }}
+                    />
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
+        )}
 
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-slate-100 pt-3 text-xs text-slate-500">
           <div className="flex items-center gap-2">
             <span>
-              Hiển thị {filtered.length === 0 ? 0 : (visiblePage - 1) * pageSize + 1}
-              –{Math.min(visiblePage * pageSize, filtered.length)} / {filtered.length} tài khoản
+              Hiển thị {pagination.from}
+              –{pagination.to} / {pagination.total} tài khoản
             </span>
-            <select
-              value={pageSize}
-              onChange={(event) => {
-                setPageSize(Number(event.target.value));
-                setCurrentPage(1);
-              }}
-              className="px-2 py-1 border border-slate-200 rounded-md bg-white font-medium text-slate-700 outline-none"
-              aria-label="Số tài khoản mỗi trang"
-            >
-              <option value={10}>10 / trang</option>
-              <option value={25}>25 / trang</option>
-              <option value={50}>50 / trang</option>
-            </select>
           </div>
           <div className="flex items-center gap-1.5">
             <button
               type="button"
-              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-              disabled={visiblePage === 1}
+              onClick={() => goToPage(pagination.page - 1)}
+              disabled={!pagination.hasPrev}
               className="p-1.5 border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none"
               aria-label="Trang trước"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
             <span className="min-w-16 text-center font-semibold text-slate-700">
-              {visiblePage} / {totalPages}
+              {pagination.page} / {pagination.totalPages}
             </span>
             <button
               type="button"
-              onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
-              disabled={visiblePage === totalPages}
+              onClick={() => goToPage(pagination.page + 1)}
+              disabled={!pagination.hasNext}
               className="p-1.5 border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none"
               aria-label="Trang sau"
             >

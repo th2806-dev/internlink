@@ -775,6 +775,168 @@ public class StudentServiceTests
         student.Phone.Should().Be("0906891704");
     }
 
+    [Fact]
+    public async Task GetStudentsWithFilterAsync_ShouldScopeBySemester()
+    {
+        var db = GetInMemoryDbContext();
+        var service = CreateService(db);
+
+        var semesterA = Guid.NewGuid();
+        var semesterB = Guid.NewGuid();
+
+        var inA = new Student { Id = Guid.NewGuid(), StudentCode = "SVA", FullName = "In A", CreatedAt = DateTime.UtcNow };
+        var inB = new Student { Id = Guid.NewGuid(), StudentCode = "SVB", FullName = "In B", CreatedAt = DateTime.UtcNow };
+        var fresh = new Student { Id = Guid.NewGuid(), StudentCode = "SVF", FullName = "Fresh", CreatedAt = DateTime.UtcNow };
+
+        db.Students.AddRange(inA, inB, fresh);
+        db.Internships.AddRange(
+            new Internship { Id = Guid.NewGuid(), StudentId = inA.Id, SemesterId = semesterA, CreatedAt = DateTime.UtcNow },
+            new Internship { Id = Guid.NewGuid(), StudentId = inB.Id, SemesterId = semesterB, CreatedAt = DateTime.UtcNow });
+        await db.SaveChangesAsync();
+
+        var result = await service.GetStudentsWithFilterAsync(new StudentFilterRequest { SemesterId = semesterA });
+
+        // Same-term students + students not yet enrolled in any term stay visible.
+        result.Total.Should().Be(2);
+        result.Items.Should().Contain(s => s.StudentCode == "SVA");
+        result.Items.Should().Contain(s => s.StudentCode == "SVF");
+        result.Items.Should().NotContain(s => s.StudentCode == "SVB");
+    }
+
+    [Fact]
+    public async Task GetStudentsWithFilterAsync_ShouldFilterByAccountStatusAndPopulateAccountFields()
+    {
+        var db = GetInMemoryDbContext();
+        var service = CreateService(db);
+
+        var activeUser = new User { Id = Guid.NewGuid(), Username = "sv.active", PasswordHash = "hash", Email = "a@test.com", Role = Role.Student, FullName = "Active", IsActive = true, CreatedAt = DateTime.UtcNow };
+        var lockedUser = new User { Id = Guid.NewGuid(), Username = "sv.locked", PasswordHash = "hash", Email = "l@test.com", Role = Role.Student, FullName = "Locked", IsActive = false, CreatedAt = DateTime.UtcNow };
+
+        db.Users.AddRange(activeUser, lockedUser);
+        db.Students.AddRange(
+            new Student { Id = Guid.NewGuid(), UserId = activeUser.Id, StudentCode = "SV-ACT", FullName = "Has Active Account", CreatedAt = DateTime.UtcNow },
+            new Student { Id = Guid.NewGuid(), UserId = lockedUser.Id, StudentCode = "SV-LOCK", FullName = "Has Locked Account", CreatedAt = DateTime.UtcNow },
+            new Student { Id = Guid.NewGuid(), StudentCode = "SV-PEND", FullName = "No Account", CreatedAt = DateTime.UtcNow });
+        await db.SaveChangesAsync();
+
+        var active = await service.GetStudentsWithFilterAsync(new StudentFilterRequest { AccountStatus = "active" });
+        var locked = await service.GetStudentsWithFilterAsync(new StudentFilterRequest { AccountStatus = "locked" });
+        var pending = await service.GetStudentsWithFilterAsync(new StudentFilterRequest { AccountStatus = "pending" });
+
+        active.Items.Should().ContainSingle(s => s.StudentCode == "SV-ACT");
+        locked.Items.Should().ContainSingle(s => s.StudentCode == "SV-LOCK");
+        pending.Items.Should().ContainSingle(s => s.StudentCode == "SV-PEND");
+
+        // DTO carries the account state so the UI never bulk-loads the users table.
+        var all = await service.GetStudentsWithFilterAsync(new StudentFilterRequest());
+        all.Items.Single(s => s.StudentCode == "SV-ACT").AccountIsActive.Should().BeTrue();
+        all.Items.Single(s => s.StudentCode == "SV-LOCK").AccountIsActive.Should().BeFalse();
+        all.Items.Single(s => s.StudentCode == "SV-PEND").AccountIsActive.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetStudentsWithFilterAsync_ShouldFilterByInternshipStatusWithinSemester()
+    {
+        var db = GetInMemoryDbContext();
+        var service = CreateService(db);
+
+        var semester = Guid.NewGuid();
+        var otherSemester = Guid.NewGuid();
+
+        var registered = new Student { Id = Guid.NewGuid(), StudentCode = "SV-REG", FullName = "Registered", CreatedAt = DateTime.UtcNow };
+        var preparing = new Student { Id = Guid.NewGuid(), StudentCode = "SV-PREP", FullName = "Preparing", CreatedAt = DateTime.UtcNow };
+        var interning = new Student { Id = Guid.NewGuid(), StudentCode = "SV-INT", FullName = "Interning", CreatedAt = DateTime.UtcNow };
+        var completed = new Student { Id = Guid.NewGuid(), StudentCode = "SV-COMP", FullName = "Completed", CreatedAt = DateTime.UtcNow };
+        var elsewhere = new Student { Id = Guid.NewGuid(), StudentCode = "SV-OTHER", FullName = "Other Term", CreatedAt = DateTime.UtcNow };
+
+        db.Students.AddRange(registered, preparing, interning, completed, elsewhere);
+        db.Internships.AddRange(
+            new Internship { Id = Guid.NewGuid(), StudentId = preparing.Id, SemesterId = semester, Status = InternshipStatus.NotStarted, CreatedAt = DateTime.UtcNow },
+            new Internship { Id = Guid.NewGuid(), StudentId = interning.Id, SemesterId = semester, Status = InternshipStatus.InProgress, CreatedAt = DateTime.UtcNow },
+            new Internship { Id = Guid.NewGuid(), StudentId = completed.Id, SemesterId = semester, Status = InternshipStatus.Completed, CreatedAt = DateTime.UtcNow },
+            new Internship { Id = Guid.NewGuid(), StudentId = elsewhere.Id, SemesterId = otherSemester, Status = InternshipStatus.InProgress, CreatedAt = DateTime.UtcNow });
+        await db.SaveChangesAsync();
+
+        async Task<string[]> CodesFor(string status) =>
+            (await service.GetStudentsWithFilterAsync(new StudentFilterRequest { SemesterId = semester, InternshipStatus = status }))
+                .Items.Select(s => s.StudentCode).ToArray();
+
+        (await CodesFor("registered")).Should().BeEquivalentTo(new[] { "SV-REG" });
+        (await CodesFor("preparing")).Should().BeEquivalentTo(new[] { "SV-PREP" });
+        (await CodesFor("interning")).Should().BeEquivalentTo(new[] { "SV-INT" });
+        (await CodesFor("completed")).Should().BeEquivalentTo(new[] { "SV-COMP" });
+    }
+
+    [Fact]
+    public async Task GetStudentsWithFilterAsync_ShouldSortByStudentCodeAndPaginate()
+    {
+        var db = GetInMemoryDbContext();
+        var service = CreateService(db);
+
+        db.Students.AddRange(
+            new Student { Id = Guid.NewGuid(), StudentCode = "SV003", FullName = "Zed", CreatedAt = DateTime.UtcNow },
+            new Student { Id = Guid.NewGuid(), StudentCode = "SV001", FullName = "Alpha", CreatedAt = DateTime.UtcNow },
+            new Student { Id = Guid.NewGuid(), StudentCode = "SV002", FullName = "Mike", CreatedAt = DateTime.UtcNow });
+        await db.SaveChangesAsync();
+
+        var result = await service.GetStudentsWithFilterAsync(new StudentFilterRequest
+        {
+            SortBy = "mssv",
+            Skip = 1,
+            Take = 1
+        });
+
+        result.Total.Should().Be(3);
+        result.Items.Should().ContainSingle().Which.StudentCode.Should().Be("SV002");
+    }
+
+    [Fact]
+    public async Task GetStudentsWithFilterAsync_ShouldMatchEmailAndCompanyName()
+    {
+        var db = GetInMemoryDbContext();
+        var service = CreateService(db);
+
+        var byEmail = new Student { Id = Guid.NewGuid(), StudentCode = "SV-EM", FullName = "Email Student", Email = "tranvanb@school.edu.vn", CreatedAt = DateTime.UtcNow };
+        var byCompany = new Student { Id = Guid.NewGuid(), StudentCode = "SV-CO", FullName = "Company Student", CreatedAt = DateTime.UtcNow };
+        var company = new Company { Id = Guid.NewGuid(), CompanyName = "FPT Software", CreatedAt = DateTime.UtcNow };
+
+        db.Students.AddRange(byEmail, byCompany);
+        db.Companies.Add(company);
+        db.Internships.Add(new Internship
+        {
+            Id = Guid.NewGuid(),
+            StudentId = byCompany.Id,
+            CompanyId = company.Id,
+            Status = InternshipStatus.InProgress,
+            CreatedAt = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
+
+        var byMail = await service.GetStudentsWithFilterAsync(new StudentFilterRequest { SearchTerm = "tranvanb@school" });
+        var byCorp = await service.GetStudentsWithFilterAsync(new StudentFilterRequest { SearchTerm = "fpt" });
+
+        byMail.Items.Should().ContainSingle(s => s.StudentCode == "SV-EM");
+        byCorp.Items.Should().ContainSingle(s => s.StudentCode == "SV-CO");
+    }
+
+    [Fact]
+    public async Task GetClassOptionsAsync_ShouldReturnDistinctSortedClasses()
+    {
+        var db = GetInMemoryDbContext();
+        var service = CreateService(db);
+
+        db.Students.AddRange(
+            new Student { Id = Guid.NewGuid(), StudentCode = "SV1", FullName = "A", Class = "K66", CreatedAt = DateTime.UtcNow },
+            new Student { Id = Guid.NewGuid(), StudentCode = "SV2", FullName = "B", Class = "K65", CreatedAt = DateTime.UtcNow },
+            new Student { Id = Guid.NewGuid(), StudentCode = "SV3", FullName = "C", Class = "K66", CreatedAt = DateTime.UtcNow },
+            new Student { Id = Guid.NewGuid(), StudentCode = "SV4", FullName = "D", CreatedAt = DateTime.UtcNow });
+        await db.SaveChangesAsync();
+
+        var classes = await service.GetClassOptionsAsync();
+
+        classes.Should().Equal("K65", "K66");
+    }
+
     private static MemoryStream CreateStudentExcel(
         params (string Mssv, string Name, string? Class, string? Major, string? Email, string? Phone, string? Username)[] rows)
     {
