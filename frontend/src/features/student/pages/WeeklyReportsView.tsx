@@ -21,39 +21,14 @@ import { PageHeader } from "../../../components/common/PageHeader";
 import { Panel } from "../../../components/common/Panel";
 import { Toolbar } from "../../../components/common/Toolbar";
 import { EmptyState } from "../../../components/common/EmptyState";
-import { SkeletonBox } from "../../../components/common/SkeletonLoader";
+import { SkeletonBox, TableSkeleton } from "../../../components/common/SkeletonLoader";
+import { RequestErrorState } from "../../../components/common/RequestErrorState";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { mapWeeklyReportDtoToUi } from "../../../lib/portalMappers";
 import { weeklyReportService } from "../../../services/weeklyReport.service";
 import { semesterReportScheduleService, type SemesterReportScheduleDto } from "../../../services/semesterReportSchedule.service";
+import { useStudentWeeklyReportsQuery, type WeeklyReportRow } from "../../../hooks/useStudentWeeklyReportsQuery";
 import { INTERNSHIP_WEEKS } from "../../../config/internship";
-
-type WeeklyReportRow = {
-  id?: string;
-  internshipId?: string;
-  weekNumber: number;
-  title: string;
-  content?: string;
-  deadline: string;
-  allowLateSubmission?: boolean;
-  scheduleDueDate?: string;
-  submittedAt: string | null;
-  version: string;
-  status: string;
-  fileName?: string;
-  fileSize?: string;
-  versions?: {
-    id: string;
-    version: number;
-    fileName: string;
-    fileSize: number;
-    mimeType: string;
-    uploadedAt: string;
-  }[];
-  feedback?: string;
-  feedbackDate?: string;
-  stepIndex: number;
-};
 
 export const WeeklyReportsView = ({ onShowToast }: { onShowToast: (msg: string) => void }) => {
   const navigate = useNavigate();
@@ -80,53 +55,39 @@ export const WeeklyReportsView = ({ onShowToast }: { onShowToast: (msg: string) 
     name: string;
   } | null>(null);
   const [showRequirementModal, setShowRequirementModal] = useState(false);
-  const [reports, setReports] = useState<WeeklyReportRow[]>([]);
-  const [schedules, setSchedules] = useState<SemesterReportScheduleDto[]>([]);
-  const [isLoadingApi, setIsLoadingApi] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const {
+    reports,
+    schedules,
+    isLoading: isLoadingApi,
+    isFetching,
+    isError,
+    error,
+    refetch,
+    submitReport,
+    isSubmitting: isSubmittingQuery,
+  } = useStudentWeeklyReportsQuery({
+    semesterId: selectedSemester?.id,
+  });
+
+  const [isSubmittingManual, setIsSubmittingManual] = useState(false);
+  const isSubmitting = isSubmittingManual || isSubmittingQuery;
   const [isDragging, setIsDragging] = useState(false);
 
   const requiredSchedules = useMemo(
-    () => schedules.filter((schedule) => schedule.weekNumber <= totalWeeks && schedule.isSubmissionOpen),
+    () =>
+      schedules.filter(
+        (schedule) =>
+          schedule.weekNumber <= totalWeeks && schedule.isSubmissionOpen,
+      ),
     [schedules, totalWeeks],
   );
   const requiredWeekCount = requiredSchedules.length || totalWeeks;
 
   useEffect(() => {
-    if (selectedSemester?.id) {
-      semesterReportScheduleService
-        .getSchedules(selectedSemester.id)
-        .then((res) => setSchedules(res))
-        .catch(() => {});
+    if (reports.length > 0) {
+      setSelectedWeek(reports[reports.length - 1].weekNumber);
     }
-  }, [selectedSemester?.id]);
-
-  const reloadReports = useCallback(async () => {
-    const rows = await weeklyReportService.getMine();
-    const mapped: WeeklyReportRow[] = rows.map(mapWeeklyReportDtoToUi);
-    setReports(mapped);
-    return mapped;
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setIsLoadingApi(true);
-      try {
-        const mapped = await reloadReports();
-        if (!cancelled && mapped.length > 0) {
-          setSelectedWeek(mapped[mapped.length - 1].weekNumber);
-        }
-      } catch (err) {
-        if (!cancelled) onShowToast?.(getApiErrorMessage(err));
-      } finally {
-        if (!cancelled) setIsLoadingApi(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [onShowToast, reloadReports]);
+  }, [reports]);
 
   const emptyWeek = (week: number): WeeklyReportRow => ({
     weekNumber: week,
@@ -281,32 +242,21 @@ export const WeeklyReportsView = ({ onShowToast }: { onShowToast: (msg: string) 
       return;
     }
 
-    setIsSubmitting(true);
+    setIsSubmittingManual(true);
     try {
-      if (!currentReport.id) {
-        await weeklyReportService.upload({
-          internshipId,
-          weekNumber: selectedWeek,
-          title: currentReport.title || `B\u00E1o c\u00E1o tu\u1EA7n ${selectedWeek}`,
-          file: selectedPdfFile.file,
-        });
-      } else {
-        await weeklyReportService.uploadRevision(
-          currentReport.id,
-          currentReport.title,
-          selectedPdfFile.file,
-        );
-      }
-      const refreshed = await reloadReports();
-      const refreshedReport = refreshed.find((r) => r.weekNumber === selectedWeek);
-      if (refreshedReport?.id) await weeklyReportService.submit(refreshedReport.id);
-      await reloadReports();
+      await submitReport({
+        internshipId,
+        weekNumber: selectedWeek,
+        title: currentReport.title || `Báo cáo tuần ${selectedWeek}`,
+        file: selectedPdfFile.file,
+        reportId: currentReport.id,
+      });
       setSelectedPdfFile(null);
       onShowToast(`Đã nộp báo cáo tuần ${selectedWeek} lên hệ thống.`);
     } catch (err) {
       onShowToast(getApiErrorMessage(err));
     } finally {
-      setIsSubmitting(false);
+      setIsSubmittingManual(false);
     }
   };
   const handleDownloadReport = async (versionId?: string, fileName?: string) => {
@@ -396,7 +346,21 @@ export const WeeklyReportsView = ({ onShowToast }: { onShowToast: (msg: string) 
         }
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      {isLoadingApi && reports.length === 0 ? (
+        <div className="p-4" data-testid="student-reports-loading">
+          <TableSkeleton rows={4} columns={6} />
+        </div>
+      ) : isError && reports.length === 0 ? (
+        <RequestErrorState
+          title="Không thể tải báo cáo tuần"
+          message={
+            error instanceof Error ? error.message : "Lỗi kết nối máy chủ"
+          }
+          onRetry={() => void refetch()}
+          retrying={isFetching}
+        />
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* LEFT 2 COLS: REPORTS TABLE & SELECTED WEEK WORKSPACE */}
         <div className="lg:col-span-2 space-y-5">
           {/* WEEKLY REPORTS TABLE CARD */}
@@ -772,6 +736,7 @@ export const WeeklyReportsView = ({ onShowToast }: { onShowToast: (msg: string) 
           </Panel>
         </div>
       </div>
+      )}
 
       {/* REQUIREMENTS MODAL */}
       {previewReport && (

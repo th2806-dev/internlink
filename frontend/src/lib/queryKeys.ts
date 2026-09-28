@@ -105,6 +105,11 @@ export const queryKeys = {
       list: (params: QueryParams) =>
         [...queryKeys.lecturer.notifications.all, "list", params] as const,
     },
+    submissions: {
+      all: ["lecturer-portal", "submissions"] as const,
+      list: (semesterId?: string | null) =>
+        [...queryKeys.lecturer.submissions.all, "list", semesterScope(semesterId)] as const,
+    },
     dashboard: (semesterId?: string | null) =>
       [...queryKeys.lecturer.all, "dashboard", semesterScope(semesterId)] as const,
   },

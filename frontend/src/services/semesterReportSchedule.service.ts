@@ -25,8 +25,10 @@ export interface UpdateReportScheduleRequest {
 }
 
 export const semesterReportScheduleService = {
-  getSchedules(semesterId: string): Promise<SemesterReportScheduleDto[]> {
-    return apiRequest<SemesterReportScheduleDto[]>(`/api/Semesters/${semesterId}/report-schedules`);
+  getSchedules(semesterId: string, options?: { signal?: AbortSignal }): Promise<SemesterReportScheduleDto[]> {
+    return apiRequest<SemesterReportScheduleDto[]>(`/api/Semesters/${semesterId}/report-schedules`, {
+      signal: options?.signal,
+    });
   },
 
   generateDefaults(semesterId: string): Promise<SemesterReportScheduleDto[]> {

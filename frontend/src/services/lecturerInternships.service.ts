@@ -27,10 +27,11 @@ export const lecturerInternshipsService = {
     return apiRequest<InternshipDto[]>(`/api/Lecturer/internships${params}`);
   },
 
-  getStudents(semesterId?: string): Promise<LecturerStudentListItemDto[]> {
+  getStudents(semesterId?: string, options?: { signal?: AbortSignal }): Promise<LecturerStudentListItemDto[]> {
     const params = semesterId && semesterId !== "all" ? `?semesterId=${semesterId}` : "";
     return apiRequest<LecturerStudentListItemDto[]>(`/api/Lecturer/students${params}`, {
       skipCache: true,
+      signal: options?.signal,
     });
   },
 
@@ -49,9 +50,11 @@ export const lecturerInternshipsService = {
     );
   },
 
-  getAllSubmissions(semesterId?: string): Promise<SubmissionDto[]> {
+  getAllSubmissions(semesterId?: string, options?: { signal?: AbortSignal }): Promise<SubmissionDto[]> {
     const params = semesterId && semesterId !== "all" ? `?semesterId=${semesterId}` : "";
-    return apiRequest<SubmissionDto[]>(`/api/Lecturer/submissions${params}`);
+    return apiRequest<SubmissionDto[]>(`/api/Lecturer/submissions${params}`, {
+      signal: options?.signal,
+    });
   },
 
   addFeedback(

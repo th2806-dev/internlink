@@ -7,6 +7,7 @@ import { RequestErrorState } from "../../../components/common/RequestErrorState"
 import { SubmissionsHub } from "../components/SubmissionsHub";
 import { WeeklyReportsReviewPanel } from "../components/WeeklyReportsReviewPanel";
 import { useLecturerReportsQuery } from "../../../hooks/useLecturerReportsQuery";
+import { useLecturerSubmissionsQuery } from "../../../hooks/useLecturerSubmissionsQuery";
 import { ApiClientError } from "../../../lib/apiClient";
 import type { ToastType } from "../../../contexts/ToastContext";
 import type { Submission } from "../../../types/submission";
@@ -45,6 +46,21 @@ export const ReportsView = ({
   onRefresh,
 }: ReportsViewProps) => {
   const reports = useLecturerReportsQuery({ semesterId, onReviewed: onRefresh });
+  const submissionsQuery = useLecturerSubmissionsQuery({
+    semesterId,
+    enabled: submissions.length === 0,
+  });
+
+  const effectiveSubmissions =
+    submissions.length > 0 ? submissions : submissionsQuery.submissions;
+
+  const effectiveSubmissionsLoading =
+    isSubmissionsLoading ||
+    (submissions.length === 0 && submissionsQuery.isLoading);
+
+  const effectiveUpdateSubmissionStatus =
+    onUpdateSubmissionStatus ?? submissionsQuery.updateSubmissionStatus;
+
   const {
     items,
     totals,
@@ -234,15 +250,26 @@ export const ReportsView = ({
         </>
       )}
 
-      {/* Khu vực bài nộp sản phẩm/cuối kỳ (portal legacy — GĐ 3/4 sẽ chuyển sang query) */}
-      {isSubmissionsLoading && submissions.length === 0 ? (
+      {/* Khu vực bài nộp sản phẩm/cuối kỳ (TanStack Query) */}
+      {submissionsQuery.isError && submissions.length === 0 ? (
+        <RequestErrorState
+          title="Không thể tải danh sách bài nộp"
+          message={
+            submissionsQuery.error instanceof Error
+              ? submissionsQuery.error.message
+              : "Lỗi tải danh sách bài nộp."
+          }
+          onRetry={() => void submissionsQuery.refetch()}
+          retrying={submissionsQuery.isFetching}
+        />
+      ) : effectiveSubmissionsLoading && effectiveSubmissions.length === 0 ? (
         <div data-testid="submissions-loading">
           <TableSkeleton rows={3} columns={5} />
         </div>
       ) : (
         <SubmissionsHub
-          submissions={submissions}
-          onUpdateSubmissionStatus={onUpdateSubmissionStatus}
+          submissions={effectiveSubmissions}
+          onUpdateSubmissionStatus={effectiveUpdateSubmissionStatus}
           onToast={showToast}
         />
       )}

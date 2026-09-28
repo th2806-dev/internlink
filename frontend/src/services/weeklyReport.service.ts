@@ -13,8 +13,10 @@ export const weeklyReportService = {
     return apiRequest<WeeklyReportDto>(`/api/WeeklyReport/${id}`);
   },
 
-  getMine(): Promise<WeeklyReportDto[]> {
-    return apiRequest<WeeklyReportDto[]>("/api/WeeklyReport/mine");
+  getMine(options?: { signal?: AbortSignal }): Promise<WeeklyReportDto[]> {
+    return apiRequest<WeeklyReportDto[]>("/api/WeeklyReport/mine", {
+      signal: options?.signal,
+    });
   },
 
   getByInternship(internshipId: string): Promise<WeeklyReportDto[]> {

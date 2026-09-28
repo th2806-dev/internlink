@@ -21,6 +21,19 @@ vi.mock("../features/lecturer/components/SubmissionsHub", () => ({
   SubmissionsHub: () => <div data-testid="submissions-hub" />,
 }));
 
+vi.mock("../hooks/useLecturerSubmissionsQuery", () => ({
+  useLecturerSubmissionsQuery: () => ({
+    submissions: [],
+    isLoading: false,
+    isFetching: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
+    updateSubmissionStatus: vi.fn(),
+    isUpdating: false,
+  }),
+}));
+
 const getAllForLecturer = vi.mocked(weeklyReportService.getAllForLecturer);
 
 function makeReport(id: string, status = "Submitted"): WeeklyReportDto {

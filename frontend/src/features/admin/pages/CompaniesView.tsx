@@ -32,6 +32,9 @@ import { useSemester, toApiSemesterId, toApiDepartmentId } from "../../../contex
 import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
 import { ImportCompaniesModal } from "../components/modals/ImportCompaniesModal";
 import { EmptyState } from "../../../components/common/EmptyState";
+import { TableSkeleton } from "../../../components/common/SkeletonLoader";
+import { RequestErrorState } from "../../../components/common/RequestErrorState";
+import { useAdminCompaniesQuery } from "../../../hooks/useAdminCompaniesQuery";
 
 const emptyForm = {
   name: "",
@@ -53,12 +56,34 @@ export const CompaniesView = ({
   const navigate = useNavigate();
   const { selectedSemester, selectedDepartmentId } = useSemester();
   const { canMutateOps, isSuperAdmin } = useAdminCapabilities();
-  const [companies, setCompanies] = useState<Enterprise[]>([]);
-  const [isLoadingApi, setIsLoadingApi] = useState(true);
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const {
+    items: paginatedCompanies,
+    allItems: companies,
+    filteredItems: filtered,
+    totalCount,
+    totalPages,
+    page: visiblePage,
+    pageSize,
+    goToPage: setCurrentPage,
+    searchTerm: search,
+    setSearchTerm: updateSearch,
+    statusFilter,
+    setStatusFilter: updateStatusFilter,
+    statuses,
+    isLoading: isLoadingApi,
+    isFetching,
+    isError,
+    error,
+    refetch,
+    createCompany,
+    updateCompany,
+    deleteCompany,
+    setSemesterLink,
+  } = useAdminCompaniesQuery({
+    semesterId: selectedSemester?.id,
+    departmentId: selectedDepartmentId,
+  });
+
   const [editing, setEditing] = useState<Enterprise | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
@@ -68,64 +93,6 @@ export const CompaniesView = ({
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [linkTarget, setLinkTarget] = useState<Enterprise | null>(null);
   const [isLinking, setIsLinking] = useState(false);
-
-  const reloadCompanies = async () => {
-    setIsLoadingApi(true);
-    try {
-      const rows = await adminCompaniesService.getAll(
-        0,
-        500,
-        toApiSemesterId(selectedSemester?.id),
-        toApiDepartmentId(selectedDepartmentId),
-      );
-      setCompanies(rows.map(mapCompanyDtoToEnterprise));
-    } catch (err) {
-      onShowToast(getApiErrorMessage(err));
-    } finally {
-      setIsLoadingApi(false);
-    }
-  };
-
-  // Load companies for the currently selected term/department; refetch on change
-  useEffect(() => {
-    void reloadCompanies();
-  }, [selectedSemester?.id, selectedDepartmentId, onShowToast]);
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return companies.filter((c) => {
-      const matchQ =
-        !q ||
-        c.name.toLowerCase().includes(q) ||
-        c.shortCode.toLowerCase().includes(q) ||
-        c.field.toLowerCase().includes(q);
-      const matchStatus =
-        statusFilter === "all" || c.status === statusFilter;
-      return matchQ && matchStatus;
-    });
-  }, [companies, search, statusFilter]);
-
-  const statuses = useMemo(
-    () => Array.from(new Set(companies.map((c) => c.status))),
-    [companies],
-  );
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const visiblePage = Math.min(currentPage, totalPages);
-  const paginatedCompanies = useMemo(() => {
-    const start = (visiblePage - 1) * pageSize;
-    return filtered.slice(start, start + pageSize);
-  }, [filtered, pageSize, visiblePage]);
-
-  const updateSearch = (value: string) => {
-    setSearch(value);
-    setCurrentPage(1);
-  };
-
-  const updateStatusFilter = (value: string) => {
-    setStatusFilter(value);
-    setCurrentPage(1);
-  };
 
   const openCreate = () => {
     setEditing(null);
@@ -170,15 +137,16 @@ export const CompaniesView = ({
     setIsSaving(true);
     try {
       if (editing) {
-        await adminCompaniesService.update(editing.id, {
-          ...body,
-          isActive,
+        await updateCompany({
+          id: editing.id,
+          body: {
+            ...body,
+            isActive,
+          },
         });
-        await reloadCompanies();
         onShowToast(`Đã cập nhật doanh nghiệp ${form.name}`);
       } else {
-        await adminCompaniesService.create(body);
-        await reloadCompanies();
+        await createCompany(body);
         onShowToast(`Đã thêm doanh nghiệp ${form.name.trim()}`);
       }
       setIsFormOpen(false);
@@ -196,8 +164,7 @@ export const CompaniesView = ({
     if (!semesterId) return;
     setIsLinking(true);
     try {
-      await adminCompaniesService.setSemesterLink(c.id, semesterId, isLinked);
-      await reloadCompanies();
+      await setSemesterLink({ id: c.id, semId: semesterId, isLinked });
       onShowToast(
         isLinked
           ? `Đã liên kết ${c.name} với học kỳ ${selectedSemester?.name}`
@@ -213,8 +180,7 @@ export const CompaniesView = ({
 
   const handleDelete = async (c: Enterprise) => {
     try {
-      await adminCompaniesService.delete(c.id);
-      await reloadCompanies();
+      await deleteCompany(c.id);
       onShowToast(`Đã xóa ${c.name}`);
     } catch (err) {
       onShowToast(getApiErrorMessage(err));
@@ -335,8 +301,35 @@ export const CompaniesView = ({
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+        {isLoadingApi && paginatedCompanies.length === 0 ? (
+          <div className="p-4" data-testid="companies-loading">
+            <TableSkeleton rows={5} columns={7} />
+          </div>
+        ) : isError && paginatedCompanies.length === 0 ? (
+          <div className="p-4">
+            <RequestErrorState
+              title="Không thể tải danh sách doanh nghiệp"
+              message={
+                error instanceof Error
+                  ? error.message
+                  : "Lỗi kết nối tới máy chủ"
+              }
+              onRetry={() => void refetch()}
+              retrying={isFetching}
+            />
+          </div>
+        ) : filtered.length === 0 ? (
+          <EmptyState
+            title="Không tìm thấy doanh nghiệp"
+            description="Thử đổi bộ lọc hoặc thêm mới doanh nghiệp."
+          />
+        ) : (
+          <div
+            className={`overflow-x-auto transition-opacity duration-150 ${
+              isFetching ? "opacity-60" : ""
+            }`}
+          >
+            <table className="w-full text-left text-xs">
             <thead>
               <tr className="border-b border-slate-100 text-[10px] uppercase tracking-wider text-slate-400 font-bold">
                 <th className="py-2.5 pr-3">Doanh nghiệp</th>
@@ -483,6 +476,7 @@ export const CompaniesView = ({
             </tbody>
           </table>
         </div>
+        )}
 
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-slate-100 pt-3 text-xs text-slate-500">
           <div className="flex items-center gap-2">
