@@ -27,10 +27,14 @@ services:
       - Email__PortalUrl=${PORTAL_URL:-http://localhost:3000}
       - Cors__AllowedOrigins__0=${PORTAL_URL:-http://localhost:3000}
       - Cors__AllowedOrigins__1=http://localhost:5173
-    # Không publish port ra ngoài - chỉ truy cập qua Nginx proxy (frontend:3000)
-    # Muốn gỡ lỗi Swagger trực tiếp: uncomment dòng dưới
-    # ports:
-    #   - "127.0.0.1:7109:8080"
+      # LAN: cho phép máy khác trong mạng gọi API trực tiếp
+      - Cors__AllowedOrigins__2=http://${HOST_IP:-localhost}:3000
+      - Cors__AllowedOrigins__3=http://${HOST_IP:-localhost}:7109
+      # Ngrok: cho phép truy cập từ internet
+      - Cors__AllowedOrigins__4=${NGROK_URL:-https://db60-2402-9d80-3d2-b2af-c895-7f0e-ec9d-8f9c.ngrok-free.app}
+    # Publish port ra LAN — Swagger: http://<HOST_IP>:7109/swagger
+    ports:
+      - "0.0.0.0:7109:8080"
     volumes:
       - internlink_uploads_data:/app/uploads
     networks:
@@ -55,9 +59,10 @@ services:
       MSSQL_PID: "Developer"
       # Giới hạn RAM SQL Server tránh OOM trên máy 4-8GB (mặc định chiếm 80% RAM vật lý)
       MSSQL_MEMORY_LIMIT_MB: "${MSSQL_MEMORY_LIMIT_MB:-2048}"
-    # Không publish port ra ngoài - SQL Server chỉ truy cập nội bộ qua Docker network
-    # ports:
-    #   - "127.0.0.1:1433:1433"
+    # Publish port ra LAN — SSMS/ADS: <HOST_IP>,14330
+    # Port 14330 vì máy host đã có SQL Server local trên 1433
+    ports:
+      - "0.0.0.0:14330:1433"
     volumes:
       - internlink_database_data:/var/opt/mssql
     networks:
@@ -82,7 +87,7 @@ services:
       backend:
         condition: service_healthy
     ports:
-      - "3000:80"
+      - "0.0.0.0:3000:80"
     networks:
       - internlink_network
     healthcheck:
