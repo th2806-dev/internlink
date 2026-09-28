@@ -74,11 +74,11 @@ cd frontend
 # Install dependencies
 npm install
 
-# Run dev server (port 5173)
+# Run dev server (port 3000)
 npm run dev
 ```
 
-**Frontend Dev**: `http://localhost:5173`
+**Frontend Dev**: `http://localhost:3000` (Vite, proxy `/api` → `http://localhost:7109`)
 
 ### 3.3. Environment Variables
 

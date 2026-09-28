@@ -1,6 +1,6 @@
 # Frontend — InternLink
 
-React 19 + Vite + Tailwind 4. Portals: SuperAdmin / Lecturer / Student — wired to backend API (mock optional via env).
+React 19 + Vite + Tailwind 4. Portals: Admin (SuperAdmin + DepartmentAdmin) / Lecturer / Student — wired to backend API (mock optional via env).
 
 ## Local dev (API mode)
 
@@ -26,9 +26,9 @@ React 19 + Vite + Tailwind 4. Portals: SuperAdmin / Lecturer / Student — wired
    npm run dev
    ```
 
-   App: `http://localhost:5173`
+   App: `http://localhost:3000` (Vite dev server, `/api` proxy → 7109)
 
-**Demo accounts** (seed): `superadmin` / `lecturer1` / `student1` — password `Password123!`
+**Demo accounts**: SuperAdmin `admin` / `Password123!` (seeded on a fresh DB). DepartmentAdmin, Lecturer and Student accounts are created from the Admin portal (Excel import → temp password via email/log). Full walkthrough: [README — Quy trình demo 4 phân quyền](../README.md).
 
 **Verify:** `npm run typecheck` · `npm run build` · `npm run smoke:m6` · `npm run smoke:m7`
 

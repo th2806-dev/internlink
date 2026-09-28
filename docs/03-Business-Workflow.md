@@ -72,4 +72,4 @@
 | Tổng hợp điểm | Excel thủ công 1-2 tuần | Auto + Export 1 click |
 | Thông báo | Zalo/Telegram | SignalR real-time + In-app |
 | Yêu cầu tài khoản | Gặp trực tiếp | Account Requests queue |
-| Lưu trữ | Google Drive cá nhân | Docker Volume + SQL Server |
+| Lưu trữ | Google Drive cá nhân | Docker Volume (tệp) + SQL Server (metadata) |

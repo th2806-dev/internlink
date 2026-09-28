@@ -1,5 +1,6 @@
 import { API_BASE_URL, TOKEN_STORAGE_KEY, REFRESH_TOKEN_STORAGE_KEY } from "../config/env";
 import type { ApiResponse } from "../types/api";
+import { toVietnameseMessage } from "./viMessageMap";
 
 export class ApiClientError extends Error {
   status: number;
@@ -37,8 +38,8 @@ export function clearAuthTokens(): void {
 }
 
 export function getApiErrorMessage(err: unknown): string {
-  if (err instanceof ApiClientError) return err.message;
-  if (err instanceof Error) return err.message;
+  if (err instanceof ApiClientError) return toVietnameseMessage(err.message);
+  if (err instanceof Error) return toVietnameseMessage(err.message);
   return "Đã xảy ra lỗi không xác định.";
 }
 

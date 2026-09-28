@@ -184,7 +184,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
       await loadData();
     } catch (err: any) {
       onShowToast?.(
-        err?.message || "Thêm biểu mẫu thất bại. Kiểm tra cấu hình Google Drive trên backend.",
+        err?.message || "Không thể thêm biểu mẫu. Vui lòng thử lại.",
         "danger",
       );
     } finally {
