@@ -918,6 +918,8 @@ export interface AttendanceSessionDto {
   location?: string | null;
   status: AttendanceSessionStatus;
   isLecturerOnly: boolean;
+  /** Buổi hướng dẫn chung (sinh hoạt lớp/khoa) — điểm danh phụ, không bắt buộc. */
+  isGeneralSession?: boolean;
   totalStudents: number;
   presentCount: number;
   absentCount: number;
@@ -940,6 +942,8 @@ export interface CreateAttendanceSessionDto {
   location?: string | null;
   studentIds?: string[] | null;
   isLecturerOnly?: boolean;
+  /** Buổi hướng dẫn chung (sinh hoạt lớp/khoa) — điểm danh phụ, không bắt buộc. */
+  isGeneralSession?: boolean;
 }
 
 export interface UpdateAttendanceSessionDto {
@@ -952,6 +956,8 @@ export interface UpdateAttendanceSessionDto {
   location?: string | null;
   status?: AttendanceSessionStatus;
   isLecturerOnly?: boolean;
+  /** Đánh dấu/bỏ dấu buổi hướng dẫn chung (sinh hoạt lớp/khoa). */
+  isGeneralSession?: boolean;
 }
 
 export interface MarkStudentAttendanceItemDto {

@@ -139,6 +139,9 @@ export const AttendanceView: React.FC<{
   const [createDate, setCreateDate] = useState("");
   const [createDurationMinutes, setCreateDurationMinutes] = useState(60);
   const [createLocation, setCreateLocation] = useState("");
+  // Buổi hướng dẫn chung (sinh hoạt lớp/khoa) — điểm danh phụ, không bắt buộc,
+  // vắng không tính vào điều kiện dự thi (mặc định BẬT vì trang này mặc định tạo buổi sinh hoạt khoa).
+  const [createIsGeneral, setCreateIsGeneral] = useState(true);
   const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(
     new Set()
   );
@@ -155,6 +158,7 @@ export const AttendanceView: React.FC<{
   const [editStatus, setEditStatus] = useState<
     "Scheduled" | "Completed" | "Cancelled"
   >("Scheduled");
+  const [editIsGeneral, setEditIsGeneral] = useState(false);
 
   // Handler for open create modal
   const openCreateModal = () => {
@@ -295,6 +299,7 @@ export const AttendanceView: React.FC<{
       location: createLocation.trim() || undefined,
       studentIds: Array.from(selectedStudentIds),
       isLecturerOnly: false,
+      isGeneralSession: createIsGeneral,
     };
 
     try {
@@ -388,6 +393,7 @@ export const AttendanceView: React.FC<{
     setEditDurationMinutes(session.durationMinutes);
     setEditLocation(session.location || "");
     setEditStatus(session.status);
+    setEditIsGeneral(session.isGeneralSession ?? false);
     setIsEditModalOpen(true);
   };
 
@@ -408,6 +414,7 @@ export const AttendanceView: React.FC<{
       durationMinutes: Number(editDurationMinutes) || 60,
       location: editLocation.trim() || undefined,
       status: editStatus,
+      isGeneralSession: editIsGeneral,
     };
 
     try {
@@ -636,6 +643,11 @@ export const AttendanceView: React.FC<{
                         <span className="font-bold text-slate-900 block truncate">
                           {s.title}
                         </span>
+                        {s.isGeneralSession && (
+                          <span className="inline-flex mt-0.5 px-1.5 py-0.5 rounded border border-amber-200 bg-amber-50 text-amber-700 text-[10px] font-bold">
+                            Hướng dẫn chung — không bắt buộc
+                          </span>
+                        )}
                         {s.location && (
                           <span className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5 truncate">
                             {s.location.toLowerCase().includes("http") ||
@@ -886,6 +898,22 @@ export const AttendanceView: React.FC<{
                   className="w-full px-3 py-2 border border-slate-200 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 />
               </div>
+
+              {/* Buổi hướng dẫn chung — điểm danh PHỤ, không tính điều kiện dự thi */}
+              <label className="flex items-start gap-2.5 p-3 rounded-md border border-amber-200 bg-amber-50/60 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={createIsGeneral}
+                  onChange={(e) => setCreateIsGeneral(e.target.checked)}
+                  className="mt-0.5 rounded border-slate-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
+                />
+                <span className="text-xs leading-5">
+                  <strong className="text-amber-800">Buổi hướng dẫn chung (sinh hoạt lớp)</strong>
+                  <span className="block text-slate-600 mt-0.5">
+                    Điểm danh PHỤ — không bắt buộc: vắng buổi này KHÔNG tính vào số buổi vắng ảnh hưởng điều kiện dự thi (khác với buổi gặp tuần bắt buộc). Vẫn hiển thị ở cột "HD chung" khi xuất Excel.
+                  </span>
+                </span>
+              </label>
 
               {/* STUDENT SELECTION */}
               <div className="border border-slate-200 rounded-lg p-3 bg-slate-50/50 space-y-2.5">
@@ -1245,6 +1273,21 @@ export const AttendanceView: React.FC<{
                   <option value="Cancelled">Đã hủy (Cancelled)</option>
                 </select>
               </div>
+
+              <label className="flex items-start gap-2.5 p-3 rounded-md border border-amber-200 bg-amber-50/60 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={editIsGeneral}
+                  onChange={(e) => setEditIsGeneral(e.target.checked)}
+                  className="mt-0.5 rounded border-slate-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
+                />
+                <span className="text-xs leading-5">
+                  <strong className="text-amber-800">Buổi hướng dẫn chung (sinh hoạt lớp)</strong>
+                  <span className="block text-slate-600 mt-0.5">
+                    Điểm danh PHỤ — không bắt buộc: vắng buổi này KHÔNG tính vào số buổi vắng ảnh hưởng điều kiện dự thi.
+                  </span>
+                </span>
+              </label>
 
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">

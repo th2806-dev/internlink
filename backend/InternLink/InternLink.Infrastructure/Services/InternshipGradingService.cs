@@ -95,7 +95,9 @@ public class InternshipGradingService : IInternshipGradingService
             .Where(a => studentIds.Contains(a.StudentId) && !a.IsDeleted
                         && a.AttendanceSession.SemesterId == semesterId
                         && !a.AttendanceSession.IsDeleted
-                        && !a.AttendanceSession.IsLecturerOnly)
+                        && !a.AttendanceSession.IsLecturerOnly
+                        // Buổi hướng dẫn chung (sinh hoạt lớp) là điểm danh PHỤ — vắng không tính điều kiện dự thi
+                        && !a.AttendanceSession.IsGeneralSession)
             .Select(a => new { a.StudentId, a.Status, a.AttendanceSession.WeekNumber })
             .ToListAsync();
 
@@ -111,7 +113,7 @@ public class InternshipGradingService : IInternshipGradingService
         // Tuần có buổi hẹn (để phân bi�“t "chưa có buổi" vs "vắng")
         var sessionWeeks = await _context.AttendanceSessions
             .AsNoTracking()
-            .Where(s => s.SemesterId == semesterId && !s.IsDeleted && !s.IsLecturerOnly)
+            .Where(s => s.SemesterId == semesterId && !s.IsDeleted && !s.IsLecturerOnly && !s.IsGeneralSession)
             .Select(s => new { s.WeekNumber })
             .Distinct()
             .ToListAsync();
@@ -351,7 +353,8 @@ public class InternshipGradingService : IInternshipGradingService
                     && a.Status == AttendanceStatus.Absent
                     && a.AttendanceSession.SemesterId == semesterId
                     && !a.AttendanceSession.IsDeleted
-                    && !a.AttendanceSession.IsLecturerOnly)
+                    && !a.AttendanceSession.IsLecturerOnly
+                    && !a.AttendanceSession.IsGeneralSession)
                 .Select(a => (int?)a.AttendanceSession.WeekNumber)
                 .Distinct()
                 .CountAsync();

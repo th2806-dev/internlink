@@ -556,6 +556,7 @@ public class AppDbContext : DbContext
             b.Property(x => x.Location).HasMaxLength(500);
             b.Property(x => x.Status).HasConversion<string>().HasMaxLength(50).HasDefaultValue(AttendanceSessionStatus.Scheduled);
             b.Property(x => x.IsLecturerOnly).HasDefaultValue(false);
+            b.Property(x => x.IsGeneralSession).HasDefaultValue(false);
             b.Property(x => x.DurationMinutes).HasDefaultValue(60);
             b.Property(x => x.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
 

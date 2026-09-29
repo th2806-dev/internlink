@@ -394,7 +394,9 @@ public class InternshipReportService : IInternshipReportService
             .Where(a => studentIds.Contains(a.StudentId) && !a.IsDeleted
                 && a.Status == AttendanceStatus.Absent
                 && !a.AttendanceSession.IsDeleted
-                && !a.AttendanceSession.IsLecturerOnly);
+                && !a.AttendanceSession.IsLecturerOnly
+                // Buổi hướng dẫn chung (sinh hoạt lớp) là điểm danh PHỤ — vắng không tính điều kiện dự thi
+                && !a.AttendanceSession.IsGeneralSession);
         if (semesterId.HasValue)
             absenceQuery = absenceQuery.Where(a => a.AttendanceSession.SemesterId == semesterId.Value);
         var absenceRows = await absenceQuery

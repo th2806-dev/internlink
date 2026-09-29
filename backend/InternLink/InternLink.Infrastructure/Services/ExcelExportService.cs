@@ -147,6 +147,8 @@ public class ExcelExportService : IExcelExportService
                         && a.AttendanceSession != null
                         && a.AttendanceSession.SemesterId == (internship.SemesterId ?? semesterId)
                         && !a.AttendanceSession.IsLecturerOnly
+                        // Buổi hướng dẫn chung (sinh hoạt lớp) là điểm danh PHỤ — vắng không tính điều kiện dự thi
+                        && !a.AttendanceSession.IsGeneralSession
                         && a.AttendanceSession.WeekNumber == week);
 
                     if (absent)
@@ -210,10 +212,11 @@ public class ExcelExportService : IExcelExportService
 
                 dto.IsIneligible = ineligible;
 
-                // Các cột TUẦN dùng để đánh vắng: lấy từ điểm danh, không lấy trạng thái bài nộp.
-                // Trạng thái bài nộp vẫn được dùng riêng cho HD CHUNG, Điểm QT và NỘP BC.
+                // Các cột TUẦN dùng để đánh vắng: lấy từ điểm danh buổi gặp BẮT BUỘC, không lấy trạng thái bài nộp.
+                // Buổi hướng dẫn chung (sinh hoạt lớp) chỉ hiển thị riêng ở cột HD CHUNG.
+                // Trạng thái bài nộp vẫn được dùng riêng cho Điểm QT và NỘP BC.
                 var reports = internship.WeeklyReports.OrderBy(r => r.WeekNumber).ToList();
-                dto.HdChung = reports.Count(r => reportScheduleByWeek.ContainsKey(r.WeekNumber) && r.SubmittedAt.HasValue) >= reportScheduleByWeek.Count ? "Đủ" : "Thiếu";
+                dto.HdChung = FormatGeneralAttendanceCell(student.AttendanceRecords, internship.SemesterId ?? semesterId);
                 dto.WeeklyReportCells = Enumerable.Range(1, totalWeeks)
                     .Select(week => FormatAttendanceCell(student.AttendanceRecords, internship.SemesterId ?? semesterId, week))
                     .ToList();
@@ -232,7 +235,7 @@ public class ExcelExportService : IExcelExportService
                 dto.PhuTrachCongTy = string.Empty;
                 dto.GvHuongDan = string.Empty;
                 dto.GhiChu = string.Empty;
-                dto.HdChung = "Thiếu";
+                dto.HdChung = "–";
                 dto.Tuan1 = "–";
                 dto.Tuan2 = "–";
                 dto.Tuan3 = "–";
@@ -1062,10 +1065,45 @@ public class ExcelExportService : IExcelExportService
             && record.AttendanceSession.SemesterId == semesterId
             && !record.AttendanceSession.IsDeleted
             && !record.AttendanceSession.IsLecturerOnly
+            // Buổi hướng dẫn chung hiển thị ở cột HD CHUNG, không trộn vào ô tuần
+            && !record.AttendanceSession.IsGeneralSession
             && record.AttendanceSession.WeekNumber == weekNumber);
 
         if (weekRecords.Any(record => record.Status == AttendanceStatus.Absent)) return "V";
         if (weekRecords.Any(record => record.Status == AttendanceStatus.Present)) return "✓";
         return "–";
+    }
+
+    /// <summary>
+    /// Ô HD CHUNG: điểm danh các buổi HƯỚNG DẪN CHUNG (sinh hoạt lớp/khoa — điểm danh phụ, không bắt buộc).
+    /// 1 buổi duy nhất → ✓/V/–; nhiều buổi → "x/y" (x = số buổi có mặt / y tổng số buổi có điểm danh).
+    /// Không có buổi chung nào → "–".
+    /// </summary>
+    private static string FormatGeneralAttendanceCell(
+        IEnumerable<AttendanceRecord> records,
+        Guid? semesterId)
+    {
+        var generalRecords = records.Where(record =>
+            !record.IsDeleted
+            && record.AttendanceSession != null
+            && record.AttendanceSession.SemesterId == semesterId
+            && !record.AttendanceSession.IsDeleted
+            && !record.AttendanceSession.IsLecturerOnly
+            && record.AttendanceSession.IsGeneralSession)
+            .ToList();
+
+        if (generalRecords.Count == 0) return "–";
+
+        var present = generalRecords.Count(record => record.Status == AttendanceStatus.Present);
+        var absent = generalRecords.Count(record => record.Status == AttendanceStatus.Absent);
+
+        if (generalRecords.Count == 1)
+        {
+            if (absent > 0) return "V";
+            if (present > 0) return "✓";
+            return "–";
+        }
+
+        return $"{present}/{generalRecords.Count}";
     }
 }

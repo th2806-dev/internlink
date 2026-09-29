@@ -44,6 +44,8 @@ public class AttendanceSessionDto
     public string? Location { get; set; }
     public string Status { get; set; } = "Scheduled";
     public bool IsLecturerOnly { get; set; }
+    /// <summary>Buổi hướng dẫn chung (sinh hoạt lớp/khoa) — điểm danh phụ, không bắt buộc.</summary>
+    public bool IsGeneralSession { get; set; }
     public int TotalStudents { get; set; }
     public int PresentCount { get; set; }
     public int AbsentCount { get; set; }
@@ -68,6 +70,8 @@ public class CreateAttendanceSessionDto
     public string? Location { get; set; }
     public List<Guid>? StudentIds { get; set; }
     public bool IsLecturerOnly { get; set; }
+    /// <summary>Buổi hướng dẫn chung (sinh hoạt lớp/khoa) — điểm danh phụ, không bắt buộc.</summary>
+    public bool IsGeneralSession { get; set; }
 }
 
 public class UpdateAttendanceSessionDto
@@ -81,6 +85,8 @@ public class UpdateAttendanceSessionDto
     public string? Location { get; set; }
     public string? Status { get; set; }
     public bool? IsLecturerOnly { get; set; }
+    /// <summary>Đánh dấu/bỏ dấu buổi hướng dẫn chung (sinh hoạt lớp/khoa).</summary>
+    public bool? IsGeneralSession { get; set; }
 }
 
 public class MarkAttendanceDto

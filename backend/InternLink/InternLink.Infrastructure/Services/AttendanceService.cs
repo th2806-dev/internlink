@@ -118,16 +118,18 @@ public class AttendanceService : IAttendanceService
         // -3..0 = [Start - 4 tuần, Start); check riêng trước đây bị mâu thuẫn và từ chối sai tuần -3.)
         ValidateMeetingDateInWeek(semester, dto.WeekNumber, dto.MeetingDate);
 
-        // Mỗi tuần chỉ một buổi GẶP SINH VIÊN; buổi công tác riêng (IsLecturerOnly)
-        // được phép trùng tuần vì chúng là lịch làm việc nội bộ của giảng viên.
-        if (!dto.IsLecturerOnly)
+        // Mỗi tuần chỉ một buổi GẶP SINH VIÊN BẮT BUỘC; buổi công tác riêng (IsLecturerOnly)
+        // và buổi hướng dẫn chung (IsGeneralSession — sinh hoạt lớp, không bắt buộc)
+        // được phép trùng tuần vì không phải buổi điểm danh bắt buộc của tuần đó.
+        if (!dto.IsLecturerOnly && !dto.IsGeneralSession)
         {
             var alreadyScheduled = await _context.AttendanceSessions
                 .AnyAsync(s => s.SemesterId == dto.SemesterId
                     && s.LecturerId == lecturerId
                     && s.WeekNumber == dto.WeekNumber
                     && !s.IsDeleted
-                    && !s.IsLecturerOnly);
+                    && !s.IsLecturerOnly
+                    && !s.IsGeneralSession);
             if (alreadyScheduled)
             {
                 throw new InvalidOperationException($"Tuần {dto.WeekNumber} đã có buổi gặp sinh viên được lên lịch.");
@@ -146,6 +148,7 @@ public class AttendanceService : IAttendanceService
             Location = dto.Location?.Trim(),
             Status = AttendanceSessionStatus.Scheduled,
             IsLecturerOnly = dto.IsLecturerOnly,
+            IsGeneralSession = dto.IsGeneralSession,
         };
 
         // Determine students to populate
@@ -259,9 +262,10 @@ public class AttendanceService : IAttendanceService
 
         var newIsLecturerOnly = dto.IsLecturerOnly ?? session.IsLecturerOnly;
 
-        // Mỗi tuần chỉ một buổi GẶP SINH VIÊN — kiểm tra cho cả trường hợp đổi tuần
-        // lẫn bật/tắt "Công tác riêng" (buổi công tác riêng được phép trùng tuần).
-        if (!newIsLecturerOnly)
+        // Mỗi tuần chỉ một buổi GẶP SINH VIÊN BẮT BUỘC — kiểm tra cho cả trường hợp đổi tuần
+        // lẫn bật/tắt "Công tác riêng"/"Hướng dẫn chung" (buổi này được phép trùng tuần).
+        var newIsGeneral = dto.IsGeneralSession ?? session.IsGeneralSession;
+        if (!newIsLecturerOnly && !newIsGeneral)
         {
             var hasStudentMeeting = await _context.AttendanceSessions
                 .AnyAsync(s => s.SemesterId == session.SemesterId
@@ -269,7 +273,8 @@ public class AttendanceService : IAttendanceService
                     && s.WeekNumber == newWeek
                     && s.Id != session.Id
                     && !s.IsDeleted
-                    && !s.IsLecturerOnly);
+                    && !s.IsLecturerOnly
+                    && !s.IsGeneralSession);
             if (hasStudentMeeting)
             {
                 var semesterWeek = (semester.InternshipStartWeek - 1) + newWeek;
@@ -332,6 +337,8 @@ public class AttendanceService : IAttendanceService
                 }
             }
             session.IsLecturerOnly = dto.IsLecturerOnly.Value;
+        if (dto.IsGeneralSession.HasValue)
+            session.IsGeneralSession = dto.IsGeneralSession.Value;
         }
 
         await _context.SaveChangesAsync();
@@ -603,6 +610,7 @@ public class AttendanceService : IAttendanceService
             Location = s.Location,
             Status = s.Status.ToString(),
             IsLecturerOnly = s.IsLecturerOnly,
+            IsGeneralSession = s.IsGeneralSession,
             TotalStudents = total,
             PresentCount = present,
             AbsentCount = absent,
@@ -630,6 +638,7 @@ public class AttendanceService : IAttendanceService
             Location = baseDto.Location,
             Status = baseDto.Status,
             IsLecturerOnly = baseDto.IsLecturerOnly,
+            IsGeneralSession = baseDto.IsGeneralSession,
             TotalStudents = baseDto.TotalStudents,
             PresentCount = baseDto.PresentCount,
             AbsentCount = baseDto.AbsentCount,
@@ -676,7 +685,9 @@ public class AttendanceService : IAttendanceService
             .Where(r => !r.IsDeleted
                         && r.Status == AttendanceStatus.Absent
                         && r.AttendanceSession.SemesterId == semesterId
-                        && !r.AttendanceSession.IsDeleted);
+                        && !r.AttendanceSession.IsDeleted
+                        // Buổi hướng dẫn chung (sinh hoạt lớp) là điểm danh PHỤ — vắng không tính vào tổng kết
+                        && !r.AttendanceSession.IsGeneralSession);
 
         // Lecturer: chỉ đếm các buổi do mình phụ trách; Guid.Empty → toàn bộ (admin)
         if (lecturerId != Guid.Empty)
