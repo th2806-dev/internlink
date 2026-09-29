@@ -78,6 +78,14 @@ export const AttendanceView: React.FC<{
     return `Tuần ${week}${week <= 0 ? " (chuẩn bị)" : ""} — HK tuần ${toSemesterWeek(week, internshipStartWeek)}`;
   };
 
+  // Quy đổi phút → tiết (1 tiết = 45 phút) để hiển thị ở bảng.
+  // Dữ liệu cũ nhập theo phút (VD 60 phút → 1.3 tiết).
+  const formatPeriods = (minutes?: number | null) => {
+    if (!minutes) return "—";
+    const periods = Math.round((minutes / 45) * 10) / 10;
+    return `${Number.isInteger(periods) ? periods : periods.toFixed(1)} tiết`;
+  };
+
   const {
     sessions,
     stats,
@@ -137,7 +145,8 @@ export const AttendanceView: React.FC<{
   const [createTitle, setCreateTitle] = useState("");
   const [createDescription, setCreateDescription] = useState("");
   const [createDate, setCreateDate] = useState("");
-  const [createDurationMinutes, setCreateDurationMinutes] = useState(60);
+  // Thời lượng nhập theo SỐ TIẾT (1 tiết = 45 phút); lưu DB vẫn là phút.
+  const [createPeriods, setCreatePeriods] = useState(2);
   const [createLocation, setCreateLocation] = useState("");
   // Buổi hướng dẫn chung (sinh hoạt lớp/khoa) — điểm danh phụ, không bắt buộc,
   // vắng không tính vào điều kiện dự thi (mặc định BẬT vì trang này mặc định tạo buổi sinh hoạt khoa).
@@ -153,7 +162,7 @@ export const AttendanceView: React.FC<{
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editDate, setEditDate] = useState("");
-  const [editDurationMinutes, setEditDurationMinutes] = useState(60);
+  const [editPeriods, setEditPeriods] = useState(2);
   const [editLocation, setEditLocation] = useState("");
   const [editStatus, setEditStatus] = useState<
     "Scheduled" | "Completed" | "Cancelled"
@@ -168,7 +177,7 @@ export const AttendanceView: React.FC<{
     setCreateDescription(
       "Phổ biến quy định, lịch trình thực tập và giải đáp thắc mắc cho sinh viên toàn khoa."
     );
-    setCreateDurationMinutes(60);
+    setCreatePeriods(2);
     setCreateLocation("Hội trường A / Trực tuyến");
 
     // Initialize meeting date within week 1
@@ -295,7 +304,7 @@ export const AttendanceView: React.FC<{
       title: createTitle.trim(),
       description: createDescription.trim() || undefined,
       meetingDate: dateObj.toISOString(),
-      durationMinutes: Number(createDurationMinutes) || 60,
+      durationMinutes: (Number(createPeriods) || 1) * 45,
       location: createLocation.trim() || undefined,
       studentIds: Array.from(selectedStudentIds),
       isLecturerOnly: false,
@@ -390,7 +399,7 @@ export const AttendanceView: React.FC<{
     setEditDescription(session.description || "");
     const dateObj = parseBackendDate(session.meetingDate) ?? new Date();
     setEditDate(toDateTimeLocalValue(dateObj));
-    setEditDurationMinutes(session.durationMinutes);
+    setEditPeriods(Math.max(1, Math.round((session.durationMinutes ?? 90) / 45)));
     setEditLocation(session.location || "");
     setEditStatus(session.status);
     setEditIsGeneral(session.isGeneralSession ?? false);
@@ -411,7 +420,7 @@ export const AttendanceView: React.FC<{
       title: editTitle.trim(),
       description: editDescription.trim() || undefined,
       meetingDate: dateObj.toISOString(),
-      durationMinutes: Number(editDurationMinutes) || 60,
+      durationMinutes: (Number(editPeriods) || 1) * 45,
       location: editLocation.trim() || undefined,
       status: editStatus,
       isGeneralSession: editIsGeneral,
@@ -635,7 +644,7 @@ export const AttendanceView: React.FC<{
                         </span>
                         <span className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
                           <Clock className="w-3 h-3 text-slate-400" />
-                          {formattedDate} ({s.durationMinutes}p)
+                          {formattedDate} ({formatPeriods(s.durationMinutes)})
                         </span>
                       </td>
 
@@ -858,18 +867,21 @@ export const AttendanceView: React.FC<{
                 </div>
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
-                    Thời lượng (phút)
+                    Thời lượng (số tiết)
                   </label>
                   <input
                     type="number"
-                    min={15}
-                    step={15}
-                    value={createDurationMinutes}
+                    min={1}
+                    step={1}
+                    value={createPeriods}
                     onChange={(e) =>
-                      setCreateDurationMinutes(Number(e.target.value) || 60)
+                      setCreatePeriods(Number(e.target.value) || 1)
                     }
                     className="w-full px-3 py-2 border border-slate-200 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                   />
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    1 tiết = 45 phút → {((Number(createPeriods) || 1) * 45)} phút
+                  </p>
                 </div>
               </div>
 
@@ -1228,18 +1240,21 @@ export const AttendanceView: React.FC<{
                 </div>
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
-                    Thời lượng (phút)
+                    Thời lượng (số tiết)
                   </label>
                   <input
                     type="number"
-                    min={15}
-                    step={15}
-                    value={editDurationMinutes}
+                    min={1}
+                    step={1}
+                    value={editPeriods}
                     onChange={(e) =>
-                      setEditDurationMinutes(Number(e.target.value) || 60)
+                      setEditPeriods(Number(e.target.value) || 1)
                     }
                     className="w-full px-3 py-2 border border-slate-200 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                   />
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    1 tiết = 45 phút → {((Number(editPeriods) || 1) * 45)} phút
+                  </p>
                 </div>
               </div>
 
