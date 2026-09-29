@@ -323,9 +323,12 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
     setExporting(kind);
     try {
       if (kind === "grades") {
-        // Bảng điểm xuất TRỰC TIẾP từ dữ liệu chấm điểm (cùng nguồn với bảng trên màn hình):
-        // điểm QT/thi/TB, xếp loại, điều kiện dự thi — không còn lấy từ danh sách thực tập tự ghép.
-        await internshipGradingService.exportGradesExcel(semesterId);
+        // Cùng pipeline template C23 "DANH SACH THUC TAP" với nút Export tại /lecturer/evaluations.
+        // Admin khoa → endpoint khoa (xuất TOÀN khoa, server tự khóa theo khoa từ token);
+        // giảng viên → endpoint nhóm (chỉ SV đang hướng dẫn). Lưu ý endpoint lecturer-only
+        // sẽ 403 nếu admin gọi (admin không có profile giảng viên).
+        if (isAdminScope) await lecturerExportService.downloadDepartmentInternshipExcel(semesterId);
+        else await lecturerExportService.downloadInternshipExcel(semesterId);
       }
       else if (kind === "report") await lecturerExportService.downloadSummaryReportWord(semesterId);
       else await lecturerExportService.downloadGuidanceSchedule(semesterId);

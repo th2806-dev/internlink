@@ -101,14 +101,4 @@ export const internshipGradingService = {
       `DanhSachThucTap_${semesterId.slice(0, 8)}.xlsx`
     );
   },
-
-  /** Export "Bảng điểm toàn khóa" từ dữ liệu chấm điểm (điểm QT/thi/TB, xếp loại, điều kiện dự thi). */
-  exportGradesExcel(semesterId: string, className?: string): Promise<{ blob: Blob; filename: string }> {
-    const params = new URLSearchParams({ semesterId });
-    if (className) params.set("className", className);
-    return downloadAuthenticatedFile(
-      `/api/InternshipGrading/grades-excel?${params.toString()}`,
-      `BangDiemToanKhoa_${new Date().toISOString().slice(0, 10)}.xlsx`,
-    );
-  },
 };

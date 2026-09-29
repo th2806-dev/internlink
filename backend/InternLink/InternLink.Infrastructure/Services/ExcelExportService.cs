@@ -65,9 +65,12 @@ public class ExcelExportService : IExcelExportService
         }
 
         // Department filter (GUID): scope to students belonging to the selected department.
+        // Khớp nguồn dữ liệu bảng chấm (/InternshipGrading/summary): admin khoa chỉ thấy SV CÓ internship
+        // trong kỳ (không liệt kê SV chưa đăng ký thực tập → tránh lệch số liệu với bảng chấm).
         if (departmentId.HasValue)
         {
-            studentsQuery = studentsQuery.Where(s => s.DepartmentId == departmentId.Value);
+            studentsQuery = studentsQuery.Where(s => s.DepartmentId == departmentId.Value
+                && s.Internships.Any(i => !i.IsDeleted && (!semesterId.HasValue || i.SemesterId == semesterId.Value)));
         }
 
         var students = await studentsQuery
