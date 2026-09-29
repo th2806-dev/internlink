@@ -90,8 +90,8 @@ export const ReportsView = ({
     void reports.refetch();
   };
 
-  const handleReview = async (id: string, uiStatus: string, comment?: string) => {
-    await reports.reviewReport({ id, uiStatus, comment });
+  const handleReview = async (id: string, uiStatus: string, comment?: string, qualityScore?: number) => {
+    await reports.reviewReport({ id, uiStatus, comment, qualityScore });
   };
 
   const errorStatus =

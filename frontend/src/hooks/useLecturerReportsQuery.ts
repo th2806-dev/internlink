@@ -121,14 +121,16 @@ export function useLecturerReportsQuery(options: UseLecturerReportsQueryOptions 
   });
 
   const reviewMutation = useMutation({
-    mutationFn: (vars: { id: string; uiStatus: string; comment?: string }) =>
+    mutationFn: (vars: { id: string; uiStatus: string; comment?: string; qualityScore?: number }) =>
       weeklyReportService.review(vars.id, {
         status: mapUiWeeklyReportReviewStatusToApi(vars.uiStatus),
         lecturerComment: vars.comment?.trim() || undefined,
+        qualityScore: vars.qualityScore,
       }),
     onSuccess: () => {
-      // Auto sync: làm mới toàn bộ namespace báo cáo → bảng cập nhật ngay, không cần F5.
+      // Auto sync: làm mới toàn bộ namespace báo cáo và điểm thực tập → bảng cập nhật ngay, không cần F5.
       void queryClient.invalidateQueries({ queryKey: queryKeys.lecturerReports.all });
+      void queryClient.invalidateQueries({ queryKey: ["internship-grading"] });
       onReviewed?.();
     },
   });

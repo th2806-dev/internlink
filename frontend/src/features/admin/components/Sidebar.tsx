@@ -11,6 +11,7 @@ import {
   Calendar,
   FileText,
   ClipboardList,
+  CalendarCheck,
 } from "lucide-react";
 import { FEATURES } from "../../../config/featureFlags";
 import { formatCountBadge } from "../../../lib/userDisplay";
@@ -121,6 +122,11 @@ export const Sidebar = ({
           ...(unassigned > 0
             ? { badgeText: `${unassigned} chưa PC` }
             : {}),
+        },
+        {
+          id: "admin-attendance",
+          label: "Điểm danh & Buổi gặp",
+          icon: CalendarCheck,
         },
       ],
     },

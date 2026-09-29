@@ -48,7 +48,9 @@ export const CreateSemesterModal = ({
   const [endDate, setEndDate] = useState("2026-12-15");
   const [targetStudents, setTargetStudents] = useState("1350");
   const [totalWeeks, setTotalWeeks] = useState("6");
-  const [internshipStartWeek, setInternshipStartWeek] = useState("14");
+  // Mặc định 1 = kỳ nhập vào CHÍNH LÀ giai đoạn thực tập (tuần thực tập 1 = ngày bắt đầu kỳ).
+  // Chỉ tăng lên (vd 14) khi StartDate là đầu CẢ học kỳ của trường chứ không riêng đợt thực tập.
+  const [internshipStartWeek, setInternshipStartWeek] = useState("1");
   const isEditing = Boolean(editing?.id);
 
   // Preload form when opening in edit mode; reset to defaults in create mode.
@@ -69,12 +71,34 @@ export const CreateSemesterModal = ({
       setStartDate("2026-09-01");
       setEndDate("2026-12-15");
       setTotalWeeks("6");
-      setInternshipStartWeek("14");
+      setInternshipStartWeek("1");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, editing?.id, editing?.name, editing?.startDate, editing?.endDate]);
 
   if (!isOpen) return null;
+
+  // ── Preview ngày thực tập thực tế theo cấu hình ──
+  // Tuần thực tập 1 bắt đầu = StartDate + (internshipStartWeek - 1) tuần.
+  // Nếu toàn bộ giai đoạn thực tập vượt EndDate → cấu hình mâu thuẫn,
+  // gần như chắc chắn do đặt InternshipStartWeek > 1 trong khi StartDate là ngày đầu thực tập.
+  const parsedStart = startDate ? new Date(startDate) : null;
+  const parsedEnd = endDate ? new Date(endDate) : null;
+  const effectiveStartWeek = Math.min(52, Math.max(1, parseInt(internshipStartWeek) || 1));
+  const effectiveTotalWeeks = Math.min(52, Math.max(1, parseInt(totalWeeks) || 6));
+  const internshipPeriodStart = parsedStart
+    ? new Date(parsedStart.getTime() + (effectiveStartWeek - 1) * 7 * 86400000)
+    : null;
+  const internshipPeriodEnd = internshipPeriodStart
+    ? new Date(internshipPeriodStart.getTime() + effectiveTotalWeeks * 7 * 86400000 - 86400000)
+    : null;
+  const internshipEndExceedsSemesterEnd = Boolean(
+    internshipPeriodEnd && parsedEnd && internshipPeriodEnd > parsedEnd,
+  );
+  const fmtDmy = (d: Date) => d.toLocaleDateString("vi-VN");
+  const displayStartDate = parsedStart ? fmtDmy(parsedStart) : "?";
+  const displaySemesterEnd = parsedEnd ? fmtDmy(parsedEnd) : "?";
+  const displayInternshipEnd = internshipPeriodEnd ? fmtDmy(internshipPeriodEnd) : "?";
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -243,9 +267,11 @@ export const CreateSemesterModal = ({
                 className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-900 outline-none focus:bg-white focus:border-blue-500"
               />
               <p className="text-[11px] text-slate-500 mt-1">
-                {Math.min(52, Math.max(1, parseInt(internshipStartWeek) || 1)) + Math.min(52, Math.max(1, parseInt(totalWeeks) || 6)) - 1 > 52
-                  ? "Vượt 52 tuần học kỳ — kiểm tra lại."
-                  : `Thực tập 1..${Math.min(52, Math.max(1, parseInt(totalWeeks) || 6))} = HK tuần ${Math.min(52, Math.max(1, parseInt(internshipStartWeek) || 1))}..${Math.min(52, Math.max(1, parseInt(internshipStartWeek) || 1)) + Math.min(52, Math.max(1, parseInt(totalWeeks) || 6)) - 1}`}
+                {internshipEndExceedsSemesterEnd
+                  ? `⚠️ Lệch mốc: với StartDate ${displayStartDate} + ${Math.min(52, Math.max(1, parseInt(internshipStartWeek) || 1)) - 1} tuần chờ, toàn bộ ${Math.min(52, Math.max(1, parseInt(totalWeeks) || 6))} tuần thực tập kết thúc ${displayInternshipEnd} — SAU EndDate ${displaySemesterEnd}. Nếu StartDate là NGÀY BẮT ĐẦU THỰC TẬP thì đặt = 1.`
+                  : Math.min(52, Math.max(1, parseInt(internshipStartWeek) || 1)) + Math.min(52, Math.max(1, parseInt(totalWeeks) || 6)) - 1 > 52
+                    ? "Vượt 52 tuần học kỳ — kiểm tra lại."
+                    : `Thực tập 1..${Math.min(52, Math.max(1, parseInt(totalWeeks) || 6))} = HK tuần ${Math.min(52, Math.max(1, parseInt(internshipStartWeek) || 1))}..${Math.min(52, Math.max(1, parseInt(internshipStartWeek) || 1)) + Math.min(52, Math.max(1, parseInt(totalWeeks) || 6)) - 1}`}
               </p>
             </div>
           </div>

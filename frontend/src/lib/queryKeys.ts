@@ -78,6 +78,13 @@ export const queryKeys = {
       list: (params: QueryParams) =>
         [...queryKeys.admin.accountRequests.all, "list", params] as const,
     },
+    attendance: {
+      all: ["admin", "attendance"] as const,
+      list: (params: QueryParams) =>
+        [...queryKeys.admin.attendance.all, "list", params] as const,
+      session: (id: string) =>
+        [...queryKeys.admin.attendance.all, "session", id] as const,
+    },
     dashboard: (semesterId?: string | null) =>
       [...queryKeys.admin.all, "dashboard", semesterScope(semesterId)] as const,
   },

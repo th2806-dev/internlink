@@ -1,5 +1,7 @@
 import { apiRequest, downloadAuthenticatedFile } from "../lib/apiClient";
 
+// Xem định nghĩa kiểu ở dưới (StudentGrade, GradingSummaryResponse...)
+
 // ═════════════════════════════════════════════════════════════════════════════
 // Module chấm điểm thực tập — quy định hiện hành (QT 40% + Thi 60%)
 // ═════════════════════════════════════════════════════════════════════════════
@@ -24,6 +26,12 @@ export interface StudentGrade {
   fullName: string;
   className: string;
   note: string;
+
+  /** Thông tin thực tập hiển thị trong bảng tổng hợp (từ Internship.Company) */
+  companyName?: string | null;
+  position?: string | null;
+  /** NotStarted | InProgress | Completed | ... (enum backend) */
+  internshipStatus?: string | null;
 
   missingCount: number;
   lateCount: number;
@@ -91,6 +99,16 @@ export const internshipGradingService = {
     return downloadAuthenticatedFile(
       `/api/Export/internship-excel?${params.toString()}`,
       `DanhSachThucTap_${semesterId.slice(0, 8)}.xlsx`
+    );
+  },
+
+  /** Export "Bảng điểm toàn khóa" từ dữ liệu chấm điểm (điểm QT/thi/TB, xếp loại, điều kiện dự thi). */
+  exportGradesExcel(semesterId: string, className?: string): Promise<{ blob: Blob; filename: string }> {
+    const params = new URLSearchParams({ semesterId });
+    if (className) params.set("className", className);
+    return downloadAuthenticatedFile(
+      `/api/InternshipGrading/grades-excel?${params.toString()}`,
+      `BangDiemToanKhoa_${new Date().toISOString().slice(0, 10)}.xlsx`,
     );
   },
 };

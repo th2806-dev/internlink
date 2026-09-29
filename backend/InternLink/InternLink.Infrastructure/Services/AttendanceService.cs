@@ -89,7 +89,7 @@ public class AttendanceService : IAttendanceService
         return dto;
     }
 
-    public async Task<AttendanceSessionDetailDto> CreateSessionAsync(Guid lecturerId, CreateAttendanceSessionDto dto)
+    public async Task<AttendanceSessionDetailDto> CreateSessionAsync(Guid lecturerId, CreateAttendanceSessionDto dto, bool isAdmin = false)
     {
         var semester = await _context.Semesters.FindAsync(dto.SemesterId);
         if (semester == null)
@@ -156,9 +156,20 @@ public class AttendanceService : IAttendanceService
         }
         else if (dto.StudentIds != null && dto.StudentIds.Any())
         {
-            targetInternships = await _context.Internships
-                .Where(i => i.SemesterId == dto.SemesterId && i.LecturerId == lecturerId && dto.StudentIds.Contains(i.StudentId))
-                .ToListAsync();
+            // Admin Khoa: không lọc theo lecturerId — chọn bất kỳ sinh viên nào trong kỳ.
+            // Lecturer: chỉ sinh viên được phân công cho mình.
+            if (isAdmin)
+            {
+                targetInternships = await _context.Internships
+                    .Where(i => i.SemesterId == dto.SemesterId && dto.StudentIds.Contains(i.StudentId))
+                    .ToListAsync();
+            }
+            else
+            {
+                targetInternships = await _context.Internships
+                    .Where(i => i.SemesterId == dto.SemesterId && i.LecturerId == lecturerId && dto.StudentIds.Contains(i.StudentId))
+                    .ToListAsync();
+            }
         }
         else
         {
@@ -181,22 +192,28 @@ public class AttendanceService : IAttendanceService
         _context.AttendanceSessions.Add(session);
         await _context.SaveChangesAsync();
 
-        _logger.LogInformation("Lecturer {LecturerId} created attendance session {SessionId} with {Count} students",
-            lecturerId, session.Id, session.Records.Count);
+        _logger.LogInformation("{Caller} created attendance session {SessionId} with {Count} students",
+            isAdmin ? "Admin" : $"Lecturer {lecturerId}", session.Id, session.Records.Count);
 
-        var result = await GetSessionDetailAsync(session.Id, lecturerId);
+        // Admin: trả session không lọc theo lecturerId ownership
+        var result = await GetSessionDetailAsync(session.Id, isAdmin ? null : lecturerId);
         return result!;
     }
 
-    public async Task<AttendanceSessionDetailDto> UpdateSessionAsync(Guid sessionId, Guid lecturerId, UpdateAttendanceSessionDto dto)
+    public async Task<AttendanceSessionDetailDto> UpdateSessionAsync(Guid sessionId, Guid? lecturerId, UpdateAttendanceSessionDto dto)
     {
-        var session = await _context.AttendanceSessions
-            .FirstOrDefaultAsync(s => s.Id == sessionId && s.LecturerId == lecturerId);
+        var query = _context.AttendanceSessions.AsQueryable();
+        if (lecturerId.HasValue)
+            query = query.Where(s => s.LecturerId == lecturerId.Value);
+
+        var session = await query.FirstOrDefaultAsync(s => s.Id == sessionId);
 
         if (session == null)
         {
             throw new KeyNotFoundException("Không tìm thấy buổi gặp hoặc bạn không có quyền chỉnh sửa.");
         }
+
+        var effectiveLecturerId = lecturerId ?? session.LecturerId;
 
         var semester = await _context.Semesters.FindAsync(session.SemesterId);
         if (semester == null)
@@ -248,7 +265,7 @@ public class AttendanceService : IAttendanceService
         {
             var hasStudentMeeting = await _context.AttendanceSessions
                 .AnyAsync(s => s.SemesterId == session.SemesterId
-                    && s.LecturerId == lecturerId
+                    && s.LecturerId == effectiveLecturerId
                     && s.WeekNumber == newWeek
                     && s.Id != session.Id
                     && !s.IsDeleted
@@ -302,7 +319,7 @@ public class AttendanceService : IAttendanceService
 
                 // Create records for all assigned students
                 var internships = await _context.Internships
-                    .Where(i => i.SemesterId == session.SemesterId && i.LecturerId == lecturerId)
+                    .Where(i => i.SemesterId == session.SemesterId && i.LecturerId == effectiveLecturerId)
                     .ToListAsync();
                 foreach (var internship in internships)
                 {
@@ -323,10 +340,13 @@ public class AttendanceService : IAttendanceService
         return result!;
     }
 
-    public async Task<bool> DeleteSessionAsync(Guid sessionId, Guid lecturerId)
+    public async Task<bool> DeleteSessionAsync(Guid sessionId, Guid? lecturerId)
     {
-        var session = await _context.AttendanceSessions
-            .FirstOrDefaultAsync(s => s.Id == sessionId && s.LecturerId == lecturerId);
+        var query = _context.AttendanceSessions.AsQueryable();
+        if (lecturerId.HasValue)
+            query = query.Where(s => s.LecturerId == lecturerId.Value);
+
+        var session = await query.FirstOrDefaultAsync(s => s.Id == sessionId);
 
         if (session == null)
             return false;
@@ -336,19 +356,24 @@ public class AttendanceService : IAttendanceService
         return true;
     }
 
-    public async Task<AttendanceSessionDetailDto> MarkAttendanceAsync(Guid sessionId, Guid lecturerId, MarkAttendanceDto dto)
+    public async Task<AttendanceSessionDetailDto> MarkAttendanceAsync(Guid sessionId, Guid? lecturerId, MarkAttendanceDto dto, string? adminName = null)
     {
-        var session = await _context.AttendanceSessions
+        var query = _context.AttendanceSessions
             .Include(s => s.Lecturer)
             .Include(s => s.Records)
-            .FirstOrDefaultAsync(s => s.Id == sessionId && s.LecturerId == lecturerId);
+            .AsQueryable();
+
+        if (lecturerId.HasValue)
+            query = query.Where(s => s.LecturerId == lecturerId.Value);
+
+        var session = await query.FirstOrDefaultAsync(s => s.Id == sessionId);
 
         if (session == null)
         {
             throw new KeyNotFoundException("Không tìm thấy buổi gặp hoặc bạn không có quyền điểm danh.");
         }
 
-        var markerName = session.Lecturer?.FullName ?? "Giảng viên";
+        var markerName = adminName ?? session.Lecturer?.FullName ?? "Giảng viên";
         var now = DateTime.UtcNow;
 
         foreach (var item in dto.Records)
@@ -369,7 +394,8 @@ public class AttendanceService : IAttendanceService
         session.Status = AttendanceSessionStatus.Completed;
         await _context.SaveChangesAsync();
 
-        _logger.LogInformation("Lecturer {LecturerId} marked attendance for session {SessionId}", lecturerId, sessionId);
+        _logger.LogInformation("{Caller} marked attendance for session {SessionId}",
+            adminName ?? $"Lecturer {lecturerId}", sessionId);
 
         var result = await GetSessionDetailAsync(sessionId, lecturerId);
         return result!;

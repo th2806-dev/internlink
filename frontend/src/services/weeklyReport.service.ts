@@ -117,7 +117,7 @@ export const weeklyReportService = {
 
   review(
     id: string,
-    body: { status: string; lecturerComment?: string },
+    body: { status: string; lecturerComment?: string; qualityScore?: number },
   ): Promise<WeeklyReportDto> {
     return apiRequest<WeeklyReportDto>(`/api/WeeklyReport/${id}/review`, {
       method: "POST",

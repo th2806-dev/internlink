@@ -25,8 +25,10 @@ const mockCompanies: CompanyDto[] = [
     contactPerson: "Nguyen Van A",
     isActive: true,
     capacity: 20,
-    currentInternCount: 5,
-    isLinked: true,
+    studentCount: 5,
+    openPositionCount: 2,
+    isSemesterLinked: true,
+    createdAt: "2026-01-01T00:00:00Z",
   },
   {
     id: "comp-2",
@@ -36,8 +38,10 @@ const mockCompanies: CompanyDto[] = [
     contactPerson: "Tran Van B",
     isActive: true,
     capacity: 50,
-    currentInternCount: 15,
-    isLinked: false,
+    studentCount: 15,
+    openPositionCount: 3,
+    isSemesterLinked: false,
+    createdAt: "2026-01-01T00:00:00Z",
   },
 ];
 

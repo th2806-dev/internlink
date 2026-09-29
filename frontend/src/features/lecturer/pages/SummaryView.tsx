@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import {
   CalendarDays,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   ClipboardList,
   Download,
   FileSpreadsheet,
@@ -19,7 +21,6 @@ import { lecturerExportService } from "../../../services/lecturerExport.service"
 import { adminSemestersService } from "../../../services/adminSemesters.service";
 import { lecturerInternshipsService } from "../../../services/lecturerInternships.service";
 import { attendanceService } from "../../../services/attendance.service";
-import { adminStudentsService } from "../../../services/adminStudents.service";
 import { internshipGradingService } from "../../../services/internshipGrading.service";
 import { toApiSemesterId, useSemester } from "../../../contexts/SemesterContext";
 import type { AttendanceSessionDto, LecturerStudentListItemDto } from "../../../types/api";
@@ -61,6 +62,9 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
   const [reportSavedAt, setReportSavedAt] = useState<string | null>(null);
   const [activeModule, setActiveModule] = useState<ExportKind>(isAdminScope ? "report" : "grades");
   const [attendanceSessions, setAttendanceSessions] = useState<AttendanceSessionDto[]>([]);
+  // Phân trang client-side cho bảng rà soát (bảng có thể hàng trăm sinh viên ở scope admin)
+  const [pageIndex, setPageIndex] = useState(0);
+  const [pageSize, setPageSize] = useState(15);
 
   const exportOptions: ExportOption[] = [
     {
@@ -103,52 +107,46 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
       try {
         const rows = isAdminScope
           ? await (async () => {
-              const adminRows: Awaited<ReturnType<typeof adminStudentsService.getAll>> = [];
-              let skip = 0;
-              const pageSize = 1000;
-              while (true) {
-                const page = await adminStudentsService.getAll(skip, pageSize, semesterId);
-                adminRows.push(...page);
-                if (page.length < pageSize) break;
-                skip += pageSize;
-              }
+              // Nguồn sự thật: /InternshipGrading/summary — sinh viên CÓ internship trong kỳ,
+              // scoped theo khoa của admin, kèm điểm & trạng thái nộp bài thật từ backend.
+              // (Trước đây ghép adminStudentsService.getAll + grading nên thiếu công ty,
+              //  kèm sinh viên không có thực tập, và điểm tự suy không khớp bảng chấm.)
               const grading = await internshipGradingService.getSummary(semesterId);
-                const gradesByStudent = new Map(grading.students.map((grade) => [grade.studentId, grade]));
-                return adminRows.map((student) => {
-                  const grade = gradesByStudent.get(student.id);
-                  const openWeeks = grade?.weeks ?? [];
-                  const submittedOpenWeeks = openWeeks.filter((week) => week.submittedAt).length;
-                  const requiredOpenWeeks = Math.max(openWeeks.length, 1);
-                  const reportPercent = grade
-                    ? Math.round((submittedOpenWeeks / requiredOpenWeeks) * 80)
-                    : 0;
-                  const evaluationPercent = grade?.averageScore != null || grade?.oralExamScore != null ? 20 : 0;
+              return grading.students.map((grade) => {
+                const openWeeks = grade.weeks ?? [];
+                const submittedOpenWeeks = openWeeks.filter((week) => week.submittedAt).length;
+                const requiredOpenWeeks = Math.max(openWeeks.length, 1);
+                const reportPercent = Math.round((submittedOpenWeeks / requiredOpenWeeks) * 80);
+                const evaluationPercent = grade.averageScore != null || grade.oralExamScore != null ? 20 : 0;
                   return {
-                    studentId: student.id,
-                internshipId: grade?.studentId ?? student.id,
-              studentCode: student.studentCode,
-              fullName: student.fullName,
-              email: student.email ?? null,
-              phone: student.phone ?? null,
-              class: student.class ?? null,
-              major: student.major ?? null,
+                  studentId: grade.studentId,
+                  internshipId: grade.studentId,
+                  studentCode: grade.studentCode,
+                  fullName: grade.fullName,
+                  email: null,
+                  phone: null,
+                  class: grade.className || null,
+                  major: null,
               companyId: null,
-              companyName: null,
-              position: null,
-              internshipStatus: grade ? "Đang thực tập" : "Chưa phân công",
+                  companyName: grade.companyName ?? null,
+                  position: grade.position ?? null,
+                  internshipStatus: grade.internshipStatus ?? "NotStarted",
               startDate: null,
               endDate: null,
-              weeklyReportCount: submittedOpenWeeks,
-              pendingReportCount: grade?.missingCount ?? 0,
-              submissionCount: submittedOpenWeeks,
-              notes: "",
-              finalGrade: grade?.averageScore ?? null,
-              hasEvaluation: grade != null,
-              isEvaluationFinalized: grade?.averageScore != null || grade?.oralExamScore != null,
-              progressPercent: Math.min(100, reportPercent + evaluationPercent),
+                  weeklyReportCount: submittedOpenWeeks,
+                  pendingReportCount: grade.missingCount,
+                  submissionCount: submittedOpenWeeks,
+                  notes: grade.note || "",
+                  finalGrade: grade.averageScore ?? null,
+                  hasEvaluation: grade.processScore > 0 || grade.oralExamScore != null,
+                  isEvaluationFinalized: grade.averageScore != null,
+                  progressPercent: Math.min(100, reportPercent + evaluationPercent),
               progressBreakdown: undefined,
-                  };
-              }) as LecturerStudentListItemDto[];
+                  classification: grade.classification || null,
+                  isEligible: grade.isEligible,
+                  ineligibleReasons: grade.ineligibleReasons ?? [],
+                } as LecturerStudentListItemDto;
+              });
             })()
           : await lecturerInternshipsService.getStudents(semesterId);
         if (!cancelled) {
@@ -213,6 +211,17 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
       return matchesQuery && matchesStatus;
     });
   }, [search, statusFilter, students]);
+
+  // Reset về trang 1 khi filter/search/page size thay đổi hoặc đổi tab module
+  useEffect(() => setPageIndex(0), [search, statusFilter, activeModule, pageSize]);
+
+  const totalFiltered = filteredStudents.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / pageSize));
+  const safePageIndex = Math.min(pageIndex, totalPages - 1);
+  const pagedStudents = useMemo(
+    () => filteredStudents.slice(safePageIndex * pageSize, safePageIndex * pageSize + pageSize),
+    [filteredStudents, safePageIndex, pageSize],
+  );
 
   const selectedStudent = students.find((student) => student.studentId === selectedStudentId) ?? null;
   useEffect(() => setNotesDraft(selectedStudent?.notes ?? ""), [selectedStudent]);
@@ -314,8 +323,9 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
     setExporting(kind);
     try {
       if (kind === "grades") {
-        if (isAdminScope) await lecturerExportService.downloadDepartmentInternshipExcel(semesterId);
-        else await lecturerExportService.downloadInternshipExcel(semesterId);
+        // Bảng điểm xuất TRỰC TIẾP từ dữ liệu chấm điểm (cùng nguồn với bảng trên màn hình):
+        // điểm QT/thi/TB, xếp loại, điều kiện dự thi — không còn lấy từ danh sách thực tập tự ghép.
+        await internshipGradingService.exportGradesExcel(semesterId);
       }
       else if (kind === "report") await lecturerExportService.downloadSummaryReportWord(semesterId);
       else await lecturerExportService.downloadGuidanceSchedule(semesterId);
@@ -353,7 +363,48 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
         </div>
         <div className="grid lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)]">
           <div className="overflow-x-auto lg:border-r border-slate-100">
-            {isLoading ? <div className="p-10 text-center text-xs text-slate-500">Đang tải hồ sơ...</div> : filteredStudents.length === 0 ? <div className="p-10 text-center text-xs text-slate-500">Không có sinh viên phù hợp.</div> : <table className="w-full text-left text-xs"><thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500"><tr><th className="px-4 py-3 font-bold">Sinh viên</th><th className="px-4 py-3 font-bold">Doanh nghiệp</th><th className="px-4 py-3 font-bold">Điểm</th><th className="px-4 py-3 font-bold">Trạng thái</th><th className="px-4 py-3" /></tr></thead><tbody>{filteredStudents.map((student) => { const status = getReviewStatus(student); const active = student.studentId === selectedStudentId; return <tr key={student.studentId} className={`border-t border-slate-100 ${active ? "bg-blue-50/60" : "hover:bg-slate-50"}`}><td className="px-4 py-3"><p className="font-bold text-slate-800">{student.fullName}</p><p className="text-[11px] text-slate-500">{student.studentCode} · {student.class || "Chưa có lớp"}</p></td><td className="px-4 py-3 text-slate-600">{student.companyName || "Chưa có doanh nghiệp"}</td><td className="px-4 py-3 font-bold text-slate-800">{student.finalGrade == null ? "—" : student.finalGrade.toFixed(2)}</td><td className="px-4 py-3"><span className={`inline-flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold ${status.className}`}>{student.isEvaluationFinalized ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}{status.label}</span></td><td className="px-4 py-3 text-right"><button type="button" onClick={() => setSelectedStudentId(student.studentId)} className="text-blue-700 font-bold hover:text-blue-900">Rà soát</button></td></tr>; })}</tbody></table>}
+            {isLoading ? <div className="p-10 text-center text-xs text-slate-500">Đang tải hồ sơ...</div> : filteredStudents.length === 0 ? <div className="p-10 text-center text-xs text-slate-500">Không có sinh viên phù hợp.</div> : (
+              <>
+                {/* Thanh cuộn dọc: bảng tối đa pageSize dòng hiển thị, cuộn trong khung */}
+                <div className="max-h-[720px] overflow-y-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 sticky top-0 z-10">
+                      <tr><th className="px-4 py-3 font-bold">Sinh viên</th><th className="px-4 py-3 font-bold">Doanh nghiệp</th><th className="px-4 py-3 font-bold">Điểm</th><th className="px-4 py-3 font-bold">Xếp loại</th><th className="px-4 py-3 font-bold">ĐK dự thi</th><th className="px-4 py-3 font-bold">Trạng thái</th><th className="px-4 py-3" /></tr>
+                    </thead>
+                    <tbody>{pagedStudents.map((student) => { const status = getReviewStatus(student); const active = student.studentId === selectedStudentId; return <tr key={student.studentId} className={`border-t border-slate-100 ${active ? "bg-blue-50/60" : "hover:bg-slate-50"}`}><td className="px-4 py-3"><p className="font-bold text-slate-800">{student.fullName}</p><p className="text-[11px] text-slate-500">{student.studentCode} · {student.class || "Chưa có lớp"}</p></td><td className="px-4 py-3 text-slate-600">{student.companyName || "Chưa có doanh nghiệp"}</td><td className="px-4 py-3 font-bold text-slate-800">{student.finalGrade == null ? "—" : student.finalGrade.toFixed(2)}</td><td className="px-4 py-3">{student.classification ? <span className="inline-flex px-2 py-1 rounded border text-[10px] font-bold bg-slate-50 text-slate-700 border-slate-200">{student.classification}</span> : <span className="text-slate-400">—</span>}</td><td className="px-4 py-3">{student.isEligible == null ? <span className="text-slate-400">—</span> : student.isEligible ? <span className="inline-flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold text-emerald-700 bg-emerald-50 border-emerald-200"><CheckCircle2 className="w-3 h-3" />Đủ</span> : <span className="inline-flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold text-rose-700 bg-rose-50 border-rose-200" title={(student.ineligibleReasons || []).join("; ")}><XCircle className="w-3 h-3" />Không đủ</span>}</td><td className="px-4 py-3"><span className={`inline-flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold ${status.className}`}>{student.isEvaluationFinalized ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}{status.label}</span></td><td className="px-4 py-3 text-right"><button type="button" onClick={() => setSelectedStudentId(student.studentId)} className="text-blue-700 font-bold hover:text-blue-900">Rà soát</button></td></tr>; })}</tbody>
+                  </table>
+                </div>
+                {/* Phân trang */}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-2 px-4 py-2.5 border-t border-slate-100 text-xs">
+                  <span className="text-slate-500 font-medium">
+                    Hiển thị {totalFiltered === 0 ? 0 : safePageIndex * pageSize + 1}–{Math.min((safePageIndex + 1) * pageSize, totalFiltered)} / {totalFiltered} sinh viên
+                  </span>
+                  <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-1.5 text-slate-500 font-medium">
+                      Số dòng
+                      <select
+                        value={pageSize}
+                        onChange={(event) => setPageSize(Number(event.target.value))}
+                        className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 font-bold outline-none cursor-pointer"
+                      >
+                        <option value={15}>15</option>
+                        <option value={30}>30</option>
+                        <option value={50}>50</option>
+                      </select>
+                    </label>
+                    <div className="flex items-center gap-1.5 font-bold">
+                      <button type="button" onClick={() => setPageIndex((p) => Math.max(0, p - 1))} disabled={safePageIndex === 0} className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg disabled:opacity-40 transition-colors cursor-pointer" aria-label="Trang trước">
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+                      <span className="px-2.5 py-1 bg-slate-50 rounded-lg border border-slate-200 text-slate-800">{safePageIndex + 1} / {totalPages}</span>
+                      <button type="button" onClick={() => setPageIndex((p) => Math.min(totalPages - 1, p + 1))} disabled={safePageIndex >= totalPages - 1} className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg disabled:opacity-40 transition-colors cursor-pointer" aria-label="Trang sau">
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
           <aside className="p-4 bg-slate-50/60 min-h-[300px]">
             {selectedStudent ? <div className="space-y-4"><div><p className="text-[10px] uppercase tracking-wider font-bold text-slate-500">Đang rà soát</p><h3 className="text-base font-bold text-slate-900 mt-1">{selectedStudent.fullName}</h3><p className="text-xs text-slate-500">{selectedStudent.studentCode} · {selectedStudent.major || "Chưa có ngành"}</p></div><div className="grid grid-cols-2 gap-2"><div className="p-3 bg-white border border-slate-200 rounded-md"><p className="text-[10px] text-slate-500">Tiến độ</p><p className="text-lg font-bold text-slate-900">{selectedStudent.progressPercent}%</p></div><div className="p-3 bg-white border border-slate-200 rounded-md"><p className="text-[10px] text-slate-500">Báo cáo tuần</p><p className="text-lg font-bold text-slate-900">{selectedStudent.weeklyReportCount}</p></div></div><label className="block"><span className="text-xs font-bold text-slate-800">Nội dung bổ sung / nhận xét tổng kết</span><textarea value={notesDraft} onChange={(event) => setNotesDraft(event.target.value)} rows={6} placeholder="Bổ sung nhận xét, lưu ý hồ sơ hoặc nội dung cần thể hiện khi tổng kết..." className="mt-2 w-full resize-y rounded-md border border-slate-200 bg-white p-3 text-xs leading-5 outline-none focus:border-blue-500" /></label><button type="button" onClick={() => void handleSaveNotes()} disabled={isSaving} className="il-btn il-btn-primary w-full justify-center disabled:opacity-50">{isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}{isSaving ? "Đang lưu..." : "Lưu nội dung bổ sung"}</button></div> : <div className="h-full flex items-center justify-center text-center text-xs text-slate-500">Chọn một sinh viên để bắt đầu rà soát.</div>}

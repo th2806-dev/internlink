@@ -98,4 +98,42 @@ public class InternshipGradingController : ControllerBase
             return StatusCode(500, ApiResponse<InternshipStudentGradeDto>.Fail(ApiError.From("Lỗi lưu điểm", ex.Message, 500)));
         }
     }
+
+    /// <summary>
+    /// Xuất Excel "Bảng điểm toàn khóa" từ dữ liệu chấm điểm (nguồn sự thật) —
+    /// gồm điểm QT/thi/TB, xếp loại và điều kiện dự thi. Lecturer: nhóm của mình; Admin: theo khoa.
+    /// </summary>
+    [HttpGet("grades-excel")]
+    public async Task<IActionResult> ExportGradesExcel(
+        [FromQuery] Guid semesterId,
+        [FromQuery] string? className = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            Guid? resolvedLecturerId = null;
+            if (User.IsInRole("Lecturer"))
+            {
+                var userId = User.GetUserId();
+                if (userId == null) return Unauthorized();
+                resolvedLecturerId = await _lecturerAccessService.ResolveLecturerIdAsync(userId.Value);
+            }
+
+            var deptId = _deptScope.ResolveEffectiveDepartmentId(User, null);
+            var fileBytes = await _gradingService.ExportGradesExcelAsync(semesterId, resolvedLecturerId, deptId, className, cancellationToken);
+            var fileName = $"BangDiemToanKhoa_{DateTime.Now:yyyy-MM-dd}.xlsx";
+            return File(
+                fileBytes,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                fileName);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(ApiResponse<object>.Fail(ApiError.From(ex.Message, status: 404)));
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, ApiResponse<object>.Fail(ApiError.From("Lỗi xuất bảng điểm", ex.Message, 500)));
+        }
+    }
 }

@@ -123,19 +123,33 @@ public class AttendanceController : ControllerBase
     }
 
     /// <summary>
-    /// Giảng viên tạo buổi gặp mới
+    /// Giảng viên hoặc Admin Khoa tạo buổi gặp mới.
+    /// Admin truyền dto.LecturerId để chỉ định GV chủ trì; Lecturer dùng ID của mình.
     /// </summary>
     [HttpPost("sessions")]
-    [Authorize(Policy = "RequireLecturer")]
+    [Authorize(Policy = "RequireLecturerOrAdmin")]
     public async Task<IActionResult> CreateSession([FromBody] CreateAttendanceSessionDto dto)
     {
-        var lecturerId = await ResolveCurrentLecturerIdAsync();
-        if (!lecturerId.HasValue)
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Không tìm thấy giảng viên tương ứng." }));
+        Guid effectiveLecturerId;
+        bool isAdmin = !User.IsLecturer();
+
+        if (isAdmin)
+        {
+            if (!dto.LecturerId.HasValue)
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Admin phải chọn Giảng viên chủ trì." }));
+            effectiveLecturerId = dto.LecturerId.Value;
+        }
+        else
+        {
+            var resolved = await ResolveCurrentLecturerIdAsync();
+            if (!resolved.HasValue)
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Không tìm thấy giảng viên tương ứng." }));
+            effectiveLecturerId = resolved.Value;
+        }
 
         try
         {
-            var session = await _attendanceService.CreateSessionAsync(lecturerId.Value, dto);
+            var session = await _attendanceService.CreateSessionAsync(effectiveLecturerId, dto, isAdmin: isAdmin);
             return Ok(ApiResponse<AttendanceSessionDetailDto>.Ok(session));
         }
         catch (KeyNotFoundException ex)
@@ -149,19 +163,23 @@ public class AttendanceController : ControllerBase
     }
 
     /// <summary>
-    /// Giảng viên cập nhật thông tin buổi gặp
+    /// Giảng viên hoặc Admin Khoa cập nhật thông tin buổi gặp
     /// </summary>
     [HttpPut("sessions/{id:guid}")]
-    [Authorize(Policy = "RequireLecturer")]
+    [Authorize(Policy = "RequireLecturerOrAdmin")]
     public async Task<IActionResult> UpdateSession(Guid id, [FromBody] UpdateAttendanceSessionDto dto)
     {
-        var lecturerId = await ResolveCurrentLecturerIdAsync();
-        if (!lecturerId.HasValue)
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Không tìm thấy giảng viên tương ứng." }));
+        Guid? lecturerId = null;
+        if (User.IsLecturer())
+        {
+            lecturerId = await ResolveCurrentLecturerIdAsync();
+            if (!lecturerId.HasValue)
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Không tìm thấy giảng viên tương ứng." }));
+        }
 
         try
         {
-            var updated = await _attendanceService.UpdateSessionAsync(id, lecturerId.Value, dto);
+            var updated = await _attendanceService.UpdateSessionAsync(id, lecturerId, dto);
             return Ok(ApiResponse<AttendanceSessionDetailDto>.Ok(updated));
         }
         catch (KeyNotFoundException ex)
@@ -171,17 +189,21 @@ public class AttendanceController : ControllerBase
     }
 
     /// <summary>
-    /// Giảng viên xóa buổi gặp
+    /// Giảng viên hoặc Admin Khoa xóa buổi gặp
     /// </summary>
     [HttpDelete("sessions/{id:guid}")]
-    [Authorize(Policy = "RequireLecturer")]
+    [Authorize(Policy = "RequireLecturerOrAdmin")]
     public async Task<IActionResult> DeleteSession(Guid id)
     {
-        var lecturerId = await ResolveCurrentLecturerIdAsync();
-        if (!lecturerId.HasValue)
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Không tìm thấy giảng viên tương ứng." }));
+        Guid? lecturerId = null;
+        if (User.IsLecturer())
+        {
+            lecturerId = await ResolveCurrentLecturerIdAsync();
+            if (!lecturerId.HasValue)
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Không tìm thấy giảng viên tương ứng." }));
+        }
 
-        var ok = await _attendanceService.DeleteSessionAsync(id, lecturerId.Value);
+        var ok = await _attendanceService.DeleteSessionAsync(id, lecturerId);
         if (!ok)
             return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Không tìm thấy buổi gặp hoặc bạn không có quyền xóa." }));
 
@@ -189,19 +211,28 @@ public class AttendanceController : ControllerBase
     }
 
     /// <summary>
-    /// Giảng viên điểm danh sinh viên trong buổi gặp
+    /// Giảng viên hoặc Admin Khoa điểm danh sinh viên trong buổi gặp
     /// </summary>
     [HttpPost("sessions/{id:guid}/mark")]
-    [Authorize(Policy = "RequireLecturer")]
+    [Authorize(Policy = "RequireLecturerOrAdmin")]
     public async Task<IActionResult> MarkAttendance(Guid id, [FromBody] MarkAttendanceDto dto)
     {
-        var lecturerId = await ResolveCurrentLecturerIdAsync();
-        if (!lecturerId.HasValue)
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Không tìm thấy giảng viên tương ứng." }));
+        Guid? lecturerId = null;
+        string? adminName = null;
+        if (User.IsLecturer())
+        {
+            lecturerId = await ResolveCurrentLecturerIdAsync();
+            if (!lecturerId.HasValue)
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Không tìm thấy giảng viên tương ứng." }));
+        }
+        else
+        {
+            adminName = User.Identity?.Name ?? "Admin Khoa";
+        }
 
         try
         {
-            var result = await _attendanceService.MarkAttendanceAsync(id, lecturerId.Value, dto);
+            var result = await _attendanceService.MarkAttendanceAsync(id, lecturerId, dto, adminName);
             return Ok(ApiResponse<AttendanceSessionDetailDto>.Ok(result));
         }
         catch (KeyNotFoundException ex)

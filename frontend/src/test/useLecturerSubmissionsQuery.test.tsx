@@ -30,14 +30,11 @@ vi.mock("../services/weeklyReport.service", () => ({
 const mockSubmissions: SubmissionDto[] = [
   {
     id: "sub-1",
-    studentId: "stu-1",
-    studentName: "Nguyen Van A",
-    studentCode: "SV001",
+    internshipId: "intern-1",
     title: "Báo cáo cuối kỳ",
     type: "FinalReport",
     status: "Submitted",
     version: 1,
-    createdAt: "2026-03-01T00:00:00Z",
     submittedAt: "2026-03-01T00:00:00Z",
     feedbacks: [],
     assets: [],
@@ -46,12 +43,18 @@ const mockSubmissions: SubmissionDto[] = [
 
 const mockStudents: LecturerStudentListItemDto[] = [
   {
-    id: "stu-1",
+    studentId: "stu-1",
+    internshipId: "intern-1",
     studentCode: "SV001",
     fullName: "Nguyen Van A Full",
     companyName: "FPT Software",
-    academicStatus: "Eligible",
     internshipStatus: "InProgress",
+    weeklyReportCount: 0,
+    pendingReportCount: 0,
+    submissionCount: 1,
+    hasEvaluation: false,
+    isEvaluationFinalized: false,
+    progressPercent: 0,
   },
 ];
 

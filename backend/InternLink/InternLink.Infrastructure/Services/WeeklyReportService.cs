@@ -1,4 +1,5 @@
 using AutoMapper;
+using InternLink.Application.Common;
 using InternLink.Application.DTOs;
 using InternLink.Application.Interfaces;
 using InternLink.Domain.Entities;
@@ -119,7 +120,27 @@ public class WeeklyReportService : IWeeklyReportService
             .OrderByDescending(r => r.WeekNumber)
             .ToListAsync();
 
-        return _mapper.Map<List<WeeklyReportDto>>(reports);
+        var dtoList = _mapper.Map<List<WeeklyReportDto>>(reports);
+        var eval = await _db.Evaluations.AsNoTracking()
+            .FirstOrDefaultAsync(e => e.InternshipId == internshipId && !e.IsDeleted);
+        if (eval != null && !string.IsNullOrWhiteSpace(eval.WeeklyQualityJson))
+        {
+            try
+            {
+                var map = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, decimal>>(eval.WeeklyQualityJson);
+                if (map != null)
+                {
+                    foreach (var dto in dtoList)
+                    {
+                        if (map.TryGetValue(dto.WeekNumber.ToString(), out var qVal))
+                            dto.QualityScore = qVal;
+                    }
+                }
+            }
+            catch {}
+        }
+
+        return dtoList;
     }
 
     public async Task<WeeklyReportDto> CreateDraftAsync(Guid userId, CreateWeeklyReportRequest request)
@@ -489,6 +510,52 @@ public class WeeklyReportService : IWeeklyReportService
                 CreatedAt = DateTime.UtcNow,
             });
         }
+
+        if (request.QualityScore.HasValue)
+        {
+            if (!InternshipGradeCalculator.IsValidQualityLevel(request.QualityScore.Value))
+                throw new ArgumentException("Mức đánh giá chất lượng phải là 1 trong các mức: 1.0, 2.0, 3.5, 4.0, 5.0");
+
+            var evaluation = await _db.Evaluations
+                .FirstOrDefaultAsync(e => e.InternshipId == report.InternshipId && !e.IsDeleted);
+
+            if (evaluation == null)
+            {
+                evaluation = new Evaluation
+                {
+                    Id = Guid.NewGuid(),
+                    InternshipId = report.InternshipId,
+                    EvaluatedById = userId != Guid.Empty ? userId : null,
+                    CreatedAt = DateTime.UtcNow,
+                };
+                _db.Evaluations.Add(evaluation);
+            }
+
+            var weeklyQuality = new Dictionary<string, decimal>();
+            if (!string.IsNullOrWhiteSpace(evaluation.WeeklyQualityJson))
+            {
+                try
+                {
+                    weeklyQuality = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, decimal>>(evaluation.WeeklyQualityJson) ?? new();
+                }
+                catch (System.Text.Json.JsonException)
+                {
+                }
+            }
+
+            weeklyQuality[report.WeekNumber.ToString()] = request.QualityScore.Value;
+            evaluation.WeeklyQualityJson = System.Text.Json.JsonSerializer.Serialize(weeklyQuality);
+            if (weeklyQuality.Count > 0)
+            {
+                evaluation.QualityLevel = InternshipGradeCalculator.Round1(weeklyQuality.Values.Average());
+            }
+            evaluation.EvaluatedAt = DateTime.UtcNow;
+            if (userId != Guid.Empty)
+            {
+                evaluation.EvaluatedById = userId;
+            }
+        }
+
         await _db.SaveChangesAsync();
 
         var studentUserId = report.Internship.Student?.UserId;
@@ -510,7 +577,30 @@ public class WeeklyReportService : IWeeklyReportService
             });
         }
 
-        return _mapper.Map<WeeklyReportDto>(report);
+        var dto = _mapper.Map<WeeklyReportDto>(report);
+        if (request.QualityScore.HasValue)
+        {
+            dto.QualityScore = request.QualityScore.Value;
+        }
+        else
+        {
+            var eval = await _db.Evaluations.AsNoTracking()
+                .FirstOrDefaultAsync(e => e.InternshipId == report.InternshipId && !e.IsDeleted);
+            if (eval != null && !string.IsNullOrWhiteSpace(eval.WeeklyQualityJson))
+            {
+                try
+                {
+                    var map = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, decimal>>(eval.WeeklyQualityJson);
+                    if (map != null && map.TryGetValue(report.WeekNumber.ToString(), out var qVal))
+                    {
+                        dto.QualityScore = qVal;
+                    }
+                }
+                catch {}
+            }
+        }
+
+        return dto;
     }
 
     public async Task<FeedbackDto?> AddStudentReplyAsync(Guid reportId, Guid studentUserId, string comment)

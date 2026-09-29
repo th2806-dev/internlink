@@ -807,7 +807,16 @@ export const AttendanceManagementView: React.FC<{
                     type="datetime-local"
                     required
                     value={createDate}
-                    onChange={(e) => setCreateDate(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setCreateDate(value);
+                      // Đổi ngày → tự suy ra tuần tương ứng (nếu kỳ đã cấu hình ngày bắt đầu)
+                      // để tuần luôn khớp ngày theo lịch học kỳ, tránh backend chặn 400 lệch tuần.
+                      if (value && semesterStartRaw) {
+                        const derived = relativeWeekFromMeetingDate(new Date(value), semesterStartRaw, totalWeeks, internshipStartWeek);
+                        if (derived !== null) setCreateWeek(derived);
+                      }
+                    }}
                     className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 focus:border-blue-500 font-medium outline-none"
                   />
                 </div>

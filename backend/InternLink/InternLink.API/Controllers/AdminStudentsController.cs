@@ -31,7 +31,7 @@ public class AdminStudentsController : ControllerBase
     {
         if (skip < 0)
             return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SkipMustBeNonNegative }));
-        if (take < 1 || take > 1000)
+        if (take < 1 || take > 5000)
             return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.TakeMustBeInRange }));
 
         var deptId = _deptScope.ResolveEffectiveDepartmentId(User, departmentId);
@@ -44,7 +44,7 @@ public class AdminStudentsController : ControllerBase
     {
         if (request.Skip < 0)
             return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SkipMustBeNonNegative }));
-        if (request.Take < 1 || request.Take > 1000)
+        if (request.Take < 1 || request.Take > 5000)
             return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.TakeMustBeInRange }));
 
         var deptId = _deptScope.ResolveEffectiveDepartmentId(User, request.DepartmentId);

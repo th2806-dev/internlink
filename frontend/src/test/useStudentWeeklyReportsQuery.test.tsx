@@ -28,6 +28,7 @@ const mockReports: WeeklyReportDto[] = [
     internshipId: "int-1",
     weekNumber: 1,
     title: "Báo cáo tuần 1",
+    content: "Nội dung tuần 1",
     version: 1,
     status: "Submitted",
     createdAt: "2026-09-01T00:00:00Z",

@@ -115,8 +115,16 @@ public class AdminSemestersController : ControllerBase
         // Semesters are department-owned: always force the admin's own department.
         dto.DepartmentId = _deptScope.GetCurrentDepartmentId(User);
 
-        var created = await _semesterService.CreateSemesterAsync(dto);
-        return CreatedAtAction(nameof(GetById), new { id = created.Id }, ApiResponse<SemesterDto>.Ok(created));
+        try
+        {
+            var created = await _semesterService.CreateSemesterAsync(dto);
+            return CreatedAtAction(nameof(GetById), new { id = created.Id }, ApiResponse<SemesterDto>.Ok(created));
+        }
+        catch (InvalidOperationException ex)
+        {
+            // Cấu hình kỳ mâu thuẫn (giai đoạn thực tập vượt EndDate)
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = ex.Message }));
+        }
     }
 
     [HttpPut("{id:guid}")]
@@ -130,11 +138,19 @@ public class AdminSemestersController : ControllerBase
         if (!_deptScope.HasAccess(User, existing.DepartmentId))
             return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SemesterNotFound }));
 
-        var updated = await _semesterService.UpdateSemesterAsync(id, dto);
-        if (updated == null)
-            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SemesterNotFound }));
+        try
+        {
+            var updated = await _semesterService.UpdateSemesterAsync(id, dto);
+            if (updated == null)
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SemesterNotFound }));
 
-        return Ok(ApiResponse<SemesterDto>.Ok(updated));
+            return Ok(ApiResponse<SemesterDto>.Ok(updated));
+        }
+        catch (InvalidOperationException ex)
+        {
+            // Cấu hình kỳ mâu thuẫn (giai đoạn thực tập vượt EndDate)
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = ex.Message }));
+        }
     }
 
     [HttpPost("{id:guid}/close")]

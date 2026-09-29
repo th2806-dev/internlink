@@ -129,6 +129,21 @@ export const CompanyDetailView = ({
   const [deletePositionId, setDeletePositionId] = useState<string | null>(null);
   const [deletingPosition, setDeletingPosition] = useState(false);
 
+  // Modal states for editing company info
+  const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
+  const [companyForm, setCompanyForm] = useState({
+    name: "",
+    industry: "",
+    address: "",
+    contactPerson: "",
+    contactEmail: "",
+    contactPhone: "",
+    website: "",
+    capacity: 10,
+  });
+  const [savingCompany, setSavingCompany] = useState(false);
+  const [companyFormError, setCompanyFormError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!companyId) return;
     setLoading(true);
@@ -143,6 +158,62 @@ export const CompanyDetailView = ({
       )
       .finally(() => setLoading(false));
   }, [companyId, semesterId, fetchDetail]);
+
+  const openEditCompany = () => {
+    if (!detail) return;
+    setCompanyForm({
+      name: detail.name,
+      industry: detail.industry ?? "",
+      address: detail.address ?? "",
+      contactPerson: detail.contactPerson ?? "",
+      contactEmail: detail.contactEmail ?? "",
+      contactPhone: detail.contactPhone ?? "",
+      website: "",
+      capacity: 10,
+    });
+    setCompanyFormError(null);
+    setIsCompanyModalOpen(true);
+  };
+
+  const handleSaveCompany = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!companyForm.name.trim() || !companyId) {
+      setCompanyFormError("Vui lòng nhập tên doanh nghiệp.");
+      return;
+    }
+    setSavingCompany(true);
+    setCompanyFormError(null);
+    try {
+      await adminCompaniesService.update(companyId, {
+        companyName: companyForm.name.trim(),
+        industry: companyForm.industry.trim() || undefined,
+        address: companyForm.address.trim() || undefined,
+        contactPerson: companyForm.contactPerson.trim() || undefined,
+        contactEmail: companyForm.contactEmail.trim() || undefined,
+        contactPhone: companyForm.contactPhone.trim() || undefined,
+        website: companyForm.website.trim() || undefined,
+        capacity: Number(companyForm.capacity) || 0,
+      });
+      setDetail((prev) =>
+        prev
+          ? {
+              ...prev,
+              name: companyForm.name.trim(),
+              industry: companyForm.industry.trim() || null,
+              address: companyForm.address.trim() || null,
+              contactPerson: companyForm.contactPerson.trim() || null,
+              contactEmail: companyForm.contactEmail.trim() || null,
+              contactPhone: companyForm.contactPhone.trim() || null,
+            }
+          : prev
+      );
+      setIsCompanyModalOpen(false);
+    } catch (err) {
+      setCompanyFormError(err instanceof Error ? err.message : "Có lỗi khi cập nhật thông tin doanh nghiệp");
+    } finally {
+      setSavingCompany(false);
+    }
+  };
 
   const openCreatePosition = () => {
     setEditingPosition(null);
@@ -189,6 +260,7 @@ export const CompanyDetailView = ({
       const stipendVal = cleanDigits ? Number(cleanDigits) : undefined;
       if (editingPosition) {
         const updated = await adminCompaniesService.updatePosition(editingPosition.id, {
+          semesterId: editingPosition.semesterId ?? (semesterId && semesterId !== "all" ? semesterId : undefined),
           title: positionForm.title.trim(),
           slots: Math.max(1, positionForm.slots),
           stipend: stipendVal,
@@ -224,6 +296,7 @@ export const CompanyDetailView = ({
   const handleToggleStatus = async (p: CompanyPositionDto) => {
     try {
       const updated = await adminCompaniesService.updatePosition(p.id, {
+        semesterId: p.semesterId ?? undefined,
         title: p.title,
         slots: p.slots,
         stipend: p.stipend ?? undefined,
@@ -322,6 +395,16 @@ export const CompanyDetailView = ({
             onClick: () => navigate(backPath),
             variant: "secondary",
           },
+          ...(isAdmin
+            ? [
+                {
+                  label: "Sửa doanh nghiệp",
+                  icon: Pencil,
+                  onClick: openEditCompany,
+                  variant: "secondary" as const,
+                },
+              ]
+            : []),
           ...actions,
         ]}
       />
@@ -802,6 +885,141 @@ export const CompanyDetailView = ({
                   className="px-4 py-1.5 rounded-md bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-50 transition cursor-pointer"
                 >
                   {savingPosition ? "Đang lưu..." : editingPosition ? "Cập nhật" : "Tạo vị trí"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL SỬA THÔNG TIN DOANH NGHIỆP */}
+      {isCompanyModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 bg-slate-50/50">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-blue-600" />
+                Chỉnh sửa thông tin doanh nghiệp
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsCompanyModalOpen(false)}
+                className="p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCompany} className="p-5 space-y-3.5 text-xs max-h-[75vh] overflow-y-auto">
+              {companyFormError && (
+                <div className="p-2.5 rounded-md bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  {companyFormError}
+                </div>
+              )}
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Tên doanh nghiệp <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={companyForm.name}
+                  onChange={(e) => setCompanyForm((prev) => ({ ...prev, name: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Lĩnh vực hoạt động</label>
+                  <input
+                    type="text"
+                    placeholder="VD: CNTT, Phần mềm..."
+                    value={companyForm.industry}
+                    onChange={(e) => setCompanyForm((prev) => ({ ...prev, industry: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Sức chứa tiếp nhận</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={companyForm.capacity}
+                    onChange={(e) => setCompanyForm((prev) => ({ ...prev, capacity: Number(e.target.value) || 1 }))}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Địa chỉ</label>
+                <input
+                  type="text"
+                  placeholder="Địa chỉ trụ sở / văn phòng..."
+                  value={companyForm.address}
+                  onChange={(e) => setCompanyForm((prev) => ({ ...prev, address: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Người liên hệ</label>
+                  <input
+                    type="text"
+                    value={companyForm.contactPerson}
+                    onChange={(e) => setCompanyForm((prev) => ({ ...prev, contactPerson: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Email</label>
+                  <input
+                    type="email"
+                    value={companyForm.contactEmail}
+                    onChange={(e) => setCompanyForm((prev) => ({ ...prev, contactEmail: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Số điện thoại</label>
+                  <input
+                    type="text"
+                    value={companyForm.contactPhone}
+                    onChange={(e) => setCompanyForm((prev) => ({ ...prev, contactPhone: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Website</label>
+                <input
+                  type="text"
+                  placeholder="https://..."
+                  value={companyForm.website}
+                  onChange={(e) => setCompanyForm((prev) => ({ ...prev, website: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsCompanyModalOpen(false)}
+                  className="px-3 py-1.5 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium cursor-pointer"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingCompany}
+                  className="px-4 py-1.5 rounded-md bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-50 transition cursor-pointer"
+                >
+                  {savingCompany ? "Đang lưu..." : "Cập nhật doanh nghiệp"}
                 </button>
               </div>
             </form>

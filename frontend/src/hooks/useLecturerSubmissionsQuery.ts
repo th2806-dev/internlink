@@ -32,14 +32,24 @@ export function useLecturerSubmissionsQuery({
           .catch(() => []),
       ]);
 
-      const studentMap = new Map(rawStudents.map((s) => [s.id, s]));
+      const internshipCtx = new Map<
+        string,
+        { studentName?: string; mssv?: string; company?: string }
+      >();
+      for (const s of rawStudents) {
+        internshipCtx.set(s.internshipId, {
+          studentName: s.fullName,
+          mssv: s.studentCode,
+          company: s.companyName ?? undefined,
+        });
+      }
 
       const mappedSubmissions: Submission[] = rawSubmissions.map((s) => {
-        const student = studentMap.get(s.studentId);
-        return mapSubmissionDtoToRow(s, {
-          studentName: student?.fullName || s.studentName,
-          mssv: student?.studentCode || s.studentCode,
-          company: student?.companyName || s.companyName,
+        const ctx = s.internshipId ? internshipCtx.get(s.internshipId) : undefined;
+        return mapSubmissionDtoToRow(s, ctx ?? {
+          studentName: "—",
+          mssv: "—",
+          company: "—",
         });
       });
 

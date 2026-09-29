@@ -12,16 +12,29 @@ import type {
 
 export const attendanceService = {
   // ---- LECTURER ENDPOINTS ----
-  getLecturerSessions(semesterId: string, lecturerId?: string): Promise<AttendanceSessionDto[]> {
+  getLecturerSessions(
+    semesterId: string,
+    lecturerId?: string,
+    options?: { signal?: AbortSignal }
+  ): Promise<AttendanceSessionDto[]> {
     const query = new URLSearchParams({ semesterId });
-    if (lecturerId) {
+    if (lecturerId && lecturerId !== "all") {
       query.set("lecturerId", lecturerId);
     }
-    return apiRequest<AttendanceSessionDto[]>(`/api/Attendance/sessions?${query.toString()}`);
+    return apiRequest<AttendanceSessionDto[]>(
+      `/api/Attendance/sessions?${query.toString()}`,
+      { signal: options?.signal }
+    );
   },
 
-  getSessionDetail(sessionId: string): Promise<AttendanceSessionDetailDto> {
-    return apiRequest<AttendanceSessionDetailDto>(`/api/Attendance/sessions/${sessionId}`);
+  getSessionDetail(
+    sessionId: string,
+    options?: { signal?: AbortSignal }
+  ): Promise<AttendanceSessionDetailDto> {
+    return apiRequest<AttendanceSessionDetailDto>(
+      `/api/Attendance/sessions/${sessionId}`,
+      { signal: options?.signal }
+    );
   },
 
   createSession(dto: CreateAttendanceSessionDto): Promise<AttendanceSessionDetailDto> {

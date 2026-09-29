@@ -77,6 +77,8 @@ public class SemesterService : ISemesterService
 
     public async Task<SemesterDto> CreateSemesterAsync(CreateSemesterDto dto)
     {
+        ValidateInternshipPeriodInSemester(dto.StartDate, dto.EndDate, Math.Clamp(dto.InternshipStartWeek, 1, 52), Math.Clamp(dto.TotalWeeks, 1, 52));
+
         var semester = new Semester
         {
             Id = Guid.NewGuid(),
@@ -123,6 +125,9 @@ public class SemesterService : ISemesterService
         if (dto.MaxStudentsPerLecturer.HasValue) semester.MaxStudentsPerLecturer = dto.MaxStudentsPerLecturer.Value;
         if (dto.TotalWeeks.HasValue) semester.TotalWeeks = Math.Clamp(dto.TotalWeeks.Value, 1, 52);
         if (dto.InternshipStartWeek.HasValue) semester.InternshipStartWeek = Math.Clamp(dto.InternshipStartWeek.Value, 1, 52);
+
+        // Chặn lưu khi giai đoạn thực tập vượt EndDate (dùng giá trị hiệu lực sau cập nhật)
+        ValidateInternshipPeriodInSemester(semester.StartDate, semester.EndDate, semester.InternshipStartWeek, semester.TotalWeeks);
 
         semester.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
@@ -536,5 +541,31 @@ public class SemesterService : ISemesterService
         if (totalDays <= 0) return 0;
         var elapsedDays = (DateTime.UtcNow - semester.StartDate.Value).TotalDays;
         return Math.Clamp((int)Math.Round(elapsedDays / totalDays * 100), 0, 100);
+    }
+
+    /// <summary>
+    /// Chặn cấu hình mâu thuẫn: nếu StartDate là NGÀY BẮT ĐẦU THỰC TẬP (trường hợp phổ biến)
+    /// thì InternshipStartWeek phải = 1. Đặt > 1 sẽ đẩy toàn bộ giai đoạn thực tập
+    /// (StartDate + (startWeek-1) tuần chờ + totalWeeks tuần thực tập) vượt qua EndDate —
+    /// khi đó lịch buổi gặp/báo cáo tuần sẽ rơi ngoài kỳ và bị chặn 400 bởi validate ngày↔tuần.
+    /// Chỉ áp dụng khi kỳ đã cấu hình đủ StartDate + EndDate.
+    /// </summary>
+    private static void ValidateInternshipPeriodInSemester(DateTime? startDate, DateTime? endDate, int internshipStartWeek, int totalWeeks)
+    {
+        if (!startDate.HasValue || !endDate.HasValue) return;
+
+        var internshipPeriodEnd = startDate.Value.Date
+            .AddDays((internshipStartWeek - 1) * 7)          // tuần chờ trước thực tập
+            .AddDays(totalWeeks * 7 - 1);                    // tổng thời gian thực tập
+
+        if (internshipPeriodEnd > endDate.Value.Date)
+        {
+            throw new InvalidOperationException(
+                $"Cấu hình học kỳ mâu thuẫn: với ngày bắt đầu {startDate.Value:dd/MM/yyyy} và " +
+                $"\"Tuần HK bắt đầu thực tập\" = {internshipStartWeek}, giai đoạn thực tập " +
+                $"{totalWeeks} tuần sẽ kết thúc {internshipPeriodEnd:dd/MM/yyyy} — sau EndDate {endDate.Value:dd/MM/yyyy}. " +
+                "Nếu StartDate là NGÀY BẮT ĐẦU THỰC TẬP thì đặt \"Tuần HK bắt đầu thực tập\" = 1, " +
+                "hoặc tăng EndDate / giảm số tuần thực tập cho khớp.");
+        }
     }
 }

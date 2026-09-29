@@ -9,10 +9,10 @@ public interface IAttendanceService
     /// <summary>Danh sách buổi gặp của cả kỳ, lọc theo khoa nếu có (null = tất cả khoa).</summary>
     Task<List<AttendanceSessionDto>> GetSessionsBySemesterAsync(Guid semesterId, Guid? departmentId = null);
     Task<AttendanceSessionDetailDto?> GetSessionDetailAsync(Guid sessionId, Guid? lecturerId = null);
-    Task<AttendanceSessionDetailDto> CreateSessionAsync(Guid lecturerId, CreateAttendanceSessionDto dto);
-    Task<AttendanceSessionDetailDto> UpdateSessionAsync(Guid sessionId, Guid lecturerId, UpdateAttendanceSessionDto dto);
-    Task<bool> DeleteSessionAsync(Guid sessionId, Guid lecturerId);
-    Task<AttendanceSessionDetailDto> MarkAttendanceAsync(Guid sessionId, Guid lecturerId, MarkAttendanceDto dto);
+    Task<AttendanceSessionDetailDto> CreateSessionAsync(Guid lecturerId, CreateAttendanceSessionDto dto, bool isAdmin = false);
+    Task<AttendanceSessionDetailDto> UpdateSessionAsync(Guid sessionId, Guid? lecturerId, UpdateAttendanceSessionDto dto);
+    Task<bool> DeleteSessionAsync(Guid sessionId, Guid? lecturerId);
+    Task<AttendanceSessionDetailDto> MarkAttendanceAsync(Guid sessionId, Guid? lecturerId, MarkAttendanceDto dto, string? adminName = null);
     Task<StudentAttendanceOverviewDto> GetStudentAttendanceAsync(Guid studentId, Guid semesterId);
     Task<AdminAttendanceReportDto> GetAdminAttendanceReportAsync(Guid semesterId, Guid? departmentId = null);
     Task<List<AttendanceRecordDto>> GetStudentAttendanceForLecturerAsync(Guid lecturerId, Guid studentId, Guid semesterId);

@@ -27,6 +27,11 @@ public class InternshipStudentGradeDto
     public string ClassName { get; set; } = string.Empty;
     public string Note { get; set; } = string.Empty;
 
+    // Thông tin thực tập hiển thị trong bảng tổng hợp (từ Internship.Company)
+    public string? CompanyName { get; set; }
+    public string? Position { get; set; }
+    public string InternshipStatus { get; set; } = string.Empty;
+
     // Cột E-H: đếm
     public int MissingCount { get; set; }
     public int LateCount { get; set; }

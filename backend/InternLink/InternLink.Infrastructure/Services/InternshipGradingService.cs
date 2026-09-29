@@ -1,3 +1,4 @@
+using ClosedXML.Excel;
 using InternLink.Application.Common;
 using InternLink.Application.DTOs;
 using InternLink.Application.Interfaces;
@@ -55,6 +56,7 @@ public class InternshipGradingService : IInternshipGradingService
         var internshipsQuery = _context.Internships
             .AsNoTracking()
             .Include(i => i.Student)
+            .Include(i => i.Company)
             .Include(i => i.Submissions)
             .Where(i => i.SemesterId == semesterId && !i.IsDeleted && i.Student != null && !i.Student.IsDeleted);
 
@@ -282,6 +284,9 @@ public class InternshipGradingService : IInternshipGradingService
                 FullName = student.FullName,
                 ClassName = student.Class ?? string.Empty,
                 Note = internship.Notes ?? string.Empty,
+                CompanyName = internship.Company?.CompanyName,
+                Position = internship.Position,
+                InternshipStatus = internship.Status.ToString(),
                 MissingCount = missingCount,
                 LateCount = lateCount,
                 AbsentCount = absentCount,
@@ -407,4 +412,11 @@ public class InternshipGradingService : IInternshipGradingService
         }
         return updatedStudent;
     }
-}
+
+    /// <inheritdoc />
+    public async Task<byte[]> ExportGradesExcelAsync(Guid semesterId, Guid? lecturerId, Guid? departmentId, string? className = null, CancellationToken cancellationToken = default)
+    {
+        // Nguồn sự thật duy nhất: bảng tổng hợp điểm (điểm QT/thi/xếp loại/điều kiện dự thi
+        // được tính y như màn hình chấm — không tự ghép từ danh sách sinh viên).
+        var summary = await GetSummaryAsync(semesterId, lecturerId, departmentId, className);
+        using var workbook = new XLWorkbook();        var ws = workbook.Worksheets.Add("Bang diem toan khoa");        ws.Style.Font.FontName = "Times New Roman";        ws.Style.Font.FontSize = 11;        // ── Tiêu đề ──        ws.Cell(1, 1).Value = $"BẢNG ĐIỂM THỰC TẬP TỐT NGHIỆP — {summary.SemesterName}";        ws.Cell(1, 1).Style.Font.SetBold().Font.SetFontSize(14);        ws.Range(1, 1, 1, 10).Merge();        ws.Cell(1, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);        ws.Cell(2, 1).Value = $"Xuất lúc: {DateTime.UtcNow.AddHours(7):dd/MM/yyyy HH:mm} (GMT+7) — Nguồn: hệ thống chấm điểm thực tập";        ws.Cell(2, 1).Style.Font.SetItalic().Font.SetFontSize(9);        ws.Range(2, 1, 2, 10).Merge();        // ── Header ──        var headers = new[]        {            "STT", "MSSV", "Họ và tên", "Lớp", "Doanh nghiệp",            "Điểm QT", "Điểm thi", "Điểm TB", "Xếp loại", "Điều kiện dự thi",        };        const int headerRow = 4;        for (var c = 0; c < headers.Length; c++)        {            var cell = ws.Cell(headerRow, c + 1);            cell.Value = headers[c];            cell.Style.Font.SetBold();            cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#1E40AF");            cell.Style.Font.SetFontColor(XLColor.White);            cell.Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);            cell.Style.Alignment.SetVertical(XLAlignmentVerticalValues.Center);            cell.Style.Border.SetOutsideBorder(XLBorderStyleValues.Thin);        }        // ── Dữ liệu ──        var row = headerRow + 1;        var stt = 1;        foreach (var s in summary.Students)        {            ws.Cell(row, 1).Value = stt++;            ws.Cell(row, 2).Value = s.StudentCode;            ws.Cell(row, 3).Value = s.FullName;            ws.Cell(row, 4).Value = s.ClassName;            ws.Cell(row, 5).Value = s.CompanyName ?? "—";            ws.Cell(row, 6).Value = (double)s.ProcessScore;            ws.Cell(row, 6).Style.NumberFormat.SetFormat("0.0");            ws.Cell(row, 7).Value = s.OralExamScore.HasValue ? (double)s.OralExamScore.Value : 0;            ws.Cell(row, 7).Style.NumberFormat.SetFormat("0.0");            ws.Cell(row, 8).Value = s.AverageScore.HasValue ? (double)s.AverageScore.Value : 0;            ws.Cell(row, 8).Style.NumberFormat.SetFormat("0.00");            ws.Cell(row, 9).Value = string.IsNullOrWhiteSpace(s.Classification) ? "—" : s.Classification;            // Điều kiện dự thi: Đủ / Không đủ + lý do ngắn gọn            var eligibility = s.IsEligible ? "Đủ" : $"Không đủ: {string.Join("; ", s.IneligibleReasons)}";            ws.Cell(row, 10).Value = eligibility;            if (!s.IsEligible)            {                ws.Cell(row, 10).Style.Font.SetFontColor(XLColor.FromHtml("#B91C1C"));            }            for (var c = 1; c <= 10; c++)            {                ws.Cell(row, c).Style.Border.SetOutsideBorder(XLBorderStyleValues.Thin);            }            row++;        }        // Định dạng cột        ws.Columns().AdjustToContents(1, headerRow + Math.Max(summary.Students.Count, 1));        ws.SheetView.FreezeRows(headerRow);        using var stream = new MemoryStream();        workbook.SaveAs(stream);        return stream.ToArray();    }}

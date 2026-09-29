@@ -644,22 +644,53 @@ function GradingTab({
                 </div>
               </div>
 
-              {/* Cụm 1 — đánh giá chất lượng theo từng báo cáo tuần */}
+              {/* Cụm 1 — đánh giá chất lượng theo từng báo cáo tuần (nhận từ duyệt báo cáo tuần, không cho chọn lại) */}
               <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Chất lượng từng báo cáo (tính trung bình, tối đa 5 điểm)
-                </p>
-                <div className="grid grid-cols-1 gap-1.5">
-                  {selected.weeks.map((week) => (
-                    <label key={week.weekNumber} className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm">
-                      <span className="font-medium">Tuần {week.weekNumber}</span>
-                      <select value={weeklyQuality[week.weekNumber] ?? ""} onChange={(event) => setWeeklyQuality((current) => ({ ...current, ...(event.target.value ? { [week.weekNumber]: Number(event.target.value) } : (() => { const next = { ...current }; delete next[week.weekNumber]; return next; })()) }))} className="rounded border border-slate-200 px-2 py-1 text-xs">
-                        <option value="">Chưa chấm</option>
-                        {GR_QUALITY_RUBRIC_LEVELS.map((level) => <option key={level.value} value={level.value}>{level.value.toFixed(1)} - {level.label}</option>)}
-                      </select>
-                    </label>
-                  ))}
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Chất lượng từng báo cáo (nhận từ duyệt báo cáo)
+                  </p>
+                  {Object.keys(weeklyQuality).length > 0 && (
+                    <span className="text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                      TB: {(Object.values(weeklyQuality).reduce((a, b) => a + b, 0) / Object.values(weeklyQuality).length).toFixed(1)} / 5.0đ
+                    </span>
+                  )}
                 </div>
+                <div className="grid grid-cols-1 gap-1.5">
+                  {selected.weeks.map((week) => {
+                    const score = weeklyQuality[week.weekNumber];
+                    const level = score != null ? GR_QUALITY_RUBRIC_LEVELS.find((l) => l.value === score) : null;
+
+                    return (
+                      <div
+                        key={week.weekNumber}
+                        className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-slate-800">Tuần {week.weekNumber}</span>
+                          <span className="text-[11px] text-slate-400">
+                            ({WEEK_STATUS_BADGE[week.status]?.label ?? "Chưa nộp"})
+                          </span>
+                        </div>
+                        {score != null && level ? (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200">
+                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                            {score.toFixed(1)}đ — {level.label}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-500">
+                            <Hourglass className="h-3 w-3 text-slate-400" />
+                            Chưa đánh giá khi duyệt
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="mt-1.5 text-[11px] text-slate-500 flex items-center gap-1">
+                  <Lock className="h-3 w-3 text-slate-400 shrink-0" />
+                  Kết quả xếp loại được tự động đồng bộ từ mục Duyệt báo cáo (/lecturer/reports).
+                </p>
               </div>
 
               {/* Cụm 2 — Thưởng sáng tạo */}

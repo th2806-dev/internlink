@@ -395,6 +395,12 @@ export interface LecturerStudentListItemDto {
   isEvaluationFinalized: boolean;
   progressPercent: number;
   progressBreakdown?: ProgressBreakdownDto | null;
+  /** Xếp loại từ grading (Xuất sắc/Giỏi/Khá/Trung bình/Yếu/Không đủ ĐKDT) — null = chưa xếp */
+  classification?: string | null;
+  /** Điều kiện dự thi từ grading: true = đủ; false = không đủ; null = chưa xác định */
+  isEligible?: boolean | null;
+  /** Lý do không đủ điều kiện dự thi (nếu có) */
+  ineligibleReasons?: string[] | null;
 }
 
 export interface CompanyDetailDto {
@@ -548,6 +554,7 @@ export interface WeeklyReportDto {
   status: string;
   submittedAt?: string | null;
   lecturerComment?: string | null;
+  qualityScore?: number | null;
   feedbacks?: FeedbackDto[];
   createdAt: string;
   updatedAt?: string | null;
@@ -924,6 +931,7 @@ export interface AttendanceSessionDetailDto extends AttendanceSessionDto {
 
 export interface CreateAttendanceSessionDto {
   semesterId: string;
+  lecturerId?: string | null;
   weekNumber: number;
   title: string;
   description?: string | null;

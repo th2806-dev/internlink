@@ -38,6 +38,7 @@ import { SettingsView as AdminSettingsView } from "../features/admin/pages/Setti
 import { AccountView as AdminAccountView } from "../features/admin/pages/AccountView";
 import { TemplatesView as AdminTemplatesView } from "../features/admin/pages/TemplatesView";
 import { DepartmentsView as AdminDepartmentsView } from "../features/admin/pages/DepartmentsView";
+import { AttendanceView as AdminAttendanceView } from "../features/admin/pages/AttendanceView";
 
 // Lecturer Pages
 import { DashboardView as LecturerDashboardView } from "../features/lecturer/pages/DashboardView";
@@ -232,6 +233,16 @@ export function AppRoutes() {
                       <Navigate to="/admin/dashboard" replace />
                     ) : (
                       <AdminAssignmentsView onShowToast={showToast} />
+                    )
+                  }
+                />
+                <Route
+                  path="attendance"
+                  element={
+                    isSuperAdmin ? (
+                      <Navigate to="/admin/dashboard" replace />
+                    ) : (
+                      <AdminAttendanceView onShowToast={showToast} />
                     )
                   }
                 />

@@ -510,9 +510,42 @@ public class LecturerService : ILecturerService
             .Take(Math.Clamp(filter.Take, 1, 100))
             .ToListAsync();
 
+        var dtoList = _mapper.Map<List<WeeklyReportDto>>(reports);
+        var internshipIds = reports.Select(r => r.InternshipId).Distinct().ToList();
+        if (internshipIds.Count > 0)
+        {
+            var evaluations = await _db.Evaluations.AsNoTracking()
+                .Where(e => internshipIds.Contains(e.InternshipId) && !e.IsDeleted)
+                .Select(e => new { e.InternshipId, e.WeeklyQualityJson })
+                .ToListAsync();
+
+            var evalMap = new Dictionary<Guid, Dictionary<string, decimal>>();
+            foreach (var ev in evaluations)
+            {
+                if (string.IsNullOrWhiteSpace(ev.WeeklyQualityJson)) continue;
+                try
+                {
+                    var parsed = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, decimal>>(ev.WeeklyQualityJson);
+                    if (parsed != null) evalMap[ev.InternshipId] = parsed;
+                }
+                catch {}
+            }
+
+            foreach (var dto in dtoList)
+            {
+                if (evalMap.TryGetValue(dto.InternshipId, out var wScores))
+                {
+                    if (wScores.TryGetValue(dto.WeekNumber.ToString(), out var qs))
+                    {
+                        dto.QualityScore = qs;
+                    }
+                }
+            }
+        }
+
         return new PaginatedResponse<WeeklyReportDto>
         {
-            Items = _mapper.Map<List<WeeklyReportDto>>(reports),
+            Items = dtoList,
             Total = total,
             Skip = filter.Skip,
             Take = Math.Clamp(filter.Take, 1, 100),

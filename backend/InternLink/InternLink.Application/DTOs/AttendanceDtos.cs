@@ -59,6 +59,7 @@ public class AttendanceSessionDetailDto : AttendanceSessionDto
 public class CreateAttendanceSessionDto
 {
     public Guid SemesterId { get; set; }
+    public Guid? LecturerId { get; set; }
     public int WeekNumber { get; set; }
     public string Title { get; set; } = string.Empty;
     public string? Description { get; set; }

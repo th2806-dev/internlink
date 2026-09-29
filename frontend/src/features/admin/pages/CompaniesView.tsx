@@ -37,6 +37,7 @@ import { RequestErrorState } from "../../../components/common/RequestErrorState"
 import { useAdminCompaniesQuery } from "../../../hooks/useAdminCompaniesQuery";
 
 const emptyForm = {
+  companyCode: "",
   name: "",
   field: "",
   location: "",
@@ -64,6 +65,7 @@ export const CompaniesView = ({
     totalPages,
     page: visiblePage,
     pageSize,
+    setPageSize,
     goToPage: setCurrentPage,
     searchTerm: search,
     setSearchTerm: updateSearch,
@@ -103,6 +105,7 @@ export const CompaniesView = ({
   const openEdit = (c: Enterprise) => {
     setEditing(c);
     setForm({
+      companyCode: c.shortCode || "",
       name: c.name,
       field: c.field,
       location: c.location,
@@ -124,6 +127,7 @@ export const CompaniesView = ({
 
     const isActive = form.status === "Đang hợp tác";
     const body = {
+      companyCode: form.companyCode ? form.companyCode.trim() : undefined,
       companyName: form.name.trim(),
       address: form.location || undefined,
       website: form.website || undefined,
@@ -401,7 +405,10 @@ export const CompaniesView = ({
                     <div className="inline-flex items-center gap-1">
                       <button
                         type="button"
-                        onClick={() => navigate(`/admin/companies/${c.id}`)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/admin/companies/${c.id}`);
+                        }}
                         className="p-1.5 rounded-md text-slate-500 hover:bg-blue-50 hover:text-blue-700 cursor-pointer"
                         title="Xem chi tiết"
                       >
@@ -410,7 +417,10 @@ export const CompaniesView = ({
                       {canMutateOps && canLink && (
                         <button
                           type="button"
-                          onClick={() => setLinkTarget(c)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setLinkTarget(c);
+                          }}
                           disabled={isLinking}
                           className={`px-2 py-1 rounded-md text-[10px] font-bold border cursor-pointer disabled:opacity-50 transition-colors ${
                             c.status === "Ngưng liên kết"
@@ -432,7 +442,10 @@ export const CompaniesView = ({
                         <>
                           <button
                             type="button"
-                            onClick={() => openEdit(c)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openEdit(c);
+                            }}
                             className="p-1.5 rounded-md text-slate-500 hover:bg-blue-50 hover:text-blue-700 cursor-pointer"
                             title="Sửa"
                           >
@@ -440,7 +453,10 @@ export const CompaniesView = ({
                           </button>
                           <button
                             type="button"
-                            onClick={() => setDeleteTarget(c)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteTarget(c);
+                            }}
                             className="p-1.5 rounded-md text-slate-500 hover:bg-rose-50 hover:text-rose-700 cursor-pointer"
                             title="Xóa khỏi hệ thống"
                           >
@@ -465,8 +481,8 @@ export const CompaniesView = ({
                       action={{
                         label: "Xóa bộ lọc tìm kiếm",
                         onClick: () => {
-                          setSearch("");
-                          setStatusFilter("all");
+                          updateSearch("");
+                          updateStatusFilter("all");
                         },
                       }}
                     />
@@ -540,6 +556,20 @@ export const CompaniesView = ({
               </button>
             </div>
             <div className="p-5 space-y-3 max-h-[70vh] overflow-y-auto">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                  Mã doanh nghiệp (nếu có)
+                </label>
+                <input
+                  type="text"
+                  placeholder="VD: FPT, VNG, VNPT..."
+                  value={form.companyCode}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, companyCode: e.target.value }))
+                  }
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-md bg-slate-50 focus:bg-white focus:border-blue-500 outline-none font-mono"
+                />
+              </div>
               {(
                 [
                   ["name", "Tên doanh nghiệp", "text"],
@@ -636,7 +666,7 @@ export const CompaniesView = ({
         isOpen={isImportModalOpen}
         onClose={() => setIsImportModalOpen(false)}
         onShowToast={onShowToast}
-        onSuccess={() => void reloadCompanies()}
+        onSuccess={() => void refetch()}
       />
 
       <ConfirmDialog
