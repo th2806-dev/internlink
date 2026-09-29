@@ -422,6 +422,9 @@ public class SubmissionService : ISubmissionService
         var submissions = await _db.Submissions
             .Include(s => s.Internship)
                 .ThenInclude(i => i.Lecturer)
+            .Include(s => s.Internship)
+                .ThenInclude(i => i.Student)
+            .Include(s => s.Assets.Where(a => !a.IsDeleted))
             .Where(s => ids.Contains(s.Id) && !s.IsDeleted)
             .ToListAsync();
 
@@ -430,31 +433,107 @@ public class SubmissionService : ISubmissionService
         if (!isSuperAdmin && submissions.Any(s => s.Internship.Lecturer?.UserId != userId))
             throw new UnauthorizedAccessException("You can only download submissions assigned to you");
 
+        // ZipArchive không cho 2 entry trùng tên → đánh số thứ tự khi trùng.
+        static string UniqueEntryName(ISet<string> used, string candidate)
+        {
+            var name = candidate;
+            var i = 2;
+            while (!used.Add(name))
+            {
+                var dir = Path.GetDirectoryName(candidate)?.Replace('\\', '/') ?? "";
+                var file = Path.GetFileName(candidate);
+                name = string.IsNullOrEmpty(dir) ? $"{Path.GetFileNameWithoutExtension(file)}_{i}{Path.GetExtension(file)}" : $"{dir}/{Path.GetFileNameWithoutExtension(file)}_{i}{Path.GetExtension(file)}";
+                i++;
+            }
+            return name;
+        }
+
         await using var output = new MemoryStream();
         using (var archive = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
         {
+            var usedEntries = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var submission in submissions)
             {
-                if (string.IsNullOrWhiteSpace(submission.FileUrl))
-                    continue;
+                // Tên thư mục theo SINH VIÊN: TenSinhVien_MSSV (bỏ ký tự không hợp lệ)
+                var student = submission.Internship.Student;
+                var rawName = $"{student?.FullName ?? "KhongTen"}_{student?.StudentCode ?? "MSVV"}";
+                var safeChars = rawName.Select(c =>
+                    char.IsLetterOrDigit(c) || c == ' ' || c == '-' || c == '_' ? c : '_');
+                var studentFolder = string.Concat(safeChars).Replace(' ', '_');
 
-                var fullPath = ResolveUploadPath(submission.FileUrl);
-                if (!File.Exists(fullPath))
-                    continue;
+                var typeFolder = submission.Type.ToString();
+                var hasAnyFile = false;
 
-                var entryName = $"{submission.InternshipId}_{submission.FileName ?? Path.GetFileName(fullPath)}";
-                var entry = archive.CreateEntry(entryName, CompressionLevel.Fastest);
-                await using var entryStream = entry.Open();
-                await using var fileStream = File.OpenRead(fullPath);
-                await fileStream.CopyToAsync(entryStream);
+                // 1) File chính của bài nộp (nếu có)
+                if (!string.IsNullOrWhiteSpace(submission.FileUrl))
+                {
+                    var mainPath = ResolveUploadPath(submission.FileUrl);
+                    if (File.Exists(mainPath))
+                    {
+                        var mainName = submission.FileName ?? Path.GetFileName(mainPath);
+                        var entry = archive.CreateEntry(
+                            UniqueEntryName(usedEntries, $"{studentFolder}/{typeFolder}/{mainName}"),
+                            CompressionLevel.Fastest);
+                        await using var entryStream = entry.Open();
+                        await using var fileStream = File.OpenRead(mainPath);
+                        await fileStream.CopyToAsync(entryStream);
+                        hasAnyFile = true;
+                    }
+                }
+
+                // 2) Các tài nguyên đính kèm dạng file (nhiều file/bundle)
+                foreach (var asset in submission.Assets.Where(a => a.AssetType == "file" && !string.IsNullOrWhiteSpace(a.FileUrl)))
+                {
+                    var assetPath = ResolveUploadPath(asset.FileUrl!);
+                    if (!File.Exists(assetPath))
+                        continue;
+
+                    var entry = archive.CreateEntry(
+                        UniqueEntryName(usedEntries, $"{studentFolder}/{typeFolder}/{asset.FileName ?? Path.GetFileName(assetPath)}"),
+                        CompressionLevel.Fastest);
+                    await using var entryStream = entry.Open();
+                    await using var fileStream = File.OpenRead(assetPath);
+                    await fileStream.CopyToAsync(entryStream);
+                    hasAnyFile = true;
+                }
+
+                // Bài nộp không có file nào trên đĩa → ghi chú TXT để GV biết vì sao thiếu
+                if (!hasAnyFile)
+                {
+                    var noteEntry = archive.CreateEntry(
+                        UniqueEntryName(usedEntries, $"{studentFolder}/{typeFolder}/_KHONG_CO_FILE.txt"),
+                        CompressionLevel.Fastest);
+                    await using var noteStream = noteEntry.Open();
+                    await using var writer = new StreamWriter(noteStream);
+                    await writer.WriteAsync($"Bai nop '{submission.Title ?? submission.Type.ToString()}' khong co tep tin tren may chu.");
+                }
             }
         }
+
+        // 1 sinh viên → tên zip theo SV; nhiều SV → tên theo thời điểm tải
+        var studentNames = submissions
+            .Select(s => s.Internship.Student)
+            .Where(s => s != null)
+            .Select(s => s!.StudentCode)
+            .Distinct()
+            .ToList();
+        var zipName = studentNames.Count == 1
+            ? $"BaiNop_{SanitizeFileName(studentNames[0])}_{DateTime.UtcNow:yyyyMMdd_HHmmss}.zip"
+            : $"submissions_{DateTime.UtcNow:yyyyMMdd_HHmmss}.zip";
 
         return new SubmissionZipDownloadDto
         {
             FileContent = output.ToArray(),
-            FileName = $"submissions_{DateTime.UtcNow:yyyyMMdd_HHmmss}.zip",
+            FileName = zipName,
         };
+    }
+
+    /// <summary>Bỏ ký tự không hợp lệ trong tên file tải xuống.</summary>
+    private static string SanitizeFileName(string name)
+    {
+        var safe = string.Concat(name.Select(c =>
+            char.IsLetterOrDigit(c) || c == '-' || c == '_' ? c : '_'));
+        return string.IsNullOrWhiteSpace(safe) ? "sinhvien" : safe;
     }
 
     public async Task<SubmissionDto?> UpdateStatusAsync(Guid id, UpdateSubmissionStatusRequest request, Guid? actorUserId = null)

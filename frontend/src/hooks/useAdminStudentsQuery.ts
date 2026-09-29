@@ -45,10 +45,12 @@ export function useAdminStudentsQuery(options: UseAdminStudentsQueryOptions = {}
   const {
     semesterId,
     departmentId,
-    pageSize = STUDENTS_PAGE_SIZE_OPTIONS[1],
+    pageSize: initialPageSize = STUDENTS_PAGE_SIZE_OPTIONS[1],
     enabled = true,
     onError,
   } = options;
+  // pageSize điều khiển được từ UI (dropdown số dòng/trang) — option chỉ là giá trị khởi tạo.
+  const [pageSize, setPageSize] = useState(initialPageSize);
   const queryClient = useQueryClient();
 
   const [searchInput, setSearchInput] = useState("");
@@ -313,6 +315,7 @@ export function useAdminStudentsQuery(options: UseAdminStudentsQueryOptions = {}
     setSortBy,
     clearFilters,
     goToPage,
+    setPageSize,
     // Mutations
     createStudent: createMutation.mutateAsync,
     isCreating: createMutation.isPending,

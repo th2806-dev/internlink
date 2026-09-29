@@ -63,7 +63,9 @@ export type AdminUserStatusFilter = AdminUsersFilterState["status"];
  * - Mutation (tạo/khóa/reset/xóa) → auto invalidation namespace `admin.users`.
  */
 export function useAdminUsersQuery(options: UseAdminUsersQueryOptions = {}) {
-  const { pageSize = 10, enabled = true, onError } = options;
+  const { pageSize: initialPageSize = 10, enabled = true, onError } = options;
+  // pageSize điều khiển được từ UI (dropdown số dòng/trang) — option chỉ là giá trị khởi tạo.
+  const [pageSize, setPageSize] = useState(initialPageSize);
   const { user } = useAuth();
   const backendRole = user?.backendRole;
   const queryClient = useQueryClient();
@@ -265,6 +267,7 @@ export function useAdminUsersQuery(options: UseAdminUsersQueryOptions = {}) {
     setStatus,
     clearFilters,
     goToPage,
+    setPageSize,
     // Mutations
     createUser: createMutation.mutateAsync,
     isCreating: createMutation.isPending,

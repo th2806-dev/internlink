@@ -12,11 +12,11 @@ import {
   ShieldCheck,
   ShieldAlert,
   Building2,
-  FileSpreadsheet,
   MessageSquare,
   Send,
   X,
   Loader2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -27,21 +27,57 @@ import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
 import { useSemester } from "../../../contexts/SemesterContext";
 import { submissionApiService } from "../../../services/submissionApi.service";
 import { weeklyReportService } from "../../../services/weeklyReport.service";
+import type { Submission } from "../../../types/submission";
+
+interface StudentGroup {
+  key: string;
+  studentName: string;
+  mssv: string;
+  company: string;
+  items: Submission[];
+}
+
+const isWeekly = (sub: Submission) =>
+  sub.sourceType === "weeklyReport" || String(sub.id).startsWith("weekly:");
+
+/** ZIP chỉ gom được file bài nộp sản phẩm (endpoint Submission); báo cáo tuần tải riêng theo từng bài. */
+const zipIdsOf = (items: Submission[]) =>
+  items.filter((sub) => !isWeekly(sub)).map((sub) => sub.id);
+
+const statusBadge = (status: string) =>
+  status === "Đã duyệt"
+    ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+    : status === "Chờ duyệt" || status === "Đã nộp" || status === "Cần nhận xét" || status === "Quá hạn"
+    ? "bg-amber-100 text-amber-800 border border-amber-200"
+    : status === "Yêu cầu sửa"
+    ? "bg-rose-100 text-rose-800 border border-rose-200"
+    : "bg-slate-100 text-slate-700";
+
+const statusIcon = (status: string) =>
+  status === "Đã duyệt" ? (
+    <CheckCircle2 className="w-3 h-3" />
+  ) : status === "Yêu cầu sửa" ? (
+    <AlertCircle className="w-3 h-3" />
+  ) : (
+    <Clock className="w-3 h-3" />
+  );
 
 export const SubmissionsHub = ({
   submissions,
   onUpdateSubmissionStatus,
   onToast,
+}: {
+  submissions: Submission[];
+  onUpdateSubmissionStatus?: (id: string, status: string, note?: string) => unknown;
+  onToast?: (msg: string, type?: string) => void;
 }) => {
   const { selectedSemester } = useSemester();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeSubTab, setActiveSubTab] = useState("all");
-  const [selectedReportType, setSelectedReportType] =
-    useState("T\u1EA5t c\u1EA3");
-  const [selectedCompany, setSelectedCompany] = useState("T\u1EA5t c\u1EA3");
-  const [selectedDuplicateFilter, setSelectedDuplicateFilter] =
-    useState("T\u1EA5t c\u1EA3");
-  const [selectedSubmission, setSelectedSubmission] = useState(null);
+  const [selectedReportType, setSelectedReportType] = useState("Tất cả");
+  const [selectedCompany, setSelectedCompany] = useState("Tất cả");
+  const [selectedDuplicateFilter, setSelectedDuplicateFilter] = useState("Tất cả");
+  const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [feedbackInput, setFeedbackInput] = useState("");
   const [isSendingFeedback, setIsSendingFeedback] = useState(false);
@@ -49,221 +85,259 @@ export const SubmissionsHub = ({
   const [isLoadingFeedback, setIsLoadingFeedback] = useState(false);
   const [preview, setPreview] = useState<{ url: string; fileName: string; isPreviewable: boolean } | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
-  const [selectedSubIds, setSelectedSubIds] = useState([]);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-
-  useEffect(() => () => {
-    if (preview?.url) URL.revokeObjectURL(preview.url);
-  }, [preview]);
-  const companyList = useMemo((): string[] => {
-    const unique = new Set<string>();
-    for (const s of submissions as { company?: string }[]) {
-      const c = String(s.company ?? "");
-      if (c) unique.add(c);
-    }
-    return ["T\u1EA5t c\u1EA3", ...unique];
-  }, [submissions]);
-  const reportTypeList = useMemo((): string[] => {
-    const unique = new Set<string>();
-    for (const s of submissions as { reportType?: string }[]) {
-      const t = String(s.reportType ?? "");
-      if (t) unique.add(t);
-    }
-    return ["T\u1EA5t c\u1EA3", ...unique];
-  }, [submissions]);
-  const stats = useMemo(() => {
-    const total = submissions.length;
-    const approved = submissions.filter(
-      (s) => s.status === "\u0110\xE3 duy\u1EC7t",
-    ).length;
-    const pending = submissions.filter(
-      (s) =>
-        s.status === "Ch\u1EDD duy\u1EC7t" ||
-        s.status === "\u0110\xE3 n\u1ED9p" ||
-        s.status === "C\u1EA7n nh\u1EADn x\xE9t" ||
-        s.status === "Qu\xE1 h\u1EA1n",
-    ).length;
-    // "Quá hạn" chỉ thuộc nhóm CHỜ DUYỆT (cần GV xử lý), không đếm vào "cần sửa"
-    // để tổng KPI không trùng lặp và khớp bộ lọc tab bên dưới.
-    const revision = submissions.filter(
-      (s) => s.status === "Y\xEAu c\u1EA7u s\u1EEDa",
-    ).length;
-    const avgPlagiarism =
-      total > 0
-        ? Math.round(
-            submissions.reduce((acc, s) => acc + (s.duplicateScore || 0), 0) /
-              total,
-          )
-        : 0;
-    return { total, approved, pending, revision, avgPlagiarism };
-  }, [submissions]);
-  const filteredSubmissions = useMemo(() => {
-    return submissions.filter((sub) => {
-      if (activeSubTab === "approved" && sub.status !== "\u0110\xE3 duy\u1EC7t")
-        return false;
-      if (
-        activeSubTab === "pending" &&
-        (sub.status === "\u0110\xE3 duy\u1EC7t" ||
-          sub.status === "Y\xEAu c\u1EA7u s\u1EEDa")
-      )
-        return false;
-      // Tab "Yêu cầu sửa" KHÔNG chứa "Quá hạn" (đã thuộc nhóm chờ duyệt) — khớp KPI stats.
-      if (activeSubTab === "revision" && sub.status !== "Y\xEAu c\u1EA7u s\u1EEDa")
-        return false;
-      if (
-        selectedReportType !== "T\u1EA5t c\u1EA3" &&
-        sub.reportType !== selectedReportType
-      )
-        return false;
-      if (
-        selectedCompany !== "T\u1EA5t c\u1EA3" &&
-        sub.company !== selectedCompany
-      )
-        return false;
-      if (selectedDuplicateFilter === "safe" && (sub.duplicateScore || 0) >= 10)
-        return false;
-      if (
-        selectedDuplicateFilter === "warning" &&
-        ((sub.duplicateScore || 0) < 10 || (sub.duplicateScore || 0) > 25)
-      )
-        return false;
-      if (
-        selectedDuplicateFilter === "danger" &&
-        (sub.duplicateScore || 0) <= 25
-      )
-        return false;
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchName = sub.studentName.toLowerCase().includes(q);
-        const matchMssv = sub.mssv.toLowerCase().includes(q);
-        const matchCompany = sub.company.toLowerCase().includes(q);
-        const matchType = sub.reportType.toLowerCase().includes(q);
-        if (!matchName && !matchMssv && !matchCompany && !matchType)
-          return false;
-      }
-      return true;
-    });
-  }, [
-    submissions,
-    activeSubTab,
-    selectedReportType,
-    selectedCompany,
-    selectedDuplicateFilter,
-    searchQuery,
-  ]);
-  const totalPages = Math.max(1, Math.ceil(filteredSubmissions.length / pageSize));
-  const visiblePage = Math.min(currentPage, totalPages);
-  const paginatedSubmissions = useMemo(() => {
-    const start = (visiblePage - 1) * pageSize;
-    return filteredSubmissions.slice(start, start + pageSize);
-  }, [filteredSubmissions, pageSize, visiblePage]);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [activeSubTab, selectedReportType, selectedCompany, selectedDuplicateFilter, searchQuery]);
-  const handleSelectAll = (e) => {
-    if (e.target.checked) {
-      setSelectedSubIds(filteredSubmissions.map((s) => s.id));
-    } else {
-      setSelectedSubIds([]);
-    }
-  };
-  const handleToggleSelect = (id) => {
-    setSelectedSubIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
-    );
-  };
+  const [selectedSubIds, setSelectedSubIds] = useState<string[]>([]);
   const [isBatchApproving, setIsBatchApproving] = useState(false);
   // Đang gọi API duyệt/yêu cầu sửa 1 bài (modal chi tiết) — khóa nút & hiện trạng thái
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
-  const handleBatchApprove = async () => {
-    if (selectedSubIds.length === 0) return;
-    if (!onUpdateSubmissionStatus) return;
+  // Nhóm theo sinh viên: mở/Thu gọn + phân trang theo NHÓM
+  const [expandedStudents, setExpandedStudents] = useState<Set<string>>(new Set());
+  const [groupPage, setGroupPage] = useState(1);
+  const [groupPageSize, setGroupPageSize] = useState(10);
+  // Đang tạo ZIP cho nhóm SV nào (hiện spinner trên đúng nút)
+  const [zippingStudentKey, setZippingStudentKey] = useState<string | null>(null);
 
+  useEffect(() => () => {
+    if (preview?.url) URL.revokeObjectURL(preview.url);
+  }, [preview]);
+
+  const companyList = useMemo((): string[] => {
+    const unique = new Set<string>();
+    for (const s of submissions) {
+      const c = String(s.company ?? "");
+      if (c && c !== "—") unique.add(c);
+    }
+    return ["Tất cả", ...unique];
+  }, [submissions]);
+
+  const reportTypeList = useMemo((): string[] => {
+    const unique = new Set<string>();
+    for (const s of submissions) {
+      const t = String(s.reportType ?? "");
+      if (t) unique.add(t);
+    }
+    return ["Tất cả", ...unique];
+  }, [submissions]);
+
+  const stats = useMemo(() => {
+    const total = submissions.length;
+    const approved = submissions.filter((s) => s.status === "Đã duyệt").length;
+    const pending = submissions.filter(
+      (s) =>
+        s.status === "Chờ duyệt" ||
+        s.status === "Đã nộp" ||
+        s.status === "Cần nhận xét" ||
+        s.status === "Quá hạn",
+    ).length;
+    // "Quá hạn" chỉ thuộc nhóm CHỜ DUYỆT (cần GV xử lý), không đếm vào "cần sửa"
+    // để tổng KPI không trùng lặp và khớp bộ lọc tab bên dưới.
+    const revision = submissions.filter((s) => s.status === "Yêu cầu sửa").length;
+    return { total, approved, pending, revision };
+  }, [submissions]);
+
+  const filteredSubmissions = useMemo(() => {
+    return submissions.filter((sub) => {
+      if (activeSubTab === "approved" && sub.status !== "Đã duyệt") return false;
+      if (
+        activeSubTab === "pending" &&
+        (sub.status === "Đã duyệt" || sub.status === "Yêu cầu sửa")
+      )
+        return false;
+      // Tab "Yêu cầu sửa" KHÔNG chứa "Quá hạn" (đã thuộc nhóm chờ duyệt) — khớp KPI stats.
+      if (activeSubTab === "revision" && sub.status !== "Yêu cầu sửa") return false;
+      if (selectedReportType !== "Tất cả" && sub.reportType !== selectedReportType) return false;
+      if (selectedCompany !== "Tất cả" && sub.company !== selectedCompany) return false;
+      if (selectedDuplicateFilter !== "Tất cả") {
+        const score = sub.duplicateScore || 0;
+        if (selectedDuplicateFilter === "safe" && score >= 10) return false;
+        if (selectedDuplicateFilter === "warning" && (score < 10 || score > 25)) return false;
+        if (selectedDuplicateFilter === "danger" && score <= 25) return false;
+      }
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const match =
+          sub.studentName.toLowerCase().includes(q) ||
+          sub.mssv.toLowerCase().includes(q) ||
+          sub.company.toLowerCase().includes(q) ||
+          sub.reportType.toLowerCase().includes(q) ||
+          (sub.fileName ?? "").toLowerCase().includes(q);
+        if (!match) return false;
+      }
+      return true;
+    });
+  }, [submissions, activeSubTab, selectedReportType, selectedCompany, selectedDuplicateFilter, searchQuery]);
+
+  // ── Nhóm bài nộp THEO SINH VIÊN — tiện xem toàn bộ hồ sơ & tải zip của từng người ──
+  const studentGroups = useMemo((): StudentGroup[] => {
+    const map = new Map<string, StudentGroup>();
+    for (const sub of filteredSubmissions) {
+      const key = sub.mssv && sub.mssv !== "—" ? sub.mssv : sub.studentName || sub.id;
+      const existing = map.get(key);
+      if (existing) {
+        existing.items.push(sub);
+      } else {
+        map.set(key, {
+          key,
+          studentName: sub.studentName,
+          mssv: sub.mssv,
+          company: sub.company,
+          items: [sub],
+        });
+      }
+    }
+    return [...map.values()];
+  }, [filteredSubmissions]);
+
+  const groupTotalPages = Math.max(1, Math.ceil(studentGroups.length / groupPageSize));
+  const visibleGroupPage = Math.min(groupPage, groupTotalPages);
+  const pagedGroups = useMemo(
+    () =>
+      studentGroups.slice(
+        (visibleGroupPage - 1) * groupPageSize,
+        visibleGroupPage * groupPageSize,
+      ),
+    [studentGroups, groupPageSize, visibleGroupPage],
+  );
+
+  useEffect(() => {
+    setGroupPage(1);
+  }, [activeSubTab, selectedReportType, selectedCompany, selectedDuplicateFilter, searchQuery]);
+
+  const toggleExpand = (key: string) =>
+    setExpandedStudents((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  const expandAll = () => setExpandedStudents(new Set(studentGroups.map((g) => g.key)));
+  const collapseAll = () => setExpandedStudents(new Set());
+
+  const toggleGroupSelection = (group: StudentGroup) => {
+    const ids = group.items.map((s) => s.id);
+    const allSelected = ids.every((id) => selectedSubIds.includes(id));
+    setSelectedSubIds((prev) =>
+      allSelected
+        ? prev.filter((id) => !ids.includes(id))
+        : [...new Set([...prev, ...ids])],
+    );
+  };
+  const toggleSelect = (id: string) =>
+    setSelectedSubIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
+    );
+
+  const groupSummary = (group: StudentGroup) => {
+    const approved = group.items.filter((s) => s.status === "Đã duyệt").length;
+    const revision = group.items.filter((s) => s.status === "Yêu cầu sửa").length;
+    return { approved, revision, pending: group.items.length - approved - revision };
+  };
+
+  const handleBatchApprove = async () => {
+    if (selectedSubIds.length === 0 || !onUpdateSubmissionStatus) return;
     setIsBatchApproving(true);
     try {
       const results = await Promise.allSettled(
         selectedSubIds.map((id) =>
-          onUpdateSubmissionStatus(
-            id,
-            "\u0110\xE3 duy\u1EC7t",
-            "\u0110\xE3 ph\xEA duy\u1EC7t h\xE0ng lo\u1EA1t",
-          ),
+          onUpdateSubmissionStatus(id, "Đã duyệt", "Đã phê duyệt hàng loạt"),
         ),
       );
       const succeeded = results.filter((result) => result.status === "fulfilled").length;
       const failed = results.length - succeeded;
       onToast?.(
         failed === 0
-          ? `\u0110\xE3 ph\xEA duy\u1EC7t th\xE0nh c\xF4ng ${succeeded} b\xE0i n\u1ED9p.`
-          : `\u0110\xE3 duy\u1EC7t ${succeeded} b\xE0i, ${failed} b\xE0i th\u1EA5t b\u1EA1i. Vui l\xF2ng ki\u1EC3m tra l\u1EA1i.`,
+          ? `Đã phê duyệt thành công ${succeeded} bài nộp.`
+          : `Đã duyệt ${succeeded} bài, ${failed} bài thất bại. Vui lòng kiểm tra lại.`,
       );
       setSelectedSubIds([]);
     } finally {
       setIsBatchApproving(false);
     }
   };
+
+  // Tải toàn bộ (theo bộ lọc hiện tại) — gom zip theo từng SV trên server
   const handleBatchDownload = async () => {
-    const ids = selectedSubIds.length > 0
-      ? selectedSubIds
-      : filteredSubmissions.map((submission) => submission.id);
-    const submissionIds = ids.filter((id) => !id.startsWith("weekly:"));
-    if (submissionIds.length === 0) {
-      onToast?.("Chưa có bài nộp để tải xuống.");
+    const ids = zipIdsOf(filteredSubmissions);
+    if (ids.length === 0) {
+      onToast?.("Chưa có bài nộp (dạng file) để tải xuống. Báo cáo tuần cần tải riêng theo từng bài.");
       return;
     }
     try {
-      await submissionApiService.downloadLecturerZip(submissionIds);
-      onToast?.(`Đã tải xuống ${submissionIds.length} bài nộp dưới dạng ZIP.`);
+      await submissionApiService.downloadLecturerZip(ids);
+      onToast?.(`Đã tải xuống ${ids.length} bài nộp dưới dạng ZIP.`);
     } catch (err) {
       onToast?.(err instanceof Error ? err.message : "Không thể tạo file ZIP.");
     }
   };
-  const handleOpenDetail = async (sub) => {
+
+  // Tải ZIP toàn bộ bài nộp FILE của 1 sinh viên
+  const handleDownloadStudentZip = async (group: StudentGroup) => {
+    const ids = zipIdsOf(group.items);
+    if (ids.length === 0) {
+      onToast?.("Sinh viên này chỉ có báo cáo tuần — hãy tải file từ từng bài trong nhóm.");
+      return;
+    }
+    setZippingStudentKey(group.key);
+    try {
+      await submissionApiService.downloadLecturerZip(ids);
+      onToast?.(`Đã tải ${ids.length} bài nộp của ${group.studentName} (.zip).`);
+    } catch (err) {
+      onToast?.(err instanceof Error ? err.message : "Không thể tạo file ZIP.");
+    } finally {
+      setZippingStudentKey(null);
+    }
+  };
+
+  const handleOpenDetail = async (sub: Submission) => {
     setSelectedSubmission(sub);
     setFeedbackInput("");
     setShowDetailModal(true);
     setIsLoadingFeedback(true);
     try {
-      const isWeekly = sub.sourceType === "weeklyReport" || sub.id.startsWith("weekly:");
+      const weekly = isWeekly(sub);
       const reportId = sub.sourceId ?? sub.id.replace(/^weekly:/, "");
-      const detail = isWeekly
+      const detail = weekly
         ? await weeklyReportService.getById(reportId)
         : await submissionApiService.getById(sub.id);
-      setSelectedSubmission((current) => current ? {
-        ...current,
-        fileName: detail.fileName ?? current.fileName,
-        fileUrl: detail.fileUrl ?? detail.fileName ?? current.fileUrl,
-        assets: "assets" in detail ? detail.assets ?? current.assets ?? [] : current.assets ?? [],
-        feedbacks: detail.feedbacks ?? [],
-        lecturerNote: detail.feedbacks?.[detail.feedbacks.length - 1]?.comment
-          ?? ("lecturerComment" in detail ? detail.lecturerComment : undefined)
-          ?? current.lecturerNote,
-      } : current);
+      setSelectedSubmission((current) =>
+        current
+          ? {
+              ...current,
+              fileName: detail.fileName ?? current.fileName,
+              fileUrl: detail.fileUrl ?? detail.fileName ?? current.fileUrl,
+              assets: "assets" in detail ? detail.assets ?? current.assets ?? [] : current.assets ?? [],
+              feedbacks: detail.feedbacks ?? [],
+              lecturerNote:
+                detail.feedbacks?.[detail.feedbacks.length - 1]?.comment
+                  ?? ("lecturerComment" in detail ? detail.lecturerComment : undefined)
+                  ?? current.lecturerNote,
+            }
+          : current,
+      );
     } catch (err) {
       onToast?.(err instanceof Error ? err.message : "Không thể tải luồng nhận xét.");
     } finally {
       setIsLoadingFeedback(false);
     }
   };
+
   const handlePreview = async (assetId?: string) => {
     if (!selectedSubmission) return;
     setPreviewLoading(true);
     try {
-      const isWeekly = selectedSubmission.sourceType === "weeklyReport" || selectedSubmission.id.startsWith("weekly:");
+      const weekly = isWeekly(selectedSubmission);
       const reportId = selectedSubmission.sourceId ?? selectedSubmission.id.replace(/^weekly:/, "");
-      const asset = selectedSubmission.assets?.find((item) => item.id === assetId && item.assetType === "file")
+      const asset =
+        selectedSubmission.assets?.find((item) => item.id === assetId && item.assetType === "file")
         ?? selectedSubmission.assets?.find((item) => item.assetType === "file")
         ?? null;
-      if (!isWeekly && selectedSubmission.assets?.length && !asset) {
+      if (!weekly && selectedSubmission.assets?.length && !asset) {
         const link = selectedSubmission.assets.find((item) => item.assetType === "link")?.fileUrl;
         if (link) window.open(link, "_blank", "noopener,noreferrer");
         return;
       }
       const fallbackName = asset?.fileName ?? selectedSubmission.fileUrl ?? "Tài liệu nộp";
-      const { blob, filename } = isWeekly
+      const { blob, filename } = weekly
         ? await weeklyReportService.download(reportId, selectedSubmission.fileUrl ?? fallbackName, false)
         : asset
           ? await submissionApiService.downloadAsset(selectedSubmission.id, asset.id, fallbackName, false)
@@ -278,22 +352,24 @@ export const SubmissionsHub = ({
       setPreviewLoading(false);
     }
   };
+
   const handleDownload = async (assetId?: string) => {
     if (!selectedSubmission || isDownloading) return;
     setIsDownloading(true);
     try {
-      const isWeekly = selectedSubmission.sourceType === "weeklyReport" || selectedSubmission.id.startsWith("weekly:");
+      const weekly = isWeekly(selectedSubmission);
       const reportId = selectedSubmission.sourceId ?? selectedSubmission.id.replace(/^weekly:/, "");
-      const asset = selectedSubmission.assets?.find((item) => item.id === assetId && item.assetType === "file")
+      const asset =
+        selectedSubmission.assets?.find((item) => item.id === assetId && item.assetType === "file")
         ?? selectedSubmission.assets?.find((item) => item.assetType === "file")
         ?? null;
-      if (!isWeekly && selectedSubmission.assets?.length && !asset) {
+      if (!weekly && selectedSubmission.assets?.length && !asset) {
         const link = selectedSubmission.assets.find((item) => item.assetType === "link")?.fileUrl;
         if (link) window.open(link, "_blank", "noopener,noreferrer");
         return;
       }
       const fallbackName = asset?.fileName ?? selectedSubmission.fileUrl ?? "Tài liệu nộp";
-      await (isWeekly
+      await (weekly
         ? weeklyReportService.download(reportId, selectedSubmission.fileUrl ?? fallbackName)
         : asset
           ? submissionApiService.downloadAsset(selectedSubmission.id, asset.id, fallbackName)
@@ -304,14 +380,15 @@ export const SubmissionsHub = ({
       setIsDownloading(false);
     }
   };
-  const handleSendFeedback = async (event) => {
+
+  const handleSendFeedback = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!selectedSubmission || !feedbackInput.trim() || isSendingFeedback) return;
     setIsSendingFeedback(true);
     try {
-      const isWeekly = selectedSubmission.sourceType === "weeklyReport" || selectedSubmission.id.startsWith("weekly:");
+      const weekly = isWeekly(selectedSubmission);
       const reportId = selectedSubmission.sourceId ?? selectedSubmission.id.replace(/^weekly:/, "");
-      const updated = isWeekly
+      const updated = weekly
         ? await weeklyReportService.review(reportId, {
             status: "Reviewed",
             lecturerComment: feedbackInput.trim(),
@@ -328,11 +405,15 @@ export const SubmissionsHub = ({
         lecturerName: "Giảng viên",
         createdAt: new Date().toISOString(),
       };
-      setSelectedSubmission((current) => current ? {
-        ...current,
-        lecturerNote: latestFeedback?.comment ?? current.lecturerNote,
-        feedbacks: updated.feedbacks ?? [...(current.feedbacks ?? []), localFeedback],
-      } : current);
+      setSelectedSubmission((current) =>
+        current
+          ? {
+              ...current,
+              lecturerNote: latestFeedback?.comment ?? current.lecturerNote,
+              feedbacks: updated.feedbacks ?? [...(current.feedbacks ?? []), localFeedback],
+            }
+          : current,
+      );
       setFeedbackInput("");
       onToast?.("Đã gửi nhận xét cho sinh viên.");
     } catch (err) {
@@ -341,19 +422,17 @@ export const SubmissionsHub = ({
       setIsSendingFeedback(false);
     }
   };
+
   const handleApproveSingle = async () => {
     if (!selectedSubmission || isUpdatingStatus) return;
     setIsUpdatingStatus(true);
     try {
       await onUpdateSubmissionStatus?.(
         selectedSubmission.id,
-        "\u0110\xE3 duy\u1EC7t",
-        feedbackInput ||
-          "\u0110\xE3 ki\u1EC3m tra & ph\xEA duy\u1EC7t b\xE0i n\u1ED9p",
+        "Đã duyệt",
+        feedbackInput || "Đã kiểm tra & phê duyệt bài nộp",
       );
-      onToast?.(
-        `\u0110\xE3 ph\xEA duy\u1EC7t b\xE0i n\u1ED9p c\u1EE7a ${selectedSubmission.studentName}`,
-      );
+      onToast?.(`Đã phê duyệt bài nộp của ${selectedSubmission.studentName}`);
       setShowDetailModal(false);
     } catch (err) {
       // API lỗi → toast lỗi thật, không đóng modal để GV thử lại
@@ -362,39 +441,39 @@ export const SubmissionsHub = ({
       setIsUpdatingStatus(false);
     }
   };
+
   const handleRequestRevisionSingle = async () => {
     if (!selectedSubmission || isUpdatingStatus) return;
     setIsUpdatingStatus(true);
     try {
       await onUpdateSubmissionStatus?.(
         selectedSubmission.id,
-        "Y\xEAu c\u1EA7u s\u1EEDa",
-        feedbackInput ||
-          "C\u1EA7n b\u1ED5 sung chi ti\u1EBFt theo y\xEAu c\u1EA7u",
+        "Yêu cầu sửa",
+        feedbackInput || "Cần bổ sung chi tiết theo yêu cầu",
       );
-      onToast?.(
-        `\u0110\xE3 g\u1EEDi y\xEAu c\u1EA7u ch\u1EC9nh s\u1EEDa cho ${selectedSubmission.studentName}`,
-      );
+      onToast?.(`Đã gửi yêu cầu chỉnh sửa cho ${selectedSubmission.studentName}`);
       setShowDetailModal(false);
     } catch (err) {
       onToast?.(err instanceof Error ? err.message : "Không thể gửi yêu cầu chỉnh sửa. Vui lòng thử lại.");
     } finally {
-    setIsUpdatingStatus(false);
+      setIsUpdatingStatus(false);
     }
   };
-  // Duyệt trực tiếp trên hàng bảng — await API, chỉ toast khi thành công
+
+  // Duyệt trực tiếp trên hàng bài nộp — await API, chỉ toast khi thành công
   const handleApproveRow = async (sub: { id: string; studentName: string }) => {
     if (isUpdatingStatus) return;
     setIsUpdatingStatus(true);
     try {
-      await onUpdateSubmissionStatus?.(sub.id, "\u0110\xE3 duy\u1EC7t", "\u0110\xE3 duy\u1EC7t tr\u1EF1c ti\u1EBFp");
-      onToast?.(`\u0110\xE3 duy\u1EC7t b\xE0i n\u1ED9p c\u1EE7a ${sub.studentName}`);
+      await onUpdateSubmissionStatus?.(sub.id, "Đã duyệt", "Đã duyệt trực tiếp");
+      onToast?.(`Đã duyệt bài nộp của ${sub.studentName}`);
     } catch (err) {
       onToast?.(err instanceof Error ? err.message : "Không thể duyệt bài nộp. Vui lòng thử lại.");
     } finally {
       setIsUpdatingStatus(false);
     }
   };
+
   return (
     <div className="space-y-5 max-w-[1500px] mx-auto animate-in fade-in duration-200">
       <PageHeader
@@ -403,10 +482,10 @@ export const SubmissionsHub = ({
         subtitle={`Tổng hợp báo cáo tuần, giữa kỳ & cuối kỳ do sinh viên tải lên · ${selectedSemester?.name || "Kỳ thực tập đang chọn"}`}
         actions={[
           {
-            label: "Tải toàn bộ (.ZIP)",
+            label: "Tải tất cả (.ZIP)",
             icon: Download,
             variant: "primary",
-            onClick: handleBatchDownload,
+            onClick: () => void handleBatchDownload(),
             ariaLabel: "Tải toàn bộ file báo cáo dưới dạng ZIP",
           },
         ]}
@@ -417,12 +496,11 @@ export const SubmissionsHub = ({
           <p className="text-xs text-slate-500 font-medium">
             <span className="font-bold text-slate-800">{stats.total}</span> bài
             ·{" "}
-            <span className="font-bold text-emerald-700">{stats.approved}</span>{" "}
-            đã duyệt ·{" "}
-            <span className="font-bold text-amber-700">{stats.pending}</span>{" "}
-            chờ ·{" "}
-            <span className="font-bold text-rose-700">{stats.revision}</span> cần
-            sửa
+            <span className="font-bold text-emerald-700">{stats.approved}</span> đã duyệt
+            ·{" "}
+            <span className="font-bold text-amber-700">{stats.pending}</span> chờ
+            ·{" "}
+            <span className="font-bold text-rose-700">{stats.revision}</span> cần sửa
           </p>
         }
       />
@@ -479,9 +557,8 @@ export const SubmissionsHub = ({
           )}
         </div>
 
-        {/* Search & Filter Inputs Grid */}
+        {/* Search & Filter Inputs */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
-          {/* Search Box */}
           <div className="relative">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
             <input
@@ -493,286 +570,306 @@ export const SubmissionsHub = ({
             />
           </div>
 
-          {/* Filter by Report Type */}
-          <div>
-            <select
-              value={selectedReportType}
-              onChange={(e) => setSelectedReportType(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 rounded-md outline-none focus:border-blue-500 font-medium text-slate-700"
-            >
-              <option value="Tất cả">Loại báo cáo: Tất cả</option>
-              {reportTypeList
-                .filter((t) => t !== "T\u1EA5t c\u1EA3")
-                .map((t, i) => (
-                  <option key={i} value={t}>
-                    {t}
-                  </option>
-                ))}
-            </select>
-          </div>
-
-          {/* Filter by Enterprise */}
-          <div>
-            <select
-              value={selectedCompany}
-              onChange={(e) => setSelectedCompany(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 rounded-md outline-none focus:border-blue-500 font-medium text-slate-700"
-            >
-              <option value="Tất cả">Doanh nghiệp: Tất cả</option>
-              {companyList
-                .filter((c) => c !== "T\u1EA5t c\u1EA3")
-                .map((c, i) => (
-                  <option key={i} value={c}>
-                    {c}
-                  </option>
-                ))}
-            </select>
-          </div>
-
-          {/* Filter by Plagiarism level */}
-          <div>
-            <select
-              value={selectedDuplicateFilter}
-              onChange={(e) => setSelectedDuplicateFilter(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 rounded-md outline-none focus:border-blue-500 font-medium text-slate-700"
-            >
-              <option value="Tất cả">Kiểm tra trùng lặp: Tất cả</option>
-              <option value="safe">🟢 An toàn (&lt;10%)</option>
-              <option value="warning">🟡 Cần lưu ý (10-25%)</option>
-              <option value="danger">🔴 Cảnh báo (&gt;25%)</option>
-            </select>
-          </div>
-        </div>
-
-      {/* Submissions Repository Table */}
-      <div className="border border-slate-200/80 rounded-md overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="bg-slate-50/80 border-b border-slate-100 text-[11px] font-bold uppercase text-slate-500 tracking-wider">
-                <th className="py-3 px-3.5 w-10 text-center">
-                  <input
-                    type="checkbox"
-                    checked={
-                      selectedSubIds.length > 0 &&
-                      selectedSubIds.length === filteredSubmissions.length
-                    }
-                    onChange={handleSelectAll}
-                    className="rounded border-slate-300 text-blue-600 cursor-pointer"
-                  />
-                </th>
-                <th className="py-3 px-3.5">SINH VIÊN & MSSV</th>
-                <th className="py-3 px-3.5">DOANH NGHIỆP</th>
-                <th className="py-3 px-3.5">BÁO CÁO & TẬP TIN</th>
-                <th className="py-3 px-3.5">THỜI GIAN NỘP</th>
-                <th className="py-3 px-3.5 text-center">TRÙNG LẶP</th>
-                <th className="py-3 px-3.5">TRẠNG THÁI & GHI CHÚ</th>
-                <th className="py-3 px-3.5 text-right">THAO TÁC</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-              {filteredSubmissions.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="py-12 text-center text-slate-400">
-                    <FileText className="w-10 h-10 mx-auto mb-2 text-slate-300" />
-                    <p className="font-bold text-sm text-slate-600">
-                      Không tìm thấy bài nộp nào phù hợp
-                    </p>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Thử điều chỉnh bộ lọc hoặc từ khóa tìm kiếm
-                    </p>
-                  </td>
-                </tr>
-              ) : (
-                paginatedSubmissions.map((sub) => {
-                  const isChecked = selectedSubIds.includes(sub.id);
-                  return (
-                    <tr
-                      key={sub.id}
-                      className={`hover:bg-slate-50/80 transition-colors ${isChecked ? "bg-blue-50/30" : ""}`}
-                    >
-                      {/* Checkbox */}
-                      <td className="py-3.5 px-3.5 text-center">
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => handleToggleSelect(sub.id)}
-                          className="rounded border-slate-300 text-blue-600 cursor-pointer"
-                        />
-                      </td>
-
-                      {/* Student Info */}
-                      <td className="py-3.5 px-3.5">
-                        <div className="flex items-center gap-2.5">
-                          <InitialsAvatar name={sub.studentName} seed={sub.mssv} size={36} />
-                          <div>
-                            <p
-                              className="font-bold text-slate-900 hover:text-blue-600 cursor-pointer"
-                              onClick={() => handleOpenDetail(sub)}
-                            >
-                              {sub.studentName}
-                            </p>
-                            <p className="text-[11px] text-slate-500 font-mono font-bold">
-                              MSSV: {sub.mssv}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Company */}
-                      <td className="py-3.5 px-3.5">
-                        <div className="flex items-center gap-1.5 font-semibold text-slate-800">
-                          <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                          <span>{sub.company}</span>
-                        </div>
-                      </td>
-
-                      {/* Report & File */}
-                      <td className="py-3.5 px-3.5">
-                        <div className="space-y-0.5">
-                          <span className="font-bold text-slate-900 block">
-                            {sub.reportType}
-                            {sub.assetCount ? ` · ${sub.assetCount} tài nguyên` : ""}
-                          </span>
-                          <button
-                            onClick={() => handleOpenDetail(sub)}
-                            className="text-xs text-blue-600 font-semibold hover:underline flex items-center gap-1"
-                          >
-                            <FileText className="w-3 h-3" />
-                            <span>{sub.fileName || "Không có tệp đính kèm"}</span>
-                            {sub.fileName && sub.fileSize && (
-                              <span className="text-slate-500 text-[11px]">
-                                ({sub.fileSize})
-                              </span>
-                            )}
-                          </button>
-                        </div>
-                      </td>
-
-                      {/* Time */}
-                      <td className="py-3.5 px-3.5 text-xs text-slate-500">
-                        <div className="font-semibold text-slate-800">
-                          {sub.date}
-                        </div>
-                        <div className="text-[11px] text-slate-500">
-                          {sub.time}
-                        </div>
-                      </td>
-
-                      {/* Duplicate Score */}
-                      <td className="py-3.5 px-3.5 text-center">
-                        <span
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${(sub.duplicateScore || 0) < 10 ? "bg-emerald-100 text-emerald-800" : (sub.duplicateScore || 0) <= 25 ? "bg-amber-100 text-amber-800" : "bg-rose-100 text-rose-800 border border-rose-200"}`}
-                        >
-                          {(sub.duplicateScore || 0) < 10 ? (
-                            <ShieldCheck className="w-3 h-3" />
-                          ) : (
-                            <ShieldAlert className="w-3 h-3" />
-                          )}
-                          {sub.duplicateScore || 0}%
-                        </span>
-                      </td>
-
-                      {/* Status & Lecturer Note */}
-                      <td className="py-3.5 px-3.5">
-                        <div className="space-y-1">
-                          <span
-                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${sub.status === "\u0110\xE3 duy\u1EC7t" ? "bg-emerald-100 text-emerald-800 border border-emerald-200" : sub.status === "Ch\u1EDD duy\u1EC7t" || sub.status === "\u0110\xE3 n\u1ED9p" ? "bg-amber-100 text-amber-800 border border-amber-200" : sub.status === "Y\xEAu c\u1EA7u s\u1EEDa" ? "bg-rose-100 text-rose-800 border border-rose-200" : "bg-slate-100 text-slate-700"}`}
-                          >
-                            {sub.status === "\u0110\xE3 duy\u1EC7t" && (
-                              <CheckCircle2 className="w-3 h-3" />
-                            )}
-                            {sub.status === "Ch\u1EDD duy\u1EC7t" && (
-                              <Clock className="w-3 h-3" />
-                            )}
-                            {sub.status === "Y\xEAu c\u1EA7u s\u1EEDa" && (
-                              <AlertCircle className="w-3 h-3" />
-                            )}
-                            {sub.status}
-                          </span>
-
-                          {sub.lecturerNote && (
-                            <p className="text-xs text-slate-600 italic line-clamp-1">
-                              &ldquo;{sub.lecturerNote}&rdquo;
-                            </p>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Action buttons */}
-                      <td className="py-3.5 px-3.5 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            onClick={() => handleOpenDetail(sub)}
-                            className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg transition-colors border border-slate-200/60"
-                            title="Xem chi tiết bài nộp"
-                          >
-                            <Eye className="w-3.5 h-3.5 text-slate-600" />
-                          </button>
-
-                          {sub.status !== "\u0110\xE3 duy\u1EC7t" && (
-                            <button
-                              onClick={() => void handleApproveRow(sub)}
-                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-[11px] shadow-2xs transition-colors flex items-center gap-1"
-                            >
-                              <Check className="w-3 h-3" />
-                              <span>Duyệt</span>
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-slate-100 pt-3 text-xs text-slate-500">
-        <div className="flex items-center gap-2">
-          <span>
-            Hiển thị {filteredSubmissions.length === 0 ? 0 : (visiblePage - 1) * pageSize + 1}
-            –{Math.min(visiblePage * pageSize, filteredSubmissions.length)} / {filteredSubmissions.length} bài nộp
-          </span>
           <select
-            value={pageSize}
-            onChange={(event) => {
-              setPageSize(Number(event.target.value));
-              setCurrentPage(1);
-            }}
-            className="px-2 py-1 border border-slate-200 rounded-md bg-white font-medium text-slate-700 outline-none"
-            aria-label="Số bài nộp mỗi trang"
+            value={selectedReportType}
+            onChange={(e) => setSelectedReportType(e.target.value)}
+            className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 rounded-md outline-none focus:border-blue-500 font-medium text-slate-700"
           >
-            <option value={5}>5 / trang</option>
-            <option value={10}>10 / trang</option>
-            <option value={20}>20 / trang</option>
+            <option value="Tất cả">Loại báo cáo: Tất cả</option>
+            {reportTypeList
+              .filter((t) => t !== "Tất cả")
+              .map((t, i) => (
+                <option key={i} value={t}>
+                  {t}
+                </option>
+              ))}
+          </select>
+
+          <select
+            value={selectedCompany}
+            onChange={(e) => setSelectedCompany(e.target.value)}
+            className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 rounded-md outline-none focus:border-blue-500 font-medium text-slate-700"
+          >
+            <option value="Tất cả">Doanh nghiệp: Tất cả</option>
+            {companyList
+              .filter((c) => c !== "Tất cả")
+              .map((c, i) => (
+                <option key={i} value={c}>
+                  {c}
+                </option>
+              ))}
+          </select>
+
+          <select
+            value={selectedDuplicateFilter}
+            onChange={(e) => setSelectedDuplicateFilter(e.target.value)}
+            className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 rounded-md outline-none focus:border-blue-500 font-medium text-slate-700"
+          >
+            <option value="Tất cả">Kiểm tra trùng lặp: Tất cả</option>
+            <option value="safe">🟢 An toàn (&lt;10%)</option>
+            <option value="warning">🟡 Cần lưu ý (10-25%)</option>
+            <option value="danger">🔴 Cảnh báo (&gt;25%)</option>
           </select>
         </div>
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-            disabled={visiblePage === 1}
-            className="p-1.5 border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none"
-            aria-label="Trang trước"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <span className="min-w-16 text-center font-semibold text-slate-700">
-            {visiblePage} / {totalPages}
-          </span>
-          <button
-            type="button"
-            onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
-            disabled={visiblePage === totalPages}
-            className="p-1.5 border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none"
-            aria-label="Trang sau"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
+
+        {/* List header */}
+        {studentGroups.length > 0 && (
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-bold text-slate-700">
+              Bài nộp theo sinh viên{" "}
+              <span className="font-medium text-slate-500">
+                ({studentGroups.length} sinh viên)
+              </span>
+            </p>
+            <div className="flex items-center gap-1.5 text-[11px] font-bold">
+              <button
+                type="button"
+                onClick={expandAll}
+                className="px-2 py-1 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 cursor-pointer"
+              >
+                Mở tất cả
+              </button>
+              <button
+                type="button"
+                onClick={collapseAll}
+                className="px-2 py-1 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 cursor-pointer"
+              >
+                Thu gọn
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Danh sách nhóm theo sinh viên ── */}
+        {studentGroups.length === 0 ? (
+          <div className="border border-slate-200/80 rounded-md py-12 text-center text-slate-400">
+            <FileText className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+            <p className="font-bold text-sm text-slate-600">Không tìm thấy bài nộp nào phù hợp</p>
+            <p className="text-xs text-slate-400 mt-0.5">Thử điều chỉnh bộ lọc hoặc từ khóa tìm kiếm</p>
+          </div>
+        ) : (
+          <div className="space-y-2.5">
+            {pagedGroups.map((group) => {
+              const summary = groupSummary(group);
+              const expanded =
+                expandedStudents.has(group.key) || studentGroups.length === 1;
+              const ids = zipIdsOf(group.items);
+              const allSelected =
+                group.items.length > 0 &&
+                group.items.every((s) => selectedSubIds.includes(s.id));
+              const isZipping = zippingStudentKey === group.key;
+              return (
+                <div
+                  key={group.key}
+                  className="border border-slate-200/80 rounded-lg overflow-hidden bg-white"
+                  data-testid="student-submission-group"
+                >
+                  {/* Group header */}
+                  <div
+                    className="flex items-center gap-3 p-3 bg-slate-50/80 hover:bg-slate-100/70 cursor-pointer transition-colors"
+                    onClick={() => toggleExpand(group.key)}
+                  >
+                    <ChevronDown
+                      className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`}
+                    />
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      onChange={() => toggleGroupSelection(group)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="rounded border-slate-300 text-blue-600 cursor-pointer"
+                      title="Chọn tất cả bài nộp của sinh viên này"
+                    />
+                    <InitialsAvatar name={group.studentName} seed={group.mssv} size={38} />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-bold text-slate-900 text-sm truncate">{group.studentName}</p>
+                      <p className="text-[11px] text-slate-500 font-medium flex items-center gap-1 truncate">
+                        <span className="font-mono font-bold">MSSV: {group.mssv}</span>
+                        <span>·</span>
+                        <Building2 className="w-3 h-3 text-slate-400 shrink-0" />
+                        <span className="truncate">{group.company}</span>
+                      </p>
+                    </div>
+
+                    <div className="hidden md:flex items-center gap-1.5 text-[10px] font-bold shrink-0">
+                      <span className="px-2 py-0.5 rounded-full bg-slate-200/70 text-slate-600">
+                        {group.items.length} bài
+                      </span>
+                      {summary.approved > 0 && (
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                          {summary.approved} đã duyệt
+                        </span>
+                      )}
+                      {summary.pending > 0 && (
+                        <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                          {summary.pending} chờ
+                        </span>
+                      )}
+                      {summary.revision > 0 && (
+                        <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-800">
+                          {summary.revision} cần sửa
+                        </span>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleDownloadStudentZip(group);
+                      }}
+                      disabled={ids.length === 0 || isZipping}
+                      className="shrink-0 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-[11px] flex items-center gap-1 shadow-2xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title={
+                        ids.length === 0
+                          ? "Chỉ có báo cáo tuần — tải file riêng trong từng bài"
+                          : `Tải ${ids.length} bài nộp của sinh viên này (.zip)`
+                      }
+                    >
+                      {isZipping ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Download className="w-3.5 h-3.5" />
+                      )}
+                      <span>{isZipping ? "Đang tạo..." : `Tải .zip (${ids.length})`}</span>
+                    </button>
+                  </div>
+
+                  {/* Expanded rows: từng bài nộp của sinh viên */}
+                  {expanded && (
+                    <div className="divide-y divide-slate-100 border-t border-slate-100">
+                      {group.items.map((sub) => (
+                        <div
+                          key={sub.id}
+                          className={`flex items-start gap-3 p-3 hover:bg-slate-50/70 transition-colors ${selectedSubIds.includes(sub.id) ? "bg-blue-50/40" : ""}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedSubIds.includes(sub.id)}
+                            onChange={() => toggleSelect(sub.id)}
+                            className="mt-1 rounded border-slate-300 text-blue-600 cursor-pointer"
+                          />
+
+                          <div className="min-w-0 flex-1 space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-bold text-slate-900 text-xs">{sub.reportType}</span>
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${statusBadge(sub.status)}`}>
+                                {statusIcon(sub.status)}
+                                {sub.status}
+                              </span>
+                              {(sub.duplicateScore || 0) > 0 && (
+                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${(sub.duplicateScore || 0) < 10 ? "bg-emerald-50 text-emerald-700" : (sub.duplicateScore || 0) <= 25 ? "bg-amber-50 text-amber-700" : "bg-rose-50 text-rose-700 border border-rose-200"}`}>
+                                  {(sub.duplicateScore || 0) < 10 ? (
+                                    <ShieldCheck className="w-3 h-3" />
+                                  ) : (
+                                    <ShieldAlert className="w-3 h-3" />
+                                  )}
+                                  Trùng lặp {sub.duplicateScore}%
+                                </span>
+                              )}
+                              {sub.assetCount > 0 && (
+                                <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold">
+                                  {sub.assetCount} tài nguyên
+                                </span>
+                              )}
+                            </div>
+
+                            <button
+                              onClick={() => void handleOpenDetail(sub)}
+                              className="text-xs text-blue-600 font-semibold hover:underline flex items-center gap-1 max-w-full"
+                            >
+                              <FileText className="w-3 h-3 shrink-0" />
+                              <span className="truncate">{sub.fileName || "Không có tệp đính kèm"}</span>
+                              {sub.fileName && sub.fileSize && (
+                                <span className="text-slate-500 text-[11px] shrink-0">({sub.fileSize})</span>
+                              )}
+                            </button>
+
+                            <p className="text-[11px] text-slate-500">
+                              Nộp lúc <strong className="text-slate-700">{sub.time}</strong> ngày {sub.date}
+                              {sub.lecturerNote && (
+                                <>
+                                  {" · "}
+                                  <span className="italic">&ldquo;{sub.lecturerNote}&rdquo;</span>
+                                </>
+                              )}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              onClick={() => void handleOpenDetail(sub)}
+                              className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg transition-colors border border-slate-200/60"
+                              title="Xem chi tiết bài nộp"
+                            >
+                              <Eye className="w-3.5 h-3.5 text-slate-600" />
+                            </button>
+
+                            {sub.status !== "Đã duyệt" && (
+                              <button
+                                onClick={() => void handleApproveRow(sub)}
+                                className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-[11px] shadow-2xs transition-colors flex items-center gap-1"
+                              >
+                                <Check className="w-3 h-3" />
+                                <span>Duyệt</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Pagination theo NHÓM sinh viên */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-slate-100 pt-3 text-xs text-slate-500">
+          <div className="flex items-center gap-2">
+            <span>
+              Hiển thị {studentGroups.length === 0 ? 0 : (visibleGroupPage - 1) * groupPageSize + 1}
+              –{Math.min(visibleGroupPage * groupPageSize, studentGroups.length)} / {studentGroups.length} sinh viên
+            </span>
+            <select
+              value={groupPageSize}
+              onChange={(event) => {
+                setGroupPageSize(Number(event.target.value));
+                setGroupPage(1);
+              }}
+              className="px-2 py-1 border border-slate-200 rounded-md bg-white font-medium text-slate-700 outline-none"
+              aria-label="Số sinh viên mỗi trang"
+            >
+              <option value={5}>5 sinh viên / trang</option>
+              <option value={10}>10 sinh viên / trang</option>
+              <option value={20}>20 sinh viên / trang</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setGroupPage((page) => Math.max(1, page - 1))}
+              disabled={visibleGroupPage === 1}
+              className="p-1.5 border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none"
+              aria-label="Trang trước"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="min-w-16 text-center font-semibold text-slate-700">
+              {visibleGroupPage} / {groupTotalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => setGroupPage((page) => Math.min(groupTotalPages, page + 1))}
+              disabled={visibleGroupPage === groupTotalPages}
+              className="p-1.5 border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none"
+              aria-label="Trang sau"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
-      </div>
       </Panel>
 
       {/* DETAIL DOCUMENT MODAL */}
@@ -790,8 +887,7 @@ export const SubmissionsHub = ({
                     {selectedSubmission.reportType}
                   </h3>
                   <p className="text-xs text-slate-500 font-medium">
-                    Sinh viên: {selectedSubmission.studentName} • MSSV:{" "}
-                    {selectedSubmission.mssv}
+                    Sinh viên: {selectedSubmission.studentName} • MSSV: {selectedSubmission.mssv}
                   </p>
                 </div>
               </div>
@@ -817,9 +913,7 @@ export const SubmissionsHub = ({
                     <span className="font-bold text-slate-900 block text-sm">
                       {selectedSubmission.studentName}
                     </span>
-                    <span className="text-slate-500 text-[11px]">
-                      {selectedSubmission.company}
-                    </span>
+                    <span className="text-slate-500 text-[11px]">{selectedSubmission.company}</span>
                   </div>
                 </div>
 
@@ -831,7 +925,7 @@ export const SubmissionsHub = ({
                     </strong>
                   </span>
                   <span
-                    className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] ${selectedSubmission.status === "\u0110\xE3 duy\u1EC7t" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}
+                    className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] ${selectedSubmission.status === "Đã duyệt" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}
                   >
                     {selectedSubmission.status}
                   </span>
@@ -840,12 +934,9 @@ export const SubmissionsHub = ({
 
               {/* Summary Section */}
               <div className="space-y-1">
-                <label className="font-bold text-slate-800 block text-xs">
-                  Tóm tắt nội dung bài nộp:
-                </label>
+                <label className="font-bold text-slate-800 block text-xs">Tóm tắt nội dung bài nộp:</label>
                 <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-md text-slate-700 leading-relaxed font-medium">
-                  {selectedSubmission.summary ||
-                    "Ch\u01B0a c\xF3 b\u1EA3n t\xF3m t\u1EAFt n\u1ED9i dung b\u1ED5 sung."}
+                  {selectedSubmission.summary || "Chưa có bản tóm tắt nội dung bổ sung."}
                 </div>
               </div>
 
@@ -855,15 +946,17 @@ export const SubmissionsHub = ({
                   <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold">
                     PDF
                   </div>
-                  <div>
-                    <span className="font-bold text-slate-900 block">
+                  <div className="min-w-0">
+                    <span className="font-bold text-slate-900 block truncate">
                       {selectedSubmission.assets?.length
                         ? `${selectedSubmission.assets.length} tài nguyên đính kèm`
                         : selectedSubmission.fileUrl || "Chưa có file đính kèm"}
                     </span>
-                    <span className="text-[10px] text-slate-500">
+                    <span className="text-[10px] text-slate-500 block truncate">
                       {selectedSubmission.assets?.length
-                        ? selectedSubmission.assets.map((asset) => asset.label || asset.fileName || asset.fileUrl).join(" • ")
+                        ? selectedSubmission.assets
+                            .map((asset) => asset.label || asset.fileName || asset.fileUrl)
+                            .join(" • ")
                         : `Kích thước: ${selectedSubmission.fileSize || "—"} • Trùng lặp: ${selectedSubmission.duplicateScore || 0}%`}
                     </span>
                   </div>

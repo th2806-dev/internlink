@@ -30,6 +30,9 @@ export const Sidebar = ({
 }) => {
   const { profile } = useStudentPortal();
   const displayName = profile.name || studentName;
+  // Trình tự theo WORKFLOW sinh viên thực tập:
+  // Kỳ thực tập (đăng ký, lịch gặp) → Báo cáo & sản phẩm (nộp hằng tuần)
+  // → Phản hồi & kết quả (xem duyệt, chấm điểm) → Hệ thống.
   const navSections = [
     {
       title: "TỔNG QUAN",
@@ -54,13 +57,8 @@ export const Sidebar = ({
       ],
     },
     {
-      title: "TÀI LIỆU & BÁO CÁO",
+      title: "NỘP BÁO CÁO & SẢN PHẨM",
       items: [
-        {
-          id: "student-templates",
-          label: "Biểu mẫu & Tài liệu",
-          icon: FileText,
-        },
         {
           id: "student-weekly-reports",
           label: "Báo cáo tuần",
@@ -71,10 +69,15 @@ export const Sidebar = ({
           label: "Sản phẩm thực tập",
           icon: FolderKanban,
         },
+        {
+          id: "student-templates",
+          label: "Biểu mẫu & Tài liệu",
+          icon: FileText,
+        },
       ],
     },
     {
-      title: "PHẢN HỒI & HỆ THỐNG",
+      title: "PHẢN HỒI & KẾT QUẢ",
       items: [
         {
           id: "student-feedback",
@@ -86,6 +89,11 @@ export const Sidebar = ({
           label: "Kết quả Đánh giá",
           icon: Award,
         },
+      ],
+    },
+    {
+      title: "HỆ THỐNG",
+      items: [
         {
           id: "student-notifications",
           label: "Thông báo",

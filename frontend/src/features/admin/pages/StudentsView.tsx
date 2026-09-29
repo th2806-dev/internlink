@@ -43,7 +43,7 @@ import { mapStudentDtoToRow } from "../../../lib/adminMappers";
 import { adminStudentsService } from "../../../services/adminStudents.service";
 import { adminUsersService } from "../../../services/adminUsers.service";
 import { exportService } from "../../../services/export.service";
-import { useAdminStudentsQuery } from "../../../hooks/useAdminStudentsQuery";
+import { useAdminStudentsQuery, STUDENTS_PAGE_SIZE_OPTIONS } from "../../../hooks/useAdminStudentsQuery";
 import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
 import { useSemester, toApiSemesterId, toApiDepartmentId } from "../../../contexts/SemesterContext";
 import type { ToastType } from "../../../contexts/ToastContext";
@@ -83,6 +83,7 @@ export const StudentsView = ({
     setSortBy,
     clearFilters,
     goToPage,
+    setPageSize,
   } = apiPage;
   const reloadStudents = refetch;
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -761,6 +762,21 @@ export const StudentsView = ({
               Hiển thị {pagination.from}
               –{pagination.to} / {pagination.total} sinh viên
             </span>
+            <label className="flex items-center gap-1.5">
+              <span className="text-slate-500 font-medium">Số dòng:</span>
+              <select
+                value={pagination.pageSize}
+                onChange={(e) => setPageSize(Number(e.target.value))}
+                className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg font-bold text-slate-800 outline-none focus:border-blue-500 cursor-pointer"
+                aria-label="Số sinh viên mỗi trang"
+              >
+                {STUDENTS_PAGE_SIZE_OPTIONS.map((size) => (
+                  <option key={size} value={size}>
+                    {size} dòng
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
 
           <div className="flex items-center gap-1.5 font-bold">

@@ -46,21 +46,14 @@ export const Sidebar = ({
   const campaigns = stats?.notificationCampaignCount ?? 0;
   const unread = stats?.unreadNotificationCount ?? 0;
 
+  // Trình tự theo WORKFLOW đợt thực tập:
+  // Chuẩn bị (kỳ, SV, GV, DN, phân công, biểu mẫu) → Vận hành (điểm danh, thông báo)
+  // → Tổng kết (báo cáo khoa) → Hệ thống & cá nhân.
   const navSections: { title: string; items: NavItem[] }[] = [
     {
       title: "TỔNG QUAN",
       items: [
         { id: "admin-dashboard", label: "Tổng quan", icon: LayoutDashboard },
-      ],
-    },
-    {
-      title: "HỆ THỐNG",
-      items: [
-        {
-          id: "admin-departments",
-          label: "Khoa",
-          icon: Building2,
-        },
       ],
     },
     {
@@ -96,26 +89,6 @@ export const Sidebar = ({
           icon: Building2,
         },
         {
-          id: "admin-templates",
-          label: "Biểu mẫu & Tài liệu",
-          icon: FileText,
-        },
-        {
-          id: "admin-summary",
-          label: "Báo cáo tổng kết",
-          icon: ClipboardList,
-        },
-      ],
-    },
-    {
-      title: "VẬN HÀNH KỲ THỰC TẬP",
-      items: [
-        {
-          id: "admin-users",
-          label: "Người dùng",
-          icon: KeyRound,
-        },
-        {
           id: "admin-assignments",
           label: "Phân công hướng dẫn",
           icon: UserPlus,
@@ -124,15 +97,20 @@ export const Sidebar = ({
             : {}),
         },
         {
-          id: "admin-attendance",
-          label: "Điểm danh & Buổi gặp",
-          icon: CalendarCheck,
+          id: "admin-templates",
+          label: "Biểu mẫu & Tài liệu",
+          icon: FileText,
         },
       ],
     },
     {
-      title: "HỆ THỐNG & CÁ NHÂN",
+      title: "VẬN HÀNH KỲ THỰC TẬP",
       items: [
+        {
+          id: "admin-attendance",
+          label: "Điểm danh & Buổi gặp",
+          icon: CalendarCheck,
+        },
         {
           id: "admin-notifications",
           label: "Thông báo",
@@ -142,6 +120,31 @@ export const Sidebar = ({
             : campaigns > 0
             ? { badge: String(campaigns) }
             : {}),
+        },
+      ],
+    },
+    {
+      title: "TỔNG KẾT KỲ THỰC TẬP",
+      items: [
+        {
+          id: "admin-summary",
+          label: "Báo cáo tổng kết",
+          icon: ClipboardList,
+        },
+      ],
+    },
+    {
+      title: "HỆ THỐNG & CÁ NHÂN",
+      items: [
+        {
+          id: "admin-departments",
+          label: "Khoa",
+          icon: Building2,
+        },
+        {
+          id: "admin-users",
+          label: "Người dùng",
+          icon: KeyRound,
         },
         { id: "admin-settings", label: "Cài đặt", icon: Settings },
         { id: "admin-account", label: "Tài khoản", icon: User },

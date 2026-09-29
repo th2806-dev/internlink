@@ -86,7 +86,8 @@ export const AssignmentsView = ({
   const [companyFilter, setCompanyFilter] = useState("all");
   const [selectedUnassignedIds, setSelectedUnassignedIds] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(5);
+  // Danh sách sinh viên chưa phân công có thể rất lớn → 10/25/50 dòng/trang.
+  const [pageSize, setPageSize] = useState(10);
   const [recentAssignments, setRecentAssignments] = useState([]);
   const [showReassignModal, setShowReassignModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
@@ -1257,6 +1258,22 @@ export const AssignmentsView = ({
                       Hiển thị {paginatedUnassignedStudents.length} /{" "}
                       {filteredUnassignedStudents.length} sinh viên
                     </span>
+                    <label className="flex items-center gap-1.5">
+                      <span>Số dòng:</span>
+                      <select
+                        value={pageSize}
+                        onChange={(e) => {
+                          setPageSize(Number(e.target.value));
+                          setCurrentPage(1);
+                        }}
+                        className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg font-bold text-slate-800 outline-none focus:border-blue-500 cursor-pointer"
+                        aria-label="Số sinh viên mỗi trang"
+                      >
+                        <option value={10}>10 dòng</option>
+                        <option value={25}>25 dòng</option>
+                        <option value={50}>50 dòng</option>
+                      </select>
+                    </label>
                     <div className="flex items-center gap-1.5 font-bold">
                       <button
                         onClick={() =>

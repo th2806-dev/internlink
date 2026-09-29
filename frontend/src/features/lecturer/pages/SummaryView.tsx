@@ -22,7 +22,8 @@ import { adminSemestersService } from "../../../services/adminSemesters.service"
 import { lecturerInternshipsService } from "../../../services/lecturerInternships.service";
 import { attendanceService } from "../../../services/attendance.service";
 import { internshipGradingService } from "../../../services/internshipGrading.service";
-import { toApiSemesterId, useSemester } from "../../../contexts/SemesterContext";
+import { useSemester } from "../../../contexts/SemesterContext";
+import { useEnsureSpecificSemester } from "../../../hooks/useEnsureSpecificSemester";
 import type { AttendanceSessionDto, LecturerStudentListItemDto } from "../../../types/api";
 import { buildWordReportPreviewData, formatWordDate } from "./summaryWordTemplate";
 
@@ -46,9 +47,13 @@ function getReviewStatus(student: LecturerStudentListItemDto) {
 type SummaryScope = "lecturer" | "admin";
 
 export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?: (msg: string) => void; scope?: SummaryScope }) => {
-  const { selectedSemester, selectedSemesterId } = useSemester();
-  const semesterId = toApiSemesterId(selectedSemesterId);
+  const { selectedSemester } = useSemester();
   const isAdminScope = scope === "admin";
+
+  // Trang này cần HỌC KỲ CỤ THỂ (nội dung tổng kết lưu theo kỳ, Word xuất theo kỳ).
+  // Hook chung: nếu cổng admin đang ở "Tất cả các kỳ" → tự chọn kỳ phù hợp nhất một lần
+  // (kỳ active → kỳ có SV → kỳ đầu tiên); người dùng vẫn đổi tay được sau đó.
+  const { semesterId, needsSemesterChoice } = useEnsureSpecificSemester();
   const [students, setStudents] = useState<LecturerStudentListItemDto[]>([]);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -343,6 +348,13 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
   return (
     <div className="space-y-5 max-w-[1400px] mx-auto animate-in fade-in duration-200">
       <PageHeader icon={ClipboardList} title={isAdminScope ? "Báo cáo tổng kết công tác khoa" : "Tổng kết"} subtitle={isAdminScope ? "Tổng quan toàn bộ sinh viên trong kỳ đang chọn và chuẩn bị báo cáo tổng kết công tác của khoa theo học kỳ." : "Rà soát, bổ sung nội dung và chuẩn bị hồ sơ cuối kỳ của nhóm sinh viên đang hướng dẫn."} badge={selectedSemester?.name || "Chưa chọn học kỳ"} badgeColor="bg-blue-50 text-blue-800 border-blue-200" />
+
+      {/* Chưa có học kỳ cụ thể (selector đang ở "Tất cả các kỳ") → trang không có dữ liệu để hiển thị */}
+      {isAdminScope && needsSemesterChoice && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+          Trang này cần chọn <strong>một học kỳ cụ thể</strong> — hãy chọn kỳ ở đầu trang để xem dữ liệu bảng điểm và xuất báo cáo Word.
+        </div>
+      )}
 
       <nav className={`grid grid-cols-1 ${isAdminScope ? "sm:grid-cols-2" : "sm:grid-cols-3"} gap-2`} aria-label="Các mẫu tổng kết">
         {exportOptions.map((option) => {

@@ -45,6 +45,9 @@ export const Sidebar = ({
 
   const displayName = user?.name || currentLecturer || "Giảng viên";
 
+  // Trình tự theo WORKFLOW hướng dẫn thực tập:
+  // Đối tượng phụ trách (SV, DN) → Vận hành (điểm danh, duyệt báo cáo) → Đánh giá (chấm điểm, thống kê)
+  // → Tổng kết (báo cáo công tác) → Hệ thống.
   const navSections: { title: string; items: NavItem[] }[] = [
     {
       title: "TỔNG QUAN",
@@ -68,7 +71,7 @@ export const Sidebar = ({
       ],
     },
     {
-      title: "BÁO CÁO & ĐÁNH GIÁ",
+      title: "VẬN HÀNH HƯỚNG DẪN",
       items: [
         {
           id: "attendance",
@@ -81,6 +84,11 @@ export const Sidebar = ({
           icon: FileCheck,
           badge: stats.pendingReviewCount > 0 ? String(stats.pendingReviewCount) : undefined,
         },
+      ],
+    },
+    {
+      title: "ĐÁNH GIÁ & TỔNG KẾT",
+      items: [
         {
           id: "evaluations",
           label: "Đánh giá & Chấm điểm",

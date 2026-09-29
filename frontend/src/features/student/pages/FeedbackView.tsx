@@ -51,7 +51,8 @@ export const FeedbackView = ({
   const [activeTab, setActiveTab] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize] = useState(5);
+  // Feedback của sinh viên thường ít → 5/10/20 dòng/trang.
+  const [pageSize, setPageSize] = useState(5);
   const [feedbacks, setFeedbacks] = useState<StudentFeedbackUiItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -484,6 +485,22 @@ export const FeedbackView = ({
                   {filteredFeedbacks.length} phản hồi
                 </span>
 
+                <label className="flex items-center gap-1.5 font-medium text-slate-600">
+                  <span>Số dòng:</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg font-bold text-slate-800 outline-none focus:border-blue-500 cursor-pointer"
+                    aria-label="Số phản hồi mỗi trang"
+                  >
+                    <option value={5}>5 dòng</option>
+                    <option value={10}>10 dòng</option>
+                    <option value={20}>20 dòng</option>
+                  </select>
+                </label>
                 <div className="flex items-center gap-1.5 font-bold">
                   <button
                     type="button"

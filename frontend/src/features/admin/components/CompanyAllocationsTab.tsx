@@ -46,9 +46,9 @@ export const CompanyAllocationsTab = ({
   const [classFilter, setClassFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "assigned" | "unassigned">("all");
 
-  // Pagination
+  // Pagination — bảng phân công có thể hàng trăm dòng → 10/25/50 dòng/trang.
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(15);
+  const [pageSize, setPageSize] = useState(10);
 
   // Quick Assign Modal
   const [assignTarget, setAssignTarget] = useState<CompanyAllocationItemDto | null>(null);
@@ -487,6 +487,22 @@ export const CompanyAllocationsTab = ({
             </p>
 
             <div className="flex items-center gap-1.5">
+              <label className="flex items-center gap-1.5 mr-2">
+                <span>Số dòng:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="px-2 py-1 bg-white border border-slate-200 rounded-lg font-bold text-slate-800 outline-none focus:border-blue-500 cursor-pointer"
+                  aria-label="Số sinh viên mỗi trang"
+                >
+                  <option value={10}>10 dòng</option>
+                  <option value={25}>25 dòng</option>
+                  <option value={50}>50 dòng</option>
+                </select>
+              </label>
               <button
                 type="button"
                 disabled={currentPage <= 1}

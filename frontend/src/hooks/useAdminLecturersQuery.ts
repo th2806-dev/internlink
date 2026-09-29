@@ -46,10 +46,12 @@ export function useAdminLecturersQuery(options: UseAdminLecturersQueryOptions = 
   const {
     semesterId,
     departmentId,
-    pageSize = LECTURERS_PAGE_SIZE_OPTIONS[0],
+    pageSize: initialPageSize = LECTURERS_PAGE_SIZE_OPTIONS[0],
     enabled = true,
     onError,
   } = options;
+  // pageSize điều khiển được từ UI (dropdown số dòng/trang) — option chỉ là giá trị khởi tạo.
+  const [pageSize, setPageSize] = useState(initialPageSize);
   const queryClient = useQueryClient();
 
   const [searchInput, setSearchInput] = useState("");
@@ -253,6 +255,7 @@ export function useAdminLecturersQuery(options: UseAdminLecturersQueryOptions = 
     setHasGuidanceFilter,
     clearFilters,
     goToPage,
+    setPageSize,
     // Mutations
     createLecturer: createMutation.mutateAsync,
     isCreating: createMutation.isPending,

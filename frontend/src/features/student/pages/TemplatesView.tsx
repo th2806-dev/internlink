@@ -23,7 +23,8 @@ export const TemplatesView = ({ onShowToast }: { onShowToast: (msg: string) => v
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFileType, setSelectedFileType] = useState("Tất cả");
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 6;
+  // Mẫu tài liệu dạng card → 6/12/24 mẫu/trang.
+  const [pageSize, setPageSize] = useState(6);
   const [selectedDoc, setSelectedDoc] = useState<any>(null);
   const [templates, setTemplates] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -311,6 +312,22 @@ export const TemplatesView = ({ onShowToast }: { onShowToast: (msg: string) => v
                 Hiển thị {paginatedTemplates.length} / {filteredTemplates.length} mẫu
               </span>
 
+              <label className="flex items-center gap-1.5 font-medium text-slate-600">
+                <span>Số dòng:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg font-bold text-slate-800 outline-none focus:border-blue-500 cursor-pointer"
+                  aria-label="Số mẫu mỗi trang"
+                >
+                  <option value={6}>6 dòng</option>
+                  <option value={12}>12 dòng</option>
+                  <option value={24}>24 dòng</option>
+                </select>
+              </label>
               <div className="flex items-center gap-1.5 font-bold">
                 <button
                   onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}

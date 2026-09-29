@@ -18,6 +18,8 @@ import {
   CheckSquare,
   Sliders,
   PlayCircle,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { useSemester } from "../../../contexts/SemesterContext";
 import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
@@ -83,6 +85,7 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
   const [tableFilterStatus, setTableFilterStatus] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  // Kỳ thực tập thường ít → 5/10/20 dòng/trang.
   const [pageSize, setPageSize] = useState(5);
 
   const [formData, setFormData] = useState({
@@ -594,6 +597,54 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
                   ))}
                 </tbody>
               </table>
+            </div>
+
+            {/* Phân trang danh sách kỳ (ít dữ liệu → 5/10/20 dòng) */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-2 px-3 py-2.5 border-t border-slate-100 text-xs">
+              <span className="text-slate-500 font-medium">
+                Hiển thị {filteredSemesters.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, filteredSemesters.length)} / {filteredSemesters.length} kỳ
+              </span>
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-1.5 text-slate-500 font-medium">
+                  Số dòng
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 font-bold outline-none cursor-pointer"
+                    aria-label="Số kỳ mỗi trang"
+                  >
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                  </select>
+                </label>
+                <div className="flex items-center gap-1.5 font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg disabled:opacity-40 transition-colors cursor-pointer"
+                    aria-label="Trang trước"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <span className="px-2.5 py-1 bg-slate-50 rounded-lg border border-slate-200 text-slate-800">
+                    {currentPage} / {totalPages}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage >= totalPages}
+                    className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg disabled:opacity-40 transition-colors cursor-pointer"
+                    aria-label="Trang sau"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
             </div>
           </Panel>
         </div>

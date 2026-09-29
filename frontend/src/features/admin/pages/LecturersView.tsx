@@ -22,7 +22,7 @@ import {
   Check,
   UserSearch,
 } from "lucide-react";
-import { useAdminLecturersQuery } from "../../../hooks/useAdminLecturersQuery";
+import { useAdminLecturersQuery, LECTURERS_PAGE_SIZE_OPTIONS } from "../../../hooks/useAdminLecturersQuery";
 import { CreateLecturerModal } from "../components/modals/CreateLecturerModal";
 import type { CreateLecturerFormPayload } from "../components/modals/CreateLecturerModal";
 import { EditLecturerModal } from "../components/modals/EditLecturerModal";
@@ -88,6 +88,7 @@ export const LecturersView = ({
     setHasGuidanceFilter,
     clearFilters,
     goToPage,
+    setPageSize,
   } = lecturersQuery;
   const reloadLecturers = refetch;
 
@@ -621,11 +622,26 @@ export const LecturersView = ({
 
         {/* Table Pagination */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs pt-1 border-t border-slate-100">
-          <div className="flex items-center gap-1.5 text-slate-600 font-medium">
+          <div className="flex items-center gap-3 text-slate-600 font-medium">
             <span>
               Hiển thị {pagination.from}
               –{pagination.to} / {pagination.total} giảng viên
             </span>
+            <label className="flex items-center gap-1.5">
+              <span className="text-slate-500 font-medium">Số dòng:</span>
+              <select
+                value={pagination.pageSize}
+                onChange={(e) => setPageSize(Number(e.target.value))}
+                className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg font-bold text-slate-800 outline-none focus:border-blue-500 cursor-pointer"
+                aria-label="Số giảng viên mỗi trang"
+              >
+                {LECTURERS_PAGE_SIZE_OPTIONS.map((size) => (
+                  <option key={size} value={size}>
+                    {size} dòng
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
 
           <div className="flex items-center gap-1.5 font-bold">

@@ -93,6 +93,7 @@ export const UsersView = ({
     setStatus,
     clearFilters,
     goToPage,
+    setPageSize,
     createUser,
     toggleLock: toggleUserLock,
     resetPassword: resetUserPassword,
@@ -408,6 +409,21 @@ export const UsersView = ({
               Hiển thị {pagination.from}
               –{pagination.to} / {pagination.total} tài khoản
             </span>
+            <label className="flex items-center gap-1.5">
+              <span>Số dòng:</span>
+              <select
+                value={pagination.pageSize}
+                onChange={(e) => setPageSize(Number(e.target.value))}
+                className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-700 outline-none focus:border-blue-500 cursor-pointer"
+                aria-label="Số tài khoản mỗi trang"
+              >
+                {USERS_PAGE_SIZE_OPTIONS.map((size) => (
+                  <option key={size} value={size}>
+                    {size} dòng
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
           <div className="flex items-center gap-1.5">
             <button
