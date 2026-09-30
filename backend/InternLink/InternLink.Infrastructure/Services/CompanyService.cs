@@ -517,6 +517,12 @@ public class CompanyService : ICompanyService
         var createdPositionCount = 0;
         var updatedPositionCount = 0;
         var hasPositionColumns = columnMap.ContainsKey(CompanyColumn.PositionCode) || columnMap.ContainsKey(CompanyColumn.PositionTitle);
+        // Position upserts are collected here and processed AFTER companies are persisted.
+        // Upserting inline would Add new CompanyPositions to the change tracker while their
+        // parent Company is still in Added state → the first SaveChangesAsync flushes the
+        // position MERGE before the company INSERT → FK_CompanyPositions_Companies_CompanyId
+        // violation (500 on every import that creates companies with positions).
+        var positionWorkItems = new List<ImportedPositionWorkItem>();
 
         // Cache existing (non-deleted) companies so repeated imports update the same row instead of
         // failing: matched by CompanyCode first (like MSSV/MaGV), falling back to normalized name so
@@ -697,9 +703,7 @@ public class CompanyService : ICompanyService
                 if (!createdInFile.Contains(existingCompany) && updatedExisting.Add(existingCompany))
                     updated.Add(existingCompany);
 
-                (var posCreated, var posUpdated) = await UpsertImportedPositionAsync(existingCompany, rowNumber, positionCode, positionTitle, positionMajor, capacityText, errors);
-                createdPositionCount += posCreated;
-                updatedPositionCount += posUpdated;
+                positionWorkItems.Add(new ImportedPositionWorkItem(existingCompany, rowNumber, positionCode, positionTitle, positionMajor, capacityText));
                 continue;
             }
 
@@ -726,9 +730,7 @@ public class CompanyService : ICompanyService
             existingByCode[companyCode] = company;
             existingByName[normalizedName] = company;
 
-            (var newPosCreated, var newPosUpdated) = await UpsertImportedPositionAsync(company, rowNumber, positionCode, positionTitle, positionMajor, capacityText, errors);
-            createdPositionCount += newPosCreated;
-            updatedPositionCount += newPosUpdated;
+            positionWorkItems.Add(new ImportedPositionWorkItem(company, rowNumber, positionCode, positionTitle, positionMajor, capacityText));
         }
 
         // Persist existing-row updates BEFORE adding new companies: UpdateRange must not
@@ -745,6 +747,20 @@ public class CompanyService : ICompanyService
             await _db.Companies.AddRangeAsync(created);
             await _db.SaveChangesAsync();
         }
+
+        // Now that every company row (new and existing) is actually persisted, upsert the
+        // recruitment positions. New positions created here flush immediately so later
+        // in-file repeats of the same company can match them by code/title.
+        foreach (var item in positionWorkItems)
+        {
+            (var posCreated, var posUpdated) = await UpsertImportedPositionAsync(item.Company, item.RowNumber, item.PositionCode, item.PositionTitle, item.PositionMajor, item.CapacityText, errors);
+            createdPositionCount += posCreated;
+            updatedPositionCount += posUpdated;
+            if (posCreated > 0)
+                await _db.SaveChangesAsync();
+        }
+        if (updatedPositionCount > 0)
+            await _db.SaveChangesAsync();
 
         // Row-per-position layout: derive company capacity as the sum of its positions'
         // quotas (e.g. VT_FPT_01=4 + VT_FPT_02=3 + VT_FPT_03=3 → Capacity=10). The
@@ -1020,6 +1036,18 @@ public class CompanyService : ICompanyService
 
     private static bool IsBlankRow(params string?[] values) =>
         values.All(string.IsNullOrWhiteSpace);
+
+    /// <summary>
+    /// Deferred position upsert request collected while scanning import rows.
+    /// Processing happens only after the owning company row is persisted.
+    /// </summary>
+    private sealed record ImportedPositionWorkItem(
+        Company Company,
+        int RowNumber,
+        string? PositionCode,
+        string? PositionTitle,
+        string? PositionMajor,
+        string? CapacityText);
 
     private static string? NullIfWhiteSpace(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
