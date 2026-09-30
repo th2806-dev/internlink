@@ -110,7 +110,7 @@ export const EvaluationView = ({
   const processScore = Math.min(10, Math.max(0, 2 - missingCount * 0.5) + (submittedWeekCount > 0 ? Math.max(0, 2 - lateCount * 0.5) : 0) + (qualityScore ?? 0) + (evaluation?.hasCreativeProduct ? 1 : 0));
   const classification = currentGrade >= 8.5 ? "Xuất sắc" : currentGrade >= 8 ? "Giỏi" : currentGrade >= 6.5 ? "Khá" : currentGrade >= 5 ? "Trung bình" : currentGrade > 0 ? "Không đạt" : "—";
   const formatDate = (value?: string | null) =>
-    value ? new Date(value).toLocaleDateString("vi-VN") : "—";
+    value ? new Date(value).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "—";
   const statusLabel = (status: string) => ({
     Draft: "Bản nháp",
     Submitted: "Đã nộp",

@@ -109,6 +109,7 @@ export const WeeklyReportsView = ({ onShowToast }: { onShowToast: (msg: string) 
         const schedule = schedules.find((s) => s.weekNumber === week);
         const deadline = schedule?.dueDate
           ? new Date(schedule.dueDate).toLocaleString("vi-VN", {
+              timeZone: "Asia/Ho_Chi_Minh",
               day: "2-digit",
               month: "2-digit",
               year: "numeric",

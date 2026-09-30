@@ -15,6 +15,7 @@ import {
   TrendingUp,
   ShieldCheck,
   MessageSquare,
+  Clock,
 } from "lucide-react";
 import { useStudentPortal } from "../../../contexts/StudentPortalContext";
 import { useSemester } from "../../../contexts/SemesterContext";
@@ -25,6 +26,10 @@ import { Toolbar } from "../../../components/common/Toolbar";
 import { INTERNSHIP_WEEKS } from "../../../config/internship";
 import { mapWeeklyReportStatusToUi } from "../../../lib/portalMappers";
 import { weeklyReportService } from "../../../services/weeklyReport.service";
+import {
+  semesterReportScheduleService,
+  type SemesterReportScheduleDto,
+} from "../../../services/semesterReportSchedule.service";
 
 function formatDateVi(value?: string | null, style: "short" | "full" = "full") {
   if (!value) return "—";
@@ -32,15 +37,26 @@ function formatDateVi(value?: string | null, style: "short" | "full" = "full") {
   if (Number.isNaN(d.getTime())) return "—";
   return d.toLocaleDateString(
     "vi-VN",
-    style === "short" ? { day: "2-digit", month: "2-digit" } : undefined,
+    style === "short"
+      ? { timeZone: "Asia/Ho_Chi_Minh", day: "2-digit", month: "2-digit" }
+      : { timeZone: "Asia/Ho_Chi_Minh", day: "2-digit", month: "2-digit", year: "numeric" },
   );
 }
 
-function addDays(iso: string, days: number) {
-  const d = new Date(iso);
-  d.setDate(d.getDate() + days);
-  return d;
+function formatDateTimeVi(value?: string | null) {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("vi-VN", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
+
 
 function initials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -49,18 +65,38 @@ function initials(name: string) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-function weekDeadline(startDate: string | null | undefined, week: number) {
-  if (!startDate) return "—";
-  return formatDateVi(addDays(startDate, week * 7).toISOString());
+
+export interface WeeklyPlanItem {
+  week: number;
+  title: string;
+  goal: string;
+  status: string;
+  progress: number;
+  deliverable: string;
+  dueDate?: string;
+  isSubmissionOpen?: boolean;
 }
 
-export const InternshipView = ({ onShowToast, onNavigate }) => {
+export const InternshipView = ({ onShowToast, onNavigate }: { onShowToast: (msg: string) => void; onNavigate?: (tab: string) => void }) => {
   const { profile, internship, internshipId } = useStudentPortal();
   const { selectedSemester } = useSemester();
   const dynamicWeeks = selectedSemester?.totalWeeks || INTERNSHIP_WEEKS;
-  const [activeContactModal, setActiveContactModal] = useState(null);
-  const [selectedWeekDetail, setSelectedWeekDetail] = useState(null);
-  const [apiWeeklyPlans, setApiWeeklyPlans] = useState([]);
+  const currentSemesterId = internship?.semesterId || selectedSemester?.id;
+
+  const [activeContactModal, setActiveContactModal] = useState<"lecturer" | "mentor" | null>(null);
+  const [selectedWeekDetail, setSelectedWeekDetail] = useState<WeeklyPlanItem | null>(null);
+  const [apiWeeklyPlans, setApiWeeklyPlans] = useState<{
+    week: number;
+    title: string;
+    goal: string;
+    status: string;
+    progress: number;
+    deliverable: string;
+    submittedAt?: string | null;
+  }[]>([]);
+  const [schedules, setSchedules] = useState<SemesterReportScheduleDto[]>([]);
+  const [contactTopic, setContactTopic] = useState("Hỏi về Báo cáo thực tập tuần");
+  const [contactMessage, setContactMessage] = useState("");
 
   const isAssigned = Boolean(
     internship?.id &&
@@ -73,23 +109,24 @@ export const InternshipView = ({ onShowToast, onNavigate }) => {
     let cancelled = false;
     (async () => {
       try {
-        const reports = await weeklyReportService.getMine();
+        const [reports, fetchedSchedules] = await Promise.all([
+          weeklyReportService.getMine(),
+          currentSemesterId
+            ? semesterReportScheduleService.getSchedules(currentSemesterId).catch(() => [] as SemesterReportScheduleDto[])
+            : Promise.resolve([] as SemesterReportScheduleDto[]),
+        ]);
         if (cancelled) return;
+        setSchedules(fetchedSchedules);
         setApiWeeklyPlans(
           reports.map((r) => ({
             week: r.weekNumber,
             title: r.title,
             goal: r.content.slice(0, 120) + (r.content.length > 120 ? "…" : ""),
             status: mapWeeklyReportStatusToUi(r.status),
-            progress:
-              r.status === "Approved"
-                ? 100
-                : r.status === "Submitted"
-                  ? 80
-                  : r.status === "Draft"
-                    ? 30
-                    : 50,
+            // Tiến độ thật: tuần chỉ hoàn thành khi báo cáo đã được duyệt.
+            progress: r.status === "Approved" ? 100 : 0,
             deliverable: r.title,
+            submittedAt: r.submittedAt,
           })),
         );
       } catch {
@@ -99,38 +136,74 @@ export const InternshipView = ({ onShowToast, onNavigate }) => {
     return () => {
       cancelled = true;
     };
-  }, [internshipId]);
+  }, [internshipId, currentSemesterId]);
 
   const weeklyPlans = useMemo(() => {
     const byWeek = new Map(apiWeeklyPlans.map((p) => [p.week, p]));
+    const scheduleByWeek = new Map(schedules.map((s) => [s.weekNumber, s]));
+
     return Array.from({ length: dynamicWeeks }, (_, i) => {
       const week = i + 1;
-      return (
-        byWeek.get(week) ?? {
+      const report = byWeek.get(week);
+      const schedule = scheduleByWeek.get(week);
+
+      if (report) {
+        return {
           week,
-          title: `Kế hoạch tuần ${week}`,
-          goal: "Chưa có báo cáo tuần",
-          status: "Chưa bắt đầu",
-          progress: 0,
-          deliverable: "—",
-        }
-      );
+          title: report.title || schedule?.title || `Báo cáo tuần ${week}`,
+          goal: report.goal || schedule?.description || "Báo cáo tiến độ tuần",
+          status: report.status,
+          progress: report.progress,
+          deliverable: report.deliverable || schedule?.title || `Tuần ${week}`,
+          dueDate: schedule?.dueDate ? formatDateTimeVi(schedule.dueDate) : undefined,
+          isSubmissionOpen: schedule?.isSubmissionOpen ?? true,
+        };
+      }
+
+      return {
+        week,
+        title: schedule?.title || `Kế hoạch tuần ${week}`,
+        goal: schedule?.description || "Chưa có báo cáo tuần",
+        status: "Chưa bắt đầu",
+        progress: 0,
+        deliverable: schedule?.title || "Báo cáo tiến độ tuần",
+        dueDate: schedule?.dueDate ? formatDateTimeVi(schedule.dueDate) : undefined,
+        isSubmissionOpen: schedule?.isSubmissionOpen ?? false,
+      };
     });
-  }, [apiWeeklyPlans]);
+  }, [apiWeeklyPlans, schedules, dynamicWeeks]);
+
+  // Tuần báo cáo được yêu cầu = lịch đang bật trong cấu hình (≤ totalWeeks).
+  // Cùng quy tắc với backend InternshipProgressCalculator.ResolveRequiredWeekNumbers.
+  const requiredWeeks = useMemo(() => {
+    const open = Array.from(
+      new Set(
+        schedules
+          .filter(
+            (s) =>
+              s.isSubmissionOpen && s.weekNumber >= 1 && s.weekNumber <= dynamicWeeks,
+          )
+          .map((s) => s.weekNumber),
+      ),
+    ).sort((a, b) => a - b);
+    return open.length ? open : Array.from({ length: dynamicWeeks }, (_, i) => i + 1);
+  }, [schedules, dynamicWeeks]);
+
   const progressSummary = useMemo(() => {
-    const total = dynamicWeeks;
-    const done = weeklyPlans.filter(
-      (w) => w.status === "Đã hoàn thành" || w.progress >= 100,
-    ).length;
+    const approvedWeeks = new Set(
+      weeklyPlans
+        .filter((w) => w.status === "Đã hoàn thành" || w.progress >= 100)
+        .map((w) => w.week),
+    );
+    const total = requiredWeeks.length || dynamicWeeks;
+    const done = requiredWeeks.filter((w) => approvedWeeks.has(w)).length;
     const current =
-      weeklyPlans.find((w) => w.progress > 0 && w.progress < 100)?.week ??
-      (weeklyPlans.length
-        ? Math.max(...weeklyPlans.map((w) => w.week))
-        : 0);
-    const pct =
-      Math.round((done / total) * 100) || profile.overallProgress;
+      requiredWeeks.find((w) => !approvedWeeks.has(w)) ??
+      requiredWeeks[requiredWeeks.length - 1] ??
+      dynamicWeeks;
+    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
     return { current, total, pct, done };
-  }, [weeklyPlans, profile.overallProgress]);
+  }, [weeklyPlans, requiredWeeks, dynamicWeeks]);
 
   const internshipRange = useMemo(() => {
     const start = internship?.startDate;
@@ -147,33 +220,56 @@ export const InternshipView = ({ onShowToast, onNavigate }) => {
     if (profile.companyAddress && profile.companyAddress !== "—") {
       return profile.companyAddress;
     }
-    return internship?.company?.industry?.trim() || "—";
+    return (
+      internship?.company?.address?.trim() ||
+      internship?.company?.industry?.trim() ||
+      "—"
+    );
   }, [internship, profile.companyAddress]);
 
   const timelineSteps = useMemo(() => {
     const start = internship?.startDate;
     const end = internship?.endDate;
+    const created = internship?.createdAt;
+    const assigned = internship?.assignedAt;
     const status = internship?.status ?? "NotStarted";
     const midWeek = Math.ceil(dynamicWeeks / 2);
     const week = progressSummary.current;
+    const scheduleByWeek = new Map(schedules.map((s) => [s.weekNumber, s]));
+    const midSchedule = scheduleByWeek.get(midWeek);
+    const finalSchedule =
+      schedules.find((s) => s.isFinalReport || s.weekNumber > dynamicWeeks) ??
+      scheduleByWeek.get(dynamicWeeks);
 
     const steps = [
       {
         label: "Đăng ký",
-        date: start ? formatDateVi(addDays(start, -30).toISOString(), "short") : "—",
+        date: created ? formatDateVi(created, "short") : "—",
         phase: 0,
       },
       {
         label: "Được duyệt",
-        date: start ? formatDateVi(addDays(start, -14).toISOString(), "short") : "—",
+        date: assigned ? formatDateVi(assigned, "short") : "—",
         phase: 1,
       },
       { label: "Bắt đầu", date: formatDateVi(start, "short"), phase: 2 },
-      { label: "Giữa kỳ", date: `Tuần ${midWeek}`, phase: 3 },
-      { label: "Cuối kỳ", date: formatDateVi(end, "short"), phase: 4 },
+      {
+        label: "Giữa kỳ",
+        date: midSchedule?.dueDate
+          ? formatDateVi(midSchedule.dueDate, "short")
+          : `Tuần ${midWeek}`,
+        phase: 3,
+      },
+      {
+        label: "Cuối kỳ",
+        date: finalSchedule?.dueDate
+          ? formatDateVi(finalSchedule.dueDate, "short")
+          : formatDateVi(end, "short"),
+        phase: 4,
+      },
       {
         label: "Hoàn thành",
-        date: end ? formatDateVi(addDays(end, 14).toISOString(), "short") : "—",
+        date: formatDateVi(end, "short"),
         phase: 5,
       },
     ];
@@ -200,12 +296,13 @@ export const InternshipView = ({ onShowToast, onNavigate }) => {
     };
 
     return steps.map((s) => ({ ...s, status: resolveStatus(s.phase) }));
-  }, [internship, progressSummary]);
+  }, [internship, progressSummary, schedules, dynamicWeeks]);
 
   const milestones = useMemo(() => {
     const start = internship?.startDate;
     const end = internship?.endDate;
     const nextWeek = weeklyPlans.find((w) => w.progress < 100);
+    const scheduleByWeek = new Map(schedules.map((s) => [s.weekNumber, s]));
     const items: {
       title: string;
       date: string;
@@ -214,30 +311,50 @@ export const InternshipView = ({ onShowToast, onNavigate }) => {
     }[] = [];
 
     if (nextWeek) {
+      const nextSchedule = scheduleByWeek.get(nextWeek.week);
+      const deadlineStr = nextSchedule?.dueDate
+        ? formatDateTimeVi(nextSchedule.dueDate)
+        : "—";
+
       items.push({
-        title: `Nộp báo cáo tuần ${nextWeek.week}`,
-        date: weekDeadline(start, nextWeek.week),
+        title: nextSchedule?.title || `Nộp báo cáo tuần ${nextWeek.week}`,
+        date: deadlineStr,
         nearest: true,
         status: nextWeek.status,
       });
     }
 
+    const midWeekNum = Math.ceil(dynamicWeeks / 2);
+    const midSchedule = scheduleByWeek.get(midWeekNum);
+    const midReport = weeklyPlans.find((w) => w.week === midWeekNum);
     items.push({
       title: "Đánh giá giữa kỳ",
-      date: weekDeadline(start, Math.ceil(dynamicWeeks / 2)),
+      date: midSchedule?.dueDate
+        ? formatDateTimeVi(midSchedule.dueDate)
+        : "—",
       nearest: false,
-      status: "Giảng viên & Doanh nghiệp",
+      status:
+        midReport && midReport.status !== "Chưa bắt đầu"
+          ? midReport.status
+          : "Chưa nộp",
     });
 
+    const finalSchedule =
+      schedules.find((s) => s.isFinalReport || s.weekNumber > dynamicWeeks) ??
+      scheduleByWeek.get(dynamicWeeks);
     items.push({
-      title: "Nộp báo cáo cuối kỳ",
-      date: end ? formatDateVi(end) : weekDeadline(start, dynamicWeeks),
+      title: finalSchedule?.title || "Nộp báo cáo cuối kỳ",
+      date: finalSchedule?.dueDate
+        ? formatDateTimeVi(finalSchedule.dueDate)
+        : end
+          ? formatDateVi(end)
+          : "—",
       nearest: false,
       status: "Báo cáo PDF chính thức",
     });
 
     return items;
-  }, [weeklyPlans, internship?.startDate, internship?.endDate]);
+  }, [weeklyPlans, schedules, internship?.endDate, dynamicWeeks]);
 
   const goTo = (tab: string) => {
     if (onNavigate) onNavigate(tab);
@@ -340,7 +457,7 @@ export const InternshipView = ({ onShowToast, onNavigate }) => {
                   {profile.company}
                 </h2>
                 <span className="text-[10px] font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md border border-blue-200">
-                  Đối tác Khoa
+                  {internship?.company?.industry || "Đơn vị thực tập"}
                 </span>
               </div>
               <p className="text-xs font-semibold text-blue-600 mt-0.5">
@@ -584,6 +701,11 @@ export const InternshipView = ({ onShowToast, onNavigate }) => {
                         <p className="text-[11px] text-slate-500 line-clamp-1">
                           {item.goal}
                         </p>
+                        {item.dueDate && (
+                          <p className="text-[10px] text-slate-400 font-medium mt-1 flex items-center gap-1">
+                            <Clock className="w-3 h-3 text-slate-400" /> Hạn nộp: {item.dueDate}
+                          </p>
+                        )}
                       </td>
                       <td className="p-3">
                         <span
@@ -714,8 +836,8 @@ export const InternshipView = ({ onShowToast, onNavigate }) => {
               <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
                 <MessageSquare className="w-4 h-4 text-blue-600" />
                 {activeContactModal === "lecturer"
-                  ? "G\u1EEDi tin nh\u1EAFn cho Gi\u1EA3ng vi\xEAn"
-                  : "G\u1EEDi tin nh\u1EAFn cho Mentor Doanh nghi\u1EC7p"}
+                  ? "Thông tin liên hệ Giảng viên"
+                  : "Thông tin liên hệ Mentor Doanh nghiệp"}
               </h3>
               <button
                 onClick={() => setActiveContactModal(null)}
@@ -730,23 +852,84 @@ export const InternshipView = ({ onShowToast, onNavigate }) => {
                 <label className="block font-bold text-slate-700 mb-1">
                   Người nhận
                 </label>
-                <input
-                  type="text"
-                  disabled
-                  value={
-                    activeContactModal === "lecturer"
-                      ? `${profile.lecturerName} (GVHD)`
-                      : `${profile.supervisorName} (Mentor ${profile.company})`
-                  }
-                  className="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-md font-bold text-slate-700"
-                />
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-md">
+                  <p className="font-bold text-slate-900 text-sm">
+                    {activeContactModal === "lecturer"
+                      ? profile.lecturerName
+                      : profile.supervisorName}
+                  </p>
+                  <p className="text-slate-500 font-medium text-[11px] mt-0.5">
+                    {activeContactModal === "lecturer"
+                      ? "Giảng viên hướng dẫn"
+                      : `Mentor tại ${profile.company}`}
+                  </p>
+                </div>
+              </div>
+
+              {/* Direct channels */}
+              <div className="space-y-2 pt-1">
+                {activeContactModal === "lecturer" ? (
+                  <>
+                    {profile.lecturerEmail && profile.lecturerEmail !== "—" && (
+                      <a
+                        href={`mailto:${profile.lecturerEmail}`}
+                        className="flex items-center justify-between p-2.5 rounded-md border border-blue-200 bg-blue-50/60 hover:bg-blue-100/60 text-blue-800 transition-colors"
+                      >
+                        <span className="flex items-center gap-2 font-semibold">
+                          <Mail className="w-4 h-4 text-blue-600" /> Email
+                        </span>
+                        <span className="font-bold">{profile.lecturerEmail}</span>
+                      </a>
+                    )}
+                    {profile.lecturerPhone && profile.lecturerPhone !== "—" && (
+                      <a
+                        href={`tel:${profile.lecturerPhone.replace(/\s/g, "")}`}
+                        className="flex items-center justify-between p-2.5 rounded-md border border-emerald-200 bg-emerald-50/60 hover:bg-emerald-100/60 text-emerald-800 transition-colors"
+                      >
+                        <span className="flex items-center gap-2 font-semibold">
+                          <Phone className="w-4 h-4 text-emerald-600" /> Điện thoại
+                        </span>
+                        <span className="font-bold">{profile.lecturerPhone}</span>
+                      </a>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {profile.supervisorEmail && profile.supervisorEmail !== "—" && (
+                      <a
+                        href={`mailto:${profile.supervisorEmail}`}
+                        className="flex items-center justify-between p-2.5 rounded-md border border-blue-200 bg-blue-50/60 hover:bg-blue-100/60 text-blue-800 transition-colors"
+                      >
+                        <span className="flex items-center gap-2 font-semibold">
+                          <Mail className="w-4 h-4 text-blue-600" /> Email
+                        </span>
+                        <span className="font-bold">{profile.supervisorEmail}</span>
+                      </a>
+                    )}
+                    {profile.supervisorPhone && profile.supervisorPhone !== "—" && (
+                      <a
+                        href={`tel:${profile.supervisorPhone.replace(/\s/g, "")}`}
+                        className="flex items-center justify-between p-2.5 rounded-md border border-emerald-200 bg-emerald-50/60 hover:bg-emerald-100/60 text-emerald-800 transition-colors"
+                      >
+                        <span className="flex items-center gap-2 font-semibold">
+                          <Phone className="w-4 h-4 text-emerald-600" /> Điện thoại
+                        </span>
+                        <span className="font-bold">{profile.supervisorPhone}</span>
+                      </a>
+                    )}
+                  </>
+                )}
               </div>
 
               <div>
                 <label className="block font-bold text-slate-700 mb-1">
                   Chủ đề cần hỗ trợ
                 </label>
-                <select className="w-full px-3 py-2 bg-white border border-slate-200 rounded-md font-medium outline-none">
+                <select
+                  value={contactTopic}
+                  onChange={(e) => setContactTopic(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-md font-medium outline-none"
+                >
                   <option>Hỏi về Báo cáo thực tập tuần</option>
                   <option>Xin hỗ trợ tài liệu dự án</option>
                   <option>Xin nghỉ phép 1 ngày tại Doanh nghiệp</option>
@@ -760,6 +943,8 @@ export const InternshipView = ({ onShowToast, onNavigate }) => {
                 </label>
                 <textarea
                   rows={4}
+                  value={contactMessage}
+                  onChange={(e) => setContactMessage(e.target.value)}
                   placeholder="Nhập nội dung thắc mắc hoặc đề xuất hỗ trợ..."
                   className="w-full p-3 bg-white border border-slate-200 rounded-md font-medium outline-none focus:border-blue-500"
                 />
@@ -769,20 +954,24 @@ export const InternshipView = ({ onShowToast, onNavigate }) => {
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
               <button
                 onClick={() => setActiveContactModal(null)}
-                className="px-4 py-2 bg-slate-100 text-xs font-bold rounded-md text-slate-700"
+                className="px-4 py-2 bg-slate-100 text-xs font-bold rounded-md text-slate-700 hover:bg-slate-200"
               >
-                Hủy
+                Đóng
               </button>
               <button
                 onClick={() => {
+                  const targetEmail = activeContactModal === "lecturer" ? profile.lecturerEmail : profile.supervisorEmail;
+                  if (targetEmail && targetEmail !== "—") {
+                    window.location.href = `mailto:${targetEmail}?subject=${encodeURIComponent(`[InternLink] ${contactTopic} - SV ${profile.name} (${profile.mssv})`)}&body=${encodeURIComponent(contactMessage || "")}`;
+                  }
                   setActiveContactModal(null);
                   onShowToast(
-                    `\u0110\xE3 g\u1EEDi tin nh\u1EAFn \u0111\u1EBFn ${activeContactModal === "lecturer" ? "Gi\u1EA3ng vi\xEAn h\u01B0\u1EDBng d\u1EABn" : "Mentor Doanh nghi\u1EC7p"}`,
+                    `Đã mở trình gửi email đến ${activeContactModal === "lecturer" ? "Giảng viên" : "Mentor"}`,
                   );
                 }}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-md shadow-xs flex items-center gap-1.5"
               >
-                <Send className="w-3.5 h-3.5" /> Gửi tin nhắn
+                <Send className="w-3.5 h-3.5" /> Gửi email
               </button>
             </div>
           </div>
@@ -811,6 +1000,17 @@ export const InternshipView = ({ onShowToast, onNavigate }) => {
             </div>
 
             <div className="space-y-3 text-xs">
+              {selectedWeekDetail.dueDate && (
+                <div className="p-3 bg-blue-50/60 rounded-md border border-blue-200/80 space-y-1">
+                  <span className="text-[10px] font-bold text-blue-700 uppercase flex items-center gap-1">
+                    <Clock className="w-3.5 h-3.5" /> Hạn chót nộp bài
+                  </span>
+                  <p className="text-slate-900 font-bold">
+                    {selectedWeekDetail.dueDate}
+                  </p>
+                </div>
+              )}
+
               <div className="p-3 bg-slate-50 rounded-md border border-slate-200 space-y-1">
                 <span className="text-[10px] font-bold text-slate-400 uppercase">
                   Mục tiêu công việc

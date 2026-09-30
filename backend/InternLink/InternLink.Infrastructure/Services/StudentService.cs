@@ -279,6 +279,7 @@ public class StudentService : IStudentService
         var internshipQuery = _db.Internships
             .Include(i => i.Company)
             .Include(i => i.Lecturer)
+                .ThenInclude(l => l!.User)
             .Include(i => i.Student)
             .Include(i => i.Semester)
             .Where(i => !i.IsDeleted && i.StudentId == student.Id);
@@ -311,10 +312,17 @@ public class StudentService : IStudentService
         IReadOnlyList<int>? requiredWeeks = null;
         if (scheduleSemesterId.HasValue)
         {
+            // Lịch áp dụng cho SV = lịch riêng GV hướng dẫn (override từng tuần) + lịch chung kỳ.
+            var ownLecturerId = internship?.LecturerId;
             var schedules = await _db.SemesterReportSchedules
                 .AsNoTracking()
-                .Where(s => s.SemesterId == scheduleSemesterId.Value && !s.IsDeleted)
+                .Where(s => s.SemesterId == scheduleSemesterId.Value && !s.IsDeleted
+                    && (s.LecturerId == null || (ownLecturerId != null && s.LecturerId == ownLecturerId)))
                 .ToListAsync();
+            schedules = schedules
+                .GroupBy(s => s.WeekNumber)
+                .Select(g => g.OrderByDescending(s => s.LecturerId != null).First())
+                .ToList();
             requiredWeeks = InternshipProgressCalculator.ResolveRequiredWeekNumbers(
                 totalWeeks ?? 0,
                 schedules);
@@ -334,6 +342,8 @@ public class StudentService : IStudentService
             Student = _mapper.Map<StudentDto>(student),
             Internship = internship == null ? null : _mapper.Map<InternshipDto>(internship),
             LecturerName = internship?.Lecturer?.FullName,
+            LecturerEmail = internship?.Lecturer?.Email ?? internship?.Lecturer?.User?.Email,
+            LecturerPhone = internship?.Lecturer?.Phone,
             ProgressPercent = breakdown.TotalPercent,
             ProgressBreakdown = breakdown,
         };

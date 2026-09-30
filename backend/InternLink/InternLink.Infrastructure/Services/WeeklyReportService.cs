@@ -419,8 +419,13 @@ public class WeeklyReportService : IWeeklyReportService
 
         if (report.Internship?.SemesterId != null)
         {
+            // Lịch hiệu lực = override riêng của GV hướng dẫn (nếu có tuần này) đè lịch chung kỳ.
+            var ownLecturerId = report.Internship.LecturerId;
             var schedule = await _db.SemesterReportSchedules
-                .FirstOrDefaultAsync(s => s.SemesterId == report.Internship.SemesterId && s.WeekNumber == report.WeekNumber && !s.IsDeleted);
+                .Where(s => s.SemesterId == report.Internship.SemesterId && s.WeekNumber == report.WeekNumber && !s.IsDeleted
+                    && (s.LecturerId == null || (ownLecturerId != null && s.LecturerId == ownLecturerId)))
+                .OrderByDescending(s => s.LecturerId != null)
+                .FirstOrDefaultAsync();
 
             if (schedule != null && !schedule.IsSubmissionOpen)
             {

@@ -35,21 +35,35 @@ public class InternshipGradingService : IInternshipGradingService
             .FirstOrDefaultAsync(s => s.Id == semesterId && !s.IsDeleted)
             ?? throw new KeyNotFoundException(InternLink.Shared.Responses.ErrorMessage.SemesterNotFoundById(semesterId));
 
-        // 1) Lịch báo cáo (tự sinh mặc định nếu chưa có — cùng hành vi với màn hình 1)
+        // 1) Lịch báo cáo (tự sinh mặc định nếu chưa có — cùng hành vi với màn hình 1).
+        // Merge per-week: lịch override riêng của GV (LecturerId = lecturerId) đè lịch chung
+        // từng tuần; các tuần không có override dùng mốc chung của kỳ.
         var schedules = await _context.SemesterReportSchedules
             .AsNoTracking()
-            .Where(s => s.SemesterId == semesterId && !s.IsDeleted)
+            .Where(s => s.SemesterId == semesterId && !s.IsDeleted
+                && (s.LecturerId == null || (lecturerId != null && s.LecturerId == lecturerId)))
             .OrderBy(s => s.WeekNumber)
             .ToListAsync();
+        schedules = schedules
+            .GroupBy(s => s.WeekNumber)
+            .Select(g => g.OrderByDescending(s => s.LecturerId != null).First())
+            .OrderBy(s => s.WeekNumber)
+            .ToList();
 
         if (schedules.Count == 0)
         {
             await _semesterService.GenerateDefaultSchedulesAsync(semesterId);
             schedules = await _context.SemesterReportSchedules
                 .AsNoTracking()
-                .Where(s => s.SemesterId == semesterId && !s.IsDeleted)
+                .Where(s => s.SemesterId == semesterId && !s.IsDeleted
+                    && (s.LecturerId == null || (lecturerId != null && s.LecturerId == lecturerId)))
                 .OrderBy(s => s.WeekNumber)
                 .ToListAsync();
+            schedules = schedules
+                .GroupBy(s => s.WeekNumber)
+                .Select(g => g.OrderByDescending(s => s.LecturerId != null).First())
+                .OrderBy(s => s.WeekNumber)
+                .ToList();
         }
 
         // 2) Sinh viên: internship trong kỳ, lọc theo GV/phân hệ khoa

@@ -134,8 +134,13 @@ public class SubmissionService : ISubmissionService
         if (internship.SemesterId.HasValue && type == SubmissionType.FinalReport)
         {
             var totalWeeks = Math.Max(internship.Semester?.TotalWeeks ?? 1, 1);
-            var schedule = await _db.SemesterReportSchedules.FirstOrDefaultAsync(s =>
-                s.SemesterId == internship.SemesterId.Value && s.WeekNumber == totalWeeks + 1 && !s.IsDeleted);
+            // Lịch hiệu lực = override riêng của GV hướng dẫn (nếu có) đè lịch chung kỳ.
+            var ownLecturerId = internship.LecturerId;
+            var schedule = await _db.SemesterReportSchedules
+                .Where(s => s.SemesterId == internship.SemesterId.Value && s.WeekNumber == totalWeeks + 1 && !s.IsDeleted
+                    && (s.LecturerId == null || (ownLecturerId != null && s.LecturerId == ownLecturerId)))
+                .OrderByDescending(s => s.LecturerId != null)
+                .FirstOrDefaultAsync();
             if (schedule != null)
             {
                 if (!schedule.IsSubmissionOpen)

@@ -346,6 +346,8 @@ export interface StudentPortalProfileDto {
   student: StudentDto;
   internship?: InternshipDto | null;
   lecturerName?: string | null;
+  lecturerEmail?: string | null;
+  lecturerPhone?: string | null;
   progressPercent?: number | null;
   progressBreakdown?: ProgressBreakdownDto | null;
 }
@@ -365,6 +367,7 @@ export interface StudentSummaryDto {
 export interface CompanySummaryDto {
   id: string;
   companyName: string;
+  address?: string | null;
   industry?: string | null;
   contactPerson?: string | null;
   contactEmail?: string | null;
@@ -486,12 +489,16 @@ export interface InternshipDto {
   id: string;
   studentId: string;
   companyId: string;
+  lecturerId?: string | null;
+  semesterId?: string | null;
   startDate?: string | null;
   endDate?: string | null;
   status: string;
   position?: string | null;
   supervisorName?: string | null;
   notes?: string | null;
+  createdAt?: string | null;
+  assignedAt?: string | null;
   student?: StudentSummaryDto | null;
   company?: CompanySummaryDto | null;
 }

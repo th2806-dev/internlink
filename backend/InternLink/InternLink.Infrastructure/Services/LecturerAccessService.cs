@@ -22,6 +22,19 @@ public class LecturerAccessService : ILecturerAccessService
             .FirstOrDefaultAsync();
     }
 
+    public async Task<Guid?> ResolveStudentSupervisorLecturerIdAsync(Guid userId, Guid semesterId)
+    {
+        return await _db.Internships
+            .Where(i => i.Student!.UserId == userId
+                && (i.SemesterId == semesterId || i.SemesterId == null)
+                && !i.IsDeleted
+                && i.LecturerId != null)
+            .OrderByDescending(i => i.SemesterId == semesterId)
+            .ThenByDescending(i => i.CreatedAt)
+            .Select(i => i.LecturerId)
+            .FirstOrDefaultAsync();
+    }
+
     public async Task<bool> CanAccessInternshipAsync(Guid internshipId, Guid userId, bool allowStudentOwner = true)
     {
         var internship = await _db.Internships

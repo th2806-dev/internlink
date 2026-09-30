@@ -8,6 +8,12 @@ public interface ILecturerAccessService
     Task<Guid?> ResolveLecturerIdAsync(Guid userId);
 
     /// <summary>
+    /// LecturerId của GV đang hướng dẫn SV (userId) trong một học kỳ — dùng để nạp lịch
+    /// báo cáo riêng của GV đó cho portal sinh viên. Null nếu SV chưa được phân công.
+    /// </summary>
+    Task<Guid?> ResolveStudentSupervisorLecturerIdAsync(Guid userId, Guid semesterId);
+
+    /// <summary>
     /// True when the user is the assigned lecturer, the student owner, or SuperAdmin.
     /// </summary>
     Task<bool> CanAccessInternshipAsync(Guid internshipId, Guid userId, bool allowStudentOwner = true);

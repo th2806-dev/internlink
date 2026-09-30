@@ -524,11 +524,13 @@ public class CompanyService : ICompanyService
         // violation (500 on every import that creates companies with positions).
         var positionWorkItems = new List<ImportedPositionWorkItem>();
 
-        // Cache existing (non-deleted) companies so repeated imports update the same row instead of
-        // failing: matched by CompanyCode first (like MSSV/MaGV), falling back to normalized name so
-        // records created before the MaDN column existed can be adopted on the first import.
+        // Cache existing companies — INCLUDING soft-deleted rows — so repeated imports update
+        // the same row instead of failing: matched by CompanyCode first (like MSSV/MaGV),
+        // falling back to normalized name. Deleted rows MUST participate here because
+        // IX_Companies_CompanyCode is a plain unique index (not filtered by IsDeleted):
+        // re-importing a code that was soft-deleted would otherwise INSERT a duplicate
+        // key → SQL error 2601. Such matches are revived below (IsDeleted = false).
         var existingCompanies = await _db.Companies
-            .Where(c => !c.IsDeleted)
             .ToListAsync();
         var existingByCode = new Dictionary<string, Company>(StringComparer.OrdinalIgnoreCase);
         var existingByName = new Dictionary<string, Company>(StringComparer.OrdinalIgnoreCase);
@@ -680,8 +682,12 @@ public class CompanyService : ICompanyService
                 }
 
                 // Upsert: refresh contact info (mirrors student/lecturer imports).
+                // A match on a soft-deleted row revives it — required because the unique
+                // CompanyCode index spans deleted rows, so INSERTing a fresh row for the
+                // same code is impossible.
                 existingCompany.CompanyCode = companyCode;
                 existingCompany.CompanyName = companyName;
+                existingCompany.IsDeleted = false;
                 if (!string.IsNullOrWhiteSpace(industry))
                     existingCompany.Industry = industry.Trim();
                 if (!string.IsNullOrWhiteSpace(contactPerson))
@@ -836,17 +842,21 @@ public class CompanyService : ICompanyService
         }
 
         CompanyPosition? position = null;
+        // Match against soft-deleted positions too: IX_CompanyPositions_PositionCode is a
+        // plain unique index (only filtered on PositionCode IS NOT NULL), so inserting a
+        // fresh row for a previously deleted code would violate it. Deleted matches are
+        // revived below.
         if (positionCode != null)
         {
             position = await _db.CompanyPositions.FirstOrDefaultAsync(p =>
-                p.PositionCode == positionCode && p.CompanyId == company.Id && !p.IsDeleted);
+                p.PositionCode == positionCode && p.CompanyId == company.Id);
         }
 
         if (position == null && positionTitle != null)
         {
             var normTitle = NormalizeName(positionTitle);
             var companyPositions = await _db.CompanyPositions
-                .Where(p => p.CompanyId == company.Id && !p.IsDeleted)
+                .Where(p => p.CompanyId == company.Id)
                 .ToListAsync();
             position = companyPositions.FirstOrDefault(p => NormalizeName(p.Title) == normTitle);
         }
@@ -863,6 +873,7 @@ public class CompanyService : ICompanyService
                 position.RequiredMajor = positionMajor.Trim();
             if (slots.HasValue)
                 position.Slots = slots.Value;
+            position.IsDeleted = false; // revive a soft-deleted match
             position.UpdatedAt = DateTime.UtcNow;
             updatedPositionCount++;
             return (0, 1);

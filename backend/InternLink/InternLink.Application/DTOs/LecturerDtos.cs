@@ -25,21 +25,14 @@ public sealed class StudentSummaryDto
 
 
 public sealed class CompanySummaryDto
-
 {
-
     public Guid Id { get; set; }
-
     public string CompanyName { get; set; } = null!;
-
+    public string? Address { get; set; }
     public string? Industry { get; set; }
-
     public string? ContactPerson { get; set; }
-
     public string? ContactEmail { get; set; }
-
     public string? ContactPhone { get; set; }
-
 }
 
 
@@ -116,31 +109,22 @@ public sealed class SubmissionAssetDto
 
 
 public class InternshipDto
-
 {
-
     public Guid Id { get; set; }
-
     public Guid StudentId { get; set; }
-
     public Guid? CompanyId { get; set; } // Changed: nullable because company assigned later
-
+    public Guid? LecturerId { get; set; }
+    public Guid? SemesterId { get; set; }
     public DateTime? StartDate { get; set; }
-
     public DateTime? EndDate { get; set; }
-
     public string Status { get; set; } = null!;
-
     public string? Position { get; set; }
-
     public string? SupervisorName { get; set; }
-
     public string? Notes { get; set; }
-
+    public DateTime CreatedAt { get; set; }
+    public DateTime? AssignedAt { get; set; }
     public StudentSummaryDto? Student { get; set; }
-
     public CompanySummaryDto? Company { get; set; }
-
 }
 
 

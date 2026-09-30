@@ -155,7 +155,7 @@ public class LecturerService : ILecturerService
             {
                 evalDict.TryGetValue(i.Id, out var eval);
                 if (i.Student == null) return 0;
-                requiredWeeksBySemester.TryGetValue(i.SemesterId, out var requiredWeeks);
+                var requiredWeeks = GetRequiredWeeksForInternship(requiredWeeksBySemester, i.SemesterId, i.LecturerId);
                 var bd = InternshipProgressCalculator.Calculate(
                     i.Student.User,
                     i.Student,
@@ -245,7 +245,7 @@ public class LecturerService : ILecturerService
             int progressPercent = 0;
             if (i.Student != null)
             {
-                requiredWeeksBySemester.TryGetValue(i.SemesterId, out var requiredWeeks);
+                var requiredWeeks = GetRequiredWeeksForInternship(requiredWeeksBySemester, i.SemesterId, i.LecturerId);
                 breakdown = InternshipProgressCalculator.Calculate(
                     i.Student.User,
                     i.Student,
@@ -868,12 +868,23 @@ public class LecturerService : ILecturerService
 
     }
 
-
+    private static IReadOnlyList<int>? GetRequiredWeeksForInternship(
+        Dictionary<(Guid? SemesterId, Guid? LecturerId), IReadOnlyList<int>> dict,
+        Guid? semesterId,
+        Guid? lecturerId)
+    {
+        if (dict.TryGetValue((semesterId, lecturerId), out var list))
+            return list;
+        if (dict.TryGetValue((semesterId, null), out var commonList))
+            return commonList;
+        return null;
+    }
 
     /// <summary>
-    /// Tuần báo cáo tuần đang bật theo «Cấu hình báo cáo» của từng học kỳ.
+    /// Tuần báo cáo tuần đang bật theo «Cấu hình báo cáo» của từng học kỳ và từng giảng viên.
+    /// Merge per-week: override riêng của từng GV (LecturerId) đè lịch chung kỳ theo tuần.
     /// </summary>
-    private async Task<Dictionary<Guid?, IReadOnlyList<int>>> LoadRequiredWeeksBySemesterAsync(
+    private async Task<Dictionary<(Guid? SemesterId, Guid? LecturerId), IReadOnlyList<int>>> LoadRequiredWeeksBySemesterAsync(
         IEnumerable<Internship> internships)
     {
         var semesterIds = internships
@@ -882,7 +893,7 @@ public class LecturerService : ILecturerService
             .ToList();
 
         if (semesterIds.Count == 0)
-            return new Dictionary<Guid?, IReadOnlyList<int>>();
+            return new();
 
         var totalWeeksBySemester = internships
             .GroupBy(i => i.SemesterId)
@@ -890,23 +901,45 @@ public class LecturerService : ILecturerService
                 g => g.Key,
                 g => g.Select(i => i.Semester?.TotalWeeks ?? 0).FirstOrDefault());
 
+        var lecturerIds = internships
+            .Where(i => i.LecturerId != null)
+            .Select(i => i.LecturerId!.Value)
+            .Distinct()
+            .ToList();
+
         var schedules = await _db.SemesterReportSchedules
             .AsNoTracking()
-            .Where(s => semesterIds.Contains(s.SemesterId) && !s.IsDeleted)
+            .Where(s => semesterIds.Contains(s.SemesterId) && !s.IsDeleted
+                && (s.LecturerId == null || lecturerIds.Contains(s.LecturerId.Value)))
             .ToListAsync();
 
-        var schedulesBySemester = schedules
-            .GroupBy(s => (Guid?)s.SemesterId)
-            .ToDictionary(g => g.Key, g => (IEnumerable<SemesterReportSchedule>)g);
+        var result = new Dictionary<(Guid? SemesterId, Guid? LecturerId), IReadOnlyList<int>>();
 
-        var result = new Dictionary<Guid?, IReadOnlyList<int>>();
         foreach (var semesterId in semesterIds)
         {
             totalWeeksBySemester.TryGetValue(semesterId, out var totalWeeks);
-            schedulesBySemester.TryGetValue(semesterId, out var semesterSchedules);
-            result[semesterId] = InternshipProgressCalculator.ResolveRequiredWeekNumbers(
-                totalWeeks,
-                semesterSchedules);
+            var semSchedules = schedules.Where(s => s.SemesterId == semesterId).ToList();
+
+            // 1. Common default for this semester (LecturerId == null)
+            var commonSchedules = semSchedules
+                .Where(s => s.LecturerId == null)
+                .GroupBy(s => s.WeekNumber)
+                .Select(g => g.First())
+                .OrderBy(s => s.WeekNumber)
+                .ToList();
+            result[(semesterId, null)] = InternshipProgressCalculator.ResolveRequiredWeekNumbers(totalWeeks, commonSchedules);
+
+            // 2. Per-lecturer override merged with common default
+            foreach (var lecturerId in lecturerIds)
+            {
+                var merged = semSchedules
+                    .Where(s => s.LecturerId == null || s.LecturerId == lecturerId)
+                    .GroupBy(s => s.WeekNumber)
+                    .Select(g => g.OrderByDescending(s => s.LecturerId == lecturerId).First())
+                    .OrderBy(s => s.WeekNumber)
+                    .ToList();
+                result[(semesterId, lecturerId)] = InternshipProgressCalculator.ResolveRequiredWeekNumbers(totalWeeks, merged);
+            }
         }
 
         return result;

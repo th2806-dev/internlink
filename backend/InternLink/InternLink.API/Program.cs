@@ -18,7 +18,12 @@ Log.Logger = new LoggerConfiguration()
 
 builder.Host.UseSerilog();
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(new JsonDateTimeUtcConverter());
+        options.JsonSerializerOptions.Converters.Add(new JsonNullableDateTimeUtcConverter());
+    });
 builder.Services.AddResponseCompression(options =>
 {
     options.EnableForHttps = true;

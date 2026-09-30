@@ -604,6 +604,7 @@ public class InternshipService : IInternshipService
             {
                 Id = internship.Company.Id,
                 CompanyName = internship.Company.CompanyName,
+                Address = internship.Company.Address,
                 Industry = internship.Company.Industry,
                 ContactPerson = internship.Company.ContactPerson,
                 ContactEmail = internship.Company.ContactEmail,

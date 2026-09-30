@@ -40,12 +40,57 @@ public class SemesterReportScheduleController : ControllerBase
 
     [HttpGet]
     // Mọi user đã đăng nhập (gồm Sinh viên) đều đọc được lịch deadline —
-    // portal SV cần hiển thị hạn nộp GV đã cấu hình. Việc SỬA vẫn giới hạn ở GV/admin.
+    // SemesterReportSchedules có cột LecturerId: lịch riêng theo GV (override) và lịch chung kỳ
+    // (LecturerId = null). Lecturer nhận lịch override riêng của mình (fallback lịch chung),
+    // role khác nhận lịch chung kỳ.
     [Authorize]
     public async Task<IActionResult> GetReportSchedules(Guid semesterId)
     {
-        var schedules = await _semesterService.GetReportSchedulesAsync(semesterId);
+        var schedules = await ReadSchedulesForCurrentUserAsync(semesterId);
         return Ok(ApiResponse<IEnumerable<SemesterReportScheduleDto>>.Ok(schedules));
+    }
+
+    /// <summary>
+    /// Lấy lịch báo cáo theo ngữ cảnh người dùng: Lecturer → lịch override riêng của GV đó
+    /// (fallback lịch chung); Sinh viên → lịch riêng của GV đang hướng dẫn (fallback lịch
+    /// chung); role khác (admin) → lịch chung kỳ (lecturerId = null).
+    /// </summary>
+    private async Task<IEnumerable<SemesterReportScheduleDto>> ReadSchedulesForCurrentUserAsync(Guid semesterId)
+    {
+        var userId = User.GetUserId();
+
+        if (User.IsInRole("Lecturer") && userId != null)
+        {
+            var ownLecturerId = await _lecturerAccessService.ResolveLecturerIdAsync(userId.Value);
+            return await _semesterService.GetReportSchedulesAsync(semesterId, ownLecturerId);
+        }
+
+        if (User.IsInRole("Student") && userId != null)
+        {
+            var supervisorLecturerId = await _lecturerAccessService.ResolveStudentSupervisorLecturerIdAsync(userId.Value, semesterId);
+            return await _semesterService.GetReportSchedulesAsync(semesterId, supervisorLecturerId);
+        }
+        // ReadModel per-week merge lives in GetReportSchedulesAsync; pass lecturerId = null for admin/others.
+        return await _semesterService.GetReportSchedulesAsync(semesterId, null);
+    }
+
+    /// <summary>
+    /// Lecturer → LecturerId profile của người dùng hiện tại; role khác → null (lịch chung kỳ).
+    /// Ghi của admin khoa luôn tác động lên lịch chung — cấp khoa đặt deadline toàn kỳ.
+    /// </summary>
+    private async Task<Guid?> ResolveCurrentLecturerIdAsync()
+    {
+        var userId = User.GetUserId();
+        if (User.IsInRole("Lecturer") && userId != null)
+        {
+            var lecturerId = await _lecturerAccessService.ResolveLecturerIdAsync(userId.Value);
+            if (lecturerId == null)
+            {
+                throw new InvalidOperationException("Tài khoản giảng viên chưa được liên kết với hồ sơ giảng viên.");
+            }
+            return lecturerId;
+        }
+        return null;
     }
 
     [HttpPost("generate-defaults")]
@@ -55,12 +100,17 @@ public class SemesterReportScheduleController : ControllerBase
         try
         {
             await EnsureSemesterWriteAccessAsync(semesterId);
-            var schedules = await _semesterService.GenerateDefaultSchedulesAsync(semesterId);
+            var lecturerId = await ResolveCurrentLecturerIdAsync();
+            var schedules = await _semesterService.GenerateDefaultSchedulesAsync(semesterId, lecturerId);
             return Ok(ApiResponse<IEnumerable<SemesterReportScheduleDto>>.Ok(schedules));
         }
         catch (UnauthorizedAccessException ex)
         {
             return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 400 }));
         }
         catch (KeyNotFoundException ex)
         {
@@ -78,12 +128,17 @@ public class SemesterReportScheduleController : ControllerBase
         try
         {
             await EnsureSemesterWriteAccessAsync(semesterId);
-            var updated = await _semesterService.UpdateReportScheduleAsync(semesterId, weekNumber, request);
+            var lecturerId = await ResolveCurrentLecturerIdAsync();
+            var updated = await _semesterService.UpdateReportScheduleAsync(semesterId, weekNumber, request, lecturerId);
             return Ok(ApiResponse<SemesterReportScheduleDto>.Ok(updated));
         }
         catch (UnauthorizedAccessException ex)
         {
             return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 400 }));
         }
         catch (KeyNotFoundException ex)
         {

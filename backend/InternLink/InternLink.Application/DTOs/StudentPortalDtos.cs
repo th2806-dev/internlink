@@ -5,6 +5,8 @@ public sealed class StudentPortalProfileDto
     public StudentDto Student { get; set; } = null!;
     public InternshipDto? Internship { get; set; }
     public string? LecturerName { get; set; }
+    public string? LecturerEmail { get; set; }
+    public string? LecturerPhone { get; set; }
     public int ProgressPercent { get; set; }
     public ProgressBreakdownDto? ProgressBreakdown { get; set; }
 }

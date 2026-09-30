@@ -76,14 +76,20 @@ function toDateTimeLocalValue(iso?: string | null): string {
   if (!iso) return "";
   const d = parseBackendDate(iso);
   if (!d) return "";
-  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
-  return local.toISOString().slice(0, 16);
+  // Always display in Vietnam timezone (UTC+7) regardless of browser timezone
+  const vnOffset = 7 * 60; // +7 hours in minutes
+  const vnTime = new Date(d.getTime() + vnOffset * 60000);
+  return vnTime.toISOString().slice(0, 16);
 }
 
 function fromDateTimeLocalValue(value: string): string | null {
   if (!value) return null;
-  const d = new Date(value);
-  return isNaN(d.getTime()) ? null : d.toISOString();
+  // Input is in Vietnam time (UTC+7), convert back to UTC
+  const vnOffset = 7 * 60; // +7 hours in minutes
+  const d = new Date(value + ":00.000Z"); // Parse as UTC
+  if (isNaN(d.getTime())) return null;
+  const utc = new Date(d.getTime() - vnOffset * 60000);
+  return utc.toISOString();
 }
 
 interface DraftRow {

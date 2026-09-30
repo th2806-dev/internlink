@@ -116,6 +116,8 @@ export interface StudentProfile {
   totalReports: number;
   daysLeftForReport: number;
   lecturerName: string;
+  lecturerEmail?: string;
+  lecturerPhone?: string;
   supervisorName: string;
   supervisorEmail: string;
   supervisorPhone: string;

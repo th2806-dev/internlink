@@ -56,6 +56,7 @@ export function buildStudentProfileFromPortal(
   weeklyReportCount = 0,
   approvedWeeklyCount = 0,
   totalWeeks = INTERNSHIP_WEEKS,
+  semesterName?: string,
 ): StudentProfile {
   const s = portal.student;
   const i = portal.internship;
@@ -65,7 +66,7 @@ export function buildStudentProfileFromPortal(
     name: s.fullName,
     mssv: s.studentCode,
     class: s.class ?? "—",
-    semester: "Học kỳ hiện tại",
+    semester: semesterName?.trim() || "Học kỳ hiện tại",
     major: s.major ?? "—",
     company: company?.companyName ?? "Chưa có doanh nghiệp",
     companyLogo: DEFAULT_LOGO,
@@ -78,10 +79,12 @@ export function buildStudentProfileFromPortal(
     totalReports: Math.max(weeklyReportCount, approvedWeeklyCount, totalWeeks),
     daysLeftForReport: 0,
     lecturerName: portal.lecturerName ?? "—",
+    lecturerEmail: portal.lecturerEmail ?? "—",
+    lecturerPhone: portal.lecturerPhone ?? "—",
     supervisorName: i?.supervisorName ?? company?.contactPerson ?? "—",
     supervisorEmail: company?.contactEmail ?? "—",
     supervisorPhone: company?.contactPhone ?? "—",
-    companyAddress: company?.industry?.trim() || "—",
+    companyAddress: company?.address?.trim() || company?.industry?.trim() || "—",
     currentPhase: i
       ? `${internshipStatusToBadge(i.status)}${weeklyReportCount > 0 ? ` • ${weeklyReportCount} báo cáo tuần` : ""}`
       : "Chưa bắt đầu thực tập",
@@ -92,6 +95,7 @@ export function useStudentPortalContext() {
   const { user, isLoggedIn } = useAuth();
   const { selectedSemester } = useSemester();
   const semesterWeeks = selectedSemester?.totalWeeks || INTERNSHIP_WEEKS;
+  const semesterName = selectedSemester?.name?.trim();
   const [portalData, setPortalData] = useState<StudentPortalProfileDto | null>(
     null,
   );
@@ -138,6 +142,7 @@ export function useStudentPortalContext() {
         weeklyCount,
         approvedWeeklyCount,
         semesterWeeks,
+        semesterName,
       );
     }
     return {
@@ -146,7 +151,7 @@ export function useStudentPortalContext() {
       mssv: user?.username ?? "—",
       totalReports: semesterWeeks,
     };
-  }, [portalData, weeklyCount, approvedWeeklyCount, user, semesterWeeks]);
+  }, [portalData, weeklyCount, approvedWeeklyCount, user, semesterWeeks, semesterName]);
 
   const internship: InternshipDto | null = portalData?.internship ?? null;
 
