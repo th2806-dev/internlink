@@ -84,11 +84,17 @@ public class ExcelExportService : IExcelExportService
             .Distinct()
             .ToList();
 
-        // Load Evaluations via optimized dictionary lookup to avoid N+1 queries
-        var evaluations = await _db.Evaluations
+        // Load Evaluations via optimized dictionary lookup to avoid N+1 queries.
+        // Nhớ tải list rồi group in-memory: nếu 1 internship có nhiều lượt đánh giá,
+        // ToDictionaryAsync trực tiếp sẽ nổ "An item with the same key" — lấy bản mới nhất.
+        var evaluationRows = await _db.Evaluations
             .AsNoTracking()
             .Where(e => internshipIds.Contains(e.InternshipId))
-            .ToDictionaryAsync(e => e.InternshipId, cancellationToken);
+            .OrderByDescending(e => e.CreatedAt)
+            .ToListAsync(cancellationToken);
+        var evaluations = evaluationRows
+            .GroupBy(e => e.InternshipId)
+            .ToDictionary(g => g.Key, g => g.First());
 
         var totalWeeks = semesterId.HasValue
             ? Math.Max(await _db.Semesters.Where(s => s.Id == semesterId.Value).Select(s => (int?)s.TotalWeeks).FirstOrDefaultAsync(cancellationToken) ?? 1, 1)
@@ -96,11 +102,15 @@ public class ExcelExportService : IExcelExportService
         var finalReportWeek = totalWeeks + 1;
 
         // Report schedule and attendance use the week count configured on the semester.
-        var reportScheduleByWeek = await _db.SemesterReportSchedules
+        // Từ khi có lịch override theo GV, cùng 1 tuần có thể có 2 dòng (chung + riêng GV):
+        // merge theo tuần, lịch CÓ GV (override) đè lịch chung — khớp pattern các service khác.
+        var scheduleRows = await _db.SemesterReportSchedules
             .AsNoTracking()
             .Where(s => !s.IsDeleted && s.IsSubmissionOpen && (!semesterId.HasValue || s.SemesterId == semesterId.Value) && s.WeekNumber >= 1 && s.WeekNumber <= totalWeeks)
-            .OrderBy(s => s.WeekNumber)
-            .ToDictionaryAsync(s => s.WeekNumber, cancellationToken);
+            .ToListAsync(cancellationToken);
+        var reportScheduleByWeek = scheduleRows
+            .GroupBy(s => s.WeekNumber)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(s => s.LecturerId != null).First());
         var studentExportList = new List<InternshipStudentExportDto>();
         int stt = 1;
         var now = DateTime.UtcNow;

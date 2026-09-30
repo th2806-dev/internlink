@@ -36,10 +36,14 @@ public class PdfExportService : IPdfExportService
 
         var internshipIds = internships.Select(i => i.Id).ToList();
 
-        var evaluations = await _db.Evaluations
+        // Lấy bản đánh giá mới nhất cho mỗi internship (1 internship có thể có nhiều lượt).
+        var evaluationRows = await _db.Evaluations
             .AsNoTracking()
             .Where(e => !e.IsDeleted && internshipIds.Contains(e.InternshipId))
-            .ToDictionaryAsync(e => e.InternshipId, cancellationToken);
+            .ToListAsync(cancellationToken);
+        var evaluations = evaluationRows
+            .GroupBy(e => e.InternshipId)
+            .ToDictionary(g => g.Key, g => g.First());
 
         var weeklyCounts = await _db.WeeklyReports
             .AsNoTracking()

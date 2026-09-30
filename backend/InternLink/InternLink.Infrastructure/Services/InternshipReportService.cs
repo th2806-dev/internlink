@@ -58,10 +58,14 @@ public class InternshipReportService : IInternshipReportService
         var internships = await internshipsQuery.ToListAsync();
 
         var internshipIds = internships.Select(i => i.Id).ToHashSet();
-        var evaluations = await _db.Set<Domain.Entities.Evaluation>()
+        // Lấy bản đánh giá mới nhất cho mỗi internship (1 internship có thể có nhiều lượt).
+        var evaluationRows = await _db.Set<Domain.Entities.Evaluation>()
             .Where(e => internshipIds.Contains(e.InternshipId))
             .AsNoTracking()
-            .ToDictionaryAsync(e => e.InternshipId);
+            .ToListAsync();
+        var evaluations = evaluationRows
+            .GroupBy(e => e.InternshipId)
+            .ToDictionary(g => g.Key, g => g.First());
 
         var (absentWeeksByInternship, weeklyQualityLevelsByInternship) = await LoadGradingContextAsync(internships, semesterId, evaluations);
 
@@ -118,10 +122,14 @@ public class InternshipReportService : IInternshipReportService
         var internships = await internshipsQuery.ToListAsync();
 
         var internshipIds = internships.Select(i => i.Id).ToHashSet();
-        var evaluations = await _db.Set<Domain.Entities.Evaluation>()
+        // Lấy bản đánh giá mới nhất cho mỗi internship (1 internship có thể có nhiều lượt).
+        var evaluationRows = await _db.Set<Domain.Entities.Evaluation>()
             .Where(e => internshipIds.Contains(e.InternshipId))
             .AsNoTracking()
-            .ToDictionaryAsync(e => e.InternshipId);
+            .ToListAsync();
+        var evaluations = evaluationRows
+            .GroupBy(e => e.InternshipId)
+            .ToDictionary(g => g.Key, g => g.First());
 
         var (absentWeeksByInternship, weeklyQualityLevelsByInternship) = await LoadGradingContextAsync(internships, semesterId, evaluations);
 
@@ -1046,13 +1054,17 @@ public class InternshipReportService : IInternshipReportService
     {
         if (totalWeeks <= 0) return new Dictionary<int, Domain.Entities.SemesterReportSchedule>();
 
-        return await _db.SemesterReportSchedules
+        // Từ khi có lịch override theo GV, cùng 1 tuần có thể có 2 dòng (chung + riêng GV):
+        // merge theo tuần, lịch CÓ GV (override) đè lịch chung — tránh nổ "duplicate key".
+        var scheduleRows = await _db.SemesterReportSchedules
             .AsNoTracking()
             .Where(s => !s.IsDeleted && s.IsSubmissionOpen
                 && (!semesterId.HasValue || s.SemesterId == semesterId.Value)
                 && s.WeekNumber >= 1 && s.WeekNumber <= totalWeeks)
-            .OrderBy(s => s.WeekNumber)
-            .ToDictionaryAsync(s => s.WeekNumber);
+            .ToListAsync();
+        return scheduleRows
+            .GroupBy(s => s.WeekNumber)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(s => s.LecturerId != null).First());
     }
 
     /// <summary>
