@@ -12,4 +12,6 @@ public interface IInternshipGradingService
     /// đã scoped theo giảng viên/khoa. Trả về byte[] file .xlsx.
     /// </summary>
     Task<byte[]> ExportGradesExcelAsync(Guid semesterId, Guid? lecturerId, Guid? departmentId, string? className = null, CancellationToken cancellationToken = default);
+        Task<byte[]> ExportExamScoresExcelAsync(Guid semesterId, Guid? departmentId, CancellationToken cancellationToken = default);
+    Task<byte[]> ExportProcessScoresExcelAsync(Guid semesterId, Guid? departmentId, CancellationToken cancellationToken = default);
 }

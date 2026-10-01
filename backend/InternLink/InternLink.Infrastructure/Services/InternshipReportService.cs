@@ -1064,7 +1064,10 @@ public class InternshipReportService : IInternshipReportService
             .ToListAsync();
         return scheduleRows
             .GroupBy(s => s.WeekNumber)
-            .ToDictionary(g => g.Key, g => g.OrderByDescending(s => s.LecturerId != null).First());
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(s => s.LecturerId != null)
+                .ThenByDescending(s => s.UpdatedAt ?? s.CreatedAt)
+                .ThenByDescending(s => s.CreatedAt)
+                .First());
     }
 
     /// <summary>

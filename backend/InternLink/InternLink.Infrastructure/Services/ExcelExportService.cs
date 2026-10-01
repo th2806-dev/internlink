@@ -110,7 +110,10 @@ public class ExcelExportService : IExcelExportService
             .ToListAsync(cancellationToken);
         var reportScheduleByWeek = scheduleRows
             .GroupBy(s => s.WeekNumber)
-            .ToDictionary(g => g.Key, g => g.OrderByDescending(s => s.LecturerId != null).First());
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(s => s.LecturerId != null)
+                .ThenByDescending(s => s.UpdatedAt ?? s.CreatedAt)
+                .ThenByDescending(s => s.CreatedAt)
+                .First());
         var studentExportList = new List<InternshipStudentExportDto>();
         int stt = 1;
         var now = DateTime.UtcNow;

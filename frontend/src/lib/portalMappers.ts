@@ -1,7 +1,6 @@
 import type {
   EvaluationListItemDto,
   FeedbackDto,
-  InternshipDto,
   LecturerStudentListItemDto,
   LecturerCompanySummaryDto,
   NotificationDto,
@@ -40,19 +39,6 @@ function formatFileSize(bytes?: number | null): string {
   if (!bytes || bytes <= 0) return "—";
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function internshipStatusToProgress(status: string): number {
-  const map: Record<string, number> = {
-    NotStarted: 0,
-    InProgress: 55,
-    BehindSchedule: 25,
-    AwaitingFeedback: 70,
-    RequiresRevision: 40,
-    Completed: 90,
-    Graded: 100,
-  };
-  return map[status] ?? 50;
 }
 
 export function mapInternshipStatusToUi(status: string): string {
@@ -160,40 +146,6 @@ export function inferFileExtensionForCategory(category: string): string {
     default:
       return "bin";
   }
-}
-
-export function mapInternshipDtoToStudent(
-  i: InternshipDto,
-  lecturerName = "—",
-): Student {
-  const student = i.student;
-  const company = i.company;
-  const uiStatus = mapInternshipStatusToUi(i.status);
-  return {
-    id: i.id,
-    name: student?.fullName ?? "—",
-    mssv: student?.studentCode ?? "—",
-    class: student?.class ?? "—",
-    gpa: 0,
-    company: company?.companyName ?? "Chưa có",
-    position: i.position ?? "—",
-    supervisor: i.supervisorName ?? "—",
-    lecturer: lecturerName,
-    major: student?.major ?? "—",
-    email: student?.email ?? undefined,
-    status: uiStatus,
-    progress: internshipStatusToProgress(i.status),
-    riskFlag:
-      i.status === "BehindSchedule" || i.status === "RequiresRevision",
-    avatar: DEFAULT_AVATAR,
-    lastReportName: "—",
-    lastReportDate: "—",
-    updatedAt: formatViDate(i.endDate),
-    startDate: i.startDate ?? undefined,
-    endDate: i.endDate ?? undefined,
-    notesCount: 0,
-    chatCount: 0,
-  };
 }
 
 export function mapLecturerStudentDtoToStudent(
@@ -550,6 +502,7 @@ export type StudentFeedbackUiItem = {
   category: string;
   priority: string;
   status: string;
+  canSubmitRevision: boolean;
   detail: string;
   attachments: { name: string; size: string; type: string }[];
   currentWorkflowStep: number;
@@ -601,6 +554,7 @@ export function mapFeedbackDtoToStudentUi(
     category: mapSubmissionTypeToUi(submission.type),
     priority: submission.status === "RevisionRequested" ? "Khẩn" : "Thường",
     status: hasUnreadLecturerFeedback ? "Chưa xem" : mapSubmissionFeedbackStatus(submission.status),
+    canSubmitRevision: submission.status === "RevisionRequested",
     detail: latestLecturerFeedback.comment,
     attachments: [],
     currentWorkflowStep: submissionToWorkflowStep(submission.status),
@@ -663,6 +617,7 @@ export function mapWeeklyReportFeedbackToStudentUi(
     category: "Báo cáo tuần",
     priority: r.status === "RevisionRequested" ? "Khẩn" : "Thường",
     status: feedbackStatus,
+    canSubmitRevision: r.status === "RevisionRequested",
     detail: r.lecturerComment ?? "",
     attachments: [],
     currentWorkflowStep: stepMap[r.status] ?? 3,

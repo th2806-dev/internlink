@@ -101,4 +101,20 @@ export const internshipGradingService = {
       `DanhSachThucTap_${semesterId.slice(0, 8)}.xlsx`
     );
   },
+
+  exportExamScoresExcel(semesterId: string): Promise<{ blob: Blob; filename: string }> {
+    const params = new URLSearchParams({ semesterId });
+    return downloadAuthenticatedFile(
+      `/api/InternshipGrading/exam-scores-excel?${params.toString()}`,
+      `Exam_128224_${new Date().toISOString().slice(0, 10)}.xlsx`,
+    );
+  },
+
+  exportProcessScoresExcel(semesterId: string): Promise<{ blob: Blob; filename: string }> {
+    const params = new URLSearchParams({ semesterId });
+    return downloadAuthenticatedFile(
+      `/api/InternshipGrading/process-scores-excel?${params.toString()}`,
+      `261210604023_01_DiemQuaTrinh_${new Date().toISOString().slice(0, 10)}.xlsx`,
+    );
+  },
 };

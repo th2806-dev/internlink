@@ -114,7 +114,6 @@ export interface StudentProfile {
   currentGrade: number;
   reportsSubmitted: number;
   totalReports: number;
-  daysLeftForReport: number;
   lecturerName: string;
   lecturerEmail?: string;
   lecturerPhone?: string;

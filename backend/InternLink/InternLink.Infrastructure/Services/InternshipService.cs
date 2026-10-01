@@ -309,14 +309,21 @@ public class InternshipService : IInternshipService
         if (existingInternship != null)
             throw new InvalidOperationException($"Student already has an active internship");
 
+        // Status & ngày theo kỳ của internship (nếu có): kỳ đang Active → InProgress
+        // (không kẹt NotStarted mãi vì StartSemesterAsync không quét lại); kỳ có ngày
+        // mà request không truyền → kế thừa từ kỳ, khớp semantics StartSemesterAsync.
+        var semester = request.SemesterId.HasValue
+            ? await _db.Semesters.FirstOrDefaultAsync(s => s.Id == request.SemesterId.Value && !s.IsDeleted)
+            : null;
         var internship = new Internship
         {
             Id = Guid.NewGuid(),
             StudentId = request.StudentId,
             CompanyId = request.CompanyId,
-            StartDate = request.StartDate,
-            EndDate = request.EndDate,
-            Status = InternshipStatus.NotStarted,
+            SemesterId = request.SemesterId,
+            StartDate = request.StartDate ?? semester?.StartDate,
+            EndDate = request.EndDate ?? semester?.EndDate,
+            Status = semester?.Status == SemesterStatus.Active ? InternshipStatus.InProgress : InternshipStatus.NotStarted,
             Position = request.Position,
             SupervisorName = request.SupervisorName,
             Notes = request.Notes,

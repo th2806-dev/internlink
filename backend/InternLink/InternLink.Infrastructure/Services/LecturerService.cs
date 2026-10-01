@@ -934,7 +934,9 @@ public class LecturerService : ILecturerService
             var commonSchedules = semSchedules
                 .Where(s => s.LecturerId == null)
                 .GroupBy(s => s.WeekNumber)
-                .Select(g => g.First())
+                .Select(g => g.OrderByDescending(s => s.UpdatedAt ?? s.CreatedAt)
+                    .ThenByDescending(s => s.CreatedAt)
+                    .First())
                 .OrderBy(s => s.WeekNumber)
                 .ToList();
             result[(semesterId, null)] = InternshipProgressCalculator.ResolveRequiredWeekNumbers(totalWeeks, commonSchedules);
@@ -945,7 +947,11 @@ public class LecturerService : ILecturerService
                 var merged = semSchedules
                     .Where(s => s.LecturerId == null || s.LecturerId == lecturerId)
                     .GroupBy(s => s.WeekNumber)
-                    .Select(g => g.OrderByDescending(s => s.LecturerId == lecturerId).First())
+                    .Select(g => g
+                        .OrderByDescending(s => s.LecturerId == lecturerId)
+                        .ThenByDescending(s => s.UpdatedAt ?? s.CreatedAt)
+                        .ThenByDescending(s => s.CreatedAt)
+                        .First())
                     .OrderBy(s => s.WeekNumber)
                     .ToList();
                 result[(semesterId, lecturerId)] = InternshipProgressCalculator.ResolveRequiredWeekNumbers(totalWeeks, merged);

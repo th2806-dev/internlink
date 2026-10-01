@@ -61,7 +61,7 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
   const [notesDraft, setNotesDraft] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [exporting, setExporting] = useState<ExportKind | null>(null);
+  const [exporting, setExporting] = useState<ExportKind | "exam" | "process" | null>(null);
   const [reportContent, setReportContent] = useState({ results: "", difficulties: "", recommendations: "", conclusion: "" });
   const [isSavingReport, setIsSavingReport] = useState(false);
   const [reportSavedAt, setReportSavedAt] = useState<string | null>(null);
@@ -316,7 +316,11 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
     }
   };
 
-  const handleExport = async (kind: ExportKind) => {
+  const handleExport = async (kind: ExportKind | "exam" | "process") => {
+    if ((kind === "exam" || kind === "process") && !isAdminScope) {
+      onShowToast?.("Mẫu điểm thi/quá trình chính thức chỉ được xuất từ cổng quản trị khoa.");
+      return;
+    }
     if (kind === "schedule" && isAdminScope) {
       onShowToast?.("Tab Lịch hướng dẫn thực tập không hiển thị ở cổng quản trị khoa. Chỉ tổng hợp file Excel theo giảng viên ở cấp khác.");
       return;
@@ -327,7 +331,11 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
     }
     setExporting(kind);
     try {
-      if (kind === "grades") {
+      if (kind === "exam") {
+        await internshipGradingService.exportExamScoresExcel(semesterId);
+      } else if (kind === "process") {
+        await internshipGradingService.exportProcessScoresExcel(semesterId);
+      } else if (kind === "grades") {
         // Cùng pipeline template C23 "DANH SACH THUC TAP" với nút Export tại /lecturer/evaluations.
         // Admin khoa → endpoint khoa (xuất TOÀN khoa, server tự khóa theo khoa từ token);
         // giảng viên → endpoint nhóm (chỉ SV đang hướng dẫn). Lưu ý endpoint lecturer-only
@@ -632,7 +640,30 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
         })()}
       </Panel>}
 
-      {activeModule === "grades" && <Panel className="space-y-4"><div className="flex items-center justify-between gap-3"><div><div className="flex items-center gap-2"><FileSpreadsheet className="w-4 h-4 text-emerald-700" /><h2 className="text-sm font-bold text-slate-900">Xuất mẫu bảng điểm</h2></div><p className="text-xs text-slate-500 mt-1">Xuất bảng điểm sau khi đã rà soát từng sinh viên.</p></div><button type="button" className="il-btn il-btn-primary" disabled={Boolean(exporting) || !semesterId} onClick={() => void handleExport("grades")}>{exporting === "grades" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} Xuất bảng điểm</button></div></Panel>}
+      {activeModule === "grades" && <Panel className="space-y-4">
+        <div className="flex flex-col gap-3 border-b border-slate-100 pb-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <div className="flex items-center gap-2"><FileSpreadsheet className="w-4 h-4 text-emerald-700" /><h2 className="text-sm font-bold text-slate-900">Xuất dữ liệu bảng điểm</h2></div>
+            <p className="text-xs text-slate-500 mt-1">Điểm thi và điểm quá trình xuất theo mẫu import tương ứng của trường.</p>
+          </div>
+          <div className="flex flex-wrap gap-2 sm:justify-end">
+            <button type="button" className="il-btn il-btn-primary" disabled={Boolean(exporting) || !semesterId} onClick={() => void handleExport("grades")}>
+              {exporting === "grades" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+              Xuất bảng điểm
+            </button>
+            {isAdminScope && <>
+              <button type="button" className="il-btn il-btn-secondary" disabled={Boolean(exporting) || !semesterId} onClick={() => void handleExport("exam")}>
+                {exporting === "exam" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                Xuất điểm thi
+              </button>
+              <button type="button" className="il-btn il-btn-secondary" disabled={Boolean(exporting) || !semesterId} onClick={() => void handleExport("process")}>
+                {exporting === "process" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                Xuất điểm quá trình
+              </button>
+            </>}
+          </div>
+        </div>
+      </Panel>}
 
       {activeModule === "report" && <Panel className="space-y-4"><div className="flex items-center justify-between gap-3"><div><div className="flex items-center gap-2"><FileText className="w-4 h-4 text-blue-700" /><h2 className="text-sm font-bold text-slate-900">Xuất mẫu báo cáo Word</h2></div><p className="text-xs text-slate-500 mt-1">Nội dung đã lưu sẽ được đưa vào các placeholder tương ứng trong mẫu Word.</p></div><button type="button" className="il-btn il-btn-primary" disabled={Boolean(exporting) || !semesterId} onClick={() => void handleExport("report")}>{exporting === "report" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} Xuất báo cáo Word</button></div></Panel>}
     </div>

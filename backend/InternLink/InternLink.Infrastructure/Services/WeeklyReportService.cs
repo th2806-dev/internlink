@@ -425,6 +425,8 @@ public class WeeklyReportService : IWeeklyReportService
                 .Where(s => s.SemesterId == report.Internship.SemesterId && s.WeekNumber == report.WeekNumber && !s.IsDeleted
                     && (s.LecturerId == null || (ownLecturerId != null && s.LecturerId == ownLecturerId)))
                 .OrderByDescending(s => s.LecturerId != null)
+                .ThenByDescending(s => s.UpdatedAt ?? s.CreatedAt)
+                .ThenByDescending(s => s.CreatedAt)
                 .FirstOrDefaultAsync();
 
             if (schedule != null && !schedule.IsSubmissionOpen)

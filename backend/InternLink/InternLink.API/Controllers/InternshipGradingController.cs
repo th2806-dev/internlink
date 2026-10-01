@@ -136,4 +136,72 @@ public class InternshipGradingController : ControllerBase
             return StatusCode(500, ApiResponse<object>.Fail(ApiError.From("Lỗi xuất bảng điểm", ex.Message, 500)));
         }
     }
+
+    /// <summary>Exports oral exam scores into column I of the school's official template.</summary>
+    [HttpGet("exam-scores-excel")]
+    public async Task<IActionResult> ExportExamScoresExcel(
+        [FromQuery] Guid semesterId,
+        CancellationToken cancellationToken = default)
+    {
+        if (User.IsInRole("Lecturer"))
+            return Forbid();
+
+        try
+        {
+            var departmentId = _deptScope.ResolveEffectiveDepartmentId(User, null);
+            var fileBytes = await _gradingService.ExportExamScoresExcelAsync(semesterId, departmentId, cancellationToken);
+            var fileName = $"Exam_128224_{DateTime.Now:yyyy-MM-dd}.xlsx";
+            return File(fileBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(ApiResponse<object>.Fail(ApiError.From(ex.Message, status: 404)));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ApiResponse<object>.Fail(ApiError.From(ex.Message, status: 400)));
+        }
+        catch (FileNotFoundException ex)
+        {
+            return StatusCode(500, ApiResponse<object>.Fail(ApiError.From("Không tìm thấy mẫu điểm thi", ex.Message, 500)));
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, ApiResponse<object>.Fail(ApiError.From("Lỗi xuất điểm thi", ex.Message, 500)));
+        }
+    }
+
+    /// <summary>Exports process scores into column K of the official course grade template.</summary>
+    [HttpGet("process-scores-excel")]
+    public async Task<IActionResult> ExportProcessScoresExcel(
+        [FromQuery] Guid semesterId,
+        CancellationToken cancellationToken = default)
+    {
+        if (User.IsInRole("Lecturer"))
+            return Forbid();
+
+        try
+        {
+            var departmentId = _deptScope.ResolveEffectiveDepartmentId(User, null);
+            var fileBytes = await _gradingService.ExportProcessScoresExcelAsync(semesterId, departmentId, cancellationToken);
+            var fileName = $"261210604023_01_DiemQuaTrinh_{DateTime.Now:yyyy-MM-dd}.xlsx";
+            return File(fileBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(ApiResponse<object>.Fail(ApiError.From(ex.Message, status: 404)));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ApiResponse<object>.Fail(ApiError.From(ex.Message, status: 400)));
+        }
+        catch (FileNotFoundException ex)
+        {
+            return StatusCode(500, ApiResponse<object>.Fail(ApiError.From("Không tìm thấy mẫu điểm quá trình", ex.Message, 500)));
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, ApiResponse<object>.Fail(ApiError.From("Lỗi xuất điểm quá trình", ex.Message, 500)));
+        }
+    }
 }

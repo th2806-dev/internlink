@@ -115,6 +115,9 @@ public class SemesterService : ISemesterService
         if (semester == null)
             return null;
 
+        var originalStartDate = semester.StartDate;
+        var originalEndDate = semester.EndDate;
+
         if (dto.Name != null) semester.Name = dto.Name;
         if (dto.Term != null) semester.Term = dto.Term;
         if (dto.AcademicYear != null) semester.AcademicYear = dto.AcademicYear;
@@ -128,6 +131,37 @@ public class SemesterService : ISemesterService
 
         // Chặn lưu khi giai đoạn thực tập vượt EndDate (dùng giá trị hiệu lực sau cập nhật)
         ValidateInternshipPeriodInSemester(semester.StartDate, semester.EndDate, semester.InternshipStartWeek, semester.TotalWeeks);
+
+        // Đồng bộ ngày internship khi admin đổi StartDate/EndDate SAU khi start kỳ:
+        // internship được copy ngày từ kỳ đúng MỘT LẦN lúc start (StartDate ??= ...), nên nếu
+        // không sync thì toàn bộ trang SV/GV hiện ngày cũ. Chỉ tự sync khi kỳ CHƯA CÓ hoạt
+        // động thật (báo cáo đã nộp, bài nộp, buổi điểm danh) — tránh xô lệch dữ liệu lịch sử.
+        var datesChanged = dto.StartDate.HasValue && dto.StartDate.Value != originalStartDate
+            || dto.EndDate.HasValue && dto.EndDate.Value != originalEndDate;
+        if (datesChanged)
+        {
+            var internshipIds = await _context.Internships
+                .Where(i => !i.IsDeleted && i.SemesterId == id)
+                .Select(i => i.Id)
+                .ToListAsync();
+            var hasRealActivity = (internshipIds.Count > 0 && await _context.WeeklyReports
+                    .AnyAsync(r => !r.IsDeleted && internshipIds.Contains(r.InternshipId) && r.Status != WeeklyReportStatus.Draft))
+                || (internshipIds.Count > 0 && await _context.Submissions
+                    .AnyAsync(s => !s.IsDeleted && internshipIds.Contains(s.InternshipId)))
+                || await _context.AttendanceSessions.AnyAsync(a => !a.IsDeleted && a.SemesterId == id);
+            if (hasRealActivity)
+            {
+                throw new InvalidOperationException(
+                    "Không thể đổi ngày học kỳ sau khi đã có báo cáo, bài nộp hoặc điểm danh. Hãy xử lý dữ liệu hoạt động trước.");
+            }
+
+            foreach (var internship in semester.Internships.Where(i => !i.IsDeleted))
+            {
+                internship.StartDate = semester.StartDate;
+                internship.EndDate = semester.EndDate;
+                internship.UpdatedAt = DateTime.UtcNow;
+            }
+        }
 
         semester.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
@@ -324,7 +358,11 @@ public class SemesterService : ISemesterService
 
         var schedules = allSchedules
             .GroupBy(s => s.WeekNumber)
-            .Select(g => g.OrderByDescending(s => s.LecturerId == lecturerId && lecturerId.HasValue).First())
+            .Select(g => g
+                .OrderByDescending(s => lecturerId.HasValue && s.LecturerId == lecturerId)
+                .ThenByDescending(s => s.UpdatedAt ?? s.CreatedAt)
+                .ThenByDescending(s => s.CreatedAt)
+                .First())
             .OrderBy(s => s.WeekNumber)
             .ToList();
 

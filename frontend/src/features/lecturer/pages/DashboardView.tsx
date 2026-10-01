@@ -100,6 +100,9 @@ export const DashboardView = ({
   const { selectedSemester, activeSemesterId } = useSemester();
   const statusSlices = buildLecturerStatusSlices(stats);
   const hasActiveSemester = !!activeSemesterId;
+  const studentsWithoutCompany = students.filter(
+    (student) => !student.company || student.company === "Chưa có" || student.company === "Chưa phân công doanh nghiệp",
+  );
 
   // ---- Recent activity feed (derived from real data, newest first) ----  // ---- Recent activity feed (derived from real data, newest first) ----
   const recentActivity = useMemo(() => {
@@ -275,6 +278,24 @@ export const DashboardView = ({
           },
         ]}
       />
+
+      {studentsWithoutCompany.length > 0 && (
+        <div className="flex flex-col gap-3 border border-amber-300 bg-amber-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <Building2 className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+            <p className="text-xs font-medium text-amber-950">
+              <strong>{studentsWithoutCompany.length} sinh viên</strong> chưa được phân công doanh nghiệp; ưu tiên hoàn tất ghép nơi thực tập.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => onNavigate("students")}
+            className="shrink-0 self-start text-xs font-bold text-amber-900 underline underline-offset-2 sm:self-auto"
+          >
+            Mở danh sách sinh viên
+          </button>
+        </div>
+      )}
 
       <StatsCards
         totalStudents={stats.total}

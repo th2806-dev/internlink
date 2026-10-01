@@ -691,7 +691,8 @@ public class StudentServiceTests
         var studentInternships = await db.Internships.Where(i => i.StudentId == existingStudent.Id).ToListAsync();
         studentInternships.Should().HaveCount(2);
         studentInternships.Should().Contain(i => i.SemesterId == oldSemester.Id && i.Status == InternshipStatus.Completed);
-        studentInternships.Should().Contain(i => i.SemesterId == newSemester.Id && i.Status == InternshipStatus.NotStarted);
+        // Kỳ Active + import sau start → internship phải InProgress (StartSemesterAsync không quét lại NotStarted)
+        studentInternships.Should().Contain(i => i.SemesterId == newSemester.Id && i.Status == InternshipStatus.InProgress);
     }
 
     [Fact]

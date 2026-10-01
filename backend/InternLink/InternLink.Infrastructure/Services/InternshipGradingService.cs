@@ -1,4 +1,7 @@
+using System.Globalization;
 using ClosedXML.Excel;
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Spreadsheet;
 using InternLink.Application.Common;
 using InternLink.Application.DTOs;
 using InternLink.Application.Interfaces;
@@ -430,10 +433,244 @@ public class InternshipGradingService : IInternshipGradingService
         return updatedStudent;
     }
 
+    public async Task<byte[]> ExportExamScoresExcelAsync(Guid semesterId, Guid? departmentId, CancellationToken cancellationToken = default)
+    {
+        var semesterExists = await _context.Semesters
+            .AnyAsync(semester => semester.Id == semesterId && !semester.IsDeleted, cancellationToken);
+        if (!semesterExists)
+            throw new KeyNotFoundException(InternLink.Shared.Responses.ErrorMessage.SemesterNotFoundById(semesterId));
+
+        var evaluationRows =
+            from internship in _context.Internships.AsNoTracking()
+            join student in _context.Students.AsNoTracking() on internship.StudentId equals student.Id
+            join evaluation in _context.Evaluations.AsNoTracking() on internship.Id equals evaluation.InternshipId
+            where internship.SemesterId == semesterId
+                && !internship.IsDeleted
+                && !student.IsDeleted
+                && !evaluation.IsDeleted
+                && evaluation.OralExamScore.HasValue
+                && (!departmentId.HasValue || student.DepartmentId == departmentId.Value)
+            select new
+            {
+                student.StudentCode,
+                evaluation.OralExamScore,
+                evaluation.CreatedAt,
+                evaluation.UpdatedAt
+            };
+
+        var savedScores = await evaluationRows.ToListAsync(cancellationToken);
+        var scoreByStudentCode = savedScores
+            .GroupBy(row => row.StudentCode.Trim(), StringComparer.OrdinalIgnoreCase)
+            .Select(group => group
+                .OrderByDescending(row => row.UpdatedAt ?? row.CreatedAt)
+                .ThenByDescending(row => row.CreatedAt)
+                .First())
+            .ToDictionary(
+                row => row.StudentCode.Trim(),
+                row => row.OralExamScore!.Value,
+                StringComparer.OrdinalIgnoreCase);
+
+        if (scoreByStudentCode.Count == 0)
+            throw new InvalidOperationException("Chưa có điểm thi trong học kỳ này để xuất.");
+
+        return await ExportScoreTemplateColumnAsync(
+            "Exam_128224 (Thực tập tốt nghiệp).xlsx",
+            "I",
+            "điểm thi",
+            scoreByStudentCode,
+            cancellationToken);
+    }
+
+    public async Task<byte[]> ExportProcessScoresExcelAsync(Guid semesterId, Guid? departmentId, CancellationToken cancellationToken = default)
+    {
+        var summary = await GetSummaryAsync(semesterId, lecturerId: null, departmentId);
+        var scoreByStudentCode = summary.Students
+            .GroupBy(student => student.StudentCode.Trim(), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => group.First().ProcessScore,
+                StringComparer.OrdinalIgnoreCase);
+
+        return await ExportScoreTemplateColumnAsync(
+            "261210604023_01 (Thực tập tốt nghiệp).xlsx",
+            "K",
+            "điểm quá trình",
+            scoreByStudentCode,
+            cancellationToken);
+    }
+
+    private static async Task<byte[]> ExportScoreTemplateColumnAsync(
+        string templateFileName,
+        string scoreColumn,
+        string scoreLabel,
+        IReadOnlyDictionary<string, decimal> scoreByStudentCode,
+        CancellationToken cancellationToken)
+    {
+        if (scoreByStudentCode.Count == 0)
+            throw new InvalidOperationException($"Không có dữ liệu {scoreLabel} để xuất.");
+
+        var templatePath = Path.Combine(AppContext.BaseDirectory, "Templates", templateFileName);
+        if (!File.Exists(templatePath))
+            throw new FileNotFoundException($"Không tìm thấy mẫu import {scoreLabel} của trường.", templatePath);
+
+        var templateBytes = await File.ReadAllBytesAsync(templatePath, cancellationToken);
+        using var stream = new MemoryStream();
+        await stream.WriteAsync(templateBytes, cancellationToken);
+        stream.Position = 0;
+
+        using (var document = SpreadsheetDocument.Open(stream, true))
+        {
+            var workbookPart = document.WorkbookPart
+                ?? throw new InvalidDataException("Mẫu điểm thi không có workbook hợp lệ.");
+            var sheet = workbookPart.Workbook.Sheets?.Elements<Sheet>().FirstOrDefault()
+                ?? throw new InvalidDataException("Mẫu điểm thi không có worksheet.");
+            var relationshipId = sheet.Id?.Value
+                ?? throw new InvalidDataException("Mẫu điểm thi thiếu liên kết worksheet.");
+            var worksheetPart = (WorksheetPart)workbookPart.GetPartById(relationshipId);
+            var sheetData = worksheetPart.Worksheet.GetFirstChild<SheetData>()
+                ?? throw new InvalidDataException("Mẫu điểm thi không có dữ liệu worksheet.");
+            var sharedStrings = workbookPart.SharedStringTablePart?.SharedStringTable;
+            var templateStudentCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var missingScoreCount = 0;
+
+            foreach (var row in sheetData.Elements<Row>().Where(row => row.RowIndex?.Value is uint index && index >= 2))
+            {
+                var rowNumber = row.RowIndex!.Value;
+                var studentCodeCell = row.Elements<Cell>()
+                    .FirstOrDefault(cell => cell.CellReference?.Value?.StartsWith("B", StringComparison.Ordinal) == true);
+                if (studentCodeCell == null)
+                    continue;
+
+                var studentCode = ReadTemplateCellText(studentCodeCell, sharedStrings).Trim();
+                if (string.IsNullOrWhiteSpace(studentCode))
+                    continue;
+                templateStudentCodes.Add(studentCode);
+
+                var scoreCell = row.Elements<Cell>()
+                    .FirstOrDefault(cell => string.Equals(cell.CellReference?.Value, $"{scoreColumn}{rowNumber}", StringComparison.Ordinal));
+                if (scoreCell == null)
+                    throw new InvalidDataException($"Mẫu {scoreLabel} thiếu ô {scoreColumn}{rowNumber}; không thể giữ nguyên cấu trúc mẫu.");
+
+                if (!scoreByStudentCode.TryGetValue(studentCode, out var score))
+                {
+                    missingScoreCount++;
+                    continue;
+                }
+
+                // Preserve the template cell/style and change only the numeric value in column I.
+                scoreCell.CellFormula = null;
+                scoreCell.InlineString = null;
+                scoreCell.DataType = CellValues.Number;
+                scoreCell.CellValue = new CellValue(score.ToString(CultureInfo.InvariantCulture));
+            }
+
+            var unmatchedScores = scoreByStudentCode.Keys
+                .Where(code => !templateStudentCodes.Contains(code))
+                .ToList();
+            if (unmatchedScores.Count > 0)
+                throw new InvalidOperationException($"Có MSSV có {scoreLabel} nhưng không nằm trong mẫu import; không xuất file để tránh sai dòng.");
+            if (templateStudentCodes.Count == 0)
+                throw new InvalidDataException($"Mẫu {scoreLabel} không có danh sách MSSV.");
+            if (missingScoreCount > 0)
+                throw new InvalidOperationException($"Chưa thể xuất: còn {missingScoreCount} sinh viên trong mẫu chưa có {scoreLabel}.");
+
+            worksheetPart.Worksheet.Save();
+        }
+
+        return stream.ToArray();
+    }
+
+    private static string ReadTemplateCellText(Cell cell, SharedStringTable? sharedStrings)
+    {
+        if (cell.DataType?.Value == CellValues.SharedString
+            && int.TryParse(cell.CellValue?.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var index))
+        {
+            return sharedStrings?.Elements<SharedStringItem>().ElementAtOrDefault(index)?.InnerText ?? string.Empty;
+        }
+
+        return cell.InlineString?.InnerText ?? cell.CellValue?.Text ?? string.Empty;
+    }
+
     /// <inheritdoc />
     public async Task<byte[]> ExportGradesExcelAsync(Guid semesterId, Guid? lecturerId, Guid? departmentId, string? className = null, CancellationToken cancellationToken = default)
     {
         // Nguồn sự thật duy nhất: bảng tổng hợp điểm (điểm QT/thi/xếp loại/điều kiện dự thi
         // được tính y như màn hình chấm — không tự ghép từ danh sách sinh viên).
         var summary = await GetSummaryAsync(semesterId, lecturerId, departmentId, className);
-        using var workbook = new XLWorkbook();        var ws = workbook.Worksheets.Add("Bang diem toan khoa");        ws.Style.Font.FontName = "Times New Roman";        ws.Style.Font.FontSize = 11;        // ── Tiêu đề ──        ws.Cell(1, 1).Value = $"BẢNG ĐIỂM THỰC TẬP TỐT NGHIỆP — {summary.SemesterName}";        ws.Cell(1, 1).Style.Font.SetBold().Font.SetFontSize(14);        ws.Range(1, 1, 1, 10).Merge();        ws.Cell(1, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);        ws.Cell(2, 1).Value = $"Xuất lúc: {DateTime.UtcNow.AddHours(7):dd/MM/yyyy HH:mm} (GMT+7) — Nguồn: hệ thống chấm điểm thực tập";        ws.Cell(2, 1).Style.Font.SetItalic().Font.SetFontSize(9);        ws.Range(2, 1, 2, 10).Merge();        // ── Header ──        var headers = new[]        {            "STT", "MSSV", "Họ và tên", "Lớp", "Doanh nghiệp",            "Điểm QT", "Điểm thi", "Điểm TB", "Xếp loại", "Điều kiện dự thi",        };        const int headerRow = 4;        for (var c = 0; c < headers.Length; c++)        {            var cell = ws.Cell(headerRow, c + 1);            cell.Value = headers[c];            cell.Style.Font.SetBold();            cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#1E40AF");            cell.Style.Font.SetFontColor(XLColor.White);            cell.Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);            cell.Style.Alignment.SetVertical(XLAlignmentVerticalValues.Center);            cell.Style.Border.SetOutsideBorder(XLBorderStyleValues.Thin);        }        // ── Dữ liệu ──        var row = headerRow + 1;        var stt = 1;        foreach (var s in summary.Students)        {            ws.Cell(row, 1).Value = stt++;            ws.Cell(row, 2).Value = s.StudentCode;            ws.Cell(row, 3).Value = s.FullName;            ws.Cell(row, 4).Value = s.ClassName;            ws.Cell(row, 5).Value = s.CompanyName ?? "—";            ws.Cell(row, 6).Value = (double)s.ProcessScore;            ws.Cell(row, 6).Style.NumberFormat.SetFormat("0.0");            ws.Cell(row, 7).Value = s.OralExamScore.HasValue ? (double)s.OralExamScore.Value : 0;            ws.Cell(row, 7).Style.NumberFormat.SetFormat("0.0");            ws.Cell(row, 8).Value = s.AverageScore.HasValue ? (double)s.AverageScore.Value : 0;            ws.Cell(row, 8).Style.NumberFormat.SetFormat("0.00");            ws.Cell(row, 9).Value = string.IsNullOrWhiteSpace(s.Classification) ? "—" : s.Classification;            // Điều kiện dự thi: Đủ / Không đủ + lý do ngắn gọn            var eligibility = s.IsEligible ? "Đủ" : $"Không đủ: {string.Join("; ", s.IneligibleReasons)}";            ws.Cell(row, 10).Value = eligibility;            if (!s.IsEligible)            {                ws.Cell(row, 10).Style.Font.SetFontColor(XLColor.FromHtml("#B91C1C"));            }            for (var c = 1; c <= 10; c++)            {                ws.Cell(row, c).Style.Border.SetOutsideBorder(XLBorderStyleValues.Thin);            }            row++;        }        // Định dạng cột        ws.Columns().AdjustToContents(1, headerRow + Math.Max(summary.Students.Count, 1));        ws.SheetView.FreezeRows(headerRow);        using var stream = new MemoryStream();        workbook.SaveAs(stream);        return stream.ToArray();    }}
+
+        using var workbook = new XLWorkbook();
+        var ws = workbook.Worksheets.Add("Bang diem toan khoa");
+
+        ws.Style.Font.FontName = "Times New Roman";
+        ws.Style.Font.FontSize = 11;
+
+        // ── Tiêu đề ──
+        ws.Cell(1, 1).Value = $"BẢNG ĐIỂM THỰC TẬP TỐT NGHIỆP — {summary.SemesterName}";
+        ws.Cell(1, 1).Style.Font.SetBold().Font.SetFontSize(14);
+        ws.Range(1, 1, 1, 10).Merge();
+        ws.Cell(1, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+        ws.Cell(2, 1).Value = $"Xuất lúc: {DateTime.UtcNow.AddHours(7):dd/MM/yyyy HH:mm} (GMT+7) — Nguồn: hệ thống chấm điểm thực tập";
+        ws.Cell(2, 1).Style.Font.SetItalic().Font.SetFontSize(9);
+        ws.Range(2, 1, 2, 10).Merge();
+
+        // ── Header ──
+        var headers = new[]
+        {
+            "STT", "MSSV", "Họ và tên", "Lớp", "Doanh nghiệp",
+            "Điểm QT", "Điểm thi", "Điểm TB", "Xếp loại", "Điều kiện dự thi",
+        };
+        const int headerRow = 4;
+        for (var c = 0; c < headers.Length; c++)
+        {
+            var cell = ws.Cell(headerRow, c + 1);
+            cell.Value = headers[c];
+            cell.Style.Font.SetBold();
+            cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#1E40AF");
+            cell.Style.Font.SetFontColor(XLColor.White);
+            cell.Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+            cell.Style.Alignment.SetVertical(XLAlignmentVerticalValues.Center);
+            cell.Style.Border.SetOutsideBorder(XLBorderStyleValues.Thin);
+        }
+
+        // ── Dữ liệu ──
+        var row = headerRow + 1;
+        var stt = 1;
+        foreach (var s in summary.Students)
+        {
+            ws.Cell(row, 1).Value = stt++;
+            ws.Cell(row, 2).Value = s.StudentCode;
+            ws.Cell(row, 3).Value = s.FullName;
+            ws.Cell(row, 4).Value = s.ClassName;
+            ws.Cell(row, 5).Value = s.CompanyName ?? "—";
+            ws.Cell(row, 6).Value = (double)s.ProcessScore;
+            ws.Cell(row, 6).Style.NumberFormat.SetFormat("0.0");
+            ws.Cell(row, 7).Value = s.OralExamScore.HasValue ? (double)s.OralExamScore.Value : 0;
+            ws.Cell(row, 7).Style.NumberFormat.SetFormat("0.0");
+            ws.Cell(row, 8).Value = s.AverageScore.HasValue ? (double)s.AverageScore.Value : 0;
+            ws.Cell(row, 8).Style.NumberFormat.SetFormat("0.00");
+            ws.Cell(row, 9).Value = string.IsNullOrWhiteSpace(s.Classification) ? "—" : s.Classification;
+
+            // Điều kiện dự thi: Đủ / Không đủ + lý do ngắn gọn
+            var eligibility = s.IsEligible ? "Đủ" : $"Không đủ: {string.Join("; ", s.IneligibleReasons)}";
+            ws.Cell(row, 10).Value = eligibility;
+            if (!s.IsEligible)
+            {
+                ws.Cell(row, 10).Style.Font.SetFontColor(XLColor.FromHtml("#B91C1C"));
+            }
+
+            for (var c = 1; c <= 10; c++)
+            {
+                ws.Cell(row, c).Style.Border.SetOutsideBorder(XLBorderStyleValues.Thin);
+            }
+            row++;
+        }
+
+        // Định dạng cột
+        ws.Columns().AdjustToContents(1, headerRow + Math.Max(summary.Students.Count, 1));
+        ws.SheetView.FreezeRows(headerRow);
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        return stream.ToArray();
+    }
+}

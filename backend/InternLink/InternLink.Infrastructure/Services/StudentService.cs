@@ -321,7 +321,11 @@ public class StudentService : IStudentService
                 .ToListAsync();
             schedules = schedules
                 .GroupBy(s => s.WeekNumber)
-                .Select(g => g.OrderByDescending(s => s.LecturerId != null).First())
+                .Select(g => g
+                    .OrderByDescending(s => ownLecturerId.HasValue && s.LecturerId == ownLecturerId)
+                    .ThenByDescending(s => s.UpdatedAt ?? s.CreatedAt)
+                    .ThenByDescending(s => s.CreatedAt)
+                    .First())
                 .ToList();
             requiredWeeks = InternshipProgressCalculator.ResolveRequiredWeekNumbers(
                 totalWeeks ?? 0,
@@ -518,6 +522,11 @@ public class StudentService : IStudentService
     public async Task<bool> StudentCodeExistsAsync(string studentCode, Guid? excludeId = null)
     {
         var normalizedCode = NormalizeStudentCode(studentCode);
+        // Filter !IsDeleted ở đây KHỚP với DB: IX_Students_StudentCode là unique index
+        // có filter "[IsDeleted] = 0" (migration CompleteStudentP0) — dòng SV đã soft-delete
+        // KHÔNG chiếm mã, nên import/create với mã trùng SV đã xóa không vỡ index.
+        // (Khác với Companies: IX_Companies_CompanyCode KHÔNG có filter → validator DN phải
+        // bỏ filter !IsDeleted, xem CompanyCodeExistsAsync.)
         var query = _db.Students.Where(s => s.StudentCode == normalizedCode && !s.IsDeleted);
 
         if (excludeId.HasValue)
@@ -777,6 +786,12 @@ public class StudentService : IStudentService
             var semesterExists = await _db.Semesters.AnyAsync(s => s.Id == semesterId && !s.IsDeleted);
             if (semesterExists)
             {
+                // Kỳ đã Active mà import sau start: internship sinh ra phải ở InProgress,
+                // không là NotStarted — nếu không sẽ kẹt trạng thái mãi mãi (StartSemesterAsync
+                // chỉ chuyển NotStarted → InProgress NGAY LÚC start, không tự quét lại).
+                var semesterIsActive = await _db.Semesters.AnyAsync(s => s.Id == semesterId && !s.IsDeleted && s.Status == SemesterStatus.Active);
+                var importStatus = semesterIsActive ? InternshipStatus.InProgress : InternshipStatus.NotStarted;
+
                 var enrolledStudentIds = allEnrolledStudents.Select(s => s.Id).ToList();
                 var existingInternshipStudentIds = (await _db.Internships
                     .Where(i => i.SemesterId == semesterId.Value && enrolledStudentIds.Contains(i.StudentId) && !i.IsDeleted)
@@ -795,7 +810,7 @@ public class StudentService : IStudentService
                             StudentId = student.Id,
                             SemesterId = semesterId.Value,
                             CompanyId = null, // Nullable: assigned later by lecturer
-                            Status = InternshipStatus.NotStarted,
+                            Status = importStatus,
                             Notes = "Nhập từ file Excel",
                             CreatedAt = DateTime.UtcNow
                         });

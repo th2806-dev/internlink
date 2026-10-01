@@ -455,7 +455,9 @@ public class CompanyService : ICompanyService
 
     public async Task<bool> CompanyCodeExistsAsync(string code, Guid? excludeId = null)
     {
-        var query = _db.Companies.Where(c => c.CompanyCode == code && !c.IsDeleted);
+        // KHÔNG filter !IsDeleted: IX_Companies_CompanyCode là unique index KHÔNG lọc IsDeleted
+        // → dòng đã xóa vẫn chiếm mã. Validator phải khớp DB để báo lỗi 400 thay vì 500.
+        var query = _db.Companies.Where(c => c.CompanyCode == code);
 
         if (excludeId.HasValue)
             query = query.Where(c => c.Id != excludeId.Value);

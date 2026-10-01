@@ -38,6 +38,7 @@ import { Panel } from "../../../components/common/Panel";
 import { INTERNSHIP_WEEKS } from "../../../config/internship";
 import { evaluationService } from "../../../services/evaluation.service";
 import { submissionApiService } from "../../../services/submissionApi.service";
+import { semesterReportScheduleService, type SemesterReportScheduleDto } from "../../../services/semesterReportSchedule.service";
 import type { EvaluationDetailDto } from "../../../types/api";
 
 const DEFAULT_AVATAR = "";
@@ -49,7 +50,7 @@ export const DashboardView = ({
   onNavigate?: (tab: string) => void;
   onShowToast?: (msg: string, type?: string) => void;
 }) => {
-  const { profile, internshipId } = useStudentPortal();
+  const { profile, internship, internshipId } = useStudentPortal();
   const { selectedSemester, activeSemesterId } = useSemester();
   const hasActiveSemester = !!activeSemesterId;
   const { reports, loading: reportsLoading, error: reportsError } = useWeeklyReports();
@@ -70,11 +71,13 @@ export const DashboardView = ({
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const [submitWeek, _setSubmitWeek] = useState("Báo cáo tuần");
   const [evaluation, setEvaluation] = useState<EvaluationDetailDto | null>(null);
+  const [reportSchedules, setReportSchedules] = useState<SemesterReportScheduleDto[]>([]);
   const [submissionComments, setSubmissionComments] = useState<
     { id: string; title: string; comment: string; date: string }[]
   >([]);
 
   const semesterWeeks = selectedSemester?.totalWeeks || INTERNSHIP_WEEKS;
+  const scheduleSemesterId = internship?.semesterId ?? selectedSemester?.id ?? activeSemesterId;
   const totalWeeks = Math.max(
     profile.progressBreakdown?.requiredWeeksCount ?? 0,
     profile.totalReports,
@@ -113,6 +116,24 @@ export const DashboardView = ({
   }, [loadExtra]);
 
   useEffect(() => {
+    let cancelled = false;
+    if (!scheduleSemesterId) {
+      setReportSchedules([]);
+      return;
+    }
+    semesterReportScheduleService.getSchedules(scheduleSemesterId)
+      .then((schedules) => {
+        if (!cancelled) setReportSchedules(schedules);
+      })
+      .catch(() => {
+        if (!cancelled) setReportSchedules([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [scheduleSemesterId]);
+
+  useEffect(() => {
     if (reportsError) {
       onShowToast?.(getApiErrorMessage(reportsError));
     }
@@ -140,9 +161,9 @@ export const DashboardView = ({
         id: report.id,
         weekNumber: report.weekNumber,
         title: `Báo cáo tuần ${report.weekNumber}: ${report.title}`,
-        deadline: report.submittedAt
-          ? new Date(report.submittedAt).toLocaleDateString("vi-VN")
-          : "Chưa nộp",
+        deadline: reportSchedules.find((schedule) => schedule.weekNumber === report.weekNumber)?.dueDate
+          ? new Date(reportSchedules.find((schedule) => schedule.weekNumber === report.weekNumber)!.dueDate).toLocaleDateString("vi-VN")
+          : "Chưa cấu hình hạn nộp",
         priority:
           report.status === "revised" || report.status === "draft"
             ? "Cao"
@@ -158,7 +179,7 @@ export const DashboardView = ({
         completed: false,
         category: "Báo cáo",
       }));
-  }, [reports]);
+  }, [reports, reportSchedules]);
 
   const feedbacks = useMemo(() => {
     const fromReports = reports
@@ -202,6 +223,17 @@ export const DashboardView = ({
   const nextReport = reports.find(
     (r) => r.status === "draft" || r.status === "revised",
   );
+  const nextReportSchedule = (nextReport
+    ? reportSchedules.find((schedule) => schedule.weekNumber === nextReport.weekNumber && schedule.isSubmissionOpen)
+    : undefined) ?? reportSchedules
+      .filter((schedule) => schedule.isSubmissionOpen && !schedule.isFinalReport)
+      .filter((schedule) => !reports.some((report) =>
+        report.weekNumber === schedule.weekNumber && report.status !== "draft" && report.status !== "revised",
+      ))
+      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())[0];
+  const daysUntilNextReport = nextReportSchedule
+    ? Math.ceil((new Date(nextReportSchedule.dueDate).getTime() - Date.now()) / 86_400_000)
+    : null;
 
   const milestones = useMemo(() => {
     return reports
@@ -337,10 +369,15 @@ export const DashboardView = ({
             <KpiCard
               tone="rose"
               title="Hạn nộp tiếp theo"
-              value={nextReport ? `Tuần ${nextReport.weekNumber}` : "—"}
+              value={daysUntilNextReport == null ? "—" : String(Math.abs(daysUntilNextReport))}
+              unit={daysUntilNextReport == null ? undefined : daysUntilNextReport < 0 ? "ngày quá hạn" : "ngày còn lại"}
               icon={Clock}
               footer={
-                nextReport ? nextReport.title : "Không có báo cáo cần nộp"
+                nextReportSchedule
+                  ? `Tuần ${nextReport?.weekNumber ?? nextReportSchedule.weekNumber}: ${nextReport?.title ?? nextReportSchedule.title}`
+                  : nextReport
+                    ? "Chưa có hạn nộp đang mở"
+                    : "Không có báo cáo cần nộp"
               }
               onClick={() => {
                 if (nextReport) onNavigate("student-weekly-reports");

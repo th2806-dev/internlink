@@ -122,7 +122,7 @@ export const FeedbackView = ({
       fb.category.toLowerCase().includes(searchQuery.toLowerCase());
     if (!matchSearch) return false;
     if (activeTab === "Unread") return fb.status === "Chưa xem";
-    if (activeTab === "Need Revision") return fb.status === "Cần chỉnh sửa";
+    if (activeTab === "Need Revision") return fb.canSubmitRevision;
     if (activeTab === "Completed") return fb.status === "Đã hoàn thành";
     return true;
   });
@@ -229,6 +229,7 @@ export const FeedbackView = ({
       onShowToast?.("Vui lòng chọn một phản hồi trước khi nộp bản sửa.");
       return;
     }
+    if (!selectedFeedback.canSubmitRevision) return;
     if (selectedFeedback.sourceType === "weeklyReport") {
       onNavigateToWeeklyReports?.();
       return;
@@ -281,7 +282,7 @@ export const FeedbackView = ({
 
   const unreadCount = feedbacks.filter((f) => f.status === "Chưa xem").length;
   const needRevisionCount = feedbacks.filter(
-    (f) => f.status === "Cần chỉnh sửa",
+    (f) => f.canSubmitRevision,
   ).length;
 
   return (
@@ -292,14 +293,6 @@ export const FeedbackView = ({
         subtitle="Theo dõi ý kiến đánh giá từ Giảng viên hướng dẫn và nộp bản chỉnh sửa bổ sung."
         badge={`${feedbacks.length} phản hồi`}
         badgeColor="bg-blue-100 text-blue-800 border-blue-200"
-        actions={[
-          {
-            label: "Nộp bản chỉnh sửa",
-            icon: Upload,
-            onClick: handleOpenUploadModal,
-            variant: "primary",
-          },
-        ]}
       >
         {unreadCount > 0 && (
           <span className="px-2 py-0.5 font-semibold text-[10px] rounded-md border bg-amber-100 text-amber-800 border-amber-200">
@@ -331,16 +324,6 @@ export const FeedbackView = ({
               </span>
             )}
           </div>
-        }
-        right={
-          <button
-            type="button"
-            onClick={handleOpenUploadModal}
-            disabled={!selectedFeedback || isLoading}
-            className="il-btn il-btn-primary text-xs py-1.5 px-3 disabled:opacity-50"
-          >
-            <Upload className="w-3.5 h-3.5" /> Nộp bản chỉnh sửa
-          </button>
         }
       />
 
@@ -550,18 +533,15 @@ export const FeedbackView = ({
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
+                  {selectedFeedback.canSubmitRevision && (
                     <button
                       type="button"
                       onClick={handleOpenUploadModal}
                       className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-md shadow-xs transition-all flex items-center gap-1.5"
                     >
-                      <Upload className="w-3.5 h-3.5" />
-                      {selectedFeedback.sourceType === "weeklyReport"
-                        ? "Sửa báo cáo tuần"
-                        : "Nộp bản sửa"}
+                      <Upload className="w-3.5 h-3.5" /> Chỉnh sửa bản nộp
                     </button>
-                  </div>
+                  )}
                 </div>
 
                 <div className="space-y-2">

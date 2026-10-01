@@ -19,7 +19,6 @@ interface StudentPortalProfileResponse {
   currentGrade?: number;
   reportsSubmitted?: number;
   totalReports?: number;
-  daysLeftForReport?: number;
   lecturerName: string;
   supervisorName: string;
   supervisorEmail?: string;

@@ -8,6 +8,7 @@ public class CreateInternshipRequest
     public Guid StudentId { get; set; }
     public Guid? CompanyId { get; set; } // Changed: nullable for initial enrollment (company assigned later)
     public Guid? LecturerId { get; set; }
+    public Guid? SemesterId { get; set; } // Nếu có: status/ngày kế thừa theo kỳ (Active → InProgress)
     public DateTime? StartDate { get; set; }
     public DateTime? EndDate { get; set; }
     public string? Position { get; set; }

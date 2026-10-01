@@ -29,7 +29,6 @@ const DEFAULT_EMPTY_STUDENT_PROFILE: StudentProfile = {
   currentGrade: 0,
   reportsSubmitted: 0,
   totalReports: INTERNSHIP_WEEKS,
-  daysLeftForReport: 0,
   lecturerName: "—",
   supervisorName: "—",
   supervisorEmail: "—",
@@ -77,13 +76,14 @@ export function buildStudentProfileFromPortal(
     currentGrade: 0,
     reportsSubmitted: approvedWeeklyCount,
     totalReports: Math.max(weeklyReportCount, approvedWeeklyCount, totalWeeks),
-    daysLeftForReport: 0,
     lecturerName: portal.lecturerName ?? "—",
     lecturerEmail: portal.lecturerEmail ?? "—",
     lecturerPhone: portal.lecturerPhone ?? "—",
-    supervisorName: i?.supervisorName ?? company?.contactPerson ?? "—",
-    supervisorEmail: company?.contactEmail ?? "—",
-    supervisorPhone: company?.contactPhone ?? "—",
+    // CHỈ dùng supervisorName của internship — không fallback sang contactPerson
+    // (người phụ trách hợp đồng/kế toán không phải mentor thực tập của SV).
+    supervisorName: i?.supervisorName ?? "Chưa có mentor",
+    supervisorEmail: "—",
+    supervisorPhone: "—",
     companyAddress: company?.address?.trim() || company?.industry?.trim() || "—",
     currentPhase: i
       ? `${internshipStatusToBadge(i.status)}${weeklyReportCount > 0 ? ` • ${weeklyReportCount} báo cáo tuần` : ""}`

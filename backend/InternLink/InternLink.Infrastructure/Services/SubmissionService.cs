@@ -140,6 +140,8 @@ public class SubmissionService : ISubmissionService
                 .Where(s => s.SemesterId == internship.SemesterId.Value && s.WeekNumber == totalWeeks + 1 && !s.IsDeleted
                     && (s.LecturerId == null || (ownLecturerId != null && s.LecturerId == ownLecturerId)))
                 .OrderByDescending(s => s.LecturerId != null)
+                .ThenByDescending(s => s.UpdatedAt ?? s.CreatedAt)
+                .ThenByDescending(s => s.CreatedAt)
                 .FirstOrDefaultAsync();
             if (schedule != null)
             {

@@ -165,6 +165,78 @@ public class SemesterServiceTests
     }
 
     [Fact]
+    public async Task UpdateSemesterAsync_ShouldSyncInternshipDatesBeforeAnyActivity()
+    {
+        var db = GetDb();
+        var semester = NewSemester("Kỳ cập nhật ngày", SemesterStatus.Active);
+        semester.StartDate = new DateTime(2026, 9, 1);
+        semester.EndDate = new DateTime(2026, 10, 15);
+        var internship = new Internship
+        {
+            Id = Guid.NewGuid(),
+            SemesterId = semester.Id,
+            StudentId = Guid.NewGuid(),
+            StartDate = semester.StartDate,
+            EndDate = semester.EndDate,
+            Status = InternshipStatus.InProgress,
+            CreatedAt = DateTime.UtcNow
+        };
+        db.Semesters.Add(semester);
+        db.Internships.Add(internship);
+        await db.SaveChangesAsync();
+
+        var startDate = new DateTime(2026, 9, 8);
+        var endDate = new DateTime(2026, 10, 22);
+        await new SemesterService(db).UpdateSemesterAsync(semester.Id, new UpdateSemesterDto
+        {
+            StartDate = startDate,
+            EndDate = endDate
+        });
+
+        var updatedInternship = await db.Internships.FindAsync(internship.Id);
+        updatedInternship!.StartDate.Should().Be(startDate);
+        updatedInternship.EndDate.Should().Be(endDate);
+    }
+
+    [Fact]
+    public async Task UpdateSemesterAsync_ShouldRejectDateChangesAfterSubmittedReport()
+    {
+        var db = GetDb();
+        var semester = NewSemester("Kỳ đã có hoạt động", SemesterStatus.Active);
+        semester.StartDate = new DateTime(2026, 9, 1);
+        semester.EndDate = new DateTime(2026, 10, 30);
+        var internship = new Internship
+        {
+            Id = Guid.NewGuid(),
+            SemesterId = semester.Id,
+            StudentId = Guid.NewGuid(),
+            Status = InternshipStatus.InProgress,
+            CreatedAt = DateTime.UtcNow
+        };
+        db.Semesters.Add(semester);
+        db.Internships.Add(internship);
+        db.WeeklyReports.Add(new WeeklyReport
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = internship.Id,
+            WeekNumber = 1,
+            Title = "Báo cáo tuần 1",
+            Content = "Đã gửi",
+            Status = WeeklyReportStatus.Submitted,
+            CreatedAt = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
+
+        var act = () => new SemesterService(db).UpdateSemesterAsync(semester.Id, new UpdateSemesterDto
+        {
+            StartDate = new DateTime(2026, 9, 8)
+        });
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("Không thể đổi ngày học kỳ sau khi đã có báo cáo, bài nộp hoặc điểm danh. Hãy xử lý dữ liệu hoạt động trước.");
+    }
+
+    [Fact]
     public async Task CreateSemesterAsync_ShouldGenerateDefaultSchedulesMatchingTotalWeeks()
     {
         var db = GetDb();
@@ -227,6 +299,41 @@ public class SemesterServiceTests
         updated.DueDate.Should().Be(newDeadline);
         updated.AllowLateSubmission.Should().BeFalse();
         updated.Description.Should().Be("Nghiêm cấm nộp trễ hạn tuần này");
+    }
+
+    [Fact]
+    public async Task GetReportSchedulesAsync_ShouldPreferMostRecentlyUpdatedDuplicateDefaultSchedule()
+    {
+        var db = GetDb();
+        var semester = NewSemester("Kỳ lịch trùng", SemesterStatus.Active);
+        var older = new SemesterReportSchedule
+        {
+            Id = Guid.NewGuid(),
+            SemesterId = semester.Id,
+            WeekNumber = 3,
+            Title = "Lịch cũ",
+            DueDate = DateTime.UtcNow.AddDays(3),
+            CreatedAt = DateTime.UtcNow.AddDays(-2),
+            UpdatedAt = DateTime.UtcNow.AddDays(-1)
+        };
+        var newer = new SemesterReportSchedule
+        {
+            Id = Guid.NewGuid(),
+            SemesterId = semester.Id,
+            WeekNumber = 3,
+            Title = "Lịch mới",
+            DueDate = DateTime.UtcNow.AddDays(10),
+            CreatedAt = DateTime.UtcNow.AddDays(-2),
+            UpdatedAt = DateTime.UtcNow
+        };
+        db.Semesters.Add(semester);
+        db.SemesterReportSchedules.AddRange(older, newer);
+        await db.SaveChangesAsync();
+
+        var schedules = (await new SemesterService(db).GetReportSchedulesAsync(semester.Id)).ToList();
+
+        schedules.Should().ContainSingle(schedule => schedule.WeekNumber == 3);
+        schedules.Single(schedule => schedule.WeekNumber == 3).Title.Should().Be("Lịch mới");
     }
 
     // ══ Audit mục 4.1–4.3 ═════════════════════════════════════════════════
