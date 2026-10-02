@@ -4,9 +4,7 @@ import {
   Sparkles,
   Plus,
   Search,
-  Calendar,
   Users,
-  UserCheck,
   CheckCircle2,
   Clock,
   Edit3,
@@ -14,9 +12,6 @@ import {
   Lock,
   Eye,
   FileUp,
-  Layers,
-  CheckSquare,
-  Sliders,
   PlayCircle,
   ChevronLeft,
   ChevronRight,
@@ -31,7 +26,6 @@ import { AssignLecturerModal } from "../components/modals/AssignLecturerModal";
 import { ImportStudentsModal } from "../components/modals/ImportStudentsModal";
 import { ImportLecturersModal } from "../components/modals/ImportLecturersModal";
 import { PageHeader } from "../../../components/common/PageHeader";
-import { KpiCard, KpiGrid } from "../../../components/common/KpiCard";
 import { Panel } from "../../../components/common/Panel";
 import { adminStudentsService } from "../../../services/adminStudents.service";
 import { adminLecturersService } from "../../../services/adminLecturers.service";
@@ -183,20 +177,6 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
   const activeSem = currentActiveSem;
   const activeInternshipPeriod = getInternshipPeriod(currentActiveSem as Semester);
   const hasRealSemester = !!currentActiveSem.id;
-  const activeCount = semestersList.filter((s) => s.status === "active").length;
-  const completedCount = semestersList.filter((s) => s.status === "completed").length;
-
-  const timelinePhases = [
-    { num: "01", label: "Tạo kỳ thực tập", sub: "Thiết lập thời gian & tiêu chí", isDone: hasRealSemester, isCurrent: false },
-    { num: "02", label: "Import giảng viên", sub: hasRealSemester ? `${activeSem.lecturersCount} GV hướng dẫn` : "—", isDone: hasRealSemester && activeSem.lecturersCount > 0, isCurrent: false },
-    { num: "03", label: "Import sinh viên", sub: hasRealSemester ? `${activeSem.studentsCount} SV đủ điều kiện` : "—", isDone: hasRealSemester && activeSem.studentsCount > 0, isCurrent: false },
-    { num: "04", label: "Phân công hướng dẫn", sub: hasRealSemester ? `${activeSem.placedStudents} đã phân công` : "Ghép nối SV & GV", isDone: hasRealSemester && activeSem.placedStudents > 0, isCurrent: false },
-    { num: "05", label: "Sinh viên thực tập", sub: hasRealSemester ? `Tại ${activeSem.companiesCount} doanh nghiệp` : "Chưa có dữ liệu", isDone: false, isCurrent: hasRealSemester && activeSem.status === "active" },
-    { num: "06", label: "Thu báo cáo & Chấm", sub: hasRealSemester ? `Điểm: ${activeSem.progressPercent}%` : "Chưa có dữ liệu", isDone: activeSem.status === "completed", isCurrent: false },
-    { num: "07", label: "Tổng kết & Đóng kỳ", sub: hasRealSemester ? (activeSem.status === "completed" ? "Đã hoàn thành" : "Chưa hoàn thành") : "Chưa có dữ liệu", isDone: activeSem.status === "completed", isCurrent: false },
-  ];
-
-  const currentPhaseIdx = timelinePhases.findIndex((p) => p.isCurrent);
   const filteredSemesters = semestersList.filter((s) => {
     const matchesFilter =
       tableFilterStatus === "all" || s.status === tableFilterStatus;
@@ -221,13 +201,13 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
           canMutateSemesters
             ? [
                 {
-                  label: "Import Giảng viên",
+                  label: "Nhập giảng viên",
                   icon: FileUp,
                   onClick: () => setImportType("lecturers"),
                   variant: "secondary",
                 },
                 {
-                  label: "Import Sinh viên",
+                  label: "Nhập sinh viên",
                   icon: Users,
                   onClick: () => setImportType("students"),
                   variant: "secondary",
@@ -250,50 +230,9 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
         <EvidenceDeadlinePanel semesterId={activeSem.id} semesterName={activeSem.name} />
       )}
 
-      <KpiGrid>
-        <KpiCard
-          tone="blue"
-          title="Tổng số kỳ thực tập"
-          value={semestersList.length}
-          unit="kỳ"
-          icon={Calendar}
-          footer="Tất cả niên khóa"
-        />
-        <KpiCard
-          tone="emerald"
-          title="Đợt đang hoạt động"
-          value={activeCount}
-          unit="đợt"
-          icon={CheckCircle2}
-          footer={
-            <span className="flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> {completedCount} đã hoàn thành
-            </span>
-          }
-        />
-        <KpiCard
-          tone="amber"
-          title="Sinh viên đợt hiện tại"
-          value={activeSem.studentsCount}
-          unit="sinh viên"
-          icon={Users}
-          footer={`${activeSem.placedStudents} đã tiếp nhận doanh nghiệp` +
-            (activeSem.targetStudents ? ` / chỉ tiêu ${activeSem.targetStudents}` : "")}
-        />
-        <KpiCard
-          tone="sky"
-          title="Giảng viên hướng dẫn"
-          value={activeSem.lecturersCount}
-          unit="giảng viên"
-          icon={UserCheck}
-          footer={`${activeSem.companiesCount} doanh nghiệp liên kết`}
-        />
-      </KpiGrid>
-
-      {/* STREAMLINED 2-COLUMN LAYOUT */}
+      {/* Current semester summary and semester list */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* LEFT 8 COLUMNS: MAIN SEMESTERS TABLE & ACTIVE PROGRESS */}
-        <div className="lg:col-span-8 space-y-6">
+        <div className="lg:col-span-12 space-y-5">
           {/* ACTIVE INTERNSHIP FEATURED SUMMARY */}
           <Panel className="space-y-5 relative overflow-hidden border-blue-200/90">
             <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-bl-full pointer-events-none" />
@@ -462,7 +401,7 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
                   Danh sách các kỳ thực tập
                 </h2>
                 <p className="text-xs text-slate-500 font-medium">
-                  Toàn bộ dữ liệu đợt thực tập hiện tại và lịch sử lưu trữ
+                  Tìm kiếm, lọc trạng thái và quản lý các kỳ thực tập
                 </p>
               </div>
 
@@ -707,83 +646,6 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
           </Panel>
         </div>
 
-        {/* RIGHT 4 COLUMNS: PROCESS TIMELINE & UPCOMING DEADLINES */}
-        <div className="lg:col-span-4 space-y-6">
-          {/* INTERNSHIP PROCESS STEPPER */}
-          <Panel className="space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                  <Layers className="w-4 h-4 text-blue-600" />
-                  Quy trình Vận hành
-                </h3>
-                <p className="text-[11px] text-slate-500 font-medium">
-                  7 bước vận hành đợt thực tập chuẩn hóa
-                </p>
-              </div>
-              <span className="px-2 py-0.5 bg-blue-50 text-blue-700 font-bold text-[10px] rounded-md">
-                Bước {(currentPhaseIdx >= 0 ? currentPhaseIdx + 1 : 1)}/{timelinePhases.length}
-              </span>
-            </div>
-
-            <div className="space-y-2 text-xs">
-              {timelinePhases.map((phase, idx) => (
-                <div
-                  key={idx}
-                  className={`p-2.5 rounded-md border flex items-center justify-between gap-2.5 transition-all ${phase.isCurrent ? "bg-blue-600 text-white border-blue-600 shadow-sm" : phase.isDone ? "bg-emerald-50/70 text-emerald-950 border-emerald-200/80" : "bg-slate-50 text-slate-500 border-slate-200/70"}`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span
-                      className={`w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center shrink-0 ${phase.isCurrent ? "bg-white text-blue-600" : phase.isDone ? "bg-emerald-600 text-white" : "bg-slate-200 text-slate-600"}`}
-                    >
-                      {phase.isDone ? "\u2713" : phase.num}
-                    </span>
-                    <div>
-                      <p
-                        className={`font-bold text-xs ${phase.isCurrent ? "text-white" : "text-slate-900"}`}
-                      >
-                        {phase.label}
-                      </p>
-                      <p
-                        className={`text-[10px] font-medium ${phase.isCurrent ? "text-blue-100" : "text-slate-500"}`}
-                      >
-                        {phase.sub}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Panel>
-
-          {/* UPCOMING TASKS & DEADLINES */}
-          <Panel className="space-y-3">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
-                <CheckSquare className="w-3.5 h-3.5 text-amber-600" /> Thống kê nhanh
-              </span>
-            </div>
-
-            <div className="space-y-2 text-xs">
-              <div className="p-3 bg-slate-50/80 rounded-md border border-slate-200/70 space-y-1">
-                <p className="font-bold text-slate-900 text-xs">Tổng số kỳ thực tập</p>
-                <p className="text-[10px] text-slate-500 font-medium">{semestersList.length} kỳ đã tạo</p>
-              </div>
-              <div className="p-3 bg-emerald-50/80 rounded-md border border-emerald-200/70 space-y-1">
-                <p className="font-bold text-emerald-900 text-xs">Đang hoạt động</p>
-                <p className="text-[10px] text-emerald-600 font-medium">{activeCount} đợt</p>
-              </div>
-              <div className="p-3 bg-slate-50/80 rounded-md border border-slate-200/70 space-y-1">
-                <p className="font-bold text-slate-900 text-xs">Đã hoàn thành</p>
-                <p className="text-[10px] text-slate-500 font-medium">{completedCount} kỳ</p>
-              </div>
-              <div className="p-3 bg-blue-50/80 rounded-md border border-blue-200/70 space-y-1">
-                <p className="font-bold text-blue-900 text-xs">Tổng sinh viên</p>
-                <p className="text-[10px] text-blue-600 font-medium">{semestersList.reduce((s, sem) => s + sem.studentsCount, 0)} SV</p>
-              </div>
-            </div>
-          </Panel>
-        </div>
       </div>
 
       {/* MODALS */}

@@ -232,27 +232,11 @@ export const DashboardView = ({
         </Panel>
       )}
 
-      <div className="il-accent-panel px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-blue-700">
-            {isSuperAdmin ? "Phạm vi giám sát" : "Bức tranh vận hành"}
-          </p>
-          <p className="text-sm font-semibold text-slate-900 mt-0.5">
-            {isSuperAdmin
-              ? departmentIdFilter
-                ? `Tổng hợp số liệu của ${selectedDepartment.name}.`
-                : "Tổng hợp số liệu toàn hệ thống theo kỳ đang chọn."
-              : "Theo dõi nhanh nguồn lực, tiến độ và các điểm cần can thiệp."}
-          </p>
-        </div>
-        <span className="text-[11px] font-semibold text-slate-500">Dữ liệu theo kỳ đang chọn</span>
-      </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         <Panel className={isSuperAdmin ? "lg:col-span-12" : "lg:col-span-8"}>
           <DashboardTrendChart
-            title="Phân bổ sinh viên theo trạng thái"
-            subtitle="Số lượng sinh viên trong đợt thực tập đang chọn"
+            title="Sinh viên theo tình trạng thực tập"
+            subtitle="Kỳ đang chọn"
             data={isLoading ? [] : internshipTrend}
             valueLabel="Số sinh viên"
             variant="bar"
@@ -303,22 +287,28 @@ export const DashboardView = ({
         </Panel>}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        <Panel className="lg:col-span-8">
+      {isSuperAdmin ? (
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+          <Panel className="lg:col-span-8">
+            <DashboardSemesterComparisonChart data={semesterComparison} />
+          </Panel>
+          <Panel className="lg:col-span-4">
+            <DashboardDonutChart
+              title="Kết quả thực tập"
+              subtitle="Tổng hợp trạng thái đánh giá của kỳ đang chọn"
+              data={
+                outcomeSlices.length > 0
+                  ? outcomeSlices
+                  : [{ name: "Chưa có dữ liệu", value: 1, tone: "slate" as const }]
+              }
+            />
+          </Panel>
+        </div>
+      ) : (
+        <Panel>
           <DashboardSemesterComparisonChart data={semesterComparison} />
         </Panel>
-        <Panel className="lg:col-span-4">
-          <DashboardDonutChart
-            title="Kết quả thực tập"
-            subtitle="Tổng hợp trạng thái đánh giá của kỳ đang chọn"
-            data={
-              outcomeSlices.length > 0
-                ? outcomeSlices
-                : [{ name: "Chưa có dữ liệu", value: 1, tone: "slate" as const }]
-            }
-          />
-        </Panel>
-      </div>
+      )}
 
       {!isSuperAdmin && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">

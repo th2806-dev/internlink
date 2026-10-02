@@ -108,14 +108,14 @@ export const Sidebar = ({
       title: "VẬN HÀNH KỲ THỰC TẬP",
       items: [
         {
-          id: "admin-report-archive",
-          label: "Kho báo cáo tuần",
-          icon: Archive,
-        },
-        {
           id: "admin-attendance",
           label: "Điểm danh & Buổi gặp",
           icon: CalendarCheck,
+        },
+        {
+          id: "admin-report-archive",
+          label: "Kho báo cáo tuần",
+          icon: Archive,
         },
         {
           id: "admin-notifications",

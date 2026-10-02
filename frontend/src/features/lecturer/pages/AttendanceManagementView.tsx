@@ -71,8 +71,8 @@ export const AttendanceManagementView: React.FC<{
   const weekLabel = (week: number) => semesterWeekLabel(week, internshipStartWeek);
   /** Nhãn option dropdown: hiển thị cả tuần thực tập (tương đối) lẫn tuần học kỳ (tuyệt đối). */
   const weekOptionLabel = (week: number) => {
-    if (internshipStartWeek <= 1) return week > 0 ? `Tuần ${week}` : `Tuần ${week} — chuẩn bị`;
-    return `Tuần ${week}${week <= 0 ? " (chuẩn bị)" : ""} — HK tuần ${toSemesterWeek(week, internshipStartWeek)}`;
+    const internshipLabel = week > 0 ? `Tuần thực tập ${week}` : `Tuần chuẩn bị ${week}`;
+    return `${internshipLabel} — Tuần ${toSemesterWeek(week, internshipStartWeek)} học kỳ`;
   };
   const [sessions, setSessions] = useState<AttendanceSessionDto[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -746,6 +746,10 @@ export const AttendanceManagementView: React.FC<{
                       const w = Number(e.target.value);
                       setCreateWeek(w);
                       setCreateTitle(w > 0 ? `Buổi gặp hướng dẫn tuần ${w}` : "Buổi chuẩn bị trước thực tập");
+                      if (createDate) {
+                        const shifted = shiftDateIntoWeek(createDate, w, semesterStartRaw, internshipStartWeek);
+                        if (shifted) setCreateDate(toDateTimeLocalValue(new Date(shifted)));
+                      }
                     }}
                     className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 focus:border-blue-500 font-medium outline-none"
                   >

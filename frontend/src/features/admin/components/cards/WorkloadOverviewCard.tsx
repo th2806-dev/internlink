@@ -54,7 +54,7 @@ export const WorkloadOverviewCard = ({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
         <div className="space-y-1">
           <p className="text-[10px] font-semibold uppercase text-slate-400 tracking-wider">
-            Tỷ lệ TB SV / GV
+            Sinh viên trung bình / giảng viên
           </p>
           <p className="text-xl font-bold text-slate-900">
             {isLoading ? "…" : avgRatio}
@@ -87,13 +87,13 @@ export const WorkloadOverviewCard = ({
         </div>
         <div className="space-y-1">
           <p className="text-[10px] font-semibold uppercase text-emerald-700 tracking-wider">
-            GV còn công suất
+            Giảng viên dưới định mức
           </p>
           <p className="text-xl font-bold text-emerald-700">
             {isLoading ? "…" : availableCapacity}
           </p>
           <p className="text-[10px] text-slate-500">
-            / {lecturerCount} giảng viên
+            Dưới 10 sinh viên / giảng viên
           </p>
         </div>
       </div>

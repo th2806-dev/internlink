@@ -90,7 +90,6 @@ export const StudentsView = ({
   const reloadStudents = refetch;
   const [statusFilter, setStatusFilter] = useState("all");
   const [lecturerFilter, setLecturerFilter] = useState("all");
-  const [companyFilter, setCompanyFilter] = useState("all");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<AdminStudentRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AdminStudentRow | null>(null);
@@ -264,35 +263,19 @@ export const StudentsView = ({
     [students],
   );
 
-  const companyOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          students
-            .map((student) => student.companyName)
-            .filter((value): value is string => Boolean(value) && value !== "Chưa có DN"),
-        ),
-      ).sort((a, b) => a.localeCompare(b, "vi")),
-    [students],
-  );
-
   const filteredStudents = useMemo(() => {
     return students.filter((student) => {
       const matchesClass = filter.class === "all" || student.classCode === filter.class;
       const matchesLecturer = lecturerFilter === "all" || student.assignedLecturer === lecturerFilter;
-      const matchesCompany = companyFilter === "all" || student.companyName === companyFilter;
       const matchesStatus =
         statusFilter === "all" ||
         (statusFilter === "active" && student.accountStatus === "active") ||
         (statusFilter === "pending" && student.accountStatus === "pending") ||
-        (statusFilter === "locked" && student.accountStatus === "locked") ||
-        (statusFilter === "hasCompany" && student.companyName !== "Chưa có DN") ||
-        (statusFilter === "inProgress" && student.internshipStatus === "interning") ||
-        (statusFilter === "completed" && student.internshipStatus === "completed");
+        (statusFilter === "locked" && student.accountStatus === "locked");
 
-      return matchesClass && matchesLecturer && matchesCompany && matchesStatus;
+      return matchesClass && matchesLecturer && matchesStatus;
     });
-  }, [companyFilter, filter.class, lecturerFilter, statusFilter, students]);
+  }, [filter.class, lecturerFilter, statusFilter, students]);
 
   const paginatedStudents = filteredStudents;
   const totalPages = pagination.totalPages;
@@ -557,20 +540,6 @@ export const StudentsView = ({
             </select>
 
             <select
-              value={filter.class}
-              onChange={(e) => setClassFilter(e.target.value)}
-              aria-label="Lọc theo lớp"
-              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-500 cursor-pointer"
-            >
-              <option value="all">Tất cả Lớp</option>
-              {classOptions.map((cls) => (
-                <option key={cls} value={cls}>
-                  Lớp {cls}
-                </option>
-              ))}
-            </select>
-
-            <select
               value={lecturerFilter}
               onChange={(e) => setLecturerFilter(e.target.value)}
               aria-label="Lọc theo giảng viên hướng dẫn"
@@ -585,32 +554,15 @@ export const StudentsView = ({
             </select>
 
             <select
-              value={companyFilter}
-              onChange={(e) => setCompanyFilter(e.target.value)}
-              aria-label="Lọc theo doanh nghiệp"
-              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-500 cursor-pointer"
-            >
-              <option value="all">Tất cả doanh nghiệp</option>
-              {companyOptions.map((company) => (
-                <option key={company} value={company}>
-                  {company}
-                </option>
-              ))}
-            </select>
-
-            <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              aria-label="Lọc theo trạng thái"
+              aria-label="Lọc theo trạng thái tài khoản"
               className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-500 cursor-pointer"
             >
               <option value="all">Tất cả trạng thái</option>
               <option value="active">Đã cấp tài khoản</option>
               <option value="pending">Chưa cấp tài khoản</option>
               <option value="locked">Tài khoản bị khóa</option>
-              <option value="hasCompany">Đã có doanh nghiệp</option>
-              <option value="inProgress">Đang thực tập</option>
-              <option value="completed">Hoàn thành</option>
             </select>
 
             <select

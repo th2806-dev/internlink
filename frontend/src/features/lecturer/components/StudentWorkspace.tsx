@@ -4,24 +4,20 @@ import {
   Building2,
   CalendarDays,
   CheckCircle2,
-  Download,
   Edit3,
-  FileText,
   GraduationCap,
   Mail,
   RefreshCw,
   Target,
-  User,
   CalendarCheck,
   XCircle,
   Clock,
+  ChevronDown,
 } from "lucide-react";
-import { Star } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useSemester } from "../../../contexts/SemesterContext";
 import { useStudentWorkspace } from "../../../hooks/useStudentWorkspace";
 import { PageHeader } from "../../../components/common/PageHeader";
-import { KpiCard, KpiGrid } from "../../../components/common/KpiCard";
 import { Panel } from "../../../components/common/Panel";
 import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
 import { mapInternshipStatusToUi } from "../../../lib/portalMappers";
@@ -202,6 +198,7 @@ export function StudentWorkspace({
                   <Mail className="w-3 h-3 text-slate-400" />
                   {student.email ?? "—"}
                 </span>
+                {student.phone && <span>{student.phone}</span>}
               </div>
             </div>
           </div>
@@ -219,63 +216,10 @@ export function StudentWorkspace({
         </div>
       </div>
 
-      {/* === KPI CARDS === */}
-      <KpiGrid>
-        <KpiCard
-          tone="blue"
-          title="Tiến độ thực tập"
-          value={`${effectiveProgress}%`}
-          icon={Target}
-          footer={finalGrade != null ? "Đã có điểm trung bình — hoàn thành" : `${weeklyReportCount} / ${requiredWeeks} tuần đã nộp`}
-        />
-        <KpiCard
-          tone="emerald"
-          title="Báo cáo tuần"
-          value={weeklyReportCount}
-          unit="báo cáo"
-          icon={FileText}
-          footer={`${approvedReportCount} đã duyệt · ${pendingReportCount} chờ duyệt`}
-        />
-        <KpiCard
-          tone="amber"
-          title="Bài nộp sản phẩm"
-          value={submissionCount}
-          unit="bài"
-          icon={Download}
-          footer={`${submissions.length ?? 0} đã nộp`}
-        />
-        <KpiCard
-          tone="sky"
-          title="Điểm cuối kỳ"
-          value={finalGrade != null ? String(finalGrade) : "—"}
-          unit={finalGrade != null ? "/ 10" : undefined}
-          icon={Star}
-          footer={finalGrade != null ? `Xếp loại: ${finalGrade >= 8.5 ? "Xuất sắc" : finalGrade >= 8 ? "Giỏi" : finalGrade >= 6.5 ? "Khá" : finalGrade >= 5 ? "Trung bình" : "Không đạt"}` : "Chưa có điểm"}
-        />
-      </KpiGrid>
-
       {/* === MAIN CONTENT GRID === */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* Left: Student info + Internship info + Reports */}
+        {/* Left: internship info and reports */}
         <div className="lg:col-span-7 space-y-5">
-          {/* Student Info Card */}
-          <Panel className="space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <User className="w-4 h-4 text-blue-600" />
-                Thông tin sinh viên
-              </h3>
-            </div>
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <InfoRow label="Họ tên" value={student.fullName} />
-              <InfoRow label="MSSV" value={student.studentCode} mono />
-              <InfoRow label="Email" value={student.email ?? "—"} />
-              <InfoRow label="Số điện thoại" value={student.phone ?? "—"} />
-              <InfoRow label="Lớp" value={student.class ?? "—"} />
-              <InfoRow label="Ngành" value={student.major ?? "—"} />
-            </div>
-          </Panel>
-
           {/* Internship Info Card */}
           <Panel className="space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
@@ -364,18 +308,28 @@ export function StudentWorkspace({
         </div>
       </div>
 
-      {/* === WEEKLY TIMELINE (full width) === */}
-      <WeeklyReportTimeline
-        internshipId={id!}
-        weeklyReports={weeklyReports}
-        isLoading={isLoading}
-        onRefresh={handleRefreshAndNotify}
-        onShowToast={onShowToast}
-        error={sectionErrors.reports}
-        evaluation={evaluation}
-        totalWeeks={totalWeeks}
-        internshipStartWeek={internshipStartWeek}
-      />
+      <details className="group rounded-lg border border-slate-200 bg-white">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 marker:hidden">
+          <span>
+            <span className="block text-sm font-semibold text-slate-900">Tiến độ chi tiết theo tuần</span>
+            <span className="mt-0.5 block text-xs text-slate-500">{approvedReportCount}/{totalWeeks} tuần đã duyệt · lịch sử báo cáo và bảo vệ</span>
+          </span>
+          <ChevronDown className="h-4 w-4 shrink-0 text-slate-500 transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="border-t border-slate-100 p-3 sm:p-4">
+          <WeeklyReportTimeline
+            internshipId={id!}
+            weeklyReports={weeklyReports}
+            isLoading={isLoading}
+            onRefresh={handleRefreshAndNotify}
+            onShowToast={onShowToast}
+            error={sectionErrors.reports}
+            evaluation={evaluation}
+            totalWeeks={totalWeeks}
+            internshipStartWeek={internshipStartWeek}
+          />
+        </div>
+      </details>
     </div>
   );
 }

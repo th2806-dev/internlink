@@ -12,7 +12,6 @@ import {
 } from "lucide-react";
 import { PageHeader } from "../../../components/common/PageHeader";
 import { Panel } from "../../../components/common/Panel";
-import { Toolbar } from "../../../components/common/Toolbar";
 import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
 import { useSemester } from "../../../contexts/SemesterContext";
 import type { Student } from "../../../types/student";
@@ -30,10 +29,10 @@ export const StudentsView = ({
   const [classFilter, setClassFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [companyFilter, setCompanyFilter] = useState("all");
-  const [progressFilter, setProgressFilter] = useState("all");
   const [sortBy, setSortBy] = useState("name");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const classOptions = useMemo(
     () => [...new Set(students.map((student) => student.class).filter(Boolean))].sort(),
@@ -59,18 +58,11 @@ export const StudentsView = ({
           student.company.toLowerCase().includes(query) ||
           student.class.toLowerCase().includes(query) ||
           student.major.toLowerCase().includes(query);
-        const matchesProgress =
-          progressFilter === "all" ||
-          (progressFilter === "low" && student.progress < 30) ||
-          (progressFilter === "medium" && student.progress >= 30 && student.progress <= 70) ||
-          (progressFilter === "high" && student.progress > 70);
-
         return (
           matchesSearch &&
           (classFilter === "all" || student.class === classFilter) &&
           (statusFilter === "all" || student.status === statusFilter) &&
-          (companyFilter === "all" || student.company === companyFilter) &&
-          matchesProgress
+          (companyFilter === "all" || student.company === companyFilter)
         );
       })
       .sort((a, b) => {
@@ -78,12 +70,13 @@ export const StudentsView = ({
         if (sortBy === "class") return a.class.localeCompare(b.class, "vi");
         return a.name.localeCompare(b.name, "vi");
       });
-  }, [classFilter, companyFilter, progressFilter, searchQuery, sortBy, statusFilter, students]);
+  }, [classFilter, companyFilter, searchQuery, sortBy, statusFilter, students]);
 
   const totalPages = Math.max(1, Math.ceil(filteredStudents.length / pageSize));
+  const visiblePage = Math.min(currentPage, totalPages);
   const paginatedStudents = filteredStudents.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize,
+    (visiblePage - 1) * pageSize,
+    visiblePage * pageSize,
   );
 
   const updateFilter = (setter: (value: string) => void, value: string) => {
@@ -109,43 +102,40 @@ export const StudentsView = ({
       <PageHeader
         icon={GraduationCap}
         title="Sinh viên được phân công"
-        subtitle="Danh sách sinh viên thuộc nhóm hướng dẫn theo học kỳ đang chọn."
+        subtitle="Sinh viên thuộc nhóm hướng dẫn trong học kỳ đang chọn."
         actions={[
           {
             label: "Làm mới",
             icon: RefreshCw,
             onClick: async () => {
-              await onRefresh?.();
+              if (isRefreshing) return;
+              setIsRefreshing(true);
+              try {
+                await onRefresh?.();
+              } finally {
+                setIsRefreshing(false);
+              }
             },
             variant: "secondary",
+            loading: isRefreshing,
+            disabled: isRefreshing,
           },
         ]}
-      />
-
-      <Toolbar
-        left={
-          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 font-medium">
-            <span className="px-2.5 py-0.5 bg-blue-50 text-blue-800 border border-blue-200 rounded font-bold text-[11px]">
-              {selectedSemester?.name ?? "Học kỳ hiện tại"}
-            </span>
-            <span>·</span>
-            <span className="font-bold text-slate-800">{students.length}</span> SV ·{" "}
-            <span className="font-bold text-emerald-700">
-              {students.filter((student) => student.company !== "Chưa có").length}
-            </span>{" "}
-            đã có DN
-          </div>
-        }
       />
 
       <Panel className="space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-3">
           <div>
-            <h2 className="text-base font-bold text-slate-900 tracking-tight">
-              Danh sách Sinh viên ({filteredStudents.length})
-            </h2>
-            <p className="text-xs text-slate-500 font-medium">
-              Sinh viên thuộc nhóm hướng dẫn của giảng viên
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-base font-bold text-slate-900 tracking-tight">Danh sách sinh viên</h2>
+              {selectedSemester?.name && (
+                <span className="rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-800">
+                  {selectedSemester.name}
+                </span>
+              )}
+            </div>
+            <p className="mt-0.5 text-xs font-medium text-slate-500">
+              {filteredStudents.length} / {students.length} sinh viên
             </p>
           </div>
 
@@ -170,12 +160,6 @@ export const StudentsView = ({
             <select value={statusFilter} onChange={(event) => updateFilter(setStatusFilter, event.target.value)} className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-500">
               <option value="all">Tất cả trạng thái</option>
               {statusOptions.map((item) => <option key={item} value={item}>{item}</option>)}
-            </select>
-            <select value={progressFilter} onChange={(event) => updateFilter(setProgressFilter, event.target.value)} className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-500">
-              <option value="all">Tất cả tiến độ</option>
-              <option value="low">&lt; 30%</option>
-              <option value="medium">30% - 70%</option>
-              <option value="high">&gt; 70%</option>
             </select>
             <select value={sortBy} onChange={(event) => updateFilter(setSortBy, event.target.value)} className="px-3 py-2 bg-blue-50/80 border border-blue-200 rounded-md font-bold text-blue-900 outline-none focus:bg-white focus:border-blue-500">
               <option value="name">Sắp xếp: Tên A-Z</option>
@@ -209,7 +193,7 @@ export const StudentsView = ({
               ) : paginatedStudents.map((student, index) => (
                 <tr key={student.id} className="hover:bg-slate-50/80 transition-colors">
                   <td className="py-3 px-3 text-center text-slate-400 font-mono font-bold">
-                    {(currentPage - 1) * pageSize + index + 1}
+                    {(visiblePage - 1) * pageSize + index + 1}
                   </td>
                   <td className="py-3 px-3">
                     <div className="flex items-center gap-2.5">
@@ -273,9 +257,9 @@ export const StudentsView = ({
             </div>
           </div>
           <div className="flex items-center gap-1.5 font-bold">
-            <button type="button" onClick={() => setCurrentPage((page) => Math.max(page - 1, 1))} disabled={currentPage === 1} className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg disabled:opacity-40 transition-colors cursor-pointer"><ChevronLeft className="w-4 h-4" /></button>
-            <span className="px-2.5 py-1 bg-slate-50 rounded-lg border border-slate-200 text-slate-800">{currentPage} / {totalPages}</span>
-            <button type="button" onClick={() => setCurrentPage((page) => Math.min(page + 1, totalPages))} disabled={currentPage === totalPages} className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg disabled:opacity-40 transition-colors cursor-pointer"><ChevronRight className="w-4 h-4" /></button>
+            <button type="button" onClick={() => setCurrentPage((page) => Math.max(page - 1, 1))} disabled={visiblePage === 1} className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg disabled:opacity-40 transition-colors cursor-pointer" aria-label="Trang trước"><ChevronLeft className="w-4 h-4" /></button>
+            <span className="px-2.5 py-1 bg-slate-50 rounded-lg border border-slate-200 text-slate-800">{visiblePage} / {totalPages}</span>
+            <button type="button" onClick={() => setCurrentPage((page) => Math.min(page + 1, totalPages))} disabled={visiblePage === totalPages} className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg disabled:opacity-40 transition-colors cursor-pointer" aria-label="Trang sau"><ChevronRight className="w-4 h-4" /></button>
           </div>
         </div>
       </Panel>

@@ -39,9 +39,8 @@ export const AdminActivityTimeline = ({
           <History className="w-4 h-4 text-slate-600" />
           <div>
             <h2 className="text-sm font-bold text-slate-900">
-              Nhật ký hoạt động
+              Thông báo gần đây
             </h2>
-            <p className="text-[11px] text-slate-500">Thông báo hệ thống gần đây</p>
           </div>
         </div>
 

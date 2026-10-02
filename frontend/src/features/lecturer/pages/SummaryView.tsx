@@ -21,7 +21,7 @@ import { lecturerExportService } from "../../../services/lecturerExport.service"
 import { adminSemestersService } from "../../../services/adminSemesters.service";
 import { lecturerInternshipsService } from "../../../services/lecturerInternships.service";
 import { attendanceService } from "../../../services/attendance.service";
-import { internshipGradingService } from "../../../services/internshipGrading.service";
+import { internshipGradingService, type GradingSummaryResponse, type GradingWeekStatus } from "../../../services/internshipGrading.service";
 import { useSemester } from "../../../contexts/SemesterContext";
 import { useEnsureSpecificSemester } from "../../../hooks/useEnsureSpecificSemester";
 import type { AttendanceSessionDto, LecturerStudentListItemDto } from "../../../types/api";
@@ -42,6 +42,26 @@ function getReviewStatus(student: LecturerStudentListItemDto) {
   if (student.isEvaluationFinalized) return { label: "Đã chốt", className: "text-emerald-700 bg-emerald-50 border-emerald-200" };
   if (student.hasEvaluation) return { label: "Đang rà soát", className: "text-blue-700 bg-blue-50 border-blue-200" };
   return { label: "Chưa có điểm", className: "text-amber-700 bg-amber-50 border-amber-200" };
+}
+
+const SUMMARY_WEEK_STATUS_STYLE: Record<GradingWeekStatus["status"], string> = {
+  on_time: "bg-emerald-50 text-emerald-700",
+  late: "bg-amber-50 text-amber-700",
+  missing: "bg-rose-100 text-rose-700 font-bold",
+  pending: "bg-slate-50 text-slate-400",
+};
+
+function summaryWeekStatusLabel(status: GradingWeekStatus["status"]): string {
+  if (status === "on_time") return "✓";
+  if (status === "late") return "Trễ";
+  if (status === "missing") return "X";
+  return "–";
+}
+
+function summaryAttendanceLabel(status: GradingWeekStatus["attendanceStatus"]): string {
+  if (status === "present") return "✓";
+  if (status === "absent") return "V";
+  return "–";
 }
 
 type SummaryScope = "lecturer" | "admin";
@@ -65,7 +85,8 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
   const [reportContent, setReportContent] = useState({ results: "", difficulties: "", recommendations: "", conclusion: "" });
   const [isSavingReport, setIsSavingReport] = useState(false);
   const [reportSavedAt, setReportSavedAt] = useState<string | null>(null);
-  const [activeModule, setActiveModule] = useState<ExportKind>(isAdminScope ? "report" : "grades");
+  const [activeModule, setActiveModule] = useState<ExportKind>("grades");
+  const [adminGradeSummary, setAdminGradeSummary] = useState<GradingSummaryResponse | null>(null);
   const [attendanceSessions, setAttendanceSessions] = useState<AttendanceSessionDto[]>([]);
   // Phân trang client-side cho bảng rà soát (bảng có thể hàng trăm sinh viên ở scope admin)
   const [pageIndex, setPageIndex] = useState(0);
@@ -106,9 +127,11 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
     const loadStudents = async () => {
       if (!semesterId) {
         setStudents([]);
+        setAdminGradeSummary(null);
         return;
       }
       setIsLoading(true);
+      if (isAdminScope) setAdminGradeSummary(null);
       try {
         const rows = isAdminScope
           ? await (async () => {
@@ -117,6 +140,7 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
               // (Trước đây ghép adminStudentsService.getAll + grading nên thiếu công ty,
               //  kèm sinh viên không có thực tập, và điểm tự suy không khớp bảng chấm.)
               const grading = await internshipGradingService.getSummary(semesterId);
+              if (!cancelled) setAdminGradeSummary(grading);
               return grading.students.map((grade) => {
                 const openWeeks = grade.weeks ?? [];
                 const submittedOpenWeeks = openWeeks.filter((week) => week.submittedAt).length;
@@ -153,7 +177,8 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
                 } as LecturerStudentListItemDto;
               });
             })()
-          : await lecturerInternshipsService.getStudents(semesterId);
+            : await lecturerInternshipsService.getStudents(semesterId);
+          if (!isAdminScope && !cancelled) setAdminGradeSummary(null);
         if (!cancelled) {
           setStudents(rows);
           setSelectedStudentId((current) => current && rows.some((row) => row.studentId === current) ? current : rows[0]?.studentId ?? null);
@@ -166,7 +191,7 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
     };
     void loadStudents();
     return () => { cancelled = true; };
-  }, [onShowToast, semesterId]);
+  }, [isAdminScope, onShowToast, semesterId]);
 
   useEffect(() => {
     if (!semesterId) {
@@ -227,6 +252,21 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
     () => filteredStudents.slice(safePageIndex * pageSize, safePageIndex * pageSize + pageSize),
     [filteredStudents, safePageIndex, pageSize],
   );
+  const filteredAdminGrades = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return (adminGradeSummary?.students ?? []).filter((student) => {
+      const matchesQuery = !query || [student.fullName, student.studentCode, student.className, student.companyName]
+        .filter(Boolean)
+        .some((value) => value!.toLowerCase().includes(query));
+      const isFinalized = student.averageScore != null;
+      const matchesStatus = statusFilter === "all"
+        || (statusFilter === "finalized" && isFinalized)
+        || (statusFilter === "pending" && !isFinalized);
+      return matchesQuery && matchesStatus;
+    });
+  }, [adminGradeSummary, search, statusFilter]);
+  const pagedAdminGrades = filteredAdminGrades.slice(safePageIndex * pageSize, safePageIndex * pageSize + pageSize);
+  const adminWeekColumns = adminGradeSummary?.students[0]?.weeks ?? [];
 
   const selectedStudent = students.find((student) => student.studentId === selectedStudentId) ?? null;
   useEffect(() => setNotesDraft(selectedStudent?.notes ?? ""), [selectedStudent]);
@@ -364,22 +404,190 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
         </div>
       )}
 
-      <nav className={`grid grid-cols-1 ${isAdminScope ? "sm:grid-cols-2" : "sm:grid-cols-3"} gap-2`} aria-label="Các mẫu tổng kết">
+      {isAdminScope && (
+        <section className="flex flex-col gap-3 rounded-lg border border-blue-200 bg-blue-50/50 p-3 sm:flex-row sm:items-center sm:justify-between" aria-label="Xuất báo cáo">
+          <div className="flex items-center gap-2 text-xs font-semibold text-slate-800">
+            <Download className="h-4 w-4 text-blue-700" />
+            <span>Xuất dữ liệu kỳ</span>
+            <span className="hidden text-slate-500 sm:inline">{selectedSemester?.name ?? "Chưa chọn học kỳ"}</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className="il-btn il-btn-primary" disabled={Boolean(exporting) || !semesterId} onClick={() => void handleExport("grades")}>
+              {exporting === "grades" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
+              Bảng điểm Excel
+            </button>
+            <button type="button" className="il-btn il-btn-secondary" disabled={Boolean(exporting) || !semesterId} onClick={() => void handleExport("exam")}>
+              {exporting === "exam" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              Điểm thi
+            </button>
+            <button type="button" className="il-btn il-btn-secondary" disabled={Boolean(exporting) || !semesterId} onClick={() => void handleExport("process")}>
+              {exporting === "process" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              Điểm quá trình
+            </button>
+            <button type="button" className="il-btn il-btn-secondary" disabled={Boolean(exporting) || !semesterId} onClick={() => void handleExport("report")}>
+              {exporting === "report" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+              Báo cáo Word
+            </button>
+          </div>
+        </section>
+      )}
+
+      <nav className="flex flex-wrap gap-1 rounded-md border border-slate-200 bg-slate-100 p-1" aria-label="Nội dung tổng kết" role="tablist">
         {exportOptions.map((option) => {
           const Icon = option.icon;
           const active = activeModule === option.kind;
-          return <button key={option.kind} type="button" onClick={() => setActiveModule(option.kind)} className={`text-left p-3 rounded-md border transition-colors ${active ? "border-blue-300 bg-blue-50 text-blue-900" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}><span className="flex items-center gap-2"><Icon className="w-4 h-4" /><span className="text-xs font-bold">{option.title}</span></span><span className="block text-[10px] mt-1 ml-6 opacity-75">Chỉnh sửa mẫu {option.format}</span></button>;
+          const label = isAdminScope && option.kind === "grades"
+            ? "Bảng điểm Excel"
+            : isAdminScope && option.kind === "report"
+              ? "Soạn nội dung Word"
+              : option.title;
+          return (
+            <button
+              key={option.kind}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setActiveModule(option.kind)}
+              title={option.description}
+              className={`inline-flex items-center gap-2 rounded px-3 py-2 text-xs font-semibold transition-colors ${active ? "bg-white text-blue-800 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
+            >
+              <Icon className="h-4 w-4" /> {label}
+            </button>
+          );
         })}
       </nav>
 
-      {activeModule === "grades" && <section className="grid grid-cols-2 lg:grid-cols-4 il-panel overflow-hidden">
+      {activeModule === "grades" && !isAdminScope && <section className="grid grid-cols-2 lg:grid-cols-4 il-panel overflow-hidden">
         <div className="p-4 border-r border-b lg:border-b-0 border-slate-100"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Sinh viên</p><p className="text-2xl font-bold text-slate-900 mt-1">{students.length}</p><p className="text-[11px] text-slate-500 mt-1">{isAdminScope ? "Trong kỳ đang chọn" : "Trong nhóm hướng dẫn"}</p></div>
         <div className="p-4 border-r border-b lg:border-b-0 border-slate-100 border-l-4 border-l-emerald-500"><p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Đã chốt điểm</p><p className="text-2xl font-bold text-slate-900 mt-1">{finalizedCount}</p><p className="text-[11px] text-slate-500 mt-1">Có thể rà soát lần cuối</p></div>
         <div className="p-4 border-r border-slate-100 border-l-4 border-l-amber-500"><p className="text-[10px] font-bold uppercase tracking-wider text-amber-700">Chưa hoàn tất</p><p className="text-2xl font-bold text-slate-900 mt-1">{students.length - finalizedCount}</p><p className="text-[11px] text-slate-500 mt-1">Cần kiểm tra thêm</p></div>
         <div className="p-4 border-l-4 border-l-blue-500"><p className="text-[10px] font-bold uppercase tracking-wider text-blue-700">Đã bổ sung</p><p className="text-2xl font-bold text-slate-900 mt-1">{notesCount}</p><p className="text-[11px] text-slate-500 mt-1">Có nội dung ghi chú</p></div>
       </section>}
 
-      {activeModule === "grades" && <Panel padding="none" className="overflow-hidden">
+      {isAdminScope && activeModule === "grades" && (
+        <Panel padding="none" className="overflow-hidden">
+          <div className="flex flex-col gap-3 border-b border-slate-100 p-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-sm font-bold text-slate-900">Tổng hợp điểm thực tập</h2>
+              <p className="mt-1 text-[11px] text-slate-500">
+                Trên: bài nộp (✓ đúng hạn, Trễ, X chưa nộp) · Dưới: điểm danh (✓ có mặt, V vắng, – không có buổi)
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" />
+                <input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Tìm tên, MSSV, lớp…"
+                  aria-label="Tìm sinh viên"
+                  className="w-52 rounded-md border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-3 text-xs outline-none focus:border-blue-500 focus:bg-white"
+                />
+              </div>
+              <select
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value)}
+                aria-label="Lọc theo trạng thái điểm"
+                className="rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs outline-none focus:border-blue-500 focus:bg-white"
+              >
+                <option value="all">Mọi trạng thái</option>
+                <option value="finalized">Đã chốt điểm</option>
+                <option value="pending">Chưa hoàn tất</option>
+              </select>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1320px] text-left text-xs">
+              <thead className="border-b border-slate-200 bg-slate-50 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-2 py-2.5 text-center">STT</th>
+                  <th className="px-2 py-2.5">Họ tên</th>
+                  <th className="px-2 py-2.5 text-center">Lớp</th>
+                  <th className="px-2 py-2.5 text-center">Điểm QT</th>
+                  <th className="px-2 py-2.5 text-center">Điểm thi</th>
+                  <th className="px-2 py-2.5 text-center">Điểm TB</th>
+                  <th className="px-2 py-2.5 text-center">Xếp loại</th>
+                  {adminWeekColumns.map((week) => (
+                    <th key={week.weekNumber} className="px-1.5 py-2.5 text-center">T{week.weekNumber}</th>
+                  ))}
+                  <th className="px-2 py-2.5 text-center">Nộp BC</th>
+                  <th className="px-2 py-2.5 text-center">Vắng</th>
+                  <th className="px-2 py-2.5 text-center">Tổng</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {isLoading && filteredAdminGrades.length === 0 ? (
+                  <tr><td colSpan={10 + adminWeekColumns.length} className="px-4 py-10 text-center text-slate-500">Đang tải bảng điểm…</td></tr>
+                ) : filteredAdminGrades.length === 0 ? (
+                  <tr><td colSpan={10 + adminWeekColumns.length} className="px-4 py-10 text-center text-slate-500">Không có sinh viên phù hợp.</td></tr>
+                ) : pagedAdminGrades.map((student, index) => (
+                  <tr key={student.studentId} className={student.isEligible ? "hover:bg-slate-50" : "bg-rose-50/40 hover:bg-rose-50/70"}>
+                    <td className="px-2 py-2.5 text-center text-slate-500">{safePageIndex * pageSize + index + 1}</td>
+                    <td className="px-2 py-2.5">
+                      <p className="font-semibold text-slate-900">{student.fullName}</p>
+                      <p className="text-[11px] text-slate-400">{student.studentCode}</p>
+                    </td>
+                    <td className="px-2 py-2.5 text-center">{student.className || "—"}</td>
+                    <td className="px-2 py-2.5 text-center font-semibold">{student.processScore.toFixed(1)}</td>
+                    <td className="px-2 py-2.5 text-center">{student.oralExamScore == null ? "—" : student.oralExamScore.toFixed(1)}</td>
+                    <td className="px-2 py-2.5 text-center font-bold text-blue-700">{student.averageScore == null ? "—" : student.averageScore.toFixed(1)}</td>
+                    <td className="px-2 py-2.5 text-center">{student.classification || "—"}</td>
+                    {adminWeekColumns.map((weekColumn) => {
+                      const week = student.weeks.find((item) => item.weekNumber === weekColumn.weekNumber);
+                      const attendanceTone = week?.attendanceStatus === "present"
+                        ? "bg-emerald-50 text-emerald-700"
+                        : week?.attendanceStatus === "absent"
+                          ? "bg-rose-100 text-rose-700"
+                          : "bg-slate-50 text-slate-400";
+                      return (
+                        <td key={weekColumn.weekNumber} className="px-1.5 py-2 text-center">
+                          <span
+                            title={`Bài nộp: ${week?.status === "on_time" ? "Đúng hạn" : week?.status === "late" ? "Trễ" : week?.status === "missing" ? "Chưa nộp" : "Chưa đến hạn"} · Điểm danh: ${week?.attendanceStatus === "present" ? "Có mặt" : week?.attendanceStatus === "absent" ? "Vắng" : "Không có buổi"}`}
+                            className="mx-auto flex w-8 flex-col gap-0.5"
+                          >
+                            <span className={`inline-flex min-h-5 items-center justify-center rounded px-1 text-[10px] ${week ? SUMMARY_WEEK_STATUS_STYLE[week.status] : "bg-slate-50 text-slate-400"}`}>
+                              {week ? summaryWeekStatusLabel(week.status) : "–"}
+                            </span>
+                            <span className={`inline-flex min-h-4 items-center justify-center rounded px-1 text-[10px] font-semibold ${attendanceTone}`}>
+                              {week ? summaryAttendanceLabel(week.attendanceStatus) : "–"}
+                            </span>
+                          </span>
+                        </td>
+                      );
+                    })}
+                    <td className="px-2 py-2.5 text-center">
+                      <span className={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-semibold ${student.finalReportSubmitted ? "bg-emerald-50 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
+                        {student.finalReportSubmitted ? "Đã nộp" : "X"}
+                      </span>
+                    </td>
+                    <td className="px-2 py-2.5 text-center font-semibold">{student.absentCount}</td>
+                    <td className="px-2 py-2.5 text-center">
+                      <span className={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-bold ${student.isEligible ? "bg-emerald-50 text-emerald-700" : "bg-rose-600 text-white"}`}>
+                        {student.isEligible ? "Đủ ĐK" : "Không đủ ĐK"}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex flex-col gap-2 border-t border-slate-100 px-3 py-2.5 text-xs sm:flex-row sm:items-center sm:justify-between">
+            <span className="text-slate-500">Hiển thị {filteredAdminGrades.length ? safePageIndex * pageSize + 1 : 0}–{Math.min((safePageIndex + 1) * pageSize, filteredAdminGrades.length)} / {filteredAdminGrades.length} sinh viên</span>
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-1.5 text-slate-500">Số dòng
+                <select value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))} className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-slate-800">
+                  <option value={15}>15</option><option value={30}>30</option><option value={50}>50</option>
+                </select>
+              </label>
+              <button type="button" onClick={() => setPageIndex((page) => Math.max(0, page - 1))} disabled={safePageIndex === 0} className="rounded bg-slate-100 p-1.5 text-slate-700 hover:bg-slate-200 disabled:opacity-40" aria-label="Trang trước"><ChevronLeft className="h-4 w-4" /></button>
+              <span className="min-w-12 text-center font-semibold text-slate-700">{safePageIndex + 1} / {totalPages}</span>
+              <button type="button" onClick={() => setPageIndex((page) => Math.min(totalPages - 1, page + 1))} disabled={safePageIndex >= totalPages - 1} className="rounded bg-slate-100 p-1.5 text-slate-700 hover:bg-slate-200 disabled:opacity-40" aria-label="Trang sau"><ChevronRight className="h-4 w-4" /></button>
+            </div>
+          </div>
+        </Panel>
+      )}
+
+      {activeModule === "grades" && !isAdminScope && <Panel padding="none" className="overflow-hidden">
         <div className="p-4 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div><div className="flex items-center gap-2"><Users className="w-4 h-4 text-blue-700" /><h2 className="text-sm font-bold text-slate-900">{isAdminScope ? "Danh sách sinh viên trong kỳ" : "Rà soát hồ sơ sinh viên"}</h2></div><p className="text-xs text-slate-500 mt-1">{isAdminScope ? "Toàn bộ sinh viên trong kỳ đang chọn, phục vụ rà soát kết quả và báo cáo tổng kết khoa." : "Chọn từng sinh viên để kiểm tra điểm và bổ sung nhận xét trước khi xuất hồ sơ."}</p></div>
           <div className="flex flex-wrap gap-2"><div className="relative"><Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm tên, MSSV, lớp..." className="pl-8 pr-3 py-2 text-xs border border-slate-200 rounded-md outline-none focus:border-blue-500 w-52" /></div><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="px-3 py-2 text-xs border border-slate-200 rounded-md"><option value="all">Tất cả trạng thái</option><option value="finalized">Đã chốt điểm</option><option value="pending">Chưa hoàn tất</option></select></div>
@@ -436,7 +644,7 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
       </Panel>}
 
       {activeModule === "report" && (
-        <div className="grid xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] gap-4">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
           <Panel className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 border-b border-slate-100 pb-3">
               <div>
@@ -454,7 +662,7 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
               ] as const).map(([key, label, placeholder]) => (
                 <label key={key} className="block">
                   <span className="text-xs font-bold text-slate-800">{label}</span>
-                  <textarea value={reportContent[key]} onChange={(event) => setReportContent((current) => ({ ...current, [key]: event.target.value }))} rows={5} placeholder={placeholder} className="mt-2 w-full resize-y rounded-md border border-slate-200 bg-white p-3 text-xs leading-5 outline-none focus:border-blue-500" />
+                  <textarea value={reportContent[key]} onChange={(event) => setReportContent((current) => ({ ...current, [key]: event.target.value }))} rows={isAdminScope ? 3 : 5} placeholder={placeholder} className="mt-2 w-full resize-y rounded-md border border-slate-200 bg-white p-3 text-xs leading-5 outline-none focus:border-blue-500" />
                 </label>
               ))}
             </div>
@@ -472,7 +680,7 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
               </div>
               <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-[10px] font-semibold text-blue-700">A4</span>
             </div>
-            <div className="bg-slate-100 p-4 md:p-6">
+            <div className={`overflow-y-auto bg-slate-100 ${isAdminScope ? "max-h-[70vh] p-2 md:p-3" : "p-4 md:p-6"}`}>
               <div className="mx-auto max-w-[780px] min-h-[1100px] bg-white p-6 md:p-8 shadow-sm border border-slate-200 text-[11px] leading-[1.6] text-slate-800 font-[Georgia,serif]">
                 <div className="text-center">
                   <div className="text-[12px] font-bold uppercase">TRƯỜNG CAO ĐẲNG GTVT</div>
@@ -640,32 +848,21 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
         })()}
       </Panel>}
 
-      {activeModule === "grades" && <Panel className="space-y-4">
+      {!isAdminScope && activeModule === "grades" && <Panel className="space-y-4">
         <div className="flex flex-col gap-3 border-b border-slate-100 pb-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="flex items-center gap-2"><FileSpreadsheet className="w-4 h-4 text-emerald-700" /><h2 className="text-sm font-bold text-slate-900">Xuất dữ liệu bảng điểm</h2></div>
             <p className="text-xs text-slate-500 mt-1">Điểm thi và điểm quá trình xuất theo mẫu import tương ứng của trường.</p>
           </div>
           <div className="flex flex-wrap gap-2 sm:justify-end">
-            <button type="button" className="il-btn il-btn-primary" disabled={Boolean(exporting) || !semesterId} onClick={() => void handleExport("grades")}>
+            {!isAdminScope && <button type="button" className="il-btn il-btn-primary" disabled={Boolean(exporting) || !semesterId} onClick={() => void handleExport("grades")}>
               {exporting === "grades" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
               Xuất bảng điểm
-            </button>
-            {isAdminScope && <>
-              <button type="button" className="il-btn il-btn-secondary" disabled={Boolean(exporting) || !semesterId} onClick={() => void handleExport("exam")}>
-                {exporting === "exam" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                Xuất điểm thi
-              </button>
-              <button type="button" className="il-btn il-btn-secondary" disabled={Boolean(exporting) || !semesterId} onClick={() => void handleExport("process")}>
-                {exporting === "process" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                Xuất điểm quá trình
-              </button>
-            </>}
+            </button>}
           </div>
         </div>
       </Panel>}
 
-      {activeModule === "report" && <Panel className="space-y-4"><div className="flex items-center justify-between gap-3"><div><div className="flex items-center gap-2"><FileText className="w-4 h-4 text-blue-700" /><h2 className="text-sm font-bold text-slate-900">Xuất mẫu báo cáo Word</h2></div><p className="text-xs text-slate-500 mt-1">Nội dung đã lưu sẽ được đưa vào các placeholder tương ứng trong mẫu Word.</p></div><button type="button" className="il-btn il-btn-primary" disabled={Boolean(exporting) || !semesterId} onClick={() => void handleExport("report")}>{exporting === "report" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} Xuất báo cáo Word</button></div></Panel>}
     </div>
   );
 };

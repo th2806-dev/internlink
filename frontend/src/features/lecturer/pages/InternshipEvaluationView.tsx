@@ -104,13 +104,15 @@ interface DraftRow {
   allowLateSubmission: boolean;
 }
 
-function ScheduleConfigTab({
+export function ScheduleConfigTab({
   onShowToast,
+  semesterId: selectedSemesterId,
 }: {
   onShowToast?: (msg: string, type?: string) => void;
+  semesterId?: string;
 }) {
   const { activeSemesterId } = useSemester();
-  const semesterId = activeSemesterId;
+  const semesterId = selectedSemesterId || activeSemesterId;
 
   const [schedules, setSchedules] = useState<SemesterReportScheduleDto[]>([]);
   const [drafts, setDrafts] = useState<Record<number, DraftRow>>({});
@@ -1522,12 +1524,11 @@ export const InternshipEvaluationView: React.FC<{
   onShowToast?: (msg: string, type?: string) => void;
   initialTab?: string;
 }> = ({ onShowToast, initialTab }) => {
-  const [tab, setTab] = useState<"schedule" | "grading" | "summary" | "comparison">(
-    initialTab === "grading" ? "grading" : initialTab === "summary" ? "summary" : initialTab === "comparison" ? "comparison" : "schedule"
+  const [tab, setTab] = useState<"grading" | "summary" | "comparison">(
+    initialTab === "summary" ? "summary" : initialTab === "comparison" ? "comparison" : "grading"
   );
 
-  const tabs: { id: typeof tab; label: string; icon: typeof CalendarClock }[] = [
-    { id: "schedule", label: "Cấu hình báo cáo", icon: CalendarClock },
+  const tabs: { id: typeof tab; label: string; icon: typeof ClipboardCheck }[] = [
     { id: "grading", label: "Chấm điểm", icon: ClipboardCheck },
     { id: "summary", label: "Tổng hợp & Xuất file", icon: Table2 },
     { id: "comparison", label: "So sánh kỳ", icon: BarChart3 },
@@ -1538,7 +1539,7 @@ export const InternshipEvaluationView: React.FC<{
       <PageHeader
         icon={ClipboardCheck}
         title="Đánh giá thực tập"
-        subtitle="Cấu hình báo cáo, đánh giá chất lượng, nhập điểm thi và tổng hợp kết quả theo quy định hiện hành."
+        subtitle="Đánh giá chất lượng, nhập điểm thi và tổng hợp kết quả theo quy định hiện hành."
       />
 
       <div className="flex flex-wrap gap-1 rounded-xl bg-slate-100 p-1">
@@ -1562,7 +1563,6 @@ export const InternshipEvaluationView: React.FC<{
         })}
       </div>
 
-      {tab === "schedule" && <ScheduleConfigTab onShowToast={onShowToast} />}
       {tab === "grading" && <GradingTab onShowToast={onShowToast} />}
       {tab === "summary" && <SummaryTab onShowToast={onShowToast} />}
       {tab === "comparison" && <SemesterComparisonTab />}

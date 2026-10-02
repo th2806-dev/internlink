@@ -73,9 +73,8 @@ export const AttendanceView: React.FC<{
     semesterWeekLabel(week, internshipStartWeek);
 
   const weekOptionLabel = (week: number) => {
-    if (internshipStartWeek <= 1)
-      return week > 0 ? `Tuần ${week}` : `Tuần ${week} — chuẩn bị`;
-    return `Tuần ${week}${week <= 0 ? " (chuẩn bị)" : ""} — HK tuần ${toSemesterWeek(week, internshipStartWeek)}`;
+    const internshipLabel = week > 0 ? `Tuần thực tập ${week}` : `Tuần chuẩn bị ${week}`;
+    return `${internshipLabel} — Tuần ${toSemesterWeek(week, internshipStartWeek)} học kỳ`;
   };
 
   // Quy đổi phút → tiết (1 tiết = 45 phút) để hiển thị ở bảng.
@@ -134,7 +133,7 @@ export const AttendanceView: React.FC<{
   >([]);
 
   // Create form state
-  const totalWeeks = currentSemester?.totalWeeks || 15;
+  const totalWeeks = currentSemester?.totalWeeks || 6;
   const PREP_WEEKS = Array.from(
     { length: MAX_PREP_WEEKS + 1 },
     (_, i) => i - MAX_PREP_WEEKS
@@ -161,6 +160,7 @@ export const AttendanceView: React.FC<{
     useState<AttendanceSessionDto | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
+  const [editWeek, setEditWeek] = useState(1);
   const [editDate, setEditDate] = useState("");
   const [editPeriods, setEditPeriods] = useState(2);
   const [editLocation, setEditLocation] = useState("");
@@ -397,6 +397,7 @@ export const AttendanceView: React.FC<{
     setEditingSession(session);
     setEditTitle(session.title);
     setEditDescription(session.description || "");
+    setEditWeek(session.weekNumber);
     const dateObj = parseBackendDate(session.meetingDate) ?? new Date();
     setEditDate(toDateTimeLocalValue(dateObj));
     setEditPeriods(Math.max(1, Math.round((session.durationMinutes ?? 90) / 45)));
@@ -415,8 +416,20 @@ export const AttendanceView: React.FC<{
       return;
     }
     const dateObj = new Date(editDate);
+    if (
+      semesterStartRaw &&
+      !isMeetingDateInWeek(dateObj, editWeek, semesterStartRaw, internshipStartWeek)
+    ) {
+      const window = getWeekWindow(editWeek, semesterStartRaw, internshipStartWeek);
+      const bounds = window
+        ? ` (từ ${window.from.toLocaleDateString("vi-VN")} đến ${new Date(window.to.getTime() - 1).toLocaleDateString("vi-VN")})`
+        : "";
+      onShowToast?.(`Ngày đã chọn không rơi vào ${weekLabel(editWeek)}${bounds}. Vui lòng chọn ngày hợp lệ.`, "error");
+      return;
+    }
 
     const payload: UpdateAttendanceSessionDto = {
+      weekNumber: editWeek,
       title: editTitle.trim(),
       description: editDescription.trim() || undefined,
       meetingDate: dateObj.toISOString(),
@@ -452,10 +465,10 @@ export const AttendanceView: React.FC<{
       <PageHeader
         icon={CalendarCheck}
         title="Điểm danh & Buổi sinh hoạt khoa"
-        subtitle="Lập lịch họp chung, phân công giảng viên chủ trì và quản lý chuyên cần sinh viên toàn khoa"
+        subtitle="Lập lịch buổi gặp và theo dõi chuyên cần sinh viên theo học kỳ."
         actions={[
           {
-            label: "Tạo buổi sinh hoạt",
+            label: "Tạo lịch điểm danh",
             icon: Plus,
             onClick: openCreateModal,
             variant: "primary",
@@ -466,7 +479,7 @@ export const AttendanceView: React.FC<{
       {/* KPI GRID */}
       <KpiGrid>
         <KpiCard
-          title="Tổng buổi sinh hoạt"
+          title="Tổng buổi gặp"
           value={stats.total}
           icon={CalendarCheck}
           tone="blue"
@@ -501,7 +514,7 @@ export const AttendanceView: React.FC<{
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-base font-bold text-slate-900 tracking-tight">
-                Danh sách Buổi gặp & Điểm danh
+                Lịch buổi gặp
               </h2>
               {currentSemester?.name && (
                 <span className="px-2 py-0.5 bg-blue-50 text-blue-700 font-bold text-[10px] rounded-md border border-blue-200/60">
@@ -509,9 +522,6 @@ export const AttendanceView: React.FC<{
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-500 font-medium mt-0.5">
-              Admin khoa tạo lịch, phân công giảng viên chủ trì và có toàn quyền điểm danh sinh viên.
-            </p>
           </div>
 
           {/* FILTERS */}
@@ -1040,6 +1050,7 @@ export const AttendanceView: React.FC<{
                   Điểm danh: {activeMarkSession?.title || "Buổi sinh hoạt"}
                 </h3>
                 <p className="text-[11px] text-slate-500 mt-0.5">
+                  {activeMarkSession && `${weekLabel(activeMarkSession.weekNumber)} · `}
                   GV chủ trì: {activeMarkSession?.lecturerName || "—"} ·{" "}
                   {activeMarkSession?.records.length || 0} sinh viên
                 </p>
@@ -1228,13 +1239,46 @@ export const AttendanceView: React.FC<{
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
+                    Tuần sinh hoạt
+                  </label>
+                  <select
+                    value={editWeek}
+                    onChange={(e) => {
+                      const week = Number(e.target.value);
+                      setEditWeek(week);
+                      if (editDate) {
+                        const shifted = shiftDateIntoWeek(editDate, week, semesterStartRaw, internshipStartWeek);
+                        if (shifted) setEditDate(toDateTimeLocalValue(new Date(shifted)));
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-md bg-white outline-none cursor-pointer font-medium"
+                  >
+                    {PREP_WEEKS.map((week) => (
+                      <option key={week} value={week}>{weekOptionLabel(week)}</option>
+                    ))}
+                    {Array.from({ length: totalWeeks }, (_, index) => index + 1).map((week) => (
+                      <option key={week} value={week}>{weekOptionLabel(week)}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
                     Thời gian bắt đầu
                   </label>
                   <input
                     type="datetime-local"
                     required
                     value={editDate}
-                    onChange={(e) => setEditDate(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setEditDate(value);
+                      if (value && semesterStartRaw) {
+                        const derived = relativeWeekFromMeetingDate(
+                          new Date(value), semesterStartRaw, totalWeeks, internshipStartWeek,
+                        );
+                        if (derived !== null) setEditWeek(derived);
+                      }
+                    }}
                     className="w-full px-3 py-2 border border-slate-200 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                   />
                 </div>

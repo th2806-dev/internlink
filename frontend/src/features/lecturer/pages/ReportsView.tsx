@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { ClipboardCheck, FileClock, FileCheck2, FileWarning, SearchX } from "lucide-react";
+import { CalendarClock, ClipboardCheck, FileClock, FileCheck2, FileWarning, SearchX } from "lucide-react";
+import { useState } from "react";
 import { PageHeader } from "../../../components/common/PageHeader";
 import { Panel } from "../../../components/common/Panel";
 import { EmptyState } from "../../../components/common/EmptyState";
@@ -14,6 +15,7 @@ import type { ToastType } from "../../../contexts/ToastContext";
 import type { Submission } from "../../../types/submission";
 import { useSemester } from "../../../contexts/SemesterContext";
 import { semesterReportScheduleService, type SemesterReportScheduleDto } from "../../../services/semesterReportSchedule.service";
+import { ScheduleConfigTab } from "./InternshipEvaluationView";
 
 interface ReportsViewProps {
   /** Bài nộp sản phẩm/cuối kỳ (dữ liệu portal legacy — chuyển sang query ở GĐ 3/4). */
@@ -48,6 +50,7 @@ export const ReportsView = ({
   semesterId,
   onRefresh,
 }: ReportsViewProps) => {
+  const [activeTab, setActiveTab] = useState<"review" | "schedule">("review");
   const { semesters } = useSemester();
   const [schedules, setSchedules] = useState<SemesterReportScheduleDto[]>([]);
   const selectedSemester = semesters.find((semester) => semester.id === semesterId);
@@ -125,12 +128,39 @@ export const ReportsView = ({
     <div className="space-y-5 animate-in fade-in duration-200 max-w-[1500px] mx-auto">
       <PageHeader
         icon={ClipboardCheck}
-        title="Duyệt báo cáo thực tập"
-        subtitle="Kiểm tra tiến độ, phản hồi và xác nhận báo cáo của sinh viên trong nhóm hướng dẫn."
-        badge={isTotalsPending ? "…" : `${reportSummary.total} báo cáo`}
+        title={activeTab === "review" ? "Duyệt báo cáo thực tập" : "Cấu hình báo cáo"}
+        subtitle={activeTab === "review"
+          ? "Kiểm tra tiến độ, phản hồi và xác nhận báo cáo của sinh viên trong nhóm hướng dẫn."
+          : "Thiết lập thời gian mở nộp, deadline và trạng thái nhận báo cáo theo tuần."}
+        badge={activeTab === "review" ? (isTotalsPending ? "…" : `${reportSummary.total} báo cáo`) : undefined}
         badgeColor="bg-blue-50 text-blue-800 border-blue-200"
       />
 
+      <div className="flex flex-wrap gap-1 rounded-lg border border-slate-200 bg-slate-100 p-1" role="tablist" aria-label="Báo cáo thực tập">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "review"}
+          onClick={() => setActiveTab("review")}
+          className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-xs font-semibold transition-colors ${activeTab === "review" ? "bg-white text-blue-700 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
+        >
+          <ClipboardCheck className="h-4 w-4" /> Duyệt báo cáo
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "schedule"}
+          onClick={() => setActiveTab("schedule")}
+          className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-xs font-semibold transition-colors ${activeTab === "schedule" ? "bg-white text-blue-700 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
+        >
+          <CalendarClock className="h-4 w-4" /> Cấu hình deadline
+        </button>
+      </div>
+
+      {activeTab === "schedule" ? (
+        <ScheduleConfigTab onShowToast={showToast} semesterId={semesterId} />
+      ) : (
+        <>
       <section className="grid grid-cols-2 lg:grid-cols-4 il-panel overflow-hidden">
         <div className="p-4 border-r border-b lg:border-b-0 border-slate-100">
           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Tổng báo cáo</p>
@@ -296,6 +326,8 @@ export const ReportsView = ({
           onUpdateSubmissionStatus={effectiveUpdateSubmissionStatus}
           onToast={showToast}
         />
+      )}
+        </>
       )}
     </div>
   );
