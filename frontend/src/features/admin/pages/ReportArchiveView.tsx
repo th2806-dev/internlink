@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Archive, Download, FileArchive, FileText, RefreshCw, Search, Users } from "lucide-react";
+import { Archive, ChevronLeft, ChevronRight, Download, FileArchive, FileText, RefreshCw, Search, Users } from "lucide-react";
 import { PageHeader } from "../../../components/common/PageHeader";
 import { Panel } from "../../../components/common/Panel";
 import { useSemester } from "../../../contexts/SemesterContext";
@@ -14,6 +14,8 @@ export const ReportArchiveView = ({ onShowToast }: { onShowToast: (message: stri
   const { semesters, selectedSemesterId, selectSemester } = useSemester();
   const [students, setStudents] = useState<WeeklyReportArchiveStudentDto[]>([]);
   const [search, setSearch] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingKey, setLoadingKey] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -38,6 +40,7 @@ export const ReportArchiveView = ({ onShowToast }: { onShowToast: (message: stri
 
   useEffect(() => {
     void loadStudents();
+    setCurrentPage(1);
   }, [semesterId]);
 
   const filteredStudents = useMemo(() => {
@@ -48,6 +51,10 @@ export const ReportArchiveView = ({ onShowToast }: { onShowToast: (message: stri
         .some((value) => value?.toLocaleLowerCase("vi").includes(term)),
     );
   }, [students, search]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredStudents.length / pageSize));
+  const visiblePage = Math.min(currentPage, totalPages);
+  const paginatedStudents = filteredStudents.slice((visiblePage - 1) * pageSize, visiblePage * pageSize);
 
   const totalReports = students.reduce((total, student) => total + student.reportCount, 0);
   const totalFiles = students.reduce((total, student) => total + student.fileCount, 0);
@@ -137,7 +144,10 @@ export const ReportArchiveView = ({ onShowToast }: { onShowToast: (message: stri
                 <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input
                   value={search}
-                  onChange={(event) => setSearch(event.target.value)}
+                  onChange={(event) => {
+                    setSearch(event.target.value);
+                    setCurrentPage(1);
+                  }}
                   placeholder="Tìm MSSV, họ tên, lớp, doanh nghiệp"
                   className="w-full rounded-md border border-slate-300 py-2 pl-8 pr-3 text-xs outline-none focus:border-blue-600"
                   aria-label="Tìm sinh viên trong kho báo cáo"
@@ -159,7 +169,7 @@ export const ReportArchiveView = ({ onShowToast }: { onShowToast: (message: stri
                 <tbody className="divide-y divide-slate-100">
                   {isLoading ? (
                     <tr><td colSpan={6} className="px-4 py-12 text-center text-slate-500">Đang tải kho báo cáo…</td></tr>
-                  ) : filteredStudents.map((student) => (
+                  ) : paginatedStudents.map((student) => (
                     <tr key={student.studentId} className="hover:bg-slate-50">
                       <td className="px-4 py-3">
                         <p className="font-semibold text-slate-900">{student.studentName}</p>
@@ -193,6 +203,48 @@ export const ReportArchiveView = ({ onShowToast }: { onShowToast: (message: stri
                   )}
                 </tbody>
               </table>
+            </div>
+            <div className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2">
+                <span>
+                  Hiển thị {filteredStudents.length === 0 ? 0 : (visiblePage - 1) * pageSize + 1}
+                  –{Math.min(visiblePage * pageSize, filteredStudents.length)} / {filteredStudents.length} sinh viên
+                </span>
+                <select
+                  value={pageSize}
+                  onChange={(event) => {
+                    setPageSize(Number(event.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="rounded-md border border-slate-300 bg-white px-2 py-1 font-medium text-slate-700 outline-none"
+                  aria-label="Số sinh viên mỗi trang"
+                >
+                  <option value={10}>10 / trang</option>
+                  <option value={25}>25 / trang</option>
+                  <option value={50}>50 / trang</option>
+                </select>
+              </div>
+              <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                  disabled={visiblePage === 1}
+                  className="rounded-md border border-slate-300 p-1.5 text-slate-700 hover:bg-slate-50 disabled:pointer-events-none disabled:opacity-40"
+                  aria-label="Trang trước"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <span className="min-w-16 text-center font-semibold text-slate-700">{visiblePage} / {totalPages}</span>
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                  disabled={visiblePage === totalPages}
+                  className="rounded-md border border-slate-300 p-1.5 text-slate-700 hover:bg-slate-50 disabled:pointer-events-none disabled:opacity-40"
+                  aria-label="Trang sau"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           </Panel>
         </>
