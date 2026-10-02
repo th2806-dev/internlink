@@ -109,10 +109,12 @@ public class AssignmentService : IAssignmentService
 
             // Check for internship in specific semester
             var internship = await _db.Internships
+                .Include(item => item.Company)
                 .FirstOrDefaultAsync(i => 
                     i.StudentId == studentId && 
                     i.SemesterId == targetSemesterId && 
                     !i.IsDeleted);
+            var previousLecturerId = internship?.LecturerId;
 
             if (internship == null)
             {
@@ -141,6 +143,21 @@ public class AssignmentService : IAssignmentService
                     internship.Notes = request.Note;
                 internship.UpdatedAt = DateTime.UtcNow;
                 result.UpdatedCount++;
+            }
+
+            if (previousLecturerId != request.LecturerId)
+            {
+                var occurredAt = DateTime.UtcNow;
+                if (previousLecturerId.HasValue)
+                {
+                    _db.LecturerActivityLogs.Add(CreateAssignmentActivity(
+                        previousLecturerId.Value, targetSemesterId, internship, student,
+                        "guidance-assignment-ended", "Kết thúc phân công hướng dẫn", occurredAt));
+                }
+
+                _db.LecturerActivityLogs.Add(CreateAssignmentActivity(
+                    request.LecturerId, targetSemesterId, internship, student,
+                    "guidance-assignment-started", "Bắt đầu phân công hướng dẫn", occurredAt));
             }
 
             result.AssignedCount++;
@@ -277,11 +294,19 @@ public class AssignmentService : IAssignmentService
         }
 
         var internship = await query
+            .Include(item => item.Student)
+            .Include(item => item.Company)
             .FirstOrDefaultAsync();
 
         if (internship == null)
             return false;
 
+        if (internship.SemesterId.HasValue)
+        {
+            _db.LecturerActivityLogs.Add(CreateAssignmentActivity(
+                request.LecturerId, internship.SemesterId.Value, internship, internship.Student,
+                "guidance-assignment-ended", "Kết thúc phân công hướng dẫn", DateTime.UtcNow));
+        }
         internship.LecturerId = null;
         internship.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
@@ -1292,6 +1317,7 @@ public class AssignmentService : IAssignmentService
 
             // 3. Assign to Internship
             var internship = existingInternships.FirstOrDefault(i => i.StudentId == matchedStudent.Id);
+            var previousLecturerId = internship?.LecturerId;
             if (internship == null)
             {
                 internship = new Internship
@@ -1316,6 +1342,21 @@ public class AssignmentService : IAssignmentService
                 internship.UpdatedAt = DateTime.UtcNow;
             }
 
+            if (previousLecturerId != matchedLecturer.Id)
+            {
+                var occurredAt = DateTime.UtcNow;
+                if (previousLecturerId.HasValue)
+                {
+                    _db.LecturerActivityLogs.Add(CreateAssignmentActivity(
+                        previousLecturerId.Value, targetSemesterId, internship, matchedStudent,
+                        "guidance-assignment-ended", "Kết thúc phân công hướng dẫn", occurredAt));
+                }
+
+                _db.LecturerActivityLogs.Add(CreateAssignmentActivity(
+                    matchedLecturer.Id, targetSemesterId, internship, matchedStudent,
+                    "guidance-assignment-started", "Bắt đầu phân công hướng dẫn", occurredAt));
+            }
+
             result.SuccessCount++;
         }
 
@@ -1326,6 +1367,28 @@ public class AssignmentService : IAssignmentService
 
         return result;
     }
+
+    private static LecturerActivityLog CreateAssignmentActivity(
+        Guid lecturerId,
+        Guid semesterId,
+        Internship internship,
+        Student? student,
+        string activityType,
+        string title,
+        DateTime occurredAt) => new()
+    {
+        LecturerId = lecturerId,
+        SemesterId = semesterId,
+        InternshipId = internship.Id,
+        RelatedEntityId = internship.Id,
+        StudentId = internship.StudentId,
+        StudentCode = student?.StudentCode,
+        StudentName = student?.FullName,
+        CompanyName = internship.Company?.CompanyName,
+        ActivityType = activityType,
+        Title = title,
+        OccurredAt = occurredAt,
+    };
 
     private async Task<Guid> ResolveTargetSemesterIdAsync(Guid? semesterId, Guid? departmentId = null)
     {

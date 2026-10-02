@@ -65,7 +65,7 @@ public class WeeklyReportController : ControllerBase
             if (userId == null)
                 return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
-            var isLecturerOrAdmin = User.IsInRole("Lecturer") || User.IsInRole("SuperAdmin");
+            var isLecturerOrAdmin = User.IsInRole("Lecturer") || User.IsInRole("SuperAdmin") || User.IsInRole("DepartmentAdmin");
             var reports = await _weeklyReportService.GetByInternshipAsync(internshipId, userId.Value, isLecturerOrAdmin);
             return Ok(ApiResponse<IEnumerable<WeeklyReportDto>>.Ok(reports));
         }
@@ -218,7 +218,7 @@ public class WeeklyReportController : ControllerBase
             if (userId == null)
                 return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
-            var isLecturerOrAdmin = User.IsInRole("Lecturer") || User.IsInRole("SuperAdmin");
+            var isLecturerOrAdmin = User.IsInRole("Lecturer") || User.IsInRole("SuperAdmin") || User.IsInRole("DepartmentAdmin");
             var file = await _weeklyReportService.DownloadFileAsync(id, userId.Value, isLecturerOrAdmin);
             if (file == null)
                 return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.FileNotFound }));

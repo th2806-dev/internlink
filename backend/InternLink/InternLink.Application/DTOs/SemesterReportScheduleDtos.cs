@@ -37,3 +37,9 @@ public class UpdateReportScheduleRequest
     public bool? AllowLateSubmission { get; set; }
     public string? Description { get; set; }
 }
+
+public sealed class SupplementalDeadlineDto
+{
+    public DateTime StartDate { get; set; }
+    public DateTime EndDate { get; set; }
+}

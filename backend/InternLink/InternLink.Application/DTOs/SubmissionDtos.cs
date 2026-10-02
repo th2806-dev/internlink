@@ -10,6 +10,7 @@ public sealed class CreateSubmissionRequest
     public string? Description { get; set; }
     public string? FileName { get; set; }
     public string? FileUrl { get; set; }
+    public decimal? EmployerScore { get; set; }
 }
 
 public sealed class UpdateSubmissionStatusRequest
@@ -23,6 +24,7 @@ public sealed class ResubmitRequest
     public string? Description { get; set; }
     public string? FileName { get; set; }
     public string? FileUrl { get; set; }
+    public decimal? EmployerScore { get; set; }
 }
 
 public sealed class UpdateFeedbackRequest
@@ -42,6 +44,7 @@ public sealed class UploadSubmissionFormRequest
     public string Type { get; set; } = null!;
     public string? Title { get; set; }
     public string? Description { get; set; }
+    public decimal? EmployerScore { get; set; }
     public IFormFile? File { get; set; }
 }
 
@@ -51,6 +54,7 @@ public sealed class UploadSubmissionBundleFormRequest
     public string Type { get; set; } = null!;
     public string? Title { get; set; }
     public string? Description { get; set; }
+    public decimal? EmployerScore { get; set; }
     public string? LinksJson { get; set; }
     public List<IFormFile> Files { get; set; } = new();
 }
@@ -66,6 +70,7 @@ public sealed class ResubmitSubmissionFormRequest
 {
     public string? Title { get; set; }
     public string? Description { get; set; }
+    public decimal? EmployerScore { get; set; }
     public IFormFile? File { get; set; }
 }
 

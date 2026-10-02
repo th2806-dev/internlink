@@ -5,5 +5,6 @@ public enum SubmissionType
     WeeklyReport,
     InternshipLog,
     FinalReport,
-    Product
+    Product,
+    Evidence
 }

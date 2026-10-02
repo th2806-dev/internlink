@@ -7,7 +7,20 @@ import type {
   SubmissionDto,
 } from "../types/api";
 
+export interface LecturerSemesterOptionDto {
+  id: string;
+  name: string;
+  term: string;
+  academicYear: string;
+  startDate?: string | null;
+  endDate?: string | null;
+}
+
 export const lecturerInternshipsService = {
+  getAssignedSemesters(): Promise<LecturerSemesterOptionDto[]> {
+    return apiRequest<LecturerSemesterOptionDto[]>("/api/Lecturer/semesters", { skipCache: true });
+  },
+
   getSemesterSummary(semesterId: string) {
     return apiRequest<LecturerSemesterSummaryDto>(`/api/Lecturer/semester-summary/${semesterId}`, {
       skipCache: true,

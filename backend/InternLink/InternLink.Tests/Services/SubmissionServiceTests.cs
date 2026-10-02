@@ -36,10 +36,13 @@ public class SubmissionServiceTests
         return new AppDbContext(options);
     }
 
-    private SubmissionService CreateService(AppDbContext db, INotificationService? notificationService = null)
+    private SubmissionService CreateService(
+        AppDbContext db,
+        INotificationService? notificationService = null,
+        string? contentRootPath = null)
     {
         var envMock = new Mock<IWebHostEnvironment>();
-        envMock.Setup(e => e.ContentRootPath).Returns(AppDomain.CurrentDomain.BaseDirectory);
+        envMock.Setup(e => e.ContentRootPath).Returns(contentRootPath ?? AppDomain.CurrentDomain.BaseDirectory);
 
         return new SubmissionService(
             db,
@@ -194,7 +197,9 @@ public class SubmissionServiceTests
             InternshipId = internship.Id,
             Type = "FinalReport",
             Title = "Final Report Title",
-            Description = "Final Report Description"
+            Description = "Final Report Description",
+            FileName = "final-report.pdf",
+            FileUrl = "uploads/submissions/final-report.pdf",
         };
 
         var result = await service.CreateAsync(studentUser.Id, request);
@@ -292,6 +297,174 @@ public class SubmissionServiceTests
 
         result.Should().HaveCount(1);
         result.First().Comment.Should().Be("Public comment");
+    }
+
+    [Fact]
+    public async Task ResubmitWithFileAsync_StrangerStudent_ShouldRejectBeforeSavingFile()
+    {
+        var db = GetDb();
+        var (_, _, strangerUser, _, internship, submission) = await SeedDataAsync(db);
+        submission.Type = SubmissionType.Evidence;
+        submission.Status = SubmissionStatus.RevisionRequested;
+        await db.SaveChangesAsync();
+
+        var contentRootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        var service = CreateService(db, contentRootPath: contentRootPath);
+
+        try
+        {
+            var act = () => service.ResubmitWithFileAsync(
+                submission.Id,
+                strangerUser.Id,
+                new ResubmitRequest(),
+                new MemoryStream(new byte[] { 1, 2, 3 }),
+                "evidence.pdf");
+
+            await act.Should().ThrowAsync<UnauthorizedAccessException>();
+            Directory.Exists(Path.Combine(contentRootPath, "uploads", "submissions", internship.Id.ToString()))
+                .Should().BeFalse();
+        }
+        finally
+        {
+            if (Directory.Exists(contentRootPath))
+                Directory.Delete(contentRootPath, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ResubmitWithFileAsync_WhenSubmissionIsNotRevisionRequested_ShouldRejectBeforeSavingFile()
+    {
+        var db = GetDb();
+        var (studentUser, _, _, _, internship, submission) = await SeedDataAsync(db);
+        var contentRootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        var service = CreateService(db, contentRootPath: contentRootPath);
+
+        try
+        {
+            var act = () => service.ResubmitWithFileAsync(
+                submission.Id,
+                studentUser.Id,
+                new ResubmitRequest(),
+                new MemoryStream(new byte[] { 1, 2, 3 }),
+                "report.pdf");
+
+            await act.Should().ThrowAsync<InvalidOperationException>()
+                .WithMessage("Resubmit is only allowed when status is RevisionRequested");
+            Directory.Exists(Path.Combine(contentRootPath, "uploads", "submissions", internship.Id.ToString()))
+                .Should().BeFalse();
+        }
+        finally
+        {
+            if (Directory.Exists(contentRootPath))
+                Directory.Delete(contentRootPath, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task CreateBundleAsync_EvidenceWithoutScoreOrImage_ShouldRejectBeforeSaving()
+    {
+        var db = GetDb();
+        var (studentUser, _, _, _, internship, _) = await SeedDataAsync(db);
+        var service = CreateService(db);
+        var request = new CreateSubmissionRequest
+        {
+            InternshipId = internship.Id,
+            Type = "Evidence",
+            EmployerScore = 8,
+        };
+        var files = new[]
+        {
+            (Stream: (Stream)new MemoryStream(new byte[] { 1, 2, 3 }), FileName: "company-form.pdf", Length: 3L, ContentType: (string?)"application/pdf"),
+        };
+
+        var act = () => service.CreateBundleAsync(studentUser.Id, request, files, Array.Empty<SubmissionAssetInput>());
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("Hồ sơ đánh giá doanh nghiệp bắt buộc đính kèm ảnh phiếu xác nhận (.jpg, .png, .webp hoặc .gif).");
+        (await db.Submissions.CountAsync(s => s.Type == SubmissionType.Evidence)).Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData(11)]
+    [InlineData(-1)]
+    public async Task CreateBundleAsync_EvidenceWithOutOfRangeScore_ShouldReject(decimal score)
+    {
+        var db = GetDb();
+        var (studentUser, _, _, _, internship, _) = await SeedDataAsync(db);
+        var service = CreateService(db);
+        var request = new CreateSubmissionRequest
+        {
+            InternshipId = internship.Id,
+            Type = "Evidence",
+            EmployerScore = score,
+        };
+        var files = new[]
+        {
+            (Stream: (Stream)new MemoryStream(new byte[] { 1, 2, 3 }), FileName: "company-form.jpg", Length: 3L, ContentType: (string?)"image/jpeg"),
+        };
+
+        var act = () => service.CreateBundleAsync(studentUser.Id, request, files, Array.Empty<SubmissionAssetInput>());
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("Vui lòng nhập điểm đánh giá doanh nghiệp từ 0 đến 10.");
+        (await db.Submissions.CountAsync(s => s.Type == SubmissionType.Evidence)).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task CreateBundleAsync_EvidenceWithoutScore_ShouldReject()
+    {
+        var db = GetDb();
+        var (studentUser, _, _, _, internship, _) = await SeedDataAsync(db);
+        var service = CreateService(db);
+        var request = new CreateSubmissionRequest
+        {
+            InternshipId = internship.Id,
+            Type = "Evidence",
+        };
+        var files = new[]
+        {
+            (Stream: (Stream)new MemoryStream(new byte[] { 1, 2, 3 }), FileName: "company-form.jpg", Length: 3L, ContentType: (string?)"image/jpeg"),
+        };
+
+        var act = () => service.CreateBundleAsync(studentUser.Id, request, files, Array.Empty<SubmissionAssetInput>());
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("Vui lòng nhập điểm đánh giá doanh nghiệp từ 0 đến 10.");
+        (await db.Submissions.CountAsync(s => s.Type == SubmissionType.Evidence)).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task CreateBundleAsync_ValidEvidence_ShouldPersistScoreAndReturnIt()
+    {
+        var db = GetDb();
+        var (studentUser, _, _, _, internship, _) = await SeedDataAsync(db);
+        var contentRootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        var service = CreateService(db, contentRootPath: contentRootPath);
+        var request = new CreateSubmissionRequest
+        {
+            InternshipId = internship.Id,
+            Type = "Evidence",
+            Title = "Phiếu đánh giá doanh nghiệp",
+            EmployerScore = 8.5m,
+        };
+        var files = new[]
+        {
+            (Stream: (Stream)new MemoryStream(new byte[] { 1, 2, 3 }), FileName: "company-form.jpg", Length: 3L, ContentType: (string?)"image/jpeg"),
+        };
+
+        try
+        {
+            var result = await service.CreateBundleAsync(studentUser.Id, request, files, Array.Empty<SubmissionAssetInput>());
+
+            result.EmployerScore.Should().Be(8.5m);
+            (await db.Submissions.SingleAsync(s => s.Id == result.Id)).EmployerScore.Should().Be(8.5m);
+            result.Assets.Should().ContainSingle(asset => asset.AssetType == "file");
+        }
+        finally
+        {
+            if (Directory.Exists(contentRootPath))
+                Directory.Delete(contentRootPath, recursive: true);
+        }
     }
 
     [Fact]

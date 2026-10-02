@@ -5,6 +5,7 @@ namespace InternLink.Application.Interfaces;
 public interface ILecturerService
 {
     Task<LecturerOverviewDto?> GetMeAsync(Guid userId);
+    Task<IEnumerable<LecturerSemesterOptionDto>> GetAssignedSemestersAsync(Guid userId);
     Task<LecturerDashboardStatsDto> GetDashboardStatsAsync(Guid userId, Guid? semesterId = null);
     Task<IEnumerable<LecturerStudentListItemDto>> GetAssignedStudentsAsync(Guid userId, string? search = null, string? status = null, Guid? semesterId = null);
     Task<IEnumerable<LecturerCompanySummaryDto>> GetAssignedCompaniesAsync(Guid userId, Guid? semesterId = null);

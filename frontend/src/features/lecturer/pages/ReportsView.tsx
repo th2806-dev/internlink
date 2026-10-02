@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { ClipboardCheck, FileClock, FileCheck2, FileWarning, SearchX } from "lucide-react";
 import { PageHeader } from "../../../components/common/PageHeader";
 import { Panel } from "../../../components/common/Panel";
@@ -11,6 +12,8 @@ import { useLecturerSubmissionsQuery } from "../../../hooks/useLecturerSubmissio
 import { ApiClientError } from "../../../lib/apiClient";
 import type { ToastType } from "../../../contexts/ToastContext";
 import type { Submission } from "../../../types/submission";
+import { useSemester } from "../../../contexts/SemesterContext";
+import { semesterReportScheduleService, type SemesterReportScheduleDto } from "../../../services/semesterReportSchedule.service";
 
 interface ReportsViewProps {
   /** Bài nộp sản phẩm/cuối kỳ (dữ liệu portal legacy — chuyển sang query ở GĐ 3/4). */
@@ -45,6 +48,25 @@ export const ReportsView = ({
   semesterId,
   onRefresh,
 }: ReportsViewProps) => {
+  const { semesters } = useSemester();
+  const [schedules, setSchedules] = useState<SemesterReportScheduleDto[]>([]);
+  const selectedSemester = semesters.find((semester) => semester.id === semesterId);
+  const isSemesterClosed = selectedSemester?.status === "completed";
+
+  useEffect(() => {
+    if (!semesterId) {
+      setSchedules([]);
+      return;
+    }
+    void semesterReportScheduleService.getSchedules(semesterId)
+      .then(setSchedules)
+      .catch(() => setSchedules([]));
+  }, [semesterId]);
+
+  const closedWeekNumbers = schedules
+    .filter((schedule) => !schedule.isSubmissionOpen || new Date(schedule.dueDate).getTime() < Date.now())
+    .map((schedule) => schedule.weekNumber);
+
   const reports = useLecturerReportsQuery({ semesterId, onReviewed: onRefresh });
   const submissionsQuery = useLecturerSubmissionsQuery({
     semesterId,
@@ -244,6 +266,8 @@ export const ReportsView = ({
                 }
                 isReviewing={reports.isReviewing}
                 isPlaceholderData={isPlaceholderData}
+                isSemesterClosed={isSemesterClosed}
+                closedWeekNumbers={closedWeekNumbers}
               />
             </div>
           )}

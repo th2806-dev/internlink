@@ -30,6 +30,10 @@ export interface StudentGrade {
   /** Thông tin thực tập hiển thị trong bảng tổng hợp (từ Internship.Company) */
   companyName?: string | null;
   position?: string | null;
+  employerScore: number | null;
+  employerEvidenceSubmissionId: string | null;
+  employerEvidenceAssetId: string | null;
+  employerEvidenceFileName: string | null;
   /** NotStarted | InProgress | Completed | ... (enum backend) */
   internshipStatus?: string | null;
 

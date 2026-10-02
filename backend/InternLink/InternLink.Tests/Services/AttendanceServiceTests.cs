@@ -58,6 +58,8 @@ public class AttendanceServiceTests
         result.TotalStudents.Should().Be(2);
         result.Records.Should().HaveCount(2);
         result.Records.Select(r => r.StudentId).Should().Contain(new[] { student1.Id, student2.Id });
+        db.LecturerActivityLogs.Should().ContainSingle()
+            .Which.ActivityType.Should().Be("guidance-session-scheduled");
     }
 
     [Fact]
@@ -187,6 +189,11 @@ public class AttendanceServiceTests
         var r2 = updated.Records.First(r => r.StudentId == student2.Id);
         r2.Status.Should().Be("Absent");
         r2.Notes.Should().Be("Không phép");
+
+        db.LecturerActivityLogs.Count(log => log.ActivityType == "attendance-marked")
+            .Should().Be(2);
+        db.LecturerActivityLogs.Should().Contain(log =>
+            log.ActivityType == "attendance-marked" && log.StudentId == student2.Id && log.Detail!.Contains("Absent"));
     }
 
     [Fact]

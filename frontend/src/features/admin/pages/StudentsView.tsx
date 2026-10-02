@@ -46,6 +46,10 @@ import { exportService } from "../../../services/export.service";
 import { useAdminStudentsQuery, STUDENTS_PAGE_SIZE_OPTIONS } from "../../../hooks/useAdminStudentsQuery";
 import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
 import { useSemester, toApiSemesterId, toApiDepartmentId } from "../../../contexts/SemesterContext";
+import { weeklyReportService } from "../../../services/weeklyReport.service";
+import { submissionApiService } from "../../../services/submissionApi.service";
+import { StudentReportsTab } from "../../lecturer/components/StudentReportsTab";
+import type { SubmissionDto, WeeklyReportDto } from "../../../types/api";
 import type { ToastType } from "../../../contexts/ToastContext";
 export const StudentsView = ({
   onShowToast,
@@ -78,24 +82,58 @@ export const StudentsView = ({
     setSearch,
     applySearch,
     setClassFilter,
-    setAccountStatusFilter,
-    setInternshipStatusFilter,
     setSortBy,
     clearFilters,
     goToPage,
     setPageSize,
   } = apiPage;
   const reloadStudents = refetch;
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [lecturerFilter, setLecturerFilter] = useState("all");
+  const [companyFilter, setCompanyFilter] = useState("all");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<AdminStudentRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AdminStudentRow | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<AdminStudentRow | null>(null);
+  const [studentWeeklyReports, setStudentWeeklyReports] = useState<WeeklyReportDto[]>([]);
+  const [studentSubmissions, setStudentSubmissions] = useState<SubmissionDto[]>([]);
+  const [studentFilesLoading, setStudentFilesLoading] = useState(false);
+  const [studentFileErrors, setStudentFileErrors] = useState<{ reports?: string; submissions?: string }>({});
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isGenerateAccountsModalOpen, setIsGenerateAccountsModalOpen] =
     useState(false);
   const [searchInput, setSearchInput] = useState(() => searchParams.get("q") ?? "");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  const loadStudentFiles = async (internshipId = selectedStudent?.internshipId) => {
+    if (!internshipId) {
+      setStudentWeeklyReports([]);
+      setStudentSubmissions([]);
+      return;
+    }
+    setStudentFilesLoading(true);
+    const [reportsResult, submissionsResult] = await Promise.allSettled([
+      weeklyReportService.getByInternship(internshipId),
+      submissionApiService.getByInternship(internshipId),
+    ]);
+    setStudentWeeklyReports(reportsResult.status === "fulfilled" ? reportsResult.value : []);
+    setStudentSubmissions(submissionsResult.status === "fulfilled" ? submissionsResult.value : []);
+    setStudentFileErrors({
+      reports: reportsResult.status === "rejected" ? getApiErrorMessage(reportsResult.reason) : undefined,
+      submissions: submissionsResult.status === "rejected" ? getApiErrorMessage(submissionsResult.reason) : undefined,
+    });
+    setStudentFilesLoading(false);
+  };
+
+  useEffect(() => {
+    if (selectedStudent?.internshipId) void loadStudentFiles(selectedStudent.internshipId);
+    else {
+      setStudentWeeklyReports([]);
+      setStudentSubmissions([]);
+      setStudentFileErrors({});
+    }
+  }, [selectedStudent?.internshipId]);
 
   /* ── URL ⇄ hook (q/class/status/internship/sort/page) ──────────────── */
   useEffect(() => {
@@ -214,8 +252,49 @@ export const StudentsView = ({
   const pendingAccounts = counts.pending;
   const interningStudents = counts.hasCompany;
   // Filter/sort/phân trang là server-side → danh sách hiển thị là dữ liệu trang hiện tại.
-  const filteredStudents = students;
-  const paginatedStudents = students;
+  const lecturerOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          students
+            .map((student) => student.assignedLecturer)
+            .filter((value): value is string => Boolean(value) && value !== "Chưa phân công"),
+        ),
+      ).sort((a, b) => a.localeCompare(b, "vi")),
+    [students],
+  );
+
+  const companyOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          students
+            .map((student) => student.companyName)
+            .filter((value): value is string => Boolean(value) && value !== "Chưa có DN"),
+        ),
+      ).sort((a, b) => a.localeCompare(b, "vi")),
+    [students],
+  );
+
+  const filteredStudents = useMemo(() => {
+    return students.filter((student) => {
+      const matchesClass = filter.class === "all" || student.classCode === filter.class;
+      const matchesLecturer = lecturerFilter === "all" || student.assignedLecturer === lecturerFilter;
+      const matchesCompany = companyFilter === "all" || student.companyName === companyFilter;
+      const matchesStatus =
+        statusFilter === "all" ||
+        (statusFilter === "active" && student.accountStatus === "active") ||
+        (statusFilter === "pending" && student.accountStatus === "pending") ||
+        (statusFilter === "locked" && student.accountStatus === "locked") ||
+        (statusFilter === "hasCompany" && student.companyName !== "Chưa có DN") ||
+        (statusFilter === "inProgress" && student.internshipStatus === "interning") ||
+        (statusFilter === "completed" && student.internshipStatus === "completed");
+
+      return matchesClass && matchesLecturer && matchesCompany && matchesStatus;
+    });
+  }, [companyFilter, filter.class, lecturerFilter, statusFilter, students]);
+
+  const paginatedStudents = filteredStudents;
   const totalPages = pagination.totalPages;
   const currentPage = pagination.page;
   const pageSize = pagination.pageSize;
@@ -478,29 +557,60 @@ export const StudentsView = ({
             </select>
 
             <select
-              value={filter.accountStatus}
-              onChange={(e) => setAccountStatusFilter(e.target.value)}
-              aria-label="Lọc theo trạng thái tài khoản"
+              value={filter.class}
+              onChange={(e) => setClassFilter(e.target.value)}
+              aria-label="Lọc theo lớp"
               className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-500 cursor-pointer"
             >
-              <option value="all">Tất cả trạng thái TK</option>
-              <option value="active">Đã cấp tài khoản</option>
-              <option value="pending">Chưa cấp tài khoản</option>
-              <option value="locked">Tài khoản bị khóa</option>
+              <option value="all">Tất cả Lớp</option>
+              {classOptions.map((cls) => (
+                <option key={cls} value={cls}>
+                  Lớp {cls}
+                </option>
+              ))}
             </select>
 
             <select
-              value={filter.internshipStatus}
-              onChange={(e) => setInternshipStatusFilter(e.target.value)}
-              aria-label="Lọc theo trạng thái thực tập"
+              value={lecturerFilter}
+              onChange={(e) => setLecturerFilter(e.target.value)}
+              aria-label="Lọc theo giảng viên hướng dẫn"
               className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-500 cursor-pointer"
             >
-              <option value="all">Tất cả tiến độ</option>
-              <option value="registered">Chưa có đợt thực tập</option>
-              <option value="preparing">Chuẩn bị</option>
-              <option value="interning">Đang thực tập</option>
+              <option value="all">Tất cả giảng viên</option>
+              {lecturerOptions.map((lecturer) => (
+                <option key={lecturer} value={lecturer}>
+                  {lecturer}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={companyFilter}
+              onChange={(e) => setCompanyFilter(e.target.value)}
+              aria-label="Lọc theo doanh nghiệp"
+              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-500 cursor-pointer"
+            >
+              <option value="all">Tất cả doanh nghiệp</option>
+              {companyOptions.map((company) => (
+                <option key={company} value={company}>
+                  {company}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              aria-label="Lọc theo trạng thái"
+              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-500 cursor-pointer"
+            >
+              <option value="all">Tất cả trạng thái</option>
+              <option value="active">Đã cấp tài khoản</option>
+              <option value="pending">Chưa cấp tài khoản</option>
+              <option value="locked">Tài khoản bị khóa</option>
+              <option value="hasCompany">Đã có doanh nghiệp</option>
+              <option value="inProgress">Đang thực tập</option>
               <option value="completed">Hoàn thành</option>
-              <option value="hasCompany">Đã có DN</option>
             </select>
 
             <select
@@ -863,7 +973,7 @@ export const StudentsView = ({
       {/* STUDENT DETAIL DRAWER */}
       {selectedStudent && (
         <div className="fixed inset-0 bg-slate-900/50 z-50 flex justify-end animate-in fade-in">
-          <div className="bg-white w-full max-w-md h-full shadow-md p-6 space-y-5 overflow-y-auto animate-in slide-in-from-right duration-300">
+          <div className="bg-white w-full max-w-3xl h-full shadow-md p-6 space-y-5 overflow-y-auto animate-in slide-in-from-right duration-300">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="font-bold text-slate-900 text-base">
                 Hồ sơ Sinh viên
@@ -942,6 +1052,25 @@ export const StudentsView = ({
                   </span>
                 </div>
               </div>
+            </div>
+
+            <div className="space-y-2 border-t border-slate-100 pt-4">
+              <h4 className="text-sm font-bold text-slate-900">File minh chứng & nhật ký</h4>
+              {selectedStudent.internshipId ? (
+                <StudentReportsTab
+                  internshipId={selectedStudent.internshipId}
+                  studentName={selectedStudent.fullName}
+                  studentCode={selectedStudent.mssv}
+                  weeklyReports={studentWeeklyReports}
+                  submissions={studentSubmissions}
+                  isLoading={studentFilesLoading}
+                  onRefresh={() => loadStudentFiles(selectedStudent.internshipId)}
+                  onShowToast={(message) => onShowToast(message)}
+                  errors={studentFileErrors}
+                />
+              ) : (
+                <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-4 text-xs text-slate-500">Sinh viên chưa được gán vào kỳ thực tập này.</p>
+              )}
             </div>
 
             {/* Internship Preferences */}

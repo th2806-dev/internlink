@@ -9,6 +9,9 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { Panel } from "../../../components/common/Panel";
+import { getApiErrorMessage } from "../../../lib/apiClient";
+import { submissionApiService } from "../../../services/submissionApi.service";
+import { weeklyReportService } from "../../../services/weeklyReport.service";
 import {
   mapWeeklyReportStatusToUi,
   mapSubmissionStatusToUi,
@@ -40,11 +43,21 @@ export function StudentReportsTab({
   errors,
 }: StudentReportsTabProps) {
   const [view, setView] = useState<"weekly" | "submissions">("weekly");
+  const [downloadingKey, setDownloadingKey] = useState<string | null>(null);
+  const [submissionTypeFilter, setSubmissionTypeFilter] = useState("all");
+  const [submissionStatusFilter, setSubmissionStatusFilter] = useState("all");
 
   // Sort trên BẢN SAO — không mutate array props của parent (React strict-mode & memo-safe).
   const sortedWeeklyReports = useMemo(
     () => [...weeklyReports].sort((a, b) => a.weekNumber - b.weekNumber),
     [weeklyReports],
+  );
+  const filteredSubmissions = useMemo(
+    () => submissions.filter((submission) =>
+      (submissionTypeFilter === "all" || submission.type.toLowerCase() === submissionTypeFilter.toLowerCase())
+      && (submissionStatusFilter === "all" || submission.status === submissionStatusFilter),
+    ),
+    [submissions, submissionTypeFilter, submissionStatusFilter],
   );
 
   const weeklyStatusClass = (status: string) => {
@@ -58,6 +71,17 @@ export function StudentReportsTab({
     if (status === "Approved") return "bg-emerald-50 text-emerald-700 border-emerald-200";
     if (status === "RevisionRequested") return "bg-rose-50 text-rose-700 border-rose-200";
     return "bg-blue-50 text-blue-700 border-blue-200";
+  };
+
+  const downloadFile = async (key: string, action: () => Promise<unknown>) => {
+    setDownloadingKey(key);
+    try {
+      await action();
+    } catch (error) {
+      onShowToast?.(getApiErrorMessage(error));
+    } finally {
+      setDownloadingKey(null);
+    }
   };
 
   if (isLoading) {
@@ -98,6 +122,33 @@ export function StudentReportsTab({
               Sản phẩm ({submissions.length})
             </button>
           </div>
+          {view === "submissions" && (
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <select
+                aria-label="Lọc hồ sơ theo loại"
+                value={submissionTypeFilter}
+                onChange={(event) => setSubmissionTypeFilter(event.target.value)}
+                className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700"
+              >
+                <option value="all">Tất cả loại</option>
+                <option value="FinalReport">Báo cáo cuối kỳ</option>
+                <option value="Product">Sản phẩm thực tế</option>
+                <option value="Evidence">Đánh giá doanh nghiệp</option>
+              </select>
+              <select
+                aria-label="Lọc hồ sơ theo trạng thái"
+                value={submissionStatusFilter}
+                onChange={(event) => setSubmissionStatusFilter(event.target.value)}
+                className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700"
+              >
+                <option value="all">Tất cả trạng thái</option>
+                <option value="Submitted">Đã nộp</option>
+                <option value="RevisionRequested">Cần bổ sung</option>
+                <option value="Approved">Đã duyệt</option>
+                <option value="Rejected">Từ chối</option>
+              </select>
+            </div>
+          )}
         </div>
 
         {view === "weekly" && (
@@ -115,6 +166,7 @@ export function StudentReportsTab({
                     <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
                       <th className="py-2.5 px-3">Tuần</th>
                       <th className="py-2.5 px-3">Tiêu đề</th>
+                      <th className="py-2.5 px-3">Tệp nộp</th>
                       <th className="py-2.5 px-3">Ngày nộp</th>
                       <th className="py-2.5 px-3 text-center">Trạng thái</th>
                       <th className="py-2.5 px-3">Nhận xét</th>
@@ -129,6 +181,20 @@ export function StudentReportsTab({
                           </td>
                           <td className="py-3 px-3 font-bold text-slate-900">
                             {r.title}
+                          </td>
+                          <td className="py-3 px-3">
+                            {r.fileName ? (
+                              <button
+                                type="button"
+                                onClick={() => void downloadFile(`weekly-${r.id}`, () => weeklyReportService.download(r.id, r.fileName!))}
+                                disabled={downloadingKey === `weekly-${r.id}`}
+                                className="inline-flex max-w-56 items-center gap-1.5 truncate font-medium text-blue-700 hover:text-blue-900 disabled:opacity-50"
+                                title={`Tải ${r.fileName}`}
+                              >
+                                <Download className="h-3.5 w-3.5 shrink-0" />
+                                <span className="truncate">{downloadingKey === `weekly-${r.id}` ? "Đang tải…" : r.fileName}</span>
+                              </button>
+                            ) : <span className="text-slate-400">Không có tệp</span>}
                           </td>
                           <td className="py-3 px-3 text-slate-600">
                             {r.submittedAt
@@ -157,10 +223,10 @@ export function StudentReportsTab({
         {view === "submissions" && (
           <div className="space-y-2">
             {errors?.submissions && <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">Không thể tải bài nộp: {errors.submissions} <button type="button" onClick={() => void onRefresh?.()} className="ml-2 font-bold underline">Thử lại</button></p>}
-            {submissions.length === 0 ? (
+            {filteredSubmissions.length === 0 ? (
               <div className="py-12 text-center">
                 <Download className="w-8 h-8 mx-auto text-slate-300 mb-2" />
-                <p className="text-xs text-slate-500">Chưa có bài nộp sản phẩm</p>
+                <p className="text-xs text-slate-500">Không có hồ sơ phù hợp với bộ lọc</p>
               </div>
             ) : (
               <div className="overflow-x-auto border border-slate-200/80 rounded-md">
@@ -169,22 +235,65 @@ export function StudentReportsTab({
                     <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
                       <th className="py-2.5 px-3">Loại</th>
                       <th className="py-2.5 px-3">Tiêu đề</th>
+                      <th className="py-2.5 px-3">Góp ý GV</th>
                       <th className="py-2.5 px-3">Ngày nộp</th>
                       <th className="py-2.5 px-3">Phiên bản</th>
                       <th className="py-2.5 px-3 text-center">Trạng thái</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {submissions.map((s) => (
+                    {filteredSubmissions.map((s) => {
+                      const latestFeedback = [...(s.feedbacks ?? [])]
+                        .filter((feedback) => feedback.isPublic)
+                        .sort((first, second) => new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime())[0];
+                      return (
                       <tr key={s.id} className="hover:bg-slate-50/80 transition-colors">
                         <td className="py-3 px-3 font-bold text-slate-700">
                           {mapSubmissionTypeToUi(s.type)}
                         </td>
                         <td className="py-3 px-3 font-bold text-slate-900">
                           {s.title ?? "—"}
+                          {s.type.toLowerCase() === "evidence" && s.employerScore != null && (
+                            <span className="mt-1 block text-[11px] font-semibold text-blue-700">
+                              Điểm doanh nghiệp: {s.employerScore.toFixed(1)}/10 · tham khảo
+                            </span>
+                          )}
                           <span className="block text-[10px] font-medium text-slate-500">
                             {s.assets?.length ?? 0} tài nguyên đính kèm
                           </span>
+                          {s.fileName && (
+                            <button
+                              type="button"
+                              onClick={() => void downloadFile(`submission-${s.id}`, () => submissionApiService.download(s.id, s.fileName!))}
+                              disabled={downloadingKey === `submission-${s.id}`}
+                              className="mt-1 inline-flex max-w-56 items-center gap-1.5 truncate text-[11px] font-medium text-blue-700 hover:text-blue-900 disabled:opacity-50"
+                              title={`Tải ${s.fileName}`}
+                            >
+                              <Download className="h-3.5 w-3.5 shrink-0" />
+                              <span className="truncate">{downloadingKey === `submission-${s.id}` ? "Đang tải…" : s.fileName}</span>
+                            </button>
+                          )}
+                          {s.assets?.filter((asset) => asset.assetType === "file" && asset.fileName).map((asset) => {
+                            const key = `asset-${asset.id}`;
+                            return (
+                              <button
+                                key={asset.id}
+                                type="button"
+                                onClick={() => void downloadFile(key, () => submissionApiService.downloadAsset(s.id, asset.id, asset.fileName ?? asset.label ?? s.title ?? "minh-chung"))}
+                                disabled={downloadingKey === key}
+                                className="mt-1 flex max-w-56 items-center gap-1.5 truncate text-[11px] font-medium text-blue-700 hover:text-blue-900 disabled:opacity-50"
+                                title={`Tải ${asset.fileName}`}
+                              >
+                                <Download className="h-3.5 w-3.5 shrink-0" />
+                                <span className="truncate">{downloadingKey === key ? "Đang tải…" : asset.fileName}</span>
+                              </button>
+                            );
+                          })}
+                        </td>
+                        <td className="max-w-56 px-3 py-3 text-slate-600">
+                          {latestFeedback ? (
+                            <p className="line-clamp-2" title={latestFeedback.comment}>{latestFeedback.comment}</p>
+                          ) : <span className="text-slate-400">Chưa có góp ý</span>}
                         </td>
                         <td className="py-3 px-3 text-slate-600">
                           {s.submittedAt
@@ -202,7 +311,8 @@ export function StudentReportsTab({
                           </span>
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

@@ -5,7 +5,7 @@ export const FEATURES = {
   /** Admin Yêu cầu tài khoản */
   adminAccountRequests: true,
   /** Lecturer Analytics nâng cao */
-  lecturerAnalytics: false,
+  lecturerAnalytics: true,
 } as const;
 
 export type FeatureFlag = keyof typeof FEATURES;

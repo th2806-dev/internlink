@@ -74,6 +74,16 @@ public class LecturerOverviewDto
     public IReadOnlyList<LecturerInternshipSummaryDto> Internships { get; set; } = Array.Empty<LecturerInternshipSummaryDto>();
 }
 
+public sealed class LecturerSemesterOptionDto
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = null!;
+    public string Term { get; set; } = null!;
+    public string AcademicYear { get; set; } = null!;
+    public DateTime? StartDate { get; set; }
+    public DateTime? EndDate { get; set; }
+}
+
 public class LecturerInternshipSummaryDto
 {
     public Guid InternshipId { get; set; }

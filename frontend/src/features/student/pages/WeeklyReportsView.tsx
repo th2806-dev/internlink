@@ -124,6 +124,7 @@ export const WeeklyReportsView = ({ onShowToast }: { onShowToast: (msg: string) 
             deadline: existing.deadline && existing.deadline !== "—" ? existing.deadline : deadline,
             allowLateSubmission: schedule ? schedule.allowLateSubmission : true,
             scheduleDueDate: schedule?.dueDate,
+            scheduleStartDate: schedule?.startDate,
           };
         }
         return {
@@ -131,6 +132,7 @@ export const WeeklyReportsView = ({ onShowToast }: { onShowToast: (msg: string) 
           deadline,
           allowLateSubmission: schedule ? schedule.allowLateSubmission : true,
           scheduleDueDate: schedule?.dueDate,
+          scheduleStartDate: schedule?.startDate,
         };
       }),
     [reports, totalWeeks, schedules, requiredSchedules],
@@ -559,7 +561,25 @@ export const WeeklyReportsView = ({ onShowToast }: { onShowToast: (msg: string) 
             )}
 
             {/* Compact Drag & Drop Upload Zone or Deadline Locked Warning */}
-            {currentReport.scheduleDueDate &&
+            {selectedSemester.status === "completed" ? (
+              <div className="flex items-start gap-3 rounded-md border border-slate-200 bg-slate-50 p-4 text-xs text-slate-700">
+                <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-slate-500" />
+                <div>
+                  <h4 className="text-sm font-bold text-slate-900">Kỳ thực tập đã đóng</h4>
+                  <p className="mt-1">Báo cáo đang ở chế độ chỉ xem.</p>
+                </div>
+              </div>
+            ) : currentReport.scheduleStartDate &&
+            new Date() < new Date(currentReport.scheduleStartDate) &&
+            (currentReport.status === "Chưa nộp" || currentReport.status === "Cần chỉnh sửa") ? (
+              <div className="flex items-start gap-3 rounded-md border border-sky-200 bg-sky-50 p-4 text-xs text-sky-800">
+                <Clock className="mt-0.5 h-5 w-5 shrink-0 text-sky-600" />
+                <div>
+                  <h4 className="text-sm font-bold">Chưa đến thời gian nộp</h4>
+                  <p className="mt-1">Mở nhận từ {new Date(currentReport.scheduleStartDate).toLocaleString("vi-VN")}.</p>
+                </div>
+              </div>
+            ) : currentReport.scheduleDueDate &&
             new Date() > new Date(currentReport.scheduleDueDate) &&
             currentReport.allowLateSubmission === false &&
             (currentReport.status === "Chưa nộp" || currentReport.status === "Cần chỉnh sửa") ? (

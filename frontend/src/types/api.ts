@@ -531,6 +531,7 @@ export interface SubmissionDto {
   description?: string | null;
   fileName?: string | null;
   fileUrl?: string | null;
+  employerScore?: number | null;
   submittedAt: string;
   assets?: SubmissionAssetDto[];
   feedbacks?: FeedbackDto[];

@@ -54,6 +54,8 @@ export const Header = ({
         return "Thống kê & Phân tích";
       case "reports":
         return "Kho Báo cáo & Bài nộp";
+      case "history":
+        return "Lịch sử hướng dẫn";
       case "notifications":
         return "Thông báo";
       case "account":

@@ -15,6 +15,7 @@ export interface Semester {
   studentsCount: number;
   placedStudents: number;
   companiesCount: number;
+  onTimeSubmissionRate?: number | null;
   status: "active" | "upcoming" | "completed" | "draft";
   progressPercent: number;
   totalWeeks: number;
@@ -23,6 +24,8 @@ export interface Semester {
    * (vd 14 → thực tập tuần 1..6 = tuần 14..19 của học kỳ). 1 = không lệch.
    */
   internshipStartWeek: number;
+  /** Chỉ tiêu sinh viên dự kiến do admin khoa nhập khi tạo kỳ (0 = chưa đặt). */
+  targetStudents?: number;
   currentPhase: string;
   description: string;
 }
@@ -66,10 +69,12 @@ const mapBackendToFrontend = (dto: BackendSemesterDto): Semester => {
     studentsCount: dto.studentsCount,
     placedStudents: dto.placedStudents,
     companiesCount: dto.companiesCount,
+    onTimeSubmissionRate: dto.onTimeSubmissionRate,
     status: statusMap[dto.status] || "upcoming",
     progressPercent: dto.progressPercent,
     totalWeeks: dto.totalWeeks || 6,
     internshipStartWeek: dto.internshipStartWeek || 1,
+    targetStudents: dto.targetStudents || 0,
     currentPhase: dto.currentPhase,
     description: dto.description || "",
   };
@@ -87,7 +92,7 @@ interface SemesterContextType {
   selectSemester: (id: string) => void;
   selectDepartment: (id: string) => void;
   createSemester: (data: Partial<Semester> & { name: string; term: string; academicYear: string }) => Promise<void>;
-  updateSemester: (id: string, data: Partial<Semester> & { name: string; term: string; academicYear: string }, onShowToast?: (msg: string) => void) => Promise<void>;
+  updateSemester: (id: string, data: Partial<Semester> & { name: string; term: string; academicYear: string }, onShowToast?: (msg: string) => void) => Promise<boolean>;
   startSemester: (id: string, onShowToast?: (msg: string) => void) => Promise<void>;
   closeSemester: (id: string, onShowToast?: (msg: string) => void) => Promise<void>;
   duplicateSemester: (sem: Semester, onShowToast?: (msg: string) => void) => void;
@@ -322,36 +327,16 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         description: data.description,
         totalWeeks: data.totalWeeks || 6,
         internshipStartWeek: data.internshipStartWeek || 1,
+        targetStudents: data.targetStudents || 0,
       });
       const mapped = mapBackendToFrontend(res);
       setSemesters((prev) => [mapped, ...prev]);
       setSelectedSemesterId(mapped.id);
       return;
     } catch (err) {
-      console.warn("Backend create semester failed, falling back to local state:", err);
+      console.warn("Backend create semester failed:", err);
+      throw err;
     }
-
-
-    const newSem: Semester = {
-      id: `sem-${Date.now()}`,
-      name: data.name,
-      term: data.term,
-      academicYear: data.academicYear,
-      startDate: data.startDate || "01/09/2026",
-      endDate: data.endDate || "15/12/2026",
-      lecturersCount: data.lecturersCount || 0,
-      studentsCount: data.studentsCount || 0,
-      placedStudents: 0,
-      companiesCount: 0,
-      status: data.status || "upcoming",
-      progressPercent: 0,
-      totalWeeks: data.totalWeeks || 6,
-      internshipStartWeek: data.internshipStartWeek || 1,
-      currentPhase: data.currentPhase || "Chuẩn bị danh sách",
-      description: data.description || `Đợt thực tập ${data.term} ${data.academicYear}`,
-    };
-    setSemesters((prev) => [newSem, ...prev]);
-    setSelectedSemesterId(newSem.id);
   };
 
   const updateSemester = async (
@@ -369,13 +354,16 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         description: data.description,
         totalWeeks: data.totalWeeks || 6,
         internshipStartWeek: data.internshipStartWeek || 1,
+        targetStudents: data.targetStudents || 0,
       });
       const mapped = mapBackendToFrontend(updated);
       setSemesters((prev) => prev.map((semester) => (semester.id === id ? mapped : semester)));
       onShowToast?.(`Đã cập nhật kỳ thực tập: "${mapped.name}".`);
+      return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : "Không thể cập nhật kỳ thực tập.";
       onShowToast?.(message);
+      return false;
     }
   };
 

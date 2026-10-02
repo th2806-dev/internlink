@@ -12,42 +12,43 @@ import {
   Star,
 } from "lucide-react";
 import { PageHeader } from "../../../components/common/PageHeader";
+import { Panel } from "../../../components/common/Panel";
 import { KpiCard, KpiGrid } from "../../../components/common/KpiCard";
 import { lecturerAnalyticsService } from "../../../services/lecturerAnalytics.service";
+import { lecturerInternshipsService, type LecturerSemesterOptionDto } from "../../../services/lecturerInternships.service";
 import { useSemester, toApiSemesterId } from "../../../contexts/SemesterContext";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import type {
+  LecturerActivityStatsDto,
+  LecturerDashboardStatsDto,
   LecturerWeeklyTrendDto,
   LecturerGradeDistributionDto,
   LecturerCompanyStatDto,
 } from "../../../types/api";
 
-interface DashboardStatsDto {
-  totalStudents: number;
-  interningCount: number;
-  pendingReviewsCount: number;
-  completedCount: number;
-  overdueReportsCount: number;
-  averageGrade: number;
-  evaluatedCount: number;
-  statusDistribution: Record<string, number>;
+interface LecturerSemesterComparisonRow {
+  semester: LecturerSemesterOptionDto;
+  stats: LecturerDashboardStatsDto;
+  activity: LecturerActivityStatsDto;
 }
 
 export const LecturerAnalytics = () => {
   const { selectedSemester } = useSemester();
   const [selectedCompanyFilter, setSelectedCompanyFilter] = useState("Tất cả doanh nghiệp");
   const [toastMsg, setToastMsg] = useState<string | null>(null);
-  const [statsData, setStatsData] = useState<DashboardStatsDto | null>(null);
+  const [statsData, setStatsData] = useState<LecturerDashboardStatsDto | null>(null);
   const [weeklyTrend, setWeeklyTrend] = useState<LecturerWeeklyTrendDto[]>([]);
   const [gradeDist, setGradeDist] = useState<LecturerGradeDistributionDto | null>(null);
   const [companyStats, setCompanyStats] = useState<LecturerCompanyStatDto[]>([]);
+  const [semesterComparison, setSemesterComparison] = useState<LecturerSemesterComparisonRow[]>([]);
+  const [isComparisonLoading, setIsComparisonLoading] = useState(true);
 
   const semesterId = toApiSemesterId(selectedSemester?.id);
 
-  const showToast = (msg: string) => {
+  const showToast = useCallback((msg: string) => {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(null), 3e3);
-  };
+  }, []);
 
   const filteredCompanyStats =
     selectedCompanyFilter === "Tất cả doanh nghiệp"
@@ -75,6 +76,32 @@ export const LecturerAnalytics = () => {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setIsComparisonLoading(true);
+    lecturerInternshipsService.getAssignedSemesters()
+      .then((semesters) => Promise.all(
+        semesters.map(async (semester) => ({
+          semester,
+          stats: await lecturerAnalyticsService.getStats(semester.id),
+          activity: await lecturerAnalyticsService.getActivityStats(semester.id),
+        })),
+      ))
+      .then((rows) => {
+        if (!cancelled) setSemesterComparison(rows);
+      })
+      .catch((error) => {
+        if (!cancelled) showToast(getApiErrorMessage(error));
+      })
+      .finally(() => {
+        if (!cancelled) setIsComparisonLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [showToast]);
 
   // Đổi kỳ → reset lọc doanh nghiệp (DN của kỳ cũ không còn trong danh sách → bảng rỗng ảo).
   useEffect(() => {
@@ -134,6 +161,57 @@ export const LecturerAnalytics = () => {
           footer="Xếp loại Khá - Giỏi - Xuất sắc"
         />
       </KpiGrid>
+
+      <Panel className="space-y-3">
+        <div className="flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 pb-3">
+          <div>
+            <h2 className="text-sm font-bold text-slate-900">Lịch sử hướng dẫn theo học kỳ</h2>
+            <p className="mt-1 text-xs text-slate-500">Kết quả và hoạt động tại các kỳ GV được phân công</p>
+          </div>
+          <BarChart3 className="h-4 w-4 text-blue-700" />
+        </div>
+        {isComparisonLoading ? (
+          <p className="py-4 text-center text-xs text-slate-500">Đang tổng hợp các kỳ đã tham gia…</p>
+        ) : semesterComparison.length === 0 ? (
+          <p className="py-4 text-center text-xs text-slate-500">Chưa có dữ liệu kỳ thực tập để so sánh.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[880px] text-left text-xs">
+              <thead>
+                <tr className="border-b border-slate-200 text-[10px] font-bold uppercase text-slate-500">
+                  <th className="px-3 py-2">Học kỳ</th>
+                  <th className="px-3 py-2 text-right">Sinh viên</th>
+                  <th className="px-3 py-2 text-right">Doanh nghiệp</th>
+                  <th className="px-3 py-2 text-right">Hoàn thành</th>
+                  <th className="px-3 py-2 text-right">Điểm TB</th>
+                  <th className="px-3 py-2 text-right">Bài đã nhận xét</th>
+                  <th className="px-3 py-2 text-right">Phản hồi TB</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {semesterComparison.map(({ semester, stats, activity }) => (
+                  <tr key={semester.id} className={semester.id === semesterId ? "bg-blue-50/60" : "hover:bg-slate-50"}>
+                    <td className="px-3 py-2.5">
+                      <p className="font-semibold text-slate-900">{semester.name}</p>
+                      <p className="mt-0.5 text-[10px] text-slate-500">{semester.term} · {semester.academicYear}</p>
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-medium text-slate-700">{stats.totalStudents}</td>
+                    <td className="px-3 py-2.5 text-right font-medium text-slate-700">{stats.assignedCompanyCount}</td>
+                    <td className="px-3 py-2.5 text-right font-medium text-slate-700">{stats.completedCount}</td>
+                    <td className="px-3 py-2.5 text-right font-bold text-blue-800">
+                      {stats.evaluatedCount > 0 ? stats.averageGrade.toFixed(2) : "—"}
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-medium text-slate-700">{activity.reviewedReportsCount}</td>
+                    <td className="px-3 py-2.5 text-right font-medium text-slate-700">
+                      {activity.reviewedReportsCount > 0 ? `${activity.averageResponseDays.toFixed(1)} ngày` : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
 
       <div className="flex justify-end">
         <select

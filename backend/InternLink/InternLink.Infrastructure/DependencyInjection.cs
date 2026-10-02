@@ -79,10 +79,12 @@ public static class DependencyInjection
 
         // Semester management service
         services.AddScoped<InternLink.Application.Interfaces.ISemesterService, InternLink.Infrastructure.Services.SemesterService>();
+        services.AddScoped<InternLink.Application.Interfaces.ISchoolAcademicTermService, InternLink.Infrastructure.Services.SchoolAcademicTermService>();
 
         // Lecturer workflow service
         services.AddScoped<InternLink.Application.Interfaces.ILecturerService, InternLink.Infrastructure.Services.LecturerService>();
         services.AddScoped<InternLink.Application.Interfaces.ILecturerAccessService, InternLink.Infrastructure.Services.LecturerAccessService>();
+        services.AddScoped<InternLink.Application.Interfaces.ILecturerParticipationHistoryService, InternLink.Infrastructure.Services.LecturerParticipationHistoryService>();
 
         // Lecturer profile CRUD / import / overview
         services.AddScoped<InternLink.Application.Interfaces.ILecturerProfileService, InternLink.Infrastructure.Services.LecturerProfileService>();
@@ -107,6 +109,7 @@ public static class DependencyInjection
 
         // Weekly report service
         services.AddScoped<InternLink.Application.Interfaces.IWeeklyReportService, InternLink.Infrastructure.Services.WeeklyReportService>();
+        services.AddScoped<InternLink.Application.Interfaces.IWeeklyReportArchiveService, InternLink.Infrastructure.Services.WeeklyReportArchiveService>();
 
         // Attendance & Meeting service
         services.AddScoped<IAttendanceService, InternLink.Infrastructure.Services.AttendanceService>();

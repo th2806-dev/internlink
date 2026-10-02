@@ -66,7 +66,7 @@ export const Sidebar = ({
         },
         {
           id: "student-submissions",
-          label: "Sản phẩm thực tập",
+          label: "Hồ sơ & sản phẩm",
           icon: FolderKanban,
         },
         {

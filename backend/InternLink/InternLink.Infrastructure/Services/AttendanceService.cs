@@ -193,6 +193,20 @@ public class AttendanceService : IAttendanceService
         }
 
         _context.AttendanceSessions.Add(session);
+        if (!isAdmin)
+        {
+            _context.LecturerActivityLogs.Add(new LecturerActivityLog
+            {
+                LecturerId = lecturerId,
+                SemesterId = session.SemesterId,
+                RelatedEntityId = session.Id,
+                WeekNumber = session.WeekNumber,
+                ActivityType = "guidance-session-scheduled",
+                Title = session.Title,
+                Detail = "Buổi hướng dẫn đã được lên lịch.",
+                OccurredAt = DateTime.UtcNow,
+            });
+        }
         await _context.SaveChangesAsync();
 
         _logger.LogInformation("{Caller} created attendance session {SessionId} with {Count} students",
@@ -341,6 +355,21 @@ public class AttendanceService : IAttendanceService
             session.IsGeneralSession = dto.IsGeneralSession.Value;
         }
 
+        if (lecturerId.HasValue)
+        {
+            _context.LecturerActivityLogs.Add(new LecturerActivityLog
+            {
+                LecturerId = lecturerId.Value,
+                SemesterId = session.SemesterId,
+                RelatedEntityId = session.Id,
+                WeekNumber = session.WeekNumber,
+                ActivityType = "guidance-session-updated",
+                Title = $"Cập nhật buổi hướng dẫn: {session.Title}",
+                Detail = $"Thời gian dự kiến: {session.MeetingDate:O}",
+                OccurredAt = DateTime.UtcNow,
+            });
+        }
+
         await _context.SaveChangesAsync();
 
         var result = await GetSessionDetailAsync(sessionId, lecturerId);
@@ -368,6 +397,10 @@ public class AttendanceService : IAttendanceService
         var query = _context.AttendanceSessions
             .Include(s => s.Lecturer)
             .Include(s => s.Records)
+                .ThenInclude(record => record.Student)
+            .Include(s => s.Records)
+                .ThenInclude(record => record.Internship)
+                    .ThenInclude(internship => internship!.Company)
             .AsQueryable();
 
         if (lecturerId.HasValue)
@@ -395,6 +428,26 @@ public class AttendanceService : IAttendanceService
                 record.Notes = item.Notes?.Trim();
                 record.MarkedAt = now;
                 record.MarkedBy = markerName;
+
+                if (lecturerId.HasValue && adminName == null)
+                {
+                    _context.LecturerActivityLogs.Add(new LecturerActivityLog
+                    {
+                        LecturerId = lecturerId.Value,
+                        SemesterId = session.SemesterId,
+                        InternshipId = record.InternshipId,
+                        RelatedEntityId = record.Id,
+                        StudentId = record.StudentId,
+                        WeekNumber = session.WeekNumber,
+                        StudentCode = record.Student?.StudentCode,
+                        StudentName = record.Student?.FullName,
+                        CompanyName = record.Internship?.Company?.CompanyName,
+                        ActivityType = "attendance-marked",
+                        Title = $"Điểm danh tuần {session.WeekNumber}",
+                        Detail = $"{record.Student?.FullName ?? "Sinh viên"}: {record.Status}{(string.IsNullOrWhiteSpace(record.Notes) ? "" : $" · {record.Notes}")}",
+                        OccurredAt = now,
+                    });
+                }
             }
         }
 

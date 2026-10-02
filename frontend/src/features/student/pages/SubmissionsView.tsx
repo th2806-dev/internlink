@@ -1,5 +1,11 @@
 import { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import {
+  CalendarDays,
+  CheckCircle2,
+  ClipboardCheck,
+  Clock3,
+  FileCheck2,
   Package,
   FileCode,
   Database,
@@ -9,7 +15,6 @@ import {
   Upload,
   Download,
   RefreshCw,
-  Trash2,
   Send,
   Plus,
   ShieldAlert,
@@ -17,6 +22,7 @@ import {
   BookOpen,
 } from "lucide-react";
 import { useStudentPortal } from "../../../contexts/StudentPortalContext";
+import { useSemester } from "../../../contexts/SemesterContext";
 import { PageHeader } from "../../../components/common/PageHeader";
 import { Panel } from "../../../components/common/Panel";
 import { CompanyAvatar } from "../../../components/common/CompanyAvatar";
@@ -25,6 +31,7 @@ import { EmptyState } from "../../../components/common/EmptyState";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { mapStudentSubmissionToUpload } from "../../../lib/portalMappers";
 import { submissionApiService } from "../../../services/submissionApi.service";
+import { semesterReportScheduleService, type SupplementalDeadline } from "../../../services/semesterReportSchedule.service";
 import type { SubmissionDto } from "../../../types/api";
 
 type UploadItem = {
@@ -44,8 +51,10 @@ type UploadItem = {
 type SubmissionLink = { label: string; url: string };
 
 export const SubmissionsView = ({ onShowToast }) => {
+  const navigate = useNavigate();
   const { profile, internshipId } = useStudentPortal();
-  const [hasSubmissions, setHasSubmissions] = useState(false);
+  const { selectedSemesterId } = useSemester();
+  const [evidenceDeadline, setEvidenceDeadline] = useState<SupplementalDeadline | null>(null);
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [rawSubmissions, setRawSubmissions] = useState<SubmissionDto[]>([]);
 
@@ -57,7 +66,6 @@ export const SubmissionsView = ({ onShowToast }) => {
         if (!cancelled) {
           setRawSubmissions(rows);
           setUploads(rows.map(mapStudentSubmissionToUpload));
-          setHasSubmissions(rows.length > 0);
         }
       } catch (err) {
         if (!cancelled) onShowToast?.(getApiErrorMessage(err));
@@ -91,8 +99,8 @@ export const SubmissionsView = ({ onShowToast }) => {
   const [replaceTarget, setReplaceTarget] = useState<UploadItem | null>(null);
   const [uploadTitle, setUploadTitle] = useState("");
   const [uploadCategory, setUploadCategory] = useState("FinalReport");
-  const [uploadVersion, setUploadVersion] = useState("v1.0");
   const [uploadNotes, setUploadNotes] = useState("");
+  const [employerScore, setEmployerScore] = useState("");
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [uploadLinks, setUploadLinks] = useState<SubmissionLink[]>([
     { label: "", url: "" },
@@ -100,11 +108,79 @@ export const SubmissionsView = ({ onShowToast }) => {
   const [replaceFile, setReplaceFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [contactMsg, setContactMsg] = useState("");
+  useEffect(() => {
+    if (!selectedSemesterId || selectedSemesterId === "all") {
+      setEvidenceDeadline(null);
+      return;
+    }
+    void semesterReportScheduleService.getEvidenceDeadline(selectedSemesterId)
+      .then(setEvidenceDeadline)
+      .catch(() => setEvidenceDeadline(null));
+  }, [selectedSemesterId]);
+
+  const evidenceWindowOpen = Boolean(
+    evidenceDeadline
+      && Date.now() >= new Date(evidenceDeadline.startDate).getTime()
+      && Date.now() <= new Date(evidenceDeadline.endDate).getTime(),
+  );
+  const employerScoreValue = Number(employerScore);
+  const employerScoreValid = employerScore.trim() !== "" && Number.isFinite(employerScoreValue) && employerScoreValue >= 0 && employerScoreValue <= 10;
+  const hasEmployerImage = uploadFiles.some((file) => /\.(png|jpe?g|webp|gif)$/i.test(file.name));
+  const hasRequiredUploadFile = uploadCategory === "FinalReport"
+    ? uploadFiles.length > 0
+    : uploadCategory !== "Evidence" || hasEmployerImage;
+  const latestSubmissionOfType = (type: string) => rawSubmissions
+    .filter((submission) => submission.type.toLowerCase() === type.toLowerCase())
+    .sort((first, second) => new Date(second.submittedAt).getTime() - new Date(first.submittedAt).getTime())[0];
+  const finalReport = latestSubmissionOfType("FinalReport");
+  const productSubmission = latestSubmissionOfType("Product");
+  const employerEvidence = latestSubmissionOfType("Evidence");
+  const isRevisionRequested = (submission?: SubmissionDto) => submission?.status === "RevisionRequested";
+  const getSubmissionState = (submission?: SubmissionDto) => {
+    if (!submission) return "Chưa nộp";
+    if (submission.status === "RevisionRequested") return "Cần bổ sung";
+    if (submission.status === "Rejected") return "Bị từ chối";
+    return "Đã nộp";
+  };
+  const evidenceWindowMessage = evidenceDeadline
+    ? Date.now() < new Date(evidenceDeadline.startDate).getTime()
+      ? `Mở nhận từ ${new Date(evidenceDeadline.startDate).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}`
+      : evidenceWindowOpen
+        ? `Đang nhận đến ${new Date(evidenceDeadline.endDate).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}`
+        : `Đã đóng từ ${new Date(evidenceDeadline.endDate).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}`
+    : "Admin khoa chưa cấu hình thời hạn";
+  const evidenceWindowStatus = !evidenceDeadline
+    ? "Chưa cấu hình"
+    : evidenceWindowOpen
+      ? "Đang nhận"
+      : Date.now() < new Date(evidenceDeadline.startDate).getTime()
+        ? "Chưa mở"
+        : "Đã đóng";
+
+  const openUploadFor = (category: "FinalReport" | "Product" | "Evidence") => {
+    setUploadCategory(category);
+    setUploadTitle(category === "FinalReport"
+      ? "Báo cáo thực tập tốt nghiệp"
+      : category === "Evidence" ? "Phiếu đánh giá doanh nghiệp" : "Sản phẩm thực tế");
+    setEmployerScore("");
+    setUploadFiles([]);
+    setUploadLinks([{ label: "", url: "" }]);
+    setShowUploadModal(true);
+  };
+  const openRevisionUpload = (submission?: SubmissionDto) => {
+    if (!submission) return;
+    const item = uploads.find((upload) => upload.id === submission.id);
+    if (!item) return;
+    setReplaceTarget(item);
+    setUploadNotes(item.notes || "");
+    setReplaceFile(null);
+  };
+
   const handleAddUpload = async (e) => {
     e.preventDefault();
     const title = uploadTitle.trim() || (uploadCategory === "FinalReport"
       ? "Báo cáo thực tập tốt nghiệp"
-      : "Sản phẩm thực tế");
+      : uploadCategory === "Evidence" ? "Minh chứng thực tập" : "Sản phẩm thực tế");
     if (!title) {
       onShowToast("Vui lòng nhập tên sản phẩm!");
       return;
@@ -114,7 +190,26 @@ export const SubmissionsView = ({ onShowToast }) => {
       onShowToast("Chưa có kỳ thực tập được gán. Vui lòng liên hệ phòng đào tạo.");
       return;
     }
+    if (uploadCategory === "Evidence" && !evidenceWindowOpen) {
+      onShowToast("Minh chứng chỉ được nộp trong thời hạn do giảng viên cấu hình.");
+      return;
+    }
 
+    if (uploadCategory === "Evidence") {
+      const score = Number(employerScore);
+      if (!employerScore.trim() || !Number.isFinite(score) || score < 0 || score > 10) {
+        onShowToast("Vui lòng nhập điểm đánh giá doanh nghiệp từ 0 đến 10.");
+        return;
+      }
+      if (!uploadFiles.some((file) => /\.(png|jpe?g|webp|gif)$/i.test(file.name))) {
+        onShowToast("Vui lòng đính kèm ảnh phiếu xác nhận của doanh nghiệp.");
+        return;
+      }
+    }
+    if (uploadCategory === "FinalReport" && uploadFiles.length === 0) {
+      onShowToast("Vui lòng đính kèm tệp báo cáo cuối kỳ.");
+      return;
+    }
     const links = uploadLinks.filter((link) => link.url.trim());
     if (uploadFiles.length === 0 && links.length === 0) {
       onShowToast("Vui lòng chọn ít nhất một tệp hoặc thêm một liên kết!");
@@ -128,6 +223,7 @@ export const SubmissionsView = ({ onShowToast }) => {
         type: uploadCategory,
         title,
         description: uploadNotes.trim() || undefined,
+            employerScore: uploadCategory === "Evidence" ? Number(employerScore) : undefined,
         files: uploadFiles,
         links: links.map((link) => ({ label: link.label.trim(), url: link.url.trim() })),
       })];
@@ -136,11 +232,15 @@ export const SubmissionsView = ({ onShowToast }) => {
         ...prev,
       ]);
       setRawSubmissions((prev) => [...created, ...prev]);
-      setHasSubmissions(true);
       setShowUploadModal(false);
-      onShowToast(`Đã nộp sản phẩm cùng ${uploadFiles.length + links.length} tài nguyên.`);
+      onShowToast(uploadCategory === "Evidence"
+        ? "Đã nộp điểm và ảnh phiếu đánh giá doanh nghiệp."
+        : uploadCategory === "FinalReport"
+          ? "Đã nộp báo cáo cuối kỳ."
+          : `Đã nộp sản phẩm cùng ${uploadFiles.length + links.length} tài nguyên.`);
       setUploadTitle("");
       setUploadNotes("");
+      setEmployerScore("");
       setUploadFiles([]);
       setUploadLinks([{ label: "", url: "" }]);
     } catch (err) {
@@ -194,9 +294,6 @@ export const SubmissionsView = ({ onShowToast }) => {
       onShowToast(getApiErrorMessage(err));
     }
   };
-  const handleDeleteUpload = (_id: string, _title: string) => {
-    onShowToast("Chức năng xóa sản phẩm chưa được hỗ trợ trên hệ thống.");
-  };
   const handleSendContact = (e) => {
     e.preventDefault();
     if (!contactMsg.trim()) return;
@@ -222,73 +319,14 @@ export const SubmissionsView = ({ onShowToast }) => {
         return <FileText className="w-4 h-4 text-slate-600" />;
     }
   };
-  if (!hasSubmissions) {
-    return (
-      <div className="space-y-5 animate-in fade-in duration-200 max-w-3xl mx-auto py-8">
-        <PageHeader
-          icon={Package}
-          title="Sản phẩm thực tập"
-          subtitle="Quản lý mã nguồn, slide thuyết trình, video demo và các tài liệu đợt thực tập."
-          badge="Chưa có sản phẩm"
-          badgeColor="bg-slate-100 text-slate-700 border-slate-200"
-          actions={[
-            {
-              label: "Nộp báo cáo tốt nghiệp",
-              icon: Plus,
-              onClick: () => {
-                setHasSubmissions(true);
-                setShowUploadModal(true);
-              },
-              variant: "primary",
-            },
-          ]}
-        />
-        <Panel className="p-8 text-center space-y-4" padding="none">
-          <div className="w-16 h-16 bg-blue-50 border border-blue-200 text-blue-600 rounded-lg flex items-center justify-center mx-auto">
-            <Package className="w-8 h-8" />
-          </div>
-
-          <div className="max-w-md mx-auto space-y-1.5">
-            <h2 className="text-lg font-bold text-slate-900">
-              Chưa có sản phẩm thực tập nào được bàn giao
-            </h2>
-            <p className="text-xs text-slate-500 font-medium">
-              Bạn cần nộp Báo cáo thực tập tốt nghiệp. Sản phẩm thực tế như web,
-              app, source code hoặc link deploy là tùy chọn để cộng thêm điểm.
-            </p>
-          </div>
-
-          <div className="pt-2 flex justify-center gap-3">
-            <button
-              onClick={() => {
-                setHasSubmissions(true);
-                setShowUploadModal(true);
-              }}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-md transition-all flex items-center gap-2"
-            >
-              <Plus className="w-4 h-4" /> Nộp báo cáo tốt nghiệp
-            </button>
-          </div>
-        </Panel>
-      </div>
-    );
-  }
   return (
     <div className="space-y-5 animate-in fade-in duration-200 max-w-7xl mx-auto">
       <PageHeader
         icon={Package}
-        title="Sản phẩm thực tập"
-        subtitle="Quản lý mã nguồn, slide thuyết trình, video demo và các tài liệu đợt thực tập."
-        badge={`Đã nộp ${uploads.length} sản phẩm`}
+        title="Hồ sơ & sản phẩm thực tập"
+        subtitle="Chọn đúng loại hồ sơ bên dưới. Báo cáo tuần được nộp ở mục Báo cáo tuần."
+        badge={`${uploads.length} hồ sơ đã nộp`}
         badgeColor="bg-blue-100 text-blue-800 border-blue-200"
-        actions={[
-          {
-            label: "Thêm sản phẩm",
-            icon: Plus,
-            onClick: () => setShowUploadModal(true),
-            variant: "primary",
-          },
-        ]}
       >
         <span className="px-2 py-0.5 font-semibold text-[10px] rounded-md border bg-emerald-100 text-emerald-800 border-emerald-200">
           {uploads.length} tài nguyên
@@ -299,10 +337,68 @@ export const SubmissionsView = ({ onShowToast }) => {
         left={
           <span className="text-xs font-semibold text-slate-600">
             <span className="text-slate-900 font-bold">{uploads.length}</span>{" "}
-            tài nguyên đã nộp · tệp hoặc liên kết tùy chọn
+            hồ sơ đã nộp
           </span>
         }
       />
+
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <Panel className="flex flex-col gap-3 border-blue-200">
+          <div className="flex items-center gap-2 text-blue-800">
+            <CalendarDays className="h-4 w-4" />
+            <h2 className="text-sm font-bold">Báo cáo tuần</h2>
+          </div>
+          <p className="flex-1 text-xs leading-5 text-slate-600">Nộp nhật ký/báo cáo theo tuần và xem hạn từng tuần.</p>
+          <button type="button" onClick={() => navigate("/student/weekly-reports")} className="il-btn il-btn-secondary inline-flex items-center justify-center gap-1.5 text-xs">
+            <FileText className="h-3.5 w-3.5" /> Mở báo cáo tuần
+          </button>
+        </Panel>
+
+        <Panel className="flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-slate-800">
+              <FileCheck2 className="h-4 w-4 text-blue-700" />
+              <h2 className="text-sm font-bold">Báo cáo cuối kỳ</h2>
+            </div>
+            <span className={`text-[10px] font-bold ${finalReport ? "text-emerald-700" : "text-rose-700"}`}>{getSubmissionState(finalReport)}</span>
+          </div>
+          <p className="flex-1 text-xs leading-5 text-slate-600">Tệp báo cáo thực tập tốt nghiệp. Đây là hồ sơ bắt buộc.</p>
+          <button type="button" onClick={() => isRevisionRequested(finalReport) ? openRevisionUpload(finalReport) : openUploadFor("FinalReport")} disabled={!internshipId || Boolean(finalReport && !isRevisionRequested(finalReport))} className="il-btn il-btn-primary inline-flex items-center justify-center gap-1.5 text-xs disabled:opacity-50">
+            <Upload className="h-3.5 w-3.5" /> {isRevisionRequested(finalReport) ? "Nộp bản chỉnh sửa" : finalReport ? "Đã nộp" : "Nộp báo cáo cuối kỳ"}
+          </button>
+        </Panel>
+
+        <Panel className="flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-slate-800">
+              <Package className="h-4 w-4 text-emerald-700" />
+              <h2 className="text-sm font-bold">Sản phẩm thực tế</h2>
+            </div>
+            <span className={`text-[10px] font-bold ${productSubmission ? "text-emerald-700" : "text-slate-500"}`}>{productSubmission ? getSubmissionState(productSubmission) : "Tùy chọn"}</span>
+          </div>
+          <p className="flex-1 text-xs leading-5 text-slate-600">Source code, slide, video demo hoặc link triển khai. Có thể nộp nhiều tệp/liên kết.</p>
+          <button type="button" onClick={() => openUploadFor("Product")} disabled={!internshipId} className="il-btn il-btn-secondary inline-flex items-center justify-center gap-1.5 text-xs disabled:opacity-50">
+            <Plus className="h-3.5 w-3.5" /> Thêm sản phẩm
+          </button>
+        </Panel>
+
+        <Panel className={`flex flex-col gap-3 ${evidenceWindowOpen ? "border-emerald-200" : "border-amber-200"}`}>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-slate-800">
+              <ClipboardCheck className="h-4 w-4 text-amber-700" />
+              <h2 className="text-sm font-bold">Đánh giá doanh nghiệp</h2>
+            </div>
+            <span className={`text-[10px] font-bold ${employerEvidence ? (isRevisionRequested(employerEvidence) ? "text-rose-700" : "text-emerald-700") : evidenceWindowOpen ? "text-emerald-700" : "text-amber-800"}`}>
+              {employerEvidence ? getSubmissionState(employerEvidence) : evidenceWindowStatus}
+            </span>
+          </div>
+          <p className="flex-1 text-xs leading-5 text-slate-600">Nhập điểm doanh nghiệp và chụp/scan ảnh phiếu xác nhận. Điểm chỉ để GV tham khảo.</p>
+          <p className="text-[10px] text-slate-500">{evidenceWindowMessage}</p>
+          <button type="button" onClick={() => isRevisionRequested(employerEvidence) ? openRevisionUpload(employerEvidence) : openUploadFor("Evidence")} disabled={!internshipId || !evidenceWindowOpen || Boolean(employerEvidence && !isRevisionRequested(employerEvidence))} className="il-btn il-btn-secondary inline-flex items-center justify-center gap-1.5 text-xs disabled:opacity-50">
+            <Upload className="h-3.5 w-3.5" /> {isRevisionRequested(employerEvidence) ? "Bổ sung minh chứng" : employerEvidence ? "Đã nộp đánh giá" : "Nộp đánh giá doanh nghiệp"}
+          </button>
+        </Panel>
+      </div>
 
       <Panel className="space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
@@ -358,7 +454,7 @@ export const SubmissionsView = ({ onShowToast }) => {
           <Panel className="space-y-0 overflow-hidden">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-0">
               <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <Package className="w-4 h-4 text-blue-600" /> Sản phẩm bàn giao
+                <Package className="w-4 h-4 text-blue-600" /> Hồ sơ đã nộp
               </h2>
             </div>
 
@@ -377,11 +473,11 @@ export const SubmissionsView = ({ onShowToast }) => {
                     <tr>
                       <td colSpan={4} className="p-4">
                         <EmptyState
-                          title="Chưa có sản phẩm nào được nộp"
-                          description="Nhấp vào nút 'Nộp sản phẩm' phía trên để tải lên báo cáo cuối kỳ, slide, mã nguồn hoặc video demo."
+                          title="Chưa có hồ sơ nào được nộp"
+                          description="Dùng các mục bên trên để nộp báo cáo cuối kỳ, sản phẩm tùy chọn hoặc phiếu đánh giá doanh nghiệp."
                           action={{
-                            label: "Nộp sản phẩm ngay",
-                            onClick: () => setShowUploadModal(true),
+                            label: "Nộp báo cáo cuối kỳ",
+                            onClick: () => openUploadFor("FinalReport"),
                           }}
                         />
                       </td>
@@ -433,28 +529,17 @@ export const SubmissionsView = ({ onShowToast }) => {
                           >
                             <Download className="w-3.5 h-3.5" />
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setReplaceTarget(item);
-                              setUploadNotes(item.notes || "");
-                              setReplaceFile(null);
-                            }}
-                            className="p-1.5 hover:bg-slate-100 rounded-md text-amber-600"
-                            title="Thay thế"
-                          >
-                            <RefreshCw className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleDeleteUpload(item.id, item.title)
-                            }
-                            className="p-1.5 hover:bg-rose-50 rounded-md text-slate-400 hover:text-rose-600"
-                            title="Xóa"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          {rawSubmissions.some((submission) => submission.id === item.id && submission.status === "RevisionRequested") && (
+                            <button
+                              type="button"
+                              onClick={() => openRevisionUpload(rawSubmissions.find((submission) => submission.id === item.id))}
+                              className="p-1.5 hover:bg-amber-50 rounded-md text-amber-700"
+                              aria-label={`Nộp bản chỉnh sửa ${item.title}`}
+                              title="Nộp bản chỉnh sửa theo góp ý"
+                            >
+                              <RefreshCw className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -518,8 +603,8 @@ export const SubmissionsView = ({ onShowToast }) => {
           >
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
-                <Upload className="w-4 h-4 text-blue-600" /> Tải lên sản phẩm
-                thực tập mới
+                <Upload className="w-4 h-4 text-blue-600" />
+                {uploadCategory === "FinalReport" ? "Nộp báo cáo cuối kỳ" : uploadCategory === "Evidence" ? "Nộp đánh giá doanh nghiệp" : "Nộp sản phẩm thực tế"}
               </h3>
               <button
                 type="button"
@@ -531,47 +616,48 @@ export const SubmissionsView = ({ onShowToast }) => {
             </div>
 
             <div className="space-y-3 text-xs">
+              <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                <p className="text-xs font-bold text-slate-800">
+                  {uploadCategory === "FinalReport" ? "Báo cáo thực tập tốt nghiệp" : uploadCategory === "Evidence" ? "Phiếu đánh giá/xác nhận của doanh nghiệp" : "Sản phẩm thực tế"}
+                </p>
+                <p className="mt-1 text-[11px] leading-4 text-slate-600">
+                  {uploadCategory === "FinalReport" ? "Nộp báo cáo cuối kỳ của đợt thực tập." : uploadCategory === "Evidence" ? "Nhập điểm doanh nghiệp và tải ảnh phiếu. Điểm chỉ để giảng viên tham khảo." : "Tải tài liệu sản phẩm hoặc thêm link triển khai."}
+                </p>
+              </div>
               <div>
-                  <label className="block font-bold text-slate-700 mb-1">
-                    Tên sản phẩm
-                </label>
+                <label className="block font-bold text-slate-700 mb-1">Tên hồ sơ</label>
                 <input
                   type="text"
-                  placeholder="Ví dụ: Báo cáo thực tập tốt nghiệp"
+                  placeholder={uploadCategory === "Evidence" ? "Phiếu đánh giá doanh nghiệp" : uploadCategory === "Product" ? "Tên sản phẩm thực tế" : "Báo cáo thực tập tốt nghiệp"}
                   value={uploadTitle}
                   onChange={(e) => setUploadTitle(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-md outline-none font-medium focus:border-blue-500 focus:bg-white"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">
-                    Sản phẩm
+              {uploadCategory === "Evidence" && (
+                <div className="space-y-3">
+                  <div className={`rounded-md border px-3 py-2 text-xs ${evidenceWindowOpen ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
+                    {evidenceDeadline
+                      ? `Thời hạn: ${new Date(evidenceDeadline.startDate).toLocaleString("vi-VN")} – ${new Date(evidenceDeadline.endDate).toLocaleString("vi-VN")}${evidenceWindowOpen ? " · Đang mở" : " · Chưa mở hoặc đã kết thúc"}`
+                      : "Admin khoa chưa cấu hình deadline nộp minh chứng."}
+                  </div>
+                  <label className="block space-y-1 text-xs font-bold text-slate-700">
+                    Điểm đánh giá của doanh nghiệp (0–10) *
+                    <input
+                      required
+                      type="number"
+                      min="0"
+                      max="10"
+                      step="0.1"
+                      value={employerScore}
+                      onChange={(event) => setEmployerScore(event.target.value)}
+                      className="block w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium"
+                    />
+                    <span className="block font-normal text-slate-500">Điểm này để giảng viên tham khảo, không cộng trực tiếp vào điểm tổng kết.</span>
                   </label>
-                  <select
-                    value={uploadCategory}
-                    onChange={(e) => setUploadCategory(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-md outline-none font-medium"
-                  >
-                    <option value="FinalReport">Báo cáo thực tập tốt nghiệp (bắt buộc)</option>
-                    <option value="Product">Sản phẩm thực tế (tùy chọn, cộng điểm)</option>
-                  </select>
                 </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">
-                    Ghi chú phiên bản
-                  </label>
-                  <input
-                    type="text"
-                    value={uploadVersion}
-                    onChange={(e) => setUploadVersion(e.target.value)}
-                    placeholder="Ví dụ: Bản hoàn thiện"
-                    className="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-md outline-none font-medium"
-                  />
-                </div>
-              </div>
+              )}
 
               <div>
                 <label className="block font-bold text-slate-700 mb-1">
@@ -581,25 +667,27 @@ export const SubmissionsView = ({ onShowToast }) => {
                   <input
                     type="file"
                     multiple
+                    accept={uploadCategory === "Evidence" ? "image/jpeg,image/png,image/webp,image/gif" : uploadCategory === "FinalReport" ? ".pdf,.doc,.docx" : undefined}
                     className="hidden"
                     onChange={(e) => setUploadFiles(Array.from(e.target.files ?? []))}
                   />
                   <Upload className="w-5 h-5 text-blue-600 mx-auto" />
                   <p className="font-bold text-slate-800 text-xs">
                     {uploadFiles.length > 0
-                      ? `${uploadFiles.length} tệp đã chọn`
-                      : "Bấm để chọn một hoặc nhiều tệp"}
+                      ? uploadFiles.map((file) => file.name).join(", ")
+                      : uploadCategory === "Evidence" ? "Chọn ảnh phiếu xác nhận" : "Chọn tệp trên thiết bị"}
                   </p>
                   <p className="text-[11px] text-slate-400 font-medium">
-                    PDF, ZIP, DOCX, PPTX, MP4, ảnh hoặc tài liệu liên quan (tùy chọn)
+                    {uploadCategory === "Evidence" ? "Ảnh phiếu đánh giá/xác nhận của doanh nghiệp (bắt buộc)" : "PDF, ZIP, DOCX, PPTX, MP4, ảnh hoặc tài liệu liên quan (tùy chọn)"}
+                                      {uploadCategory === "FinalReport" ? "Tệp báo cáo PDF hoặc Word (bắt buộc)" : uploadCategory === "Evidence" ? "Ảnh phiếu đánh giá/xác nhận của doanh nghiệp (bắt buộc)" : "PDF, ZIP, DOCX, PPTX, MP4, ảnh hoặc tài liệu liên quan (tùy chọn)"}
                   </p>
                 </label>
               </div>
 
-              <div>
+              {uploadCategory !== "Evidence" && <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="block font-bold text-slate-700">
-                    Liên kết sản phẩm (tùy chọn)
+                    Liên kết sản phẩm (nếu có)
                   </label>
                   <button
                     type="button"
@@ -639,7 +727,7 @@ export const SubmissionsView = ({ onShowToast }) => {
                     </div>
                   ))}
                 </div>
-              </div>
+              </div>}
 
               <div>
                 <label className="block font-bold text-slate-700 mb-1">
@@ -665,10 +753,10 @@ export const SubmissionsView = ({ onShowToast }) => {
               </button>
               <button
                 type="submit"
-                disabled={isSubmitting}
+                disabled={isSubmitting || (uploadCategory === "Evidence" && (!evidenceWindowOpen || !employerScoreValid || !hasEmployerImage)) || (uploadCategory === "FinalReport" && !hasRequiredUploadFile)}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-md shadow-xs disabled:opacity-50"
               >
-                {isSubmitting ? "Đang nộp..." : "Tải lên"}
+                {isSubmitting ? "Đang nộp..." : uploadCategory === "Evidence" ? "Nộp điểm & ảnh phiếu" : uploadCategory === "FinalReport" ? "Nộp báo cáo cuối kỳ" : "Nộp sản phẩm"}
               </button>
             </div>
           </form>

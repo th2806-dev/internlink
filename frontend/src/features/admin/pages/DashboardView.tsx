@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from "react";
 import { useSemester, toApiSemesterId, toApiDepartmentId } from "../../../contexts/SemesterContext";
 import type { ToastType } from "../../../contexts/ToastContext";
 import {
@@ -5,6 +6,11 @@ import {
   RefreshCw,
   ArrowUpRight,
   AlertTriangle,
+  Building2,
+  CheckCircle2,
+  ClipboardCheck,
+  Clock3,
+  Users,
 } from "lucide-react";
 import { PageHeader } from "../../../components/common/PageHeader";
 import { Panel } from "../../../components/common/Panel";
@@ -19,6 +25,8 @@ import {
 } from "../../../components/common/DashboardCharts";
 import { useAdminDashboardStats } from "../../../hooks/useAdminDashboardStats";
 import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
+import { internshipGradingService, type GradingSummaryResponse } from "../../../services/internshipGrading.service";
+import { getApiErrorMessage } from "../../../lib/apiClient";
 
 export const DashboardView = ({
   onShowToast,
@@ -28,7 +36,7 @@ export const DashboardView = ({
   onNavigateTab: (tab: string) => void;
 }) => {
   const { isSuperAdmin } = useAdminCapabilities();
-  const { semesters, selectedSemester, selectedDepartmentId, selectedDepartment } = useSemester();
+  const { semesters, selectedSemester, activeSemesterId, selectedDepartmentId, selectedDepartment } = useSemester();
   const { stats, isLoading, updatedAt, reload } = useAdminDashboardStats(
     true,
     toApiSemesterId(selectedSemester?.id),
@@ -38,6 +46,69 @@ export const DashboardView = ({
   );
 
   const departmentIdFilter = toApiDepartmentId(selectedDepartmentId);
+  const reportSemesterId = toApiSemesterId(selectedSemester?.id) ?? toApiSemesterId(activeSemesterId);
+  const reportSemesterName = selectedSemester?.id && selectedSemester.id !== "all"
+    ? selectedSemester.name
+    : semesters.find((semester) => semester.id === activeSemesterId)?.name ?? "Kỳ đang hoạt động";
+  const [semesterReport, setSemesterReport] = useState<GradingSummaryResponse | null>(null);
+  const [semesterReportLoading, setSemesterReportLoading] = useState(false);
+  const [semesterReportError, setSemesterReportError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isSuperAdmin || !reportSemesterId) {
+      setSemesterReport(null);
+      setSemesterReportError(null);
+      setSemesterReportLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setSemesterReportLoading(true);
+    setSemesterReportError(null);
+    internshipGradingService.getSummary(reportSemesterId)
+      .then((summary) => {
+        if (!cancelled) setSemesterReport(summary);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setSemesterReport(null);
+          setSemesterReportError(getApiErrorMessage(error));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setSemesterReportLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isSuperAdmin, reportSemesterId]);
+
+  const semesterReportMetrics = useMemo(() => {
+    const students = semesterReport?.students ?? [];
+    const companies = new Set(
+      students.map((student) => student.companyName?.trim()).filter((name): name is string => Boolean(name)),
+    );
+    const statuses = students.flatMap((student) => [
+      ...student.weeks.map((week) => week.status),
+      student.finalReportStatus,
+    ]);
+    const onTime = statuses.filter((status) => status === "on_time").length;
+    const late = statuses.filter((status) => status === "late").length;
+    const missing = statuses.filter((status) => status === "missing").length;
+    const dueCount = onTime + late + missing;
+
+    return {
+      studentCount: students.length,
+      companyCount: companies.size,
+      onTime,
+      late,
+      missing,
+      dueCount,
+      onTimeRate: dueCount > 0 ? Math.round((onTime / dueCount) * 100) : null,
+    };
+  }, [semesterReport]);
+
   const handleRefresh = async () => {
     if (isLoading) return;
     await reload();
@@ -120,6 +191,46 @@ export const DashboardView = ({
               }
         }
       />
+
+      {!isSuperAdmin && (
+        <Panel className="space-y-4">
+          <div className="flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 pb-3">
+            <div>
+              <h2 className="text-sm font-bold text-slate-900">Tiến độ nộp hồ sơ thực tập</h2>
+              <p className="mt-1 text-xs text-slate-500">{reportSemesterName} · Chỉ tính báo cáo đã đến hạn</p>
+            </div>
+            <ClipboardCheck className="h-4 w-4 text-blue-700" />
+          </div>
+          {semesterReportLoading ? (
+            <p className="py-4 text-center text-xs text-slate-500">Đang tổng hợp dữ liệu kỳ…</p>
+          ) : semesterReportError ? (
+            <p role="alert" className="py-3 text-center text-xs text-rose-700">{semesterReportError}</p>
+          ) : !semesterReport ? (
+            <p className="py-3 text-center text-xs text-slate-500">Chưa có kỳ thực tập đang hoạt động.</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-4 divide-x divide-slate-100 sm:grid-cols-4">
+              <div className="px-2">
+                <p className="flex items-center gap-1.5 text-xs text-slate-500"><Users className="h-3.5 w-3.5" /> Sinh viên tham gia</p>
+                <p className="mt-1 text-2xl font-bold text-slate-900">{semesterReportMetrics.studentCount}</p>
+              </div>
+              <div className="px-2">
+                <p className="flex items-center gap-1.5 text-xs text-slate-500"><Building2 className="h-3.5 w-3.5" /> Doanh nghiệp tiếp nhận</p>
+                <p className="mt-1 text-2xl font-bold text-slate-900">{semesterReportMetrics.companyCount}</p>
+              </div>
+              <div className="px-2">
+                <p className="flex items-center gap-1.5 text-xs text-slate-500"><CheckCircle2 className="h-3.5 w-3.5" /> Nộp đúng hạn</p>
+                <p className="mt-1 text-2xl font-bold text-emerald-700">{semesterReportMetrics.onTimeRate == null ? "—" : `${semesterReportMetrics.onTimeRate}%`}</p>
+                <p className="text-[10px] text-slate-500">{semesterReportMetrics.onTime}/{semesterReportMetrics.dueCount} báo cáo đến hạn</p>
+              </div>
+              <div className="px-2">
+                <p className="flex items-center gap-1.5 text-xs text-slate-500"><Clock3 className="h-3.5 w-3.5" /> Trễ / còn thiếu</p>
+                <p className="mt-1 text-2xl font-bold text-amber-700">{semesterReportMetrics.late + semesterReportMetrics.missing}</p>
+                <p className="text-[10px] text-slate-500">{semesterReportMetrics.late} trễ · {semesterReportMetrics.missing} thiếu</p>
+              </div>
+            </div>
+          )}
+        </Panel>
+      )}
 
       <div className="il-accent-panel px-4 py-3 flex flex-wrap items-center justify-between gap-3">
         <div>

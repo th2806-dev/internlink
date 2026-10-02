@@ -78,6 +78,8 @@ public class AssignmentServiceTests
         internships.Should().HaveCount(5);
         internships.Should().OnlyContain(i => i.Status == InternshipStatus.InProgress);
         internships.Should().OnlyContain(i => i.CompanyId == null);
+        db.LecturerActivityLogs.Count(log => log.ActivityType == "guidance-assignment-started")
+            .Should().Be(5);
     }
 
     [Fact]
@@ -119,6 +121,12 @@ public class AssignmentServiceTests
 
         var updated = await db.Internships.FindAsync(internship.Id);
         updated!.LecturerId.Should().Be(lecturerB.Id);
+        db.LecturerActivityLogs.Should().Contain(log =>
+            log.LecturerId == lecturerA.Id && log.ActivityType == "guidance-assignment-ended"
+            && log.StudentId == student.Id);
+        db.LecturerActivityLogs.Should().Contain(log =>
+            log.LecturerId == lecturerB.Id && log.ActivityType == "guidance-assignment-started"
+            && log.StudentId == student.Id);
     }
 
     [Fact]

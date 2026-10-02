@@ -5,6 +5,7 @@ using DocumentFormat.OpenXml.Spreadsheet;
 using InternLink.Application.Common;
 using InternLink.Application.DTOs;
 using InternLink.Application.Interfaces;
+using InternLink.Domain.Entities;
 using InternLink.Domain.Enums;
 using InternLink.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -75,6 +76,7 @@ public class InternshipGradingService : IInternshipGradingService
             .Include(i => i.Student)
             .Include(i => i.Company)
             .Include(i => i.Submissions)
+                .ThenInclude(submission => submission.Assets)
             .Where(i => i.SemesterId == semesterId && !i.IsDeleted && i.Student != null && !i.Student.IsDeleted);
 
         if (lecturerId.HasValue)
@@ -189,6 +191,16 @@ public class InternshipGradingService : IInternshipGradingService
         foreach (var internship in internships)
         {
             var student = internship.Student!;
+            var employerEvidence = internship.Submissions
+                .Where(submission => !submission.IsDeleted
+                    && submission.Type == SubmissionType.Evidence
+                    && submission.Status != SubmissionStatus.Rejected)
+                .OrderByDescending(submission => submission.SubmittedAt)
+                .FirstOrDefault();
+            var employerEvidenceAsset = employerEvidence?.Assets
+                .Where(asset => !asset.IsDeleted && asset.AssetType == "file")
+                .OrderByDescending(asset => asset.UploadedAt)
+                .FirstOrDefault();
             var submitted = reportsByInternship.TryGetValue(internship.Id, out var list)
                 ? list : new List<(Guid InternshipId, int WeekNumber, DateTime? SubmittedAt)>();
             var attendanceByWeek = attendanceByStudent.TryGetValue(student.Id, out var atMap)
@@ -316,6 +328,10 @@ public class InternshipGradingService : IInternshipGradingService
                 ProductSubmitted = productSubmitted,
                 HasCreativeProduct = creative,
                 ProcessScore = processScore,
+                EmployerScore = employerEvidence?.EmployerScore,
+                EmployerEvidenceSubmissionId = employerEvidence?.Id,
+                EmployerEvidenceAssetId = employerEvidenceAsset?.Id,
+                EmployerEvidenceFileName = employerEvidenceAsset?.FileName ?? employerEvidence?.FileName,
                 OralExamScore = oral,
                 AverageScore = average,
                 Classification = classification,
@@ -340,6 +356,7 @@ public class InternshipGradingService : IInternshipGradingService
     {
         var internship = await _context.Internships
             .Include(i => i.Student)
+            .Include(i => i.Company)
             .FirstOrDefaultAsync(i => i.StudentId == dto.StudentId && i.SemesterId == semesterId && !i.IsDeleted);
 
         if (internship == null) return null;
@@ -427,6 +444,24 @@ public class InternshipGradingService : IInternshipGradingService
                 evaluation.IsFinalized = true;
                 internship.Status = InternshipStatus.Graded;
                 internship.UpdatedAt = DateTime.UtcNow;
+            }
+            if (actorLecturerId.HasValue)
+            {
+                _context.LecturerActivityLogs.Add(new LecturerActivityLog
+                {
+                    LecturerId = actorLecturerId.Value,
+                    SemesterId = semesterId,
+                    InternshipId = internship.Id,
+                    RelatedEntityId = evaluation.Id,
+                    StudentId = internship.StudentId,
+                    StudentCode = internship.Student?.StudentCode,
+                    StudentName = internship.Student?.FullName,
+                    CompanyName = internship.Company?.CompanyName,
+                    ActivityType = "final-result-updated",
+                    Title = evaluation.IsFinalized ? "Đã chốt kết quả cuối kỳ" : "Cập nhật đánh giá cuối kỳ",
+                    Detail = $"Điểm hiện tại: {evaluation.FinalGrade:0.##}/10.",
+                    OccurredAt = evaluation.EvaluatedAt,
+                });
             }
             await _context.SaveChangesAsync();
         }

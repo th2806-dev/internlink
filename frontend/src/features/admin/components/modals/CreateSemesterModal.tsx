@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { CalendarPlus, X, Save, PencilLine } from "lucide-react";
+import { getApiErrorMessage } from "../../../../lib/apiClient";
+import { schoolAcademicTermsService, type SchoolAcademicTermDto } from "../../../../services/schoolAcademicTerms.service";
 
 export interface SemesterModalFormValues {
   name: string;
@@ -25,8 +27,8 @@ export const CreateSemesterModal = ({
   isOpen: boolean;
   onClose: () => void;
   onShowToast: (msg: string) => void;
-  onCreate?: (sem: SemesterModalFormValues) => void;
-  onUpdate?: (id: string, sem: SemesterModalFormValues) => void;
+  onCreate?: (sem: SemesterModalFormValues) => void | Promise<void>;
+  onUpdate?: (id: string, sem: SemesterModalFormValues) => void | boolean | Promise<void | boolean>;
   /** When set, the modal edits this semester instead of creating a new one. */
   editing?: {
     id: string;
@@ -38,6 +40,7 @@ export const CreateSemesterModal = ({
     endDate: string;
     totalWeeks?: number;
     internshipStartWeek?: number;
+    targetStudents?: number;
     description?: string;
   } | null;
 }) => {
@@ -47,10 +50,11 @@ export const CreateSemesterModal = ({
   const [startDate, setStartDate] = useState("2026-09-01");
   const [endDate, setEndDate] = useState("2026-12-15");
   const [targetStudents, setTargetStudents] = useState("1350");
-  const [totalWeeks, setTotalWeeks] = useState("6");
+  const [internshipEndWeek, setInternshipEndWeek] = useState("6");
   // Mặc định 1 = kỳ nhập vào CHÍNH LÀ giai đoạn thực tập (tuần thực tập 1 = ngày bắt đầu kỳ).
   // Chỉ tăng lên (vd 14) khi StartDate là đầu CẢ học kỳ của trường chứ không riêng đợt thực tập.
   const [internshipStartWeek, setInternshipStartWeek] = useState("1");
+  const [academicTerms, setAcademicTerms] = useState<SchoolAcademicTermDto[]>([]);
   /** Đã tự sửa ISW về 1 khi mở modal sửa kỳ ngắn có ISW sai → hiển thị ghi chú giải thích. */
   const [autoFixedIsw, setAutoFixedIsw] = useState(false);
   const isEditing = Boolean(editing?.id);
@@ -64,8 +68,11 @@ export const CreateSemesterModal = ({
       setAcademicYear(editing.academicYear || "");
       setStartDate(parseToInputDate(editing.startDate));
       setEndDate(parseToInputDate(editing.endDate));
-      setTotalWeeks(String(editing.totalWeeks ?? 6));
-      setInternshipStartWeek(String(editing.internshipStartWeek ?? 1));
+      setTargetStudents(String(editing.targetStudents ?? 0));
+      const editingStartWeek = Math.min(52, Math.max(1, editing.internshipStartWeek ?? 1));
+      const editingWeeks = Math.min(52, Math.max(1, editing.totalWeeks ?? 6));
+      setInternshipStartWeek(String(editingStartWeek));
+      setInternshipEndWeek(String(editingStartWeek + editingWeeks - 1));
       setAutoFixedIsw(false);
 
       // Kỳ ngắn (≤ 3 tháng) gần như chắc chắn là đợt thực tập thuần túy: StartDate =
@@ -73,13 +80,12 @@ export const CreateSemesterModal = ({
       // thực tập vượt EndDate — lỗi 400 khi lưu), tự sửa về 1 ngay khi mở modal.
       const preStart = parseToInputDate(editing.startDate);
       const preEnd = parseToInputDate(editing.endDate);
-      const preIsw = Math.min(52, Math.max(1, editing.internshipStartWeek ?? 1));
-      const preWeeks = Math.min(52, Math.max(1, editing.totalWeeks ?? 6));
-      if (preStart && preEnd && preIsw > 1) {
+      if (preStart && preEnd && editingStartWeek > 1) {
         const durationDays = (new Date(preEnd).getTime() - new Date(preStart).getTime()) / 86400000;
-        const periodEndDays = (preIsw - 1) * 7 + preWeeks * 7 - 1;
+        const periodEndDays = (editingStartWeek - 1) * 7 + editingWeeks * 7 - 1;
         if (durationDays > 0 && durationDays <= 92 && periodEndDays > durationDays) {
           setInternshipStartWeek("1");
+          setInternshipEndWeek(String(editingWeeks));
           setAutoFixedIsw(true);
         }
       }
@@ -89,12 +95,36 @@ export const CreateSemesterModal = ({
       setAcademicYear("2026 - 2027");
       setStartDate("2026-09-01");
       setEndDate("2026-12-15");
-      setTotalWeeks("6");
+      setInternshipEndWeek("6");
       setInternshipStartWeek("1");
       setAutoFixedIsw(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, editing?.id, editing?.name, editing?.startDate, editing?.endDate]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    void schoolAcademicTermsService.getAll().then(setAcademicTerms).catch(() => setAcademicTerms([]));
+  }, [isOpen]);
+
+  const configuredTerm = academicTerms.find(
+    (item) => item.academicYear === academicYear && item.term === term,
+  );
+  const availableWeeks = configuredTerm?.totalWeeks ?? 0;
+  const selectedStartWeek = parseInt(internshipStartWeek) || 0;
+  const selectedEndWeek = parseInt(internshipEndWeek) || 0;
+  const selectedDuration = selectedEndWeek - selectedStartWeek + 1;
+  const weekRangeInvalid = !configuredTerm
+    || selectedStartWeek < 1
+    || selectedEndWeek < selectedStartWeek
+    || selectedEndWeek > availableWeeks
+    || selectedDuration > 52;
+
+  useEffect(() => {
+    if (!configuredTerm) return;
+    setStartDate(configuredTerm.startDate.slice(0, 10));
+    setEndDate(configuredTerm.endDate.slice(0, 10));
+  }, [configuredTerm?.id]);
 
   if (!isOpen) return null;
 
@@ -104,31 +134,29 @@ export const CreateSemesterModal = ({
   // gần như chắc chắn do đặt InternshipStartWeek > 1 trong khi StartDate là ngày đầu thực tập.
   const parsedStart = startDate ? new Date(startDate) : null;
   const parsedEnd = endDate ? new Date(endDate) : null;
-  const effectiveStartWeek = Math.min(52, Math.max(1, parseInt(internshipStartWeek) || 1));
-  const effectiveTotalWeeks = Math.min(52, Math.max(1, parseInt(totalWeeks) || 6));
+  const effectiveStartWeek = Math.min(52, Math.max(1, selectedStartWeek || 1));
+  const effectiveTotalWeeks = Math.min(52, Math.max(1, selectedDuration || 1));
   const internshipPeriodStart = parsedStart
     ? new Date(parsedStart.getTime() + (effectiveStartWeek - 1) * 7 * 86400000)
     : null;
   const internshipPeriodEnd = internshipPeriodStart
     ? new Date(internshipPeriodStart.getTime() + effectiveTotalWeeks * 7 * 86400000 - 86400000)
     : null;
-  const internshipEndExceedsSemesterEnd = Boolean(
-    internshipPeriodEnd && parsedEnd && internshipPeriodEnd > parsedEnd,
-  );
+  const internshipEndExceedsSemesterEnd = weekRangeInvalid;
   const fmtDmy = (d: Date) => d.toLocaleDateString("vi-VN");
   const displayStartDate = parsedStart ? fmtDmy(parsedStart) : "?";
   const displaySemesterEnd = parsedEnd ? fmtDmy(parsedEnd) : "?";
   const displayInternshipEnd = internshipPeriodEnd ? fmtDmy(internshipPeriodEnd) : "?";
   // Kỳ ngắn ≤ 3 tháng (≈ 92 ngày): StartDate hầu như luôn là NGÀY BẮT ĐẦU THỰC TẬP → ISW nên = 1.
-  const semesterDurationDays =
-    parsedStart && parsedEnd
-      ? Math.round((parsedEnd.getTime() - parsedStart.getTime()) / 86400000)
-      : null;
-  const isShortSemester = semesterDurationDays !== null && semesterDurationDays > 0 && semesterDurationDays <= 92;
-  const suggestIswOne = isShortSemester && effectiveStartWeek > 1;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (weekRangeInvalid) {
+      onShowToast(configuredTerm
+        ? `Khoảng tuần phải nằm trong Tuần 1 đến Tuần ${availableWeeks}.`
+        : "Superadmin chưa cấu hình thời gian cho học kỳ này.");
+      return;
+    }
     const values: SemesterModalFormValues = {
       name: semesterName,
       term,
@@ -136,14 +164,25 @@ export const CreateSemesterModal = ({
       startDate,
       endDate,
       targetStudents: parseInt(targetStudents) || 0,
-      totalWeeks: Math.min(52, Math.max(1, parseInt(totalWeeks) || 6)),
+      totalWeeks: Math.min(52, Math.max(1, selectedDuration)),
       internshipStartWeek: Math.min(52, Math.max(1, parseInt(internshipStartWeek) || 1)),
       description: editing?.description,
     };
     if (isEditing && editing && onUpdate) {
-      onUpdate(editing.id, values);
+      try {
+        const updated = await onUpdate(editing.id, values);
+        if (updated === false) return;
+      } catch (error) {
+        onShowToast(getApiErrorMessage(error));
+        return;
+      }
     } else if (onCreate) {
-      onCreate(values);
+      try {
+        await onCreate(values);
+      } catch (error) {
+        onShowToast(getApiErrorMessage(error));
+        return;
+      }
       onShowToast(`Đã tạo thành công đợt thực tập: "${semesterName}"!`);
     }
     onClose();
@@ -212,13 +251,13 @@ export const CreateSemesterModal = ({
               <label className="block font-bold text-slate-700 mb-1">
                 Niên khóa *
               </label>
-              <input
-                type="text"
+              <select
                 value={academicYear}
                 onChange={(e) => setAcademicYear(e.target.value)}
-                required
                 className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-900 outline-none focus:bg-white focus:border-blue-500"
-              />
+              >
+                {[...new Set([academicYear, ...academicTerms.map((item) => item.academicYear)])].map((year) => <option key={year} value={year}>{year}</option>)}
+              </select>
             </div>
           </div>
 
@@ -230,7 +269,7 @@ export const CreateSemesterModal = ({
               <input
                 type="date"
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
+                readOnly
                 required
                 className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-900 outline-none focus:bg-white focus:border-blue-500"
               />
@@ -243,43 +282,28 @@ export const CreateSemesterModal = ({
               <input
                 type="date"
                 value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
+                readOnly
                 required
                 className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-900 outline-none focus:bg-white focus:border-blue-500"
               />
             </div>
           </div>
 
-          {!isEditing && (
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">
-                Chỉ tiêu Sinh viên dự kiến
-              </label>
-              <input
-                type="number"
-                value={targetStudents}
-                onChange={(e) => setTargetStudents(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-900 outline-none focus:bg-white focus:border-blue-500"
-              />
-            </div>
-          )}
+          <div>
+            <label className="block font-bold text-slate-700 mb-1">
+              Chỉ tiêu sinh viên dự kiến
+            </label>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={targetStudents}
+              onChange={(e) => setTargetStudents(e.target.value)}
+              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-900 outline-none focus:bg-white focus:border-blue-500"
+            />
+          </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">
-                Số tuần thực tập *
-              </label>
-              <input
-                type="number"
-                min={1}
-                max={52}
-                value={totalWeeks}
-                onChange={(e) => setTotalWeeks(e.target.value)}
-                required
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-900 outline-none focus:bg-white focus:border-blue-500"
-              />
-              <p className="text-[11px] text-slate-500 mt-1">Theo quy định của kỳ.</p>
-            </div>
             <div>
               <label className="block font-bold text-slate-700 mb-1">
                 Tuần HK bắt đầu thực tập *
@@ -287,42 +311,34 @@ export const CreateSemesterModal = ({
               <input
                 type="number"
                 min={1}
-                max={52}
+                max={availableWeeks || 52}
                 value={internshipStartWeek}
                 onChange={(e) => setInternshipStartWeek(e.target.value)}
                 required
                 className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-900 outline-none focus:bg-white focus:border-blue-500"
               />
+              <p className="text-[11px] text-slate-500 mt-1">Khung hiện có: {availableWeeks || "chưa cấu hình"} tuần.</p>
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Tuần HK kết thúc thực tập *
+              </label>
+              <input
+                type="number"
+                min={selectedStartWeek || 1}
+                max={availableWeeks || 52}
+                value={internshipEndWeek}
+                onChange={(e) => setInternshipEndWeek(e.target.value)}
+                required
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-900 outline-none focus:bg-white focus:border-blue-500"
+              />
               <p className="text-[11px] text-slate-500 mt-1">
                 {internshipEndExceedsSemesterEnd
-                  ? `⚠️ Lệch mốc: với StartDate ${displayStartDate} + ${Math.min(52, Math.max(1, parseInt(internshipStartWeek) || 1)) - 1} tuần chờ, toàn bộ ${Math.min(52, Math.max(1, parseInt(totalWeeks) || 6))} tuần thực tập kết thúc ${displayInternshipEnd} — SAU EndDate ${displaySemesterEnd}. Nếu StartDate là NGÀY BẮT ĐẦU THỰC TẬP thì đặt = 1.`
-                  : Math.min(52, Math.max(1, parseInt(internshipStartWeek) || 1)) + Math.min(52, Math.max(1, parseInt(totalWeeks) || 6)) - 1 > 52
-                    ? "Vượt 52 tuần học kỳ — kiểm tra lại."
-                    : `Thực tập 1..${Math.min(52, Math.max(1, parseInt(totalWeeks) || 6))} = HK tuần ${Math.min(52, Math.max(1, parseInt(internshipStartWeek) || 1))}..${Math.min(52, Math.max(1, parseInt(internshipStartWeek) || 1)) + Math.min(52, Math.max(1, parseInt(totalWeeks) || 6)) - 1}`}
+                  ? configuredTerm
+                    ? `Khoảng tuần vượt khung Tuần 1–${availableWeeks}.`
+                    : "Chưa có khung thời gian do Superadmin cấu hình cho học kỳ này."
+                    : `Suy ra ${selectedDuration} tuần · Tuần ${selectedStartWeek}–${selectedEndWeek} / ${availableWeeks}`}
               </p>
-
-              {autoFixedIsw && (
-                <p className="text-[11px] text-blue-700 bg-blue-50 border border-blue-200 rounded-md px-2 py-1.5 mt-1.5">
-                  ℹ️ Đã tự đặt "Tuần HK bắt đầu thực tập" = 1: kỳ này chỉ kéo dài ~{" "}
-                  {semesterDurationDays ?? "?"} ngày (≤ 3 tháng) nên StartDate chính là ngày bắt đầu
-                  thực tập. Nếu kỳ của bạn là đầu CẢ học kỳ trường, kéo dài EndDate tương ứng rồi
-                  chọn lại tuần.
-                </p>
-              )}
-
-              {suggestIswOne && !autoFixedIsw && (
-                <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2 py-1.5 mt-1.5">
-                  💡 Kỳ này kéo dài ~{semesterDurationDays ?? "?"} ngày (≤ 3 tháng) — gần như chắc chắn
-                  là đợt thực tập thuần túy, nên "Tuần HK bắt đầu thực tập" nên = 1.{" "}
-                  <button
-                    type="button"
-                    onClick={() => setInternshipStartWeek("1")}
-                    className="font-bold text-blue-700 underline hover:text-blue-900"
-                  >
-                    Đặt = 1
-                  </button>
-                </p>
-              )}
             </div>
           </div>
 

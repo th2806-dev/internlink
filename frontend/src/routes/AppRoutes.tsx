@@ -39,6 +39,7 @@ import { AccountView as AdminAccountView } from "../features/admin/pages/Account
 import { TemplatesView as AdminTemplatesView } from "../features/admin/pages/TemplatesView";
 import { DepartmentsView as AdminDepartmentsView } from "../features/admin/pages/DepartmentsView";
 import { AttendanceView as AdminAttendanceView } from "../features/admin/pages/AttendanceView";
+import { ReportArchiveView as AdminReportArchiveView } from "../features/admin/pages/ReportArchiveView";
 
 // Lecturer Pages
 import { DashboardView as LecturerDashboardView } from "../features/lecturer/pages/DashboardView";
@@ -53,6 +54,7 @@ import { AccountView as LecturerAccountView } from "../features/lecturer/pages/A
 import { AttendanceManagementView as LecturerAttendanceView } from "../features/lecturer/pages/AttendanceManagementView";
 import { SummaryView as LecturerSummaryView } from "../features/lecturer/pages/SummaryView";
 import { InternshipEvaluationView as LecturerInternshipEvaluationView } from "../features/lecturer/pages/InternshipEvaluationView";
+import { LecturerHistoryView } from "../features/lecturer/pages/LecturerHistoryView";
 import { StudentWorkspace as LecturerStudentWorkspace } from "../features/lecturer/components/StudentWorkspace";
 
 // Student Pages
@@ -243,6 +245,16 @@ export function AppRoutes() {
                       <Navigate to="/admin/dashboard" replace />
                     ) : (
                       <AdminAttendanceView onShowToast={showToast} />
+                    )
+                  }
+                />
+                <Route
+                  path="report-archive"
+                  element={
+                    isSuperAdmin ? (
+                      <Navigate to="/admin/dashboard" replace />
+                    ) : (
+                      <AdminReportArchiveView onShowToast={showToast} />
                     )
                   }
                 />
@@ -453,6 +465,7 @@ export function AppRoutes() {
                     />
                   }
                 />
+                <Route path="history" element={<LecturerHistoryView />} />
                 <Route
                   path="analytics"
                   element={

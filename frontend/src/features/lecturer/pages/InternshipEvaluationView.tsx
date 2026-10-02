@@ -14,6 +14,7 @@ import {
   Hourglass,
   Table2,
   Download,
+  Eye,
   CalendarDays,
   UserCheck,
   UserX,
@@ -21,6 +22,8 @@ import {
   Lock,
   Hourglass as HourglassIcon,
   ShieldAlert,
+  BarChart3,
+  X,
 } from "lucide-react";
 import { useSemester } from "../../../contexts/SemesterContext";
 import {
@@ -45,6 +48,8 @@ import {
 } from "../../../lib/gradingRules";
 import { formatDateTimeVi } from "../../../lib/formatDateTimeVi";
 import { lecturerExportService } from "../../../services/lecturerExport.service";
+import { lecturerInternshipsService, type LecturerSemesterOptionDto } from "../../../services/lecturerInternships.service";
+import { submissionApiService } from "../../../services/submissionApi.service";
 
 // ────────────────────────────────────────────────────────────────────────────
 // Tab 1: Cấu hình báo cáo & deadline
@@ -402,6 +407,16 @@ function GradingTab({
   const [creative, setCreative] = useState(false);
   const [oralExam, setOralExam] = useState<string>("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isDownloadingEmployerProof, setIsDownloadingEmployerProof] = useState(false);
+  const [isPreviewingEmployerProof, setIsPreviewingEmployerProof] = useState(false);
+  const [employerProofPreview, setEmployerProofPreview] = useState<{ url: string; mimeType: string; fileName: string } | null>(null);
+
+  useEffect(() => {
+    const previewUrl = employerProofPreview?.url;
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [employerProofPreview?.url]);
 
   const load = useCallback(async () => {
     if (!semesterId) return;
@@ -494,6 +509,63 @@ function GradingTab({
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const downloadEmployerProof = async () => {
+    if (!selected?.employerEvidenceSubmissionId || isDownloadingEmployerProof) return;
+    setIsDownloadingEmployerProof(true);
+    try {
+      if (selected.employerEvidenceAssetId) {
+        await submissionApiService.downloadAsset(
+          selected.employerEvidenceSubmissionId,
+          selected.employerEvidenceAssetId,
+          selected.employerEvidenceFileName ?? "Phieu-danh-gia-doanh-nghiep",
+        );
+      } else {
+        await submissionApiService.download(
+          selected.employerEvidenceSubmissionId,
+          selected.employerEvidenceFileName ?? "Phieu-danh-gia-doanh-nghiep",
+        );
+      }
+    } catch (error) {
+      onShowToast?.(getApiErrorMessage(error), "error");
+    } finally {
+      setIsDownloadingEmployerProof(false);
+    }
+  };
+
+  const previewEmployerProof = async () => {
+    if (!selected?.employerEvidenceSubmissionId || isPreviewingEmployerProof) return;
+    setIsPreviewingEmployerProof(true);
+    try {
+      const fallbackName = selected.employerEvidenceFileName ?? "Phieu-danh-gia-doanh-nghiep";
+      const result = selected.employerEvidenceAssetId
+        ? await submissionApiService.downloadAsset(
+            selected.employerEvidenceSubmissionId,
+            selected.employerEvidenceAssetId,
+            fallbackName,
+            false,
+          )
+        : await submissionApiService.download(selected.employerEvidenceSubmissionId, fallbackName, false);
+      const url = URL.createObjectURL(result.blob);
+      setEmployerProofPreview((current) => {
+        return {
+          url,
+          mimeType: result.filename.toLowerCase().endsWith(".pdf")
+            ? "application/pdf"
+            : result.blob.type || "image/*",
+          fileName: result.filename,
+        };
+      });
+    } catch (error) {
+      onShowToast?.(getApiErrorMessage(error), "error");
+    } finally {
+      setIsPreviewingEmployerProof(false);
+    }
+  };
+
+  const closeEmployerProofPreview = () => {
+    setEmployerProofPreview(null);
   };
 
   return (
@@ -757,6 +829,42 @@ function GradingTab({
 
               {/* Điểm thi vấn đáp + preview TB */}
               <div>
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-sky-200 bg-sky-50 px-3 py-2.5">
+                  <div>
+                    <p className="text-xs font-semibold text-sky-900">Đánh giá doanh nghiệp</p>
+                    <p className="mt-0.5 text-sm font-bold text-sky-800">
+                      {selected.employerScore != null ? `${selected.employerScore.toFixed(1)} / 10` : "Chưa nộp điểm"}
+                    </p>
+                    <p className="mt-0.5 text-[10px] font-medium text-sky-700">Tham khảo, không tính vào điểm tổng kết</p>
+                  </div>
+                  {selected.employerEvidenceSubmissionId ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {/\.(pdf|png|jpe?g|gif|webp)$/i.test(selected.employerEvidenceFileName ?? "") && (
+                        <button
+                          type="button"
+                          onClick={() => void previewEmployerProof()}
+                          disabled={isPreviewingEmployerProof}
+                          className="il-btn il-btn-secondary inline-flex items-center gap-1.5 text-xs disabled:opacity-50"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                          {isPreviewingEmployerProof ? "Đang mở…" : "Xem trước"}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => void downloadEmployerProof()}
+                        disabled={isDownloadingEmployerProof}
+                        className="il-btn il-btn-secondary inline-flex items-center gap-1.5 text-xs disabled:opacity-50"
+                        title={selected.employerEvidenceFileName ?? "Tải phiếu minh chứng"}
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        {isDownloadingEmployerProof ? "Đang tải…" : selected.employerEvidenceFileName ?? "Tải phiếu minh chứng"}
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-[11px] text-slate-500">Chưa có phiếu minh chứng</span>
+                  )}
+                </div>
                 <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Điểm thi vấn đáp (thang 10)
                 </label>
@@ -815,6 +923,37 @@ function GradingTab({
           )}
         </Panel>
       </div>
+      {employerProofPreview && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Xem trước minh chứng doanh nghiệp"
+          onMouseDown={(event) => { if (event.target === event.currentTarget) closeEmployerProofPreview(); }}
+        >
+          <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-md bg-white shadow-2xl">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+              <p className="truncate text-sm font-semibold text-slate-900">{employerProofPreview.fileName}</p>
+              <button
+                type="button"
+                onClick={closeEmployerProofPreview}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                aria-label="Đóng xem trước"
+                title="Đóng"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-auto bg-slate-100 p-3">
+              {employerProofPreview.mimeType === "application/pdf" ? (
+                <iframe title={employerProofPreview.fileName} src={employerProofPreview.url} className="h-[75vh] w-full border-0 bg-white" />
+              ) : (
+                <img src={employerProofPreview.url} alt={employerProofPreview.fileName} className="mx-auto max-h-[75vh] max-w-full object-contain" />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1191,6 +1330,190 @@ function SummaryTab({
   );
 }
 
+type SemesterComparisonRow = {
+  semester: LecturerSemesterOptionDto;
+  studentCount: number;
+  companyCount: number;
+  averageScore: number | null;
+  eligibleCount: number;
+  eligibleRate: number | null;
+  onTimeRate: number | null;
+  error?: string;
+};
+
+function SemesterComparisonTab() {
+  const { activeSemesterId } = useSemester();
+  const [semesters, setSemesters] = useState<LecturerSemesterOptionDto[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [rows, setRows] = useState<SemesterComparisonRow[]>([]);
+  const [isLoadingSemesters, setIsLoadingSemesters] = useState(true);
+  const [isLoadingResults, setIsLoadingResults] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void lecturerInternshipsService.getAssignedSemesters()
+      .then((items) => {
+        if (cancelled) return;
+        setSemesters(items);
+        const activeIndex = items.findIndex((item) => item.id === activeSemesterId);
+        const ordered = activeIndex < 0
+          ? items
+          : [items[activeIndex], ...items.filter((item) => item.id !== activeSemesterId)];
+        setSelectedIds(ordered.slice(0, 3).map((item) => item.id));
+        setLoadError(null);
+      })
+      .catch((error) => {
+        if (!cancelled) setLoadError(getApiErrorMessage(error));
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingSemesters(false);
+      });
+    return () => { cancelled = true; };
+  }, [activeSemesterId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const selected = semesters.filter((semester) => selectedIds.includes(semester.id));
+    if (selected.length === 0) {
+      setRows([]);
+      setIsLoadingResults(false);
+      return;
+    }
+
+    setIsLoadingResults(true);
+    void Promise.all(selected.map(async (semester): Promise<SemesterComparisonRow> => {
+      try {
+        const summary = await internshipGradingService.getSummary(semester.id);
+        const graded = summary.students
+          .map((student) => student.averageScore)
+          .filter((score): score is number => score != null && Number.isFinite(score));
+        const closedWeeks = summary.students.flatMap((student) => student.weeks)
+          .filter((week) => week.status !== "pending");
+        const onTimeCount = closedWeeks.filter((week) => week.status === "on_time").length;
+        const eligibleCount = summary.students.filter((student) => student.isEligible).length;
+
+        return {
+          semester,
+          studentCount: summary.students.length,
+          companyCount: new Set(summary.students.map((student) => student.companyName).filter(Boolean)).size,
+          averageScore: graded.length > 0 ? graded.reduce((total, score) => total + score, 0) / graded.length : null,
+          eligibleCount,
+          eligibleRate: summary.students.length > 0 ? eligibleCount * 100 / summary.students.length : null,
+          onTimeRate: closedWeeks.length > 0 ? onTimeCount * 100 / closedWeeks.length : null,
+        };
+      } catch (error) {
+        return {
+          semester,
+          studentCount: 0,
+          companyCount: 0,
+          averageScore: null,
+          eligibleCount: 0,
+          eligibleRate: null,
+          onTimeRate: null,
+          error: getApiErrorMessage(error),
+        };
+      }
+    })).then((results) => {
+      if (!cancelled) setRows(results);
+    }).finally(() => {
+      if (!cancelled) setIsLoadingResults(false);
+    });
+
+    return () => { cancelled = true; };
+  }, [semesters, selectedIds]);
+
+  const toggleSemester = (semesterId: string) => {
+    setSelectedIds((current) => {
+      if (current.includes(semesterId)) return current.filter((id) => id !== semesterId);
+      return current.length < 5 ? [...current, semesterId] : current;
+    });
+  };
+
+  const formatRate = (value: number | null) => value == null ? "—" : `${value.toFixed(1)}%`;
+  const formatAverage = (value: number | null) => value == null ? "—" : value.toFixed(2);
+
+  return (
+    <div className="space-y-4">
+      <Panel className="space-y-3">
+        <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+          <BarChart3 className="h-4 w-4 text-blue-700" /> So sánh kết quả theo kỳ
+        </h2>
+        {loadError ? (
+          <p role="alert" className="text-xs text-rose-700">{loadError}</p>
+        ) : isLoadingSemesters ? (
+          <p className="text-xs text-slate-500">Đang tải danh sách kỳ...</p>
+        ) : semesters.length === 0 ? (
+          <p className="text-xs text-slate-500">Chưa có kỳ nào được phân công.</p>
+        ) : (
+          <fieldset className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            <legend className="sr-only">Chọn kỳ thực tập để so sánh</legend>
+            {semesters.map((semester) => {
+              const checked = selectedIds.includes(semester.id);
+              return (
+                <label key={semester.id} className={`flex items-start gap-2 rounded-md border p-2.5 text-xs ${checked ? "border-blue-300 bg-blue-50" : "border-slate-200 bg-white"}`}>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    disabled={!checked && selectedIds.length >= 5}
+                    onChange={() => toggleSemester(semester.id)}
+                    className="mt-0.5 rounded border-slate-300 text-blue-600"
+                  />
+                  <span className="min-w-0">
+                    <span className="block truncate font-semibold text-slate-800">{semester.name}</span>
+                    <span className="text-slate-500">{semester.term} · {semester.academicYear}</span>
+                  </span>
+                </label>
+              );
+            })}
+          </fieldset>
+        )}
+      </Panel>
+
+      {selectedIds.length < 2 && !isLoadingSemesters && !loadError ? (
+        <Panel className="text-center text-xs text-slate-500">Chọn ít nhất hai kỳ để đối chiếu.</Panel>
+      ) : (
+        <Panel padding="none" className="overflow-x-auto">
+          <table className="w-full min-w-[760px] text-left text-xs">
+            <thead className="bg-slate-50 text-[10px] uppercase text-slate-500">
+              <tr>
+                <th className="px-4 py-3 font-bold">Kỳ thực tập</th>
+                <th className="px-4 py-3 font-bold text-right">Sinh viên</th>
+                <th className="px-4 py-3 font-bold text-right">Doanh nghiệp</th>
+                <th className="px-4 py-3 font-bold text-right">Điểm TB</th>
+                <th className="px-4 py-3 font-bold text-right">Đủ điều kiện</th>
+                <th className="px-4 py-3 font-bold text-right">Nộp đúng hạn</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.semester.id} className="border-t border-slate-100">
+                  <td className="px-4 py-3">
+                    <p className="font-semibold text-slate-800">{row.semester.name}</p>
+                    <p className="text-[11px] text-slate-500">{row.semester.term} · {row.semester.academicYear}</p>
+                    {row.error && <p role="alert" className="mt-1 text-[11px] text-rose-700">{row.error}</p>}
+                  </td>
+                  <td className="px-4 py-3 text-right">{row.error ? "—" : row.studentCount}</td>
+                  <td className="px-4 py-3 text-right">{row.error ? "—" : row.companyCount}</td>
+                  <td className="px-4 py-3 text-right font-semibold">{row.error ? "—" : formatAverage(row.averageScore)}</td>
+                  <td className="px-4 py-3 text-right">{row.error ? "—" : `${row.eligibleCount} · ${formatRate(row.eligibleRate)}`}</td>
+                  <td className="px-4 py-3 text-right">{row.error ? "—" : formatRate(row.onTimeRate)}</td>
+                </tr>
+              ))}
+              {isLoadingResults && rows.length === 0 && (
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500">Đang tải kết quả...</td></tr>
+              )}
+              {!isLoadingResults && rows.length === 0 && (
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500">Chọn kỳ để xem kết quả.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </Panel>
+      )}
+    </div>
+  );
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Trang gộp: tabs Cấu hình / Chấm điểm / Tổng hợp
 // ────────────────────────────────────────────────────────────────────────────
@@ -1199,14 +1522,15 @@ export const InternshipEvaluationView: React.FC<{
   onShowToast?: (msg: string, type?: string) => void;
   initialTab?: string;
 }> = ({ onShowToast, initialTab }) => {
-  const [tab, setTab] = useState<"schedule" | "grading" | "summary">(
-    initialTab === "grading" ? "grading" : initialTab === "summary" ? "summary" : "schedule"
+  const [tab, setTab] = useState<"schedule" | "grading" | "summary" | "comparison">(
+    initialTab === "grading" ? "grading" : initialTab === "summary" ? "summary" : initialTab === "comparison" ? "comparison" : "schedule"
   );
 
   const tabs: { id: typeof tab; label: string; icon: typeof CalendarClock }[] = [
     { id: "schedule", label: "Cấu hình báo cáo", icon: CalendarClock },
     { id: "grading", label: "Chấm điểm", icon: ClipboardCheck },
     { id: "summary", label: "Tổng hợp & Xuất file", icon: Table2 },
+    { id: "comparison", label: "So sánh kỳ", icon: BarChart3 },
   ];
 
   return (
@@ -1241,6 +1565,7 @@ export const InternshipEvaluationView: React.FC<{
       {tab === "schedule" && <ScheduleConfigTab onShowToast={onShowToast} />}
       {tab === "grading" && <GradingTab onShowToast={onShowToast} />}
       {tab === "summary" && <SummaryTab onShowToast={onShowToast} />}
+      {tab === "comparison" && <SemesterComparisonTab />}
     </div>
   );
 };

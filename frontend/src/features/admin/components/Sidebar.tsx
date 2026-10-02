@@ -12,6 +12,7 @@ import {
   FileText,
   ClipboardList,
   CalendarCheck,
+  Archive,
 } from "lucide-react";
 import { FEATURES } from "../../../config/featureFlags";
 import { formatCountBadge } from "../../../lib/userDisplay";
@@ -106,6 +107,11 @@ export const Sidebar = ({
     {
       title: "VẬN HÀNH KỲ THỰC TẬP",
       items: [
+        {
+          id: "admin-report-archive",
+          label: "Kho báo cáo tuần",
+          icon: Archive,
+        },
         {
           id: "admin-attendance",
           label: "Điểm danh & Buổi gặp",

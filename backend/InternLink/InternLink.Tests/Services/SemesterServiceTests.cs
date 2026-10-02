@@ -98,6 +98,16 @@ public class SemesterServiceTests
     public async Task CreateSemesterAsync_Valid_ShouldCreateAndReturn()
     {
         var db = GetDb();
+        db.SchoolAcademicTerms.Add(new SchoolAcademicTerm
+        {
+            Id = Guid.NewGuid(),
+            AcademicYear = "2026-2027",
+            Term = "Spring",
+            StartDate = new DateTime(2026, 9, 1),
+            EndDate = new DateTime(2027, 1, 15),
+            CreatedAt = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
         var service = new SemesterService(db);
 
         var dto = new CreateSemesterDto
@@ -113,6 +123,8 @@ public class SemesterServiceTests
 
         result.Should().NotBeNull();
         result.Name.Should().Be("Spring 2027");
+        result.StartDate.Should().Be(new DateTime(2026, 9, 1));
+        result.EndDate.Should().Be(new DateTime(2027, 1, 15));
 
         var created = await db.Semesters.FindAsync(result.Id);
         created.Should().NotBeNull();
@@ -168,6 +180,15 @@ public class SemesterServiceTests
     public async Task UpdateSemesterAsync_ShouldSyncInternshipDatesBeforeAnyActivity()
     {
         var db = GetDb();
+        db.SchoolAcademicTerms.Add(new SchoolAcademicTerm
+        {
+            Id = Guid.NewGuid(),
+            AcademicYear = "2025 - 2026",
+            Term = "Học kỳ I",
+            StartDate = new DateTime(2026, 9, 8),
+            EndDate = new DateTime(2026, 10, 22),
+            CreatedAt = DateTime.UtcNow
+        });
         var semester = NewSemester("Kỳ cập nhật ngày", SemesterStatus.Active);
         semester.StartDate = new DateTime(2026, 9, 1);
         semester.EndDate = new DateTime(2026, 10, 15);
@@ -195,13 +216,22 @@ public class SemesterServiceTests
 
         var updatedInternship = await db.Internships.FindAsync(internship.Id);
         updatedInternship!.StartDate.Should().Be(startDate);
-        updatedInternship.EndDate.Should().Be(endDate);
+        updatedInternship.EndDate.Should().Be(new DateTime(2026, 10, 19));
     }
 
     [Fact]
     public async Task UpdateSemesterAsync_ShouldRejectDateChangesAfterSubmittedReport()
     {
         var db = GetDb();
+        db.SchoolAcademicTerms.Add(new SchoolAcademicTerm
+        {
+            Id = Guid.NewGuid(),
+            AcademicYear = "2025 - 2026",
+            Term = "Học kỳ I",
+            StartDate = new DateTime(2026, 9, 8),
+            EndDate = new DateTime(2026, 10, 30),
+            CreatedAt = DateTime.UtcNow
+        });
         var semester = NewSemester("Kỳ đã có hoạt động", SemesterStatus.Active);
         semester.StartDate = new DateTime(2026, 9, 1);
         semester.EndDate = new DateTime(2026, 10, 30);
@@ -237,9 +267,84 @@ public class SemesterServiceTests
     }
 
     [Fact]
+    public async Task UpdateSemesterAsync_ShouldApplyConfiguredSchoolTermWhenLegacyInternshipDatesStayTheSame()
+    {
+        var db = GetDb();
+        var semester = NewSemester("Thực tập Tốt nghiệp C24A.TH", SemesterStatus.Active);
+        semester.AcademicYear = "2026 - 2027";
+        semester.StartDate = new DateTime(2026, 9, 28);
+        semester.EndDate = new DateTime(2026, 11, 8);
+        semester.TotalWeeks = 6;
+        semester.InternshipStartWeek = 1;
+        var schoolTerm = new SchoolAcademicTerm
+        {
+            Id = Guid.NewGuid(),
+            AcademicYear = "2026 - 2027",
+            Term = "Học kỳ I",
+            StartDate = new DateTime(2026, 6, 29),
+            EndDate = new DateTime(2026, 11, 29),
+            CreatedAt = DateTime.UtcNow,
+        };
+        var internship = new Internship
+        {
+            Id = Guid.NewGuid(),
+            SemesterId = semester.Id,
+            StudentId = Guid.NewGuid(),
+            StartDate = new DateTime(2026, 9, 28),
+            EndDate = new DateTime(2026, 11, 8),
+            CreatedAt = DateTime.UtcNow,
+        };
+        var attendance = new AttendanceSession
+        {
+            Id = Guid.NewGuid(),
+            SemesterId = semester.Id,
+            LecturerId = Guid.NewGuid(),
+            WeekNumber = 2,
+            Title = "Buổi gặp tuần 2",
+            MeetingDate = new DateTime(2026, 10, 9),
+            Status = AttendanceSessionStatus.Scheduled,
+            CreatedAt = DateTime.UtcNow,
+        };
+        db.Semesters.Add(semester);
+        db.SchoolAcademicTerms.Add(schoolTerm);
+        db.Internships.Add(internship);
+        db.AttendanceSessions.Add(attendance);
+        await db.SaveChangesAsync();
+
+        var result = await new SemesterService(db).UpdateSemesterAsync(semester.Id, new UpdateSemesterDto
+        {
+            Term = "Học kỳ I",
+            AcademicYear = "2026 - 2027",
+            TotalWeeks = 6,
+            InternshipStartWeek = 14,
+        });
+
+        result.Should().NotBeNull();
+        result!.StartDate.Should().Be(schoolTerm.StartDate);
+        result.EndDate.Should().Be(schoolTerm.EndDate);
+        result.InternshipStartWeek.Should().Be(14);
+        var savedInternship = await db.Internships.SingleAsync();
+        savedInternship.StartDate.Should().Be(new DateTime(2026, 9, 28));
+        savedInternship.EndDate.Should().Be(new DateTime(2026, 11, 8));
+        var savedAttendance = await db.AttendanceSessions.SingleAsync();
+        savedAttendance.MeetingDate.Should().Be(attendance.MeetingDate);
+        savedAttendance.WeekNumber.Should().Be(2);
+    }
+
+    [Fact]
     public async Task CreateSemesterAsync_ShouldGenerateDefaultSchedulesMatchingTotalWeeks()
     {
         var db = GetDb();
+        db.SchoolAcademicTerms.Add(new SchoolAcademicTerm
+        {
+            Id = Guid.NewGuid(),
+            AcademicYear = "2026 - 2027",
+            Term = "Học kỳ I",
+            StartDate = new DateTime(2026, 9, 1),
+            EndDate = new DateTime(2026, 11, 1),
+            CreatedAt = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
         var service = new SemesterService(db);
 
         var dto = new CreateSemesterDto
@@ -263,6 +368,92 @@ public class SemesterServiceTests
         schedules[0].AllowLateSubmission.Should().BeTrue();
         schedules[7].WeekNumber.Should().Be(8);
         schedules[7].Title.Should().Be("Báo cáo tuần 8");
+    }
+
+    [Fact]
+    public async Task CreateSemesterAsync_ShouldRejectWeeksOutsideConfiguredSchoolTerm()
+    {
+        var db = GetDb();
+        db.SchoolAcademicTerms.Add(new SchoolAcademicTerm
+        {
+            Id = Guid.NewGuid(),
+            AcademicYear = "2026 - 2027",
+            Term = "Học kỳ I",
+            StartDate = new DateTime(2026, 9, 1),
+            EndDate = new DateTime(2026, 9, 7),
+            CreatedAt = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
+
+        var act = () => new SemesterService(db).CreateSemesterAsync(new CreateSemesterDto
+        {
+            Name = "Kỳ vượt khung",
+            Term = "Học kỳ I",
+            AcademicYear = "2026 - 2027",
+            TotalWeeks = 2,
+            InternshipStartWeek = 1
+        });
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("Khoảng tuần thực tập phải nằm trong Tuần 1 đến Tuần 1 của học kỳ.");
+    }
+
+    [Fact]
+    public async Task GetAllSemestersAsync_ShouldCalculateOnTimeSubmissionRateForDueWeeks()
+    {
+        var db = GetDb();
+        var semester = new Semester
+        {
+            Id = Guid.NewGuid(),
+            Name = "Kỳ đã đóng",
+            Term = "Học kỳ I",
+            AcademicYear = "2025 - 2026",
+            Status = SemesterStatus.Completed,
+            TotalWeeks = 1,
+            CreatedAt = DateTime.UtcNow
+        };
+        var submittedInternship = new Internship
+        {
+            Id = Guid.NewGuid(),
+            SemesterId = semester.Id,
+            StudentId = Guid.NewGuid(),
+            CreatedAt = DateTime.UtcNow
+        };
+        var missingInternship = new Internship
+        {
+            Id = Guid.NewGuid(),
+            SemesterId = semester.Id,
+            StudentId = Guid.NewGuid(),
+            CreatedAt = DateTime.UtcNow
+        };
+        var dueDate = DateTime.UtcNow.AddDays(-1);
+        db.Semesters.Add(semester);
+        db.Internships.AddRange(submittedInternship, missingInternship);
+        db.SemesterReportSchedules.Add(new SemesterReportSchedule
+        {
+            Id = Guid.NewGuid(),
+            SemesterId = semester.Id,
+            WeekNumber = 1,
+            Title = "Báo cáo tuần 1",
+            DueDate = dueDate,
+            CreatedAt = DateTime.UtcNow.AddDays(-5)
+        });
+        db.WeeklyReports.Add(new WeeklyReport
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = submittedInternship.Id,
+            WeekNumber = 1,
+            Title = "Báo cáo tuần 1",
+            Content = "Đã nộp đúng hạn",
+            Status = WeeklyReportStatus.Submitted,
+            SubmittedAt = dueDate.AddHours(-1),
+            CreatedAt = dueDate.AddHours(-2)
+        });
+        await db.SaveChangesAsync();
+
+        var result = (await new SemesterService(db).GetAllSemestersAsync()).Single();
+
+        result.OnTimeSubmissionRate.Should().Be(50m);
     }
 
     [Fact]

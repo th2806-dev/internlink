@@ -1281,6 +1281,44 @@ public class LecturerService : ILecturerService
         return true;
     }
 
+    public async Task<IEnumerable<LecturerSemesterOptionDto>> GetAssignedSemestersAsync(Guid userId)
+    {
+        var lecturerId = await ResolveLecturerIdAsync(userId);
+        if (!lecturerId.HasValue)
+            return Array.Empty<LecturerSemesterOptionDto>();
+
+        var linkedSemesterIds = await _db.SemesterLecturers.AsNoTracking()
+            .Where(link => link.LecturerId == lecturerId.Value && !link.IsDeleted)
+            .Select(link => link.SemesterId)
+            .Distinct()
+            .ToListAsync();
+        var historySemesterIds = await _db.LecturerActivityLogs.AsNoTracking()
+            .Where(log => log.LecturerId == lecturerId.Value && !log.IsDeleted)
+            .Select(log => log.SemesterId)
+            .Distinct()
+            .ToListAsync();
+
+        return await _db.Semesters
+            .AsNoTracking()
+            .Where(semester => !semester.IsDeleted
+                && (semester.Internships.Any(internship => !internship.IsDeleted
+                        && internship.LecturerId == lecturerId.Value)
+                    || linkedSemesterIds.Contains(semester.Id)
+                    || historySemesterIds.Contains(semester.Id)))
+            .OrderByDescending(semester => semester.StartDate)
+            .ThenByDescending(semester => semester.CreatedAt)
+            .Select(semester => new LecturerSemesterOptionDto
+            {
+                Id = semester.Id,
+                Name = semester.Name,
+                Term = semester.Term,
+                AcademicYear = semester.AcademicYear,
+                StartDate = semester.StartDate,
+                EndDate = semester.EndDate,
+            })
+            .ToListAsync();
+    }
+
     public async Task<LecturerSemesterSummaryDto?> GetSemesterSummaryAsync(Guid userId, Guid semesterId)
     {
         var lecturerId = await ResolveLecturerIdAsync(userId);

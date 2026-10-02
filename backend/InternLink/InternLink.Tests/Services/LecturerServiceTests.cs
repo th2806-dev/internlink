@@ -177,6 +177,58 @@ public class LecturerServiceTests
     }
 
     [Fact]
+    public async Task GetAssignedSemestersAsync_ShouldReturnOnlySemestersWithAssignedInternships()
+    {
+        var db = GetDb();
+        var (lecturerUser, lecturer, _, _) = await SeedLecturerDataAsync(db);
+        var previousSemester = new Semester
+        {
+            Id = Guid.NewGuid(),
+            Name = "HK II - 2025",
+            Term = "Học kỳ II",
+            AcademicYear = "2025 - 2026",
+            StartDate = new DateTime(2026, 1, 1),
+            CreatedAt = DateTime.UtcNow.AddMonths(-8),
+        };
+        var otherSemester = new Semester
+        {
+            Id = Guid.NewGuid(),
+            Name = "HK I - Other Lecturer",
+            Term = "Học kỳ I",
+            AcademicYear = "2025 - 2026",
+            CreatedAt = DateTime.UtcNow.AddMonths(-12),
+        };
+        db.Semesters.AddRange(previousSemester, otherSemester);
+        db.Internships.Add(new Internship
+        {
+            Id = Guid.NewGuid(),
+            SemesterId = previousSemester.Id,
+            StudentId = Guid.NewGuid(),
+            LecturerId = lecturer.Id,
+            Status = InternshipStatus.Completed,
+            CreatedAt = DateTime.UtcNow.AddMonths(-8),
+        });
+        db.Internships.Add(new Internship
+        {
+            Id = Guid.NewGuid(),
+            SemesterId = otherSemester.Id,
+            StudentId = Guid.NewGuid(),
+            LecturerId = Guid.NewGuid(),
+            Status = InternshipStatus.Completed,
+            CreatedAt = DateTime.UtcNow.AddMonths(-12),
+        });
+        await db.SaveChangesAsync();
+
+        var result = (await new LecturerService(db, _mapper, Mock.Of<INotificationService>())
+            .GetAssignedSemestersAsync(lecturerUser.Id)).ToList();
+
+        result.Should().HaveCount(2);
+        result.Select(semester => semester.Id).Should().Contain(previousSemester.Id);
+        result.Select(semester => semester.Id).Should().NotContain(otherSemester.Id);
+        result.First().Id.Should().Be(previousSemester.Id);
+    }
+
+    [Fact]
     public async Task GetInternshipsAsync_ValidLecturer_ShouldReturnInternshipsInActiveSemester()
     {
         var db = GetDb();

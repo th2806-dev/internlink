@@ -7,6 +7,7 @@ using InternLink.Domain.Entities;
 using InternLink.Domain.Enums;
 using InternLink.Infrastructure.Persistence;
 using InternLink.Infrastructure.Services;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Moq;
 using Xunit;
@@ -35,8 +36,15 @@ public class WeeklyReportServiceTests
         return new AppDbContext(options);
     }
 
-    private WeeklyReportService CreateService(AppDbContext db, INotificationService? notificationService = null) =>
-        new(db, _mapper, notificationService ?? Mock.Of<INotificationService>());
+    private WeeklyReportService CreateService(
+        AppDbContext db,
+        INotificationService? notificationService = null,
+        string? contentRootPath = null)
+    {
+        var environment = new Mock<IWebHostEnvironment>();
+        environment.Setup(item => item.ContentRootPath).Returns(contentRootPath ?? Directory.GetCurrentDirectory());
+        return new WeeklyReportService(db, _mapper, notificationService ?? Mock.Of<INotificationService>(), environment.Object);
+    }
 
     private static async Task<(User StudentUser, User LecturerUser, User StrangerUser, User AdminUser, Internship Internship, WeeklyReport Report)> SeedDataAsync(AppDbContext db)
     {
@@ -194,6 +202,113 @@ public class WeeklyReportServiceTests
     }
 
     [Fact]
+    public async Task CreateDraftWithFileAsync_BeforeConfiguredStart_ShouldRejectUpload()
+    {
+        var db = GetDb();
+        var (studentUser, _, _, _, internship, _) = await SeedDataAsync(db);
+        var semester = new Semester
+        {
+            Id = Guid.NewGuid(),
+            Name = "Kỳ thực tập",
+            Term = "Học kỳ I",
+            AcademicYear = "2026 - 2027",
+            Status = SemesterStatus.Active,
+            TotalWeeks = 1,
+            CreatedAt = DateTime.UtcNow
+        };
+        internship.SemesterId = semester.Id;
+        db.Semesters.Add(semester);
+        db.SemesterReportSchedules.Add(new SemesterReportSchedule
+        {
+            Id = Guid.NewGuid(),
+            SemesterId = semester.Id,
+            WeekNumber = 1,
+            Title = "Báo cáo tuần 1",
+            StartDate = DateTime.UtcNow.AddDays(1),
+            DueDate = DateTime.UtcNow.AddDays(8),
+            CreatedAt = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
+
+        var act = () => CreateService(db).CreateDraftWithFileAsync(
+            studentUser.Id,
+            new CreateWeeklyReportRequest { InternshipId = internship.Id, WeekNumber = 1, Title = "Báo cáo tuần 1" },
+            new MemoryStream(new byte[] { 1 }),
+            "report.pdf",
+            1,
+            "application/pdf");
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("Bài nộp cho Báo cáo tuần 1 chưa mở nhận trước ngày *.");
+    }
+
+    [Fact]
+    public async Task CreateDraftWithFileAsync_ShouldStoreCanonicalFilenameWithoutUuidPrefix()
+    {
+        var db = GetDb();
+        var (studentUser, _, _, _, internship, _) = await SeedDataAsync(db);
+        internship.Student!.FullName = "Nguyen Van A";
+        var contentRootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        var service = CreateService(db, contentRootPath: contentRootPath);
+
+        try
+        {
+            var result = await service.CreateDraftWithFileAsync(
+                studentUser.Id,
+                new CreateWeeklyReportRequest { InternshipId = internship.Id, WeekNumber = 2, Title = "Báo cáo tuần 2" },
+                new MemoryStream(new byte[] { 1, 2, 3 }),
+                "anything.pdf",
+                3,
+                "application/pdf");
+
+            result.FileName.Should().Be("Tuan02_NguyenVanA_V1.pdf");
+            result.FileUrl.Should().NotBeNullOrWhiteSpace();
+            var relativePath = result.FileUrl!;
+            Path.GetFileName(relativePath).Should().Be("Tuan02_NguyenVanA_V1.pdf");
+            File.Exists(Path.Combine(contentRootPath, relativePath.Replace('/', Path.DirectorySeparatorChar))).Should().BeTrue();
+        }
+        finally
+        {
+            if (Directory.Exists(contentRootPath))
+                Directory.Delete(contentRootPath, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task CreateDraftWithFileAsync_WhenCanonicalFilenameExists_ShouldAdvanceStoredVersion()
+    {
+        var db = GetDb();
+        var (studentUser, _, _, _, internship, _) = await SeedDataAsync(db);
+        internship.Student!.FullName = "Nguyen Van A";
+        var contentRootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        var uploadPath = Path.Combine(contentRootPath, "uploads", "weekly-reports", internship.Id.ToString());
+        Directory.CreateDirectory(uploadPath);
+        await File.WriteAllBytesAsync(Path.Combine(uploadPath, "Tuan02_NguyenVanA_V1.pdf"), new byte[] { 9 });
+        var service = CreateService(db, contentRootPath: contentRootPath);
+
+        try
+        {
+            var result = await service.CreateDraftWithFileAsync(
+                studentUser.Id,
+                new CreateWeeklyReportRequest { InternshipId = internship.Id, WeekNumber = 2, Title = "Báo cáo tuần 2" },
+                new MemoryStream(new byte[] { 1, 2, 3 }),
+                "anything.pdf",
+                3,
+                "application/pdf");
+
+            result.FileName.Should().Be("Tuan02_NguyenVanA_V2.pdf");
+            result.Version.Should().Be(2);
+            (await db.WeeklyReportVersions.SingleAsync(version => version.WeeklyReportId == result.Id))
+                .Version.Should().Be(2);
+        }
+        finally
+        {
+            if (Directory.Exists(contentRootPath))
+                Directory.Delete(contentRootPath, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task SubmitAsync_WhenPastDeadlineAndLateNotAllowed_ShouldThrowInvalidOperationException()
     {
         var db = GetDb();
@@ -223,6 +338,45 @@ public class WeeklyReportServiceTests
 
         await act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("*Không cho phép nộp muộn*");
+    }
+
+    [Fact]
+    public async Task ReviewAsync_WhenWeekIsClosedBeforeDueDate_ShouldThrowInvalidOperationException()
+    {
+        var db = GetDb();
+        var (_, lecturerUser, _, _, internship, report) = await SeedDataAsync(db);
+        var semester = new Semester
+        {
+            Id = Guid.NewGuid(),
+            Name = "Kỳ thực tập",
+            Term = "Học kỳ I",
+            AcademicYear = "2026 - 2027",
+            Status = SemesterStatus.Active,
+            TotalWeeks = 1,
+            CreatedAt = DateTime.UtcNow
+        };
+        internship.SemesterId = semester.Id;
+        report.Status = WeeklyReportStatus.Submitted;
+        db.Semesters.Add(semester);
+        db.SemesterReportSchedules.Add(new SemesterReportSchedule
+        {
+            Id = Guid.NewGuid(),
+            SemesterId = semester.Id,
+            WeekNumber = 1,
+            Title = "Báo cáo tuần 1",
+            DueDate = DateTime.UtcNow.AddDays(7),
+            IsSubmissionOpen = false,
+            CreatedAt = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
+
+        var act = () => CreateService(db).ReviewAsync(
+            report.Id,
+            lecturerUser.Id,
+            new ReviewWeeklyReportRequest { Status = "Approved" });
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("Tuần thực tập đã đóng, nhật ký đang ở chế độ chỉ xem.");
     }
 
     [Fact]

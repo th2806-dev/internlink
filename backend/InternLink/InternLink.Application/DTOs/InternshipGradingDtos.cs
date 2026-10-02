@@ -47,6 +47,10 @@ public class InternshipStudentGradeDto
     public bool ProductSubmitted { get; set; }
     public bool HasCreativeProduct { get; set; }
     public decimal ProcessScore { get; set; }
+    public decimal? EmployerScore { get; set; }
+    public Guid? EmployerEvidenceSubmissionId { get; set; }
+    public Guid? EmployerEvidenceAssetId { get; set; }
+    public string? EmployerEvidenceFileName { get; set; }
 
     // Cột J-K: Thi & TB
     public decimal? OralExamScore { get; set; }

@@ -16,6 +16,7 @@ public class AppDbContext : DbContext
     public DbSet<Lecturer> Lecturers { get; set; } = null!;
     public DbSet<Company> Companies { get; set; } = null!;
     public DbSet<Semester> Semesters { get; set; } = null!;
+    public DbSet<SchoolAcademicTerm> SchoolAcademicTerms { get; set; } = null!;
     public DbSet<Internship> Internships { get; set; } = null!;
     public DbSet<Submission> Submissions { get; set; } = null!;
     public DbSet<SubmissionAsset> SubmissionAssets { get; set; } = null!;
@@ -39,6 +40,7 @@ public class AppDbContext : DbContext
     public DbSet<AttendanceRecord> AttendanceRecords { get; set; } = null!;
     public DbSet<DocumentVersion> DocumentVersions { get; set; } = null!;
     public DbSet<LecturerSemesterSummary> LecturerSemesterSummaries { get; set; } = null!;
+    public DbSet<LecturerActivityLog> LecturerActivityLogs { get; set; } = null!;
     public DbSet<SemesterFacultySummary> SemesterFacultySummaries { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -152,8 +154,22 @@ public class AppDbContext : DbContext
             b.Property(x => x.Description).HasMaxLength(1000);
             b.Property(x => x.MaxStudentsPerLecturer).HasDefaultValue(30);
             b.Property(x => x.TotalWeeks).HasDefaultValue(6);
+            b.Property(x => x.TargetStudents).HasDefaultValue(0);
             b.Property(x => x.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
             b.HasOne(x => x.Department).WithMany().HasForeignKey(x => x.DepartmentId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<SchoolAcademicTerm>(b =>
+        {
+            b.ToTable("SchoolAcademicTerms");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).HasColumnName("SchoolAcademicTermId");
+            b.Property(x => x.AcademicYear).IsRequired().HasMaxLength(50);
+            b.Property(x => x.Term).IsRequired().HasMaxLength(100);
+            b.Property(x => x.StartDate).HasColumnType("date");
+            b.Property(x => x.EndDate).HasColumnType("date");
+            b.Property(x => x.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
+            b.HasIndex(x => new { x.AcademicYear, x.Term }).IsUnique().HasFilter("[IsDeleted] = 0");
         });
 
         modelBuilder.Entity<Internship>(b =>
@@ -189,6 +205,7 @@ public class AppDbContext : DbContext
             b.Property(x => x.FileName).HasMaxLength(250);
             b.Property(x => x.FileUrl).HasMaxLength(1000);
             b.Property(x => x.GoogleDriveFileId).HasMaxLength(200);
+            b.Property(x => x.EmployerScore).HasPrecision(4, 2);
             b.Property(x => x.SubmittedAt).HasDefaultValueSql("GETUTCDATE()");
             b.Property(x => x.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
             b.HasOne(x => x.Internship).WithMany(x => x.Submissions).HasForeignKey(x => x.InternshipId);
@@ -359,6 +376,21 @@ public class AppDbContext : DbContext
             b.HasOne(x => x.Department).WithMany().HasForeignKey(x => x.DepartmentId).OnDelete(DeleteBehavior.SetNull);
             // Một báo cáo tổng kết cho mỗi (Kỳ, Khoa). Lưu ý SQL Server: các dòng DepartmentId = NULL
             // không xung đột nhau trong unique index — chỉ SuperAdmin dùng null nên chấp nhận được.
+        });
+
+        modelBuilder.Entity<LecturerActivityLog>(b =>
+        {
+            b.ToTable("LecturerActivityLogs");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).HasColumnName("LecturerActivityLogId");
+            b.Property(x => x.StudentCode).HasMaxLength(50);
+            b.Property(x => x.StudentName).HasMaxLength(200);
+            b.Property(x => x.CompanyName).HasMaxLength(250);
+            b.Property(x => x.ActivityType).IsRequired().HasMaxLength(50);
+            b.Property(x => x.Title).IsRequired().HasMaxLength(250);
+            b.Property(x => x.Detail).HasMaxLength(2000);
+            b.Property(x => x.OccurredAt).HasColumnType("datetime2");
+            b.HasIndex(x => new { x.LecturerId, x.SemesterId, x.OccurredAt });
         });
 
         modelBuilder.Entity<Notification>(b =>

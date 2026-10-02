@@ -16,6 +16,12 @@ public class Semester : BaseEntity, IDepartmentScoped
     public int TotalWeeks { get; set; } = 6;
 
     /// <summary>
+    /// Chỉ tiêu sinh viên dự kiến của kỳ thực tập (do admin khoa nhập khi tạo kỳ).
+    /// 0 = chưa đặt chỉ tiêu; số SV thực tế vẫn được đếm từ bảng Internships.
+    /// </summary>
+    public int TargetStudents { get; set; }
+
+    /// <summary>
     /// Tuần TUYỆT ĐỐI trong học kỳ của trường mà Tuần thực tập 1 bắt đầu.
     /// Thực tập là một học phần liên tiếp, ví dụ thực tập tuần 1..6 tương ứng
     /// tuần 14..19 của học kỳ ⇒ InternshipStartWeek = 14 (offset = 13).

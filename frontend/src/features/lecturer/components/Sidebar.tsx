@@ -7,6 +7,7 @@ import {
   Award,
   BarChart3,
   Bell,
+  History,
   User,
   CalendarCheck,
 } from "lucide-react";
@@ -85,6 +86,10 @@ export const Sidebar = ({
           badge: stats.pendingReviewCount > 0 ? String(stats.pendingReviewCount) : undefined,
         },
       ],
+    },
+    {
+      title: "HỒ SƠ HƯỚNG DẪN",
+      items: [{ id: "history", label: "Lịch sử hướng dẫn", icon: History }],
     },
     {
       title: "ĐÁNH GIÁ & TỔNG KẾT",

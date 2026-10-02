@@ -18,9 +18,12 @@ public class SemesterDto
     /// <summary>Tuần tuyệt đối của học kỳ nơi Tuần thực tập 1 bắt đầu (1 = không lệch).</summary>
     public int InternshipStartWeek { get; set; } = 1;
     public int StudentsCount { get; set; }
+    /// <summary>Chỉ tiêu sinh viên dự kiến do admin khoa nhập khi tạo kỳ (0 = chưa đặt).</summary>
+    public int TargetStudents { get; set; }
     public int LecturersCount { get; set; }
     public int PlacedStudents { get; set; }
     public int CompaniesCount { get; set; }
+    public decimal? OnTimeSubmissionRate { get; set; }
     public int ProgressPercent { get; set; }
     public string CurrentPhase { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
@@ -41,6 +44,7 @@ public class CreateSemesterDto
     public int TotalWeeks { get; set; } = 6;
     /// <summary>Tuần tuyệt đối của học kỳ nơi Tuần thực tập 1 bắt đầu (ví dụ 14).</summary>
     public int InternshipStartWeek { get; set; } = 1;
+    /// <summary>Chỉ tiêu sinh viên dự kiến của đợt thực tập (0 = chưa đặt chỉ tiêu).</summary>
     public int TargetStudents { get; set; } = 0;
     /// <summary>Department owning this semester. SuperAdmin may set it; DepartmentAdmin is forced to their own.</summary>
     public Guid? DepartmentId { get; set; }
@@ -59,4 +63,6 @@ public class UpdateSemesterDto
     public int? TotalWeeks { get; set; }
     /// <summary>Tuần tuyệt đối của học kỳ nơi Tuần thực tập 1 bắt đầu (1 = không lệch).</summary>
     public int? InternshipStartWeek { get; set; }
+    /// <summary>Chỉ tiêu sinh viên dự kiến (null = giữ nguyên giá trị cũ).</summary>
+    public int? TargetStudents { get; set; }
 }

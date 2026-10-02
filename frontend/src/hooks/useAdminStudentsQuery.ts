@@ -126,6 +126,7 @@ export function useAdminStudentsQuery(options: UseAdminStudentsQueryOptions = {}
         return mapStudentDtoToRow(dto, {
           assignment: assignment
             ? {
+                internshipId: assignment.internshipId,
                 lecturerName: assignment.lecturerName,
                 companyName: assignment.companyName,
                 status: assignment.status,

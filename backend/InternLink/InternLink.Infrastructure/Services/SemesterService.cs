@@ -31,7 +31,9 @@ public class SemesterService : ISemesterService
 
         var semesters = await query
             .Include(s => s.Internships)
+                .ThenInclude(i => i.WeeklyReports)
             .Include(s => s.SemesterLecturers)
+            .Include(s => s.ReportSchedules)
             .OrderByDescending(s => s.Status == SemesterStatus.Active)
             .ThenByDescending(s => s.CreatedAt)
             .ToListAsync();
@@ -69,7 +71,9 @@ public class SemesterService : ISemesterService
         var semester = await _context.Semesters
             .Where(s => s.Id == id && !s.IsDeleted)
             .Include(s => s.Internships)
+                .ThenInclude(i => i.WeeklyReports)
             .Include(s => s.SemesterLecturers)
+            .Include(s => s.ReportSchedules)
             .FirstOrDefaultAsync();
 
         return semester == null ? null : MapToDto(semester);
@@ -77,7 +81,10 @@ public class SemesterService : ISemesterService
 
     public async Task<SemesterDto> CreateSemesterAsync(CreateSemesterDto dto)
     {
-        ValidateInternshipPeriodInSemester(dto.StartDate, dto.EndDate, Math.Clamp(dto.InternshipStartWeek, 1, 52), Math.Clamp(dto.TotalWeeks, 1, 52));
+        var schoolTerm = await GetConfiguredSchoolTermAsync(dto.AcademicYear, dto.Term);
+        dto.StartDate = schoolTerm.StartDate;
+        dto.EndDate = schoolTerm.EndDate;
+        ValidateWeekRange(dto.InternshipStartWeek, dto.TotalWeeks, schoolTerm);
 
         var semester = new Semester
         {
@@ -92,6 +99,7 @@ public class SemesterService : ISemesterService
             MaxStudentsPerLecturer = dto.MaxStudentsPerLecturer,
             TotalWeeks = Math.Clamp(dto.TotalWeeks, 1, 52),
             InternshipStartWeek = Math.Clamp(dto.InternshipStartWeek, 1, 52),
+            TargetStudents = Math.Clamp(dto.TargetStudents, 0, 100000),
             DepartmentId = dto.DepartmentId,
             CreatedAt = DateTime.UtcNow
         };
@@ -117,28 +125,42 @@ public class SemesterService : ISemesterService
 
         var originalStartDate = semester.StartDate;
         var originalEndDate = semester.EndDate;
+        var originalTotalWeeks = semester.TotalWeeks;
+        var originalInternshipStartWeek = semester.InternshipStartWeek;
+        var originalInternshipStartDate = semester.StartDate.HasValue && semester.EndDate.HasValue
+            ? GetInternshipStartDate(semester)
+            : (DateTime?)null;
+        var originalInternshipEndDate = semester.StartDate.HasValue && semester.EndDate.HasValue
+            ? GetInternshipEndDate(semester)
+            : (DateTime?)null;
+        var academicYear = dto.AcademicYear ?? semester.AcademicYear;
+        var termName = dto.Term ?? semester.Term;
+        var schoolTerm = await GetConfiguredSchoolTermAsync(academicYear, termName);
 
         if (dto.Name != null) semester.Name = dto.Name;
-        if (dto.Term != null) semester.Term = dto.Term;
-        if (dto.AcademicYear != null) semester.AcademicYear = dto.AcademicYear;
-        if (dto.StartDate.HasValue) semester.StartDate = dto.StartDate.Value;
-        if (dto.EndDate.HasValue) semester.EndDate = dto.EndDate.Value;
+        semester.Term = termName;
+        semester.AcademicYear = academicYear;
+        semester.StartDate = schoolTerm.StartDate;
+        semester.EndDate = schoolTerm.EndDate;
         if (dto.Status.HasValue) semester.Status = dto.Status.Value;
         if (dto.Description != null) semester.Description = dto.Description;
         if (dto.MaxStudentsPerLecturer.HasValue) semester.MaxStudentsPerLecturer = dto.MaxStudentsPerLecturer.Value;
         if (dto.TotalWeeks.HasValue) semester.TotalWeeks = Math.Clamp(dto.TotalWeeks.Value, 1, 52);
         if (dto.InternshipStartWeek.HasValue) semester.InternshipStartWeek = Math.Clamp(dto.InternshipStartWeek.Value, 1, 52);
-
-        // Chặn lưu khi giai đoạn thực tập vượt EndDate (dùng giá trị hiệu lực sau cập nhật)
-        ValidateInternshipPeriodInSemester(semester.StartDate, semester.EndDate, semester.InternshipStartWeek, semester.TotalWeeks);
+        if (dto.TargetStudents.HasValue) semester.TargetStudents = Math.Clamp(dto.TargetStudents.Value, 0, 100000);
+        ValidateWeekRange(semester.InternshipStartWeek, semester.TotalWeeks, schoolTerm);
 
         // Đồng bộ ngày internship khi admin đổi StartDate/EndDate SAU khi start kỳ:
         // internship được copy ngày từ kỳ đúng MỘT LẦN lúc start (StartDate ??= ...), nên nếu
         // không sync thì toàn bộ trang SV/GV hiện ngày cũ. Chỉ tự sync khi kỳ CHƯA CÓ hoạt
         // động thật (báo cáo đã nộp, bài nộp, buổi điểm danh) — tránh xô lệch dữ liệu lịch sử.
-        var datesChanged = dto.StartDate.HasValue && dto.StartDate.Value != originalStartDate
-            || dto.EndDate.HasValue && dto.EndDate.Value != originalEndDate;
-        if (datesChanged)
+        var configurationChanged = schoolTerm.StartDate != originalStartDate
+            || schoolTerm.EndDate != originalEndDate
+            || semester.TotalWeeks != originalTotalWeeks
+            || semester.InternshipStartWeek != originalInternshipStartWeek;
+        var internshipPeriodChanged = originalInternshipStartDate != GetInternshipStartDate(semester)
+            || originalInternshipEndDate != GetInternshipEndDate(semester);
+        if (configurationChanged && internshipPeriodChanged)
         {
             var internshipIds = await _context.Internships
                 .Where(i => !i.IsDeleted && i.SemesterId == id)
@@ -157,8 +179,8 @@ public class SemesterService : ISemesterService
 
             foreach (var internship in semester.Internships.Where(i => !i.IsDeleted))
             {
-                internship.StartDate = semester.StartDate;
-                internship.EndDate = semester.EndDate;
+                internship.StartDate = GetInternshipStartDate(semester);
+                internship.EndDate = GetInternshipEndDate(semester);
                 internship.UpdatedAt = DateTime.UtcNow;
             }
         }
@@ -206,8 +228,8 @@ public class SemesterService : ISemesterService
         {
             if (internship.Status == InternshipStatus.NotStarted)
                 internship.Status = InternshipStatus.InProgress;
-            internship.StartDate ??= semester.StartDate;
-            internship.EndDate ??= semester.EndDate;
+            internship.StartDate ??= GetInternshipStartDate(semester);
+            internship.EndDate ??= GetInternshipEndDate(semester);
             internship.UpdatedAt = DateTime.UtcNow;
         }
 
@@ -538,6 +560,7 @@ public class SemesterService : ISemesterService
         var placedStudents = validInternships.Count(i => i.Status == InternshipStatus.InProgress || i.Status == InternshipStatus.Completed);
 
         var progressPercent = CalculateProgressPercent(semester);
+        var onTimeSubmissionRate = CalculateOnTimeSubmissionRate(semester, validInternships);
 
         var currentPhase = semester.Status switch
         {
@@ -560,11 +583,13 @@ public class SemesterService : ISemesterService
             MaxStudentsPerLecturer = semester.MaxStudentsPerLecturer,
             TotalWeeks = semester.TotalWeeks,
             InternshipStartWeek = semester.InternshipStartWeek,
+            TargetStudents = semester.TargetStudents,
             DepartmentId = semester.DepartmentId,
             StudentsCount = studentsCount,
             LecturersCount = lecturersCount,
             PlacedStudents = placedStudents,
             CompaniesCount = companiesCount,
+            OnTimeSubmissionRate = onTimeSubmissionRate,
             ProgressPercent = progressPercent,
             CurrentPhase = currentPhase,
             CreatedAt = semester.CreatedAt
@@ -581,29 +606,70 @@ public class SemesterService : ISemesterService
         return Math.Clamp((int)Math.Round(elapsedDays / totalDays * 100), 0, 100);
     }
 
-    /// <summary>
-    /// Chặn cấu hình mâu thuẫn: nếu StartDate là NGÀY BẮT ĐẦU THỰC TẬP (trường hợp phổ biến)
-    /// thì InternshipStartWeek phải = 1. Đặt > 1 sẽ đẩy toàn bộ giai đoạn thực tập
-    /// (StartDate + (startWeek-1) tuần chờ + totalWeeks tuần thực tập) vượt qua EndDate —
-    /// khi đó lịch buổi gặp/báo cáo tuần sẽ rơi ngoài kỳ và bị chặn 400 bởi validate ngày↔tuần.
-    /// Chỉ áp dụng khi kỳ đã cấu hình đủ StartDate + EndDate.
-    /// </summary>
-    private static void ValidateInternshipPeriodInSemester(DateTime? startDate, DateTime? endDate, int internshipStartWeek, int totalWeeks)
+    private static decimal? CalculateOnTimeSubmissionRate(Semester semester, IReadOnlyCollection<Internship> internships)
     {
-        if (!startDate.HasValue || !endDate.HasValue) return;
+        var schedules = semester.ReportSchedules
+            .Where(schedule => !schedule.IsDeleted && schedule.WeekNumber <= semester.TotalWeeks)
+            .ToList();
+        var expected = 0;
+        var submittedOnTime = 0;
+        var now = DateTime.UtcNow;
 
-        var internshipPeriodEnd = startDate.Value.Date
-            .AddDays((internshipStartWeek - 1) * 7)          // tuần chờ trước thực tập
-            .AddDays(totalWeeks * 7 - 1);                    // tổng thời gian thực tập
-
-        if (internshipPeriodEnd > endDate.Value.Date)
+        foreach (var internship in internships)
         {
-            throw new InvalidOperationException(
-                $"Cấu hình học kỳ mâu thuẫn: với ngày bắt đầu {startDate.Value:dd/MM/yyyy} và " +
-                $"\"Tuần HK bắt đầu thực tập\" = {internshipStartWeek}, giai đoạn thực tập " +
-                $"{totalWeeks} tuần sẽ kết thúc {internshipPeriodEnd:dd/MM/yyyy} — sau EndDate {endDate.Value:dd/MM/yyyy}. " +
-                "Nếu StartDate là NGÀY BẮT ĐẦU THỰC TẬP thì đặt \"Tuần HK bắt đầu thực tập\" = 1, " +
-                "hoặc tăng EndDate / giảm số tuần thực tập cho khớp.");
+            var effectiveSchedules = schedules
+                .Where(schedule => schedule.LecturerId == null
+                    || (internship.LecturerId.HasValue && schedule.LecturerId == internship.LecturerId))
+                .GroupBy(schedule => schedule.WeekNumber)
+                .Select(group => group
+                    .OrderByDescending(schedule => schedule.LecturerId.HasValue)
+                    .ThenByDescending(schedule => schedule.UpdatedAt ?? schedule.CreatedAt)
+                    .First());
+
+            foreach (var schedule in effectiveSchedules)
+            {
+                if (!schedule.IsSubmissionOpen
+                    || (semester.Status != SemesterStatus.Completed && schedule.DueDate > now))
+                    continue;
+
+                expected++;
+                if (internship.WeeklyReports.Any(report => !report.IsDeleted
+                    && report.WeekNumber == schedule.WeekNumber
+                    && report.SubmittedAt.HasValue
+                    && report.SubmittedAt.Value <= schedule.DueDate))
+                    submittedOnTime++;
+            }
         }
+
+        return expected == 0 ? null : Math.Round(submittedOnTime * 100m / expected, 1);
     }
+
+    private async Task<SchoolAcademicTerm> GetConfiguredSchoolTermAsync(string academicYear, string term)
+    {
+        var configured = await _context.SchoolAcademicTerms
+            .FirstOrDefaultAsync(item => !item.IsDeleted
+                && item.AcademicYear == academicYear
+                && item.Term == term);
+        if (configured == null)
+            throw new InvalidOperationException("Superadmin chưa cấu hình thời gian cho niên khóa và học kỳ đã chọn.");
+        return configured;
+    }
+
+    private static void ValidateWeekRange(int startWeek, int totalWeeks, SchoolAcademicTerm schoolTerm)
+    {
+        var termDays = (schoolTerm.EndDate.Date - schoolTerm.StartDate.Date).Days + 1;
+        var availableWeeks = (termDays + 6) / 7;
+        if (startWeek < 1 || totalWeeks < 1 || startWeek + totalWeeks - 1 > availableWeeks)
+            throw new InvalidOperationException($"Khoảng tuần thực tập phải nằm trong Tuần 1 đến Tuần {availableWeeks} của học kỳ.");
+    }
+
+    private static DateTime GetInternshipStartDate(Semester semester)
+        => semester.StartDate!.Value.Date.AddDays((semester.InternshipStartWeek - 1) * 7);
+
+    private static DateTime GetInternshipEndDate(Semester semester)
+        => Min(semester.EndDate!.Value.Date,
+            GetInternshipStartDate(semester).AddDays(semester.TotalWeeks * 7 - 1));
+
+    private static DateTime Min(DateTime left, DateTime right) => left <= right ? left : right;
+
 }

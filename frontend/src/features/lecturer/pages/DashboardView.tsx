@@ -10,6 +10,7 @@ import {
   ClipboardList,
   Activity,
   Users,
+  Building2,
 } from "lucide-react";
 import { PageHeader } from "../../../components/common/PageHeader";
 import { Panel } from "../../../components/common/Panel";

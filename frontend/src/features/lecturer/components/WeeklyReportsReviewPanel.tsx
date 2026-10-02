@@ -10,6 +10,7 @@ import {
   Star,
   Sparkles,
   CheckCircle2,
+  Lock,
 } from "lucide-react";
 import { Panel } from "../../../components/common/Panel";
 import { mapWeeklyReportStatusToUi } from "../../../lib/portalMappers";
@@ -32,6 +33,8 @@ type WeeklyReportsReviewPanelProps = {
   isReviewing?: boolean;
   /** Đang giữ dữ liệu trang trước khi trang mới về — không bấm hành động trên dữ liệu cũ. */
   isPlaceholderData?: boolean;
+  isSemesterClosed?: boolean;
+  closedWeekNumbers?: number[];
 };
 
 export function WeeklyReportsReviewPanel({
@@ -40,6 +43,8 @@ export function WeeklyReportsReviewPanel({
   onShowToast,
   isReviewing = false,
   isPlaceholderData = false,
+  isSemesterClosed = false,
+  closedWeekNumbers = [],
 }: WeeklyReportsReviewPanelProps) {
   const [commentById, setCommentById] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -159,6 +164,7 @@ export function WeeklyReportsReviewPanel({
         {reports.map((r) => {
           const isPendingItem = r.status === "Submitted";
           const isApprovedItem = r.status === "Approved";
+          const isReadOnly = isSemesterClosed || closedWeekNumbers.includes(r.weekNumber);
           const qualityObj = r.qualityScore != null ? GR_QUALITY_RUBRIC_LEVELS.find((l) => l.value === r.qualityScore) : null;
 
           return (
@@ -169,6 +175,7 @@ export function WeeklyReportsReviewPanel({
                     <p className="text-sm font-bold text-slate-900">
                       Tuần {r.weekNumber} — {r.title}
                     </p>
+                    {isReadOnly && <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500"><Lock className="h-3 w-3" /> Chỉ xem</span>}
                     <span
                       className={`text-[11px] font-semibold px-2 py-0.5 rounded-md border ${
                         isApprovedItem
@@ -226,7 +233,7 @@ export function WeeklyReportsReviewPanel({
                     <>
                       <button
                         type="button"
-                        disabled={busyId === r.id || isReviewing || isPlaceholderData}
+                        disabled={busyId === r.id || isReviewing || isPlaceholderData || isReadOnly}
                         onClick={() => void handleRequestRevision(r.id)}
                         className="il-btn il-btn-secondary text-xs"
                       >
@@ -235,7 +242,7 @@ export function WeeklyReportsReviewPanel({
                       </button>
                       <button
                         type="button"
-                        disabled={busyId === r.id || isReviewing || isPlaceholderData}
+                        disabled={busyId === r.id || isReviewing || isPlaceholderData || isReadOnly}
                         onClick={() => handleOpenApproveModal(r)}
                         className="il-btn il-btn-primary text-xs flex items-center gap-1"
                       >
@@ -248,7 +255,7 @@ export function WeeklyReportsReviewPanel({
                   {isApprovedItem && (
                     <button
                       type="button"
-                      disabled={busyId === r.id || isReviewing || isPlaceholderData}
+                      disabled={busyId === r.id || isReviewing || isPlaceholderData || isReadOnly}
                       onClick={() => handleOpenApproveModal(r)}
                       className="il-btn il-btn-secondary text-xs flex items-center gap-1 text-blue-700 hover:text-blue-800"
                       title="Chỉnh sửa mức đánh giá chất lượng hoặc nhận xét"
@@ -265,6 +272,7 @@ export function WeeklyReportsReviewPanel({
                   rows={2}
                   placeholder="Nhận xét gửi sinh viên (tuỳ chọn)…"
                   value={commentById[r.id] ?? r.lecturerComment ?? ""}
+                  readOnly={isReadOnly}
                   onChange={(e) =>
                     setCommentById((prev) => ({ ...prev, [r.id]: e.target.value }))
                   }

@@ -16,6 +16,7 @@ public class Submission : BaseEntity
     public string? FileName { get; set; }
     public string? FileUrl { get; set; }
     public string? GoogleDriveFileId { get; set; }
+    public decimal? EmployerScore { get; set; }
     public DateTime SubmittedAt { get; set; } = DateTime.UtcNow;
 
     public ICollection<Feedback> Feedbacks { get; set; } = new List<Feedback>();

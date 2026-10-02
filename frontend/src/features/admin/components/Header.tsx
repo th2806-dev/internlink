@@ -75,6 +75,8 @@ export const Header = ({
         return "Quản lý Kỳ thực tập";
       case "admin-templates":
         return "Quản lý Biểu mẫu & Tài liệu";
+      case "admin-report-archive":
+        return "Kho báo cáo tuần";
       case "admin-notifications":
         return "Trung tâm Thông báo";
       case "admin-settings":

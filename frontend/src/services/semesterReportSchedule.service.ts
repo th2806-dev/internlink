@@ -24,6 +24,11 @@ export interface UpdateReportScheduleRequest {
   description?: string;
 }
 
+export interface SupplementalDeadline {
+  startDate: string;
+  endDate: string;
+}
+
 export const semesterReportScheduleService = {
   getSchedules(semesterId: string, options?: { signal?: AbortSignal }): Promise<SemesterReportScheduleDto[]> {
     return apiRequest<SemesterReportScheduleDto[]>(`/api/Semesters/${semesterId}/report-schedules`, {
@@ -45,6 +50,20 @@ export const semesterReportScheduleService = {
     return apiRequest<SemesterReportScheduleDto>(`/api/Semesters/${semesterId}/report-schedules/${weekNumber}`, {
       method: "PUT",
       body: request,
+    });
+  },
+
+  getEvidenceDeadline(semesterId: string): Promise<SupplementalDeadline | null> {
+    return apiRequest<SupplementalDeadline | null>(`/api/Semesters/${semesterId}/report-schedules/evidence-deadline`, {
+      skipCache: true,
+    });
+  },
+
+  saveEvidenceDeadline(semesterId: string, request: SupplementalDeadline): Promise<SupplementalDeadline> {
+    return apiRequest<SupplementalDeadline>(`/api/Semesters/${semesterId}/report-schedules/evidence-deadline`, {
+      method: "PUT",
+      body: request,
+      skipCache: true,
     });
   },
 };

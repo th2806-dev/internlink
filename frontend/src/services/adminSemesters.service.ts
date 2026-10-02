@@ -13,10 +13,13 @@ export interface BackendSemesterDto {
   totalWeeks: number;
   /** Tuần tuyệt đối của học kỳ nơi Tuần thực tập 1 bắt đầu (1 = không lệch). */
   internshipStartWeek?: number;
+  /** Chỉ tiêu sinh viên dự kiến do admin khoa nhập khi tạo kỳ (0 = chưa đặt). */
+  targetStudents?: number;
   studentsCount: number;
   lecturersCount: number;
   placedStudents: number;
   companiesCount: number;
+  onTimeSubmissionRate?: number | null;
   progressPercent: number;
   currentPhase: string;
   createdAt: string;
@@ -33,6 +36,7 @@ export interface CreateSemesterRequest {
   maxStudentsPerLecturer?: number;
   totalWeeks?: number;
   internshipStartWeek?: number;
+  targetStudents?: number;
 }
 
 export interface UpdateSemesterRequest {
@@ -46,6 +50,7 @@ export interface UpdateSemesterRequest {
   maxStudentsPerLecturer?: number;
   totalWeeks?: number;
   internshipStartWeek?: number;
+  targetStudents?: number;
 }
 
 export interface FacultySemesterSummaryDto {

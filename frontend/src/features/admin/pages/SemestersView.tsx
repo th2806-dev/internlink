@@ -22,8 +22,11 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { useSemester } from "../../../contexts/SemesterContext";
+import type { Semester } from "../../../contexts/SemesterContext";
 import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
 import { CreateSemesterModal } from "../components/modals/CreateSemesterModal";
+import { SchoolAcademicTermsPanel } from "../components/SchoolAcademicTermsPanel";
+import { EvidenceDeadlinePanel } from "../components/EvidenceDeadlinePanel";
 import { AssignLecturerModal } from "../components/modals/AssignLecturerModal";
 import { ImportStudentsModal } from "../components/modals/ImportStudentsModal";
 import { ImportLecturersModal } from "../components/modals/ImportLecturersModal";
@@ -52,6 +55,39 @@ const EMPTY_SEMESTER = {
   description: "Nhấn nút \u201Ctạo kỳ thực tập mới\u201D để bắt đầu.",
 };
 
+function getInternshipPeriod(semester: Semester): { dates: string; weeks: string } {
+  const parseDate = (value: string): Date | null => {
+    const match = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (match) return new Date(Date.UTC(Number(match[3]), Number(match[2]) - 1, Number(match[1])));
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime())
+      ? null
+      : new Date(Date.UTC(parsed.getFullYear(), parsed.getMonth(), parsed.getDate()));
+  };
+  const schoolStart = parseDate(semester.startDate);
+  const schoolEnd = parseDate(semester.endDate);
+  const startWeek = semester.internshipStartWeek;
+  const duration = semester.totalWeeks;
+  if (!schoolStart || !schoolEnd || startWeek < 1 || duration < 1) {
+    return { dates: "Chưa cấu hình", weeks: "" };
+  }
+
+  const internshipStart = new Date(schoolStart.getTime() + (startWeek - 1) * 7 * 86400000);
+  const configuredEnd = new Date(internshipStart.getTime() + duration * 7 * 86400000 - 86400000);
+  const internshipEnd = configuredEnd < schoolEnd ? configuredEnd : schoolEnd;
+  if (internshipStart > schoolEnd || internshipEnd < internshipStart) {
+    return { dates: "Cấu hình tuần không hợp lệ", weeks: "" };
+  }
+
+  const format = (date: Date) => date.toLocaleDateString("vi-VN", { timeZone: "UTC" });
+  const availableWeeks = Math.ceil((schoolEnd.getTime() - schoolStart.getTime() + 86400000) / (7 * 86400000));
+  const endWeek = startWeek + duration - 1;
+  return {
+    dates: `${format(internshipStart)} – ${format(internshipEnd)}`,
+    weeks: `Tuần HK ${startWeek}–${endWeek}/${availableWeeks}`,
+  };
+}
+
 export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (msg: string, type?: ToastType) => void; onNavigateTab?: (tab: string) => void }) => {
   const { isSuperAdmin, isDepartmentAdmin } = useAdminCapabilities();
   // Semester lifecycle is department business: only Quản trị khoa mutates terms.
@@ -78,6 +114,7 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
     endDate: string;
     totalWeeks?: number;
     internshipStartWeek?: number;
+    targetStudents?: number;
     description?: string;
   }>(null);
   const [importType, setImportType] = useState(null);
@@ -144,6 +181,7 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
     void startSemester(semId, onShowToast);
   };
   const activeSem = currentActiveSem;
+  const activeInternshipPeriod = getInternshipPeriod(currentActiveSem as Semester);
   const hasRealSemester = !!currentActiveSem.id;
   const activeCount = semestersList.filter((s) => s.status === "active").length;
   const completedCount = semestersList.filter((s) => s.status === "completed").length;
@@ -175,6 +213,7 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
   );
   return (
     <div className="space-y-5 max-w-[1500px] mx-auto">
+      {isSuperAdmin && <SchoolAcademicTermsPanel onShowToast={onShowToast} />}
       <PageHeader
         icon={CalendarDays}
         title="Quản lý kỳ thực tập"
@@ -207,6 +246,10 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
         }
       />
 
+      {canMutateSemesters && hasRealSemester && (
+        <EvidenceDeadlinePanel semesterId={activeSem.id} semesterName={activeSem.name} />
+      )}
+
       <KpiGrid>
         <KpiCard
           tone="blue"
@@ -234,7 +277,8 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
           value={activeSem.studentsCount}
           unit="sinh viên"
           icon={Users}
-          footer={`${activeSem.placedStudents} đã tiếp nhận doanh nghiệp`}
+          footer={`${activeSem.placedStudents} đã tiếp nhận doanh nghiệp` +
+            (activeSem.targetStudents ? ` / chỉ tiêu ${activeSem.targetStudents}` : "")}
         />
         <KpiCard
           tone="sky"
@@ -290,6 +334,7 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
                           endDate: currentActiveSem.endDate,
                           totalWeeks: "totalWeeks" in currentActiveSem ? currentActiveSem.totalWeeks : undefined,
                           internshipStartWeek: "internshipStartWeek" in currentActiveSem ? currentActiveSem.internshipStartWeek : undefined,
+                          targetStudents: currentActiveSem.targetStudents,
                           description: currentActiveSem.description,
                         });
                         setShowCreateModal(true);
@@ -348,8 +393,9 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
                 </p>
                 <p className="font-bold text-slate-800 text-xs mt-1 flex items-center gap-1">
                   <Clock className="w-3 h-3 text-blue-600" />{" "}
-                  {currentActiveSem.startDate} - {currentActiveSem.endDate}
+                  {activeInternshipPeriod.dates}
                 </p>
+                <p className="mt-1 text-[10px] font-medium text-slate-500">{activeInternshipPeriod.weeks}</p>
               </div>
 
               <div className="p-3 bg-slate-50 rounded-md border border-slate-200/70">
@@ -469,9 +515,11 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
                   <tr className="bg-slate-50 border-y border-slate-200/80 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
                     <th className="py-3 px-3">Tên kỳ thực tập</th>
                     <th className="py-3 px-3">Học kỳ / Niên khóa</th>
-                    <th className="py-3 px-3">Thời gian</th>
+                    <th className="py-3 px-3">Thời gian thực tập</th>
                     <th className="py-3 px-3 text-center">Giảng viên</th>
                     <th className="py-3 px-3 text-center">Sinh viên</th>
+                    <th className="py-3 px-3 text-center">Doanh nghiệp</th>
+                    <th className="py-3 px-3 text-center">Nộp đúng hạn</th>
                     <th className="py-3 px-3 text-center">Trạng thái</th>
                     <th className="py-3 px-3 text-right">Thao tác</th>
                   </tr>
@@ -498,7 +546,8 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
                       </td>
 
                       <td className="py-3 px-3 font-medium text-slate-600 whitespace-nowrap">
-                        {sem.startDate} - {sem.endDate}
+                        <p>{getInternshipPeriod(sem).dates}</p>
+                        <p className="mt-0.5 text-[10px] text-slate-400">{getInternshipPeriod(sem).weeks}</p>
                       </td>
 
                       <td className="py-3 px-3 text-center font-bold text-blue-900">
@@ -507,6 +556,14 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
 
                       <td className="py-3 px-3 text-center font-bold text-blue-900">
                         {sem.studentsCount} SV
+                      </td>
+
+                      <td className="py-3 px-3 text-center font-bold text-slate-700">
+                        {sem.companiesCount} DN
+                      </td>
+
+                      <td className="py-3 px-3 text-center font-bold text-slate-700">
+                        {sem.onTimeSubmissionRate == null ? "—" : `${sem.onTimeSubmissionRate}%`}
                       </td>
 
                       <td className="py-3 px-3 text-center">
@@ -551,6 +608,7 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
                                     endDate: sem.endDate,
                                     totalWeeks: sem.totalWeeks,
                                     internshipStartWeek: sem.internshipStartWeek,
+                                    targetStudents: sem.targetStudents,
                                     description: sem.description,
                                   });
                                   setShowCreateModal(true);
@@ -737,22 +795,20 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
         }}
         onShowToast={onShowToast}
         editing={editingSemester}
-        onCreate={(data) => {
-          createSemester({
+        onCreate={(data) => createSemester({
             name: data.name,
             term: data.term,
             academicYear: data.academicYear,
             startDate: data.startDate,
             endDate: data.endDate,
+            targetStudents: data.targetStudents,
             studentsCount: data.targetStudents,
             totalWeeks: data.totalWeeks,
             internshipStartWeek: data.internshipStartWeek,
             status: "upcoming",
             description: `Đợt thực tập ${data.term} ${data.academicYear}`,
-          });
-        }}
-        onUpdate={(id, data) => {
-          void updateSemester(
+          })}
+        onUpdate={(id, data) => updateSemester(
             id,
             {
               name: data.name,
@@ -762,11 +818,11 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
               endDate: data.endDate,
               totalWeeks: data.totalWeeks,
               internshipStartWeek: data.internshipStartWeek,
+              targetStudents: data.targetStudents,
               description: data.description,
             },
             onShowToast,
-          );
-        }}
+          )}
       />
 
       <AssignLecturerModal

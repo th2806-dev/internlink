@@ -23,6 +23,7 @@ public class SubmissionService : ISubmissionService
         ".zip", ".rar", ".pdf", ".pptx", ".ppt", ".mp4", ".mov", ".sql", ".docx", ".doc",
         ".png", ".jpg", ".jpeg", ".webp", ".gif",
     };
+    private static readonly string[] EvidenceImageExtensions = { ".png", ".jpg", ".jpeg", ".webp", ".gif" };
 
     public SubmissionService(
         AppDbContext db,
@@ -72,7 +73,8 @@ public class SubmissionService : ISubmissionService
         {
             var isSuperAdmin = await _db.Users
                 .AnyAsync(u => u.Id == userId && u.Role == Role.SuperAdmin && !u.IsDeleted);
-            if (!isSuperAdmin)
+            var isDepartmentAdmin = await IsDepartmentAdminForStudentAsync(userId, submission.Internship.Student?.DepartmentId);
+            if (!isSuperAdmin && !isDepartmentAdmin)
                 throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessSubmission);
         }
 
@@ -125,6 +127,22 @@ public class SubmissionService : ISubmissionService
         if (!Enum.TryParse<SubmissionType>(request.Type, true, out var type))
             throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.InvalidSubmissionTypeDetail(request.Type));
 
+        if (type == SubmissionType.FinalReport
+            && (string.IsNullOrWhiteSpace(request.FileName) || string.IsNullOrWhiteSpace(request.FileUrl)))
+            throw new InvalidOperationException("Báo cáo cuối kỳ phải có tệp đính kèm.");
+
+        if (type == SubmissionType.Evidence)
+        {
+            ValidateEmployerEvaluation(request.EmployerScore, request.FileName, request.FileUrl);
+        }
+        else if (request.EmployerScore.HasValue)
+        {
+            throw new InvalidOperationException("Điểm doanh nghiệp chỉ áp dụng cho hồ sơ đánh giá doanh nghiệp.");
+        }
+
+        if (type == SubmissionType.Evidence && internship.SemesterId.HasValue)
+            await EnsureEvidenceUploadWindowOpenAsync(internship.SemesterId.Value);
+
         if (type == SubmissionType.Product && !await _db.Submissions.AnyAsync(s =>
             s.InternshipId == request.InternshipId &&
             s.Type == SubmissionType.FinalReport &&
@@ -165,6 +183,7 @@ public class SubmissionService : ISubmissionService
             Description = request.Description,
             FileName = request.FileName,
             FileUrl = request.FileUrl,
+            EmployerScore = request.EmployerScore,
             SubmittedAt = DateTime.UtcNow,
             CreatedAt = DateTime.UtcNow
         };
@@ -184,7 +203,17 @@ public class SubmissionService : ISubmissionService
 
         request.FileName = savedFileName;
         request.FileUrl = relativePath;
-        return await CreateAsync(userId, request);
+        try
+        {
+            return await CreateAsync(userId, request);
+        }
+        catch
+        {
+            var fullPath = ResolveUploadPath(relativePath);
+            if (File.Exists(fullPath))
+                File.Delete(fullPath);
+            throw;
+        }
     }
 
     public async Task<SubmissionDto> CreateBundleAsync(
@@ -198,6 +227,7 @@ public class SubmissionService : ISubmissionService
 
         var internship = await _db.Internships
             .Include(i => i.Student)
+            .Include(i => i.Semester)
             .FirstOrDefaultAsync(i => i.Id == request.InternshipId && !i.IsDeleted);
         if (internship == null)
             throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.InternshipNotFound);
@@ -210,6 +240,23 @@ public class SubmissionService : ISubmissionService
             .ToList();
         if (fileItems.Count == 0 && linkItems.Count == 0)
             throw new InvalidOperationException("At least one file or link is required");
+        if (type == SubmissionType.Evidence)
+        {
+            ValidateEmployerEvaluation(
+                request.EmployerScore,
+                fileItems.Select(file => file.FileName).FirstOrDefault(IsEvidenceImage),
+                fileItems.Any(file => IsEvidenceImage(file.FileName)) ? "image-upload" : null);
+            if (internship.SemesterId.HasValue)
+                await EnsureEvidenceUploadWindowOpenAsync(internship.SemesterId.Value);
+        }
+        else if (type == SubmissionType.FinalReport && fileItems.Count == 0)
+        {
+            throw new InvalidOperationException("Báo cáo cuối kỳ phải có ít nhất một tệp đính kèm.");
+        }
+        else if (request.EmployerScore.HasValue)
+        {
+            throw new InvalidOperationException("Điểm doanh nghiệp chỉ áp dụng cho hồ sơ đánh giá doanh nghiệp.");
+        }
 
         if (type == SubmissionType.Product)
         {
@@ -230,6 +277,7 @@ public class SubmissionService : ISubmissionService
             Version = 1,
             Title = request.Title,
             Description = request.Description,
+            EmployerScore = request.EmployerScore,
             SubmittedAt = DateTime.UtcNow,
             CreatedAt = DateTime.UtcNow,
         };
@@ -275,6 +323,8 @@ public class SubmissionService : ISubmissionService
         var existing = await _db.Submissions
             .Include(s => s.Internship)
                 .ThenInclude(i => i.Student)
+            .Include(s => s.Internship)
+                .ThenInclude(i => i.Semester)
             .FirstOrDefaultAsync(s => s.Id == id && !s.IsDeleted);
 
         if (existing == null)
@@ -285,6 +335,20 @@ public class SubmissionService : ISubmissionService
 
         if (existing.Status != SubmissionStatus.RevisionRequested)
             throw new InvalidOperationException("Resubmit is only allowed when status is RevisionRequested");
+        var employerScore = request.EmployerScore ?? existing.EmployerScore;
+        if (existing.Type == SubmissionType.Evidence)
+        {
+            ValidateEmployerEvaluation(
+                employerScore,
+                request.FileName ?? existing.FileName,
+                request.FileUrl ?? existing.FileUrl);
+        }
+        else if (request.EmployerScore.HasValue)
+        {
+            throw new InvalidOperationException("Điểm doanh nghiệp chỉ áp dụng cho hồ sơ đánh giá doanh nghiệp.");
+        }
+        if (existing.Type == SubmissionType.Evidence && existing.Internship.SemesterId.HasValue)
+            await EnsureEvidenceUploadWindowOpenAsync(existing.Internship.SemesterId.Value);
 
         var maxVersion = await _db.Submissions
             .Where(s => s.InternshipId == existing.InternshipId
@@ -303,6 +367,7 @@ public class SubmissionService : ISubmissionService
             Description = request.Description ?? existing.Description,
             FileName = request.FileName ?? existing.FileName,
             FileUrl = request.FileUrl ?? existing.FileUrl,
+            EmployerScore = employerScore,
             SubmittedAt = DateTime.UtcNow,
             CreatedAt = DateTime.UtcNow
         };
@@ -323,16 +388,47 @@ public class SubmissionService : ISubmissionService
         var existing = await _db.Submissions
             .Include(s => s.Internship)
                 .ThenInclude(i => i.Student)
+            .Include(s => s.Internship)
+                .ThenInclude(i => i.Semester)
             .FirstOrDefaultAsync(s => s.Id == id && !s.IsDeleted);
 
         if (existing == null)
             return null;
 
+        if (existing.Internship.Student?.UserId != userId)
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NotOwnerSubmission);
+
+        if (existing.Status != SubmissionStatus.RevisionRequested)
+            throw new InvalidOperationException("Resubmit is only allowed when status is RevisionRequested");
+
+        if (existing.Type == SubmissionType.Evidence)
+            ValidateEmployerEvaluation(request.EmployerScore ?? existing.EmployerScore, originalFileName, "image-upload");
+
+        if (existing.Type == SubmissionType.Evidence && existing.Internship.SemesterId.HasValue)
+            await EnsureEvidenceUploadWindowOpenAsync(existing.Internship.SemesterId.Value);
+
         var (relativePath, savedFileName) = await SaveSubmissionFileAsync(fileStream, originalFileName, existing.InternshipId);
 
         request.FileName = savedFileName;
         request.FileUrl = relativePath;
-        return await ResubmitAsync(id, userId, request);
+        try
+        {
+            var resubmission = await ResubmitAsync(id, userId, request);
+            if (resubmission != null)
+                return resubmission;
+        }
+        catch
+        {
+            var fullPath = ResolveUploadPath(relativePath);
+            if (File.Exists(fullPath))
+                File.Delete(fullPath);
+            throw;
+        }
+
+        var orphanedFilePath = ResolveUploadPath(relativePath);
+        if (File.Exists(orphanedFilePath))
+            File.Delete(orphanedFilePath);
+        return null;
     }
 
     public async Task<SubmissionFileDownloadDto?> DownloadFileAsync(
@@ -361,7 +457,8 @@ public class SubmissionService : ISubmissionService
             // SuperAdmin may download any submission file
             var isSuperAdmin = await _db.Users
                 .AnyAsync(u => u.Id == userId && u.Role == Role.SuperAdmin && !u.IsDeleted);
-            if (!isSuperAdmin)
+            var isDepartmentAdmin = await IsDepartmentAdminForStudentAsync(userId, submission.Internship.Student?.DepartmentId);
+            if (!isSuperAdmin && !isDepartmentAdmin)
                 throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessFile);
         }
 
@@ -403,8 +500,10 @@ public class SubmissionService : ISubmissionService
         var isAssignedLecturer = submission.Internship.Lecturer?.UserId == userId;
         var isSuperAdmin = isLecturerOrAdmin && await _db.Users.AnyAsync(u =>
             u.Id == userId && u.Role == Role.SuperAdmin && !u.IsDeleted);
+        var isDepartmentAdmin = isLecturerOrAdmin
+            && await IsDepartmentAdminForStudentAsync(userId, submission.Internship.Student?.DepartmentId);
         if ((!isLecturerOrAdmin && !ownsInternship) ||
-            (isLecturerOrAdmin && !isAssignedLecturer && !ownsInternship && !isSuperAdmin))
+            (isLecturerOrAdmin && !isAssignedLecturer && !ownsInternship && !isSuperAdmin && !isDepartmentAdmin))
             throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessFile);
 
         var fullPath = ResolveUploadPath(asset.FileUrl);
@@ -717,9 +816,21 @@ public class SubmissionService : ISubmissionService
         {
             var isSuperAdmin = await _db.Users
                 .AnyAsync(u => u.Id == userId && u.Role == Role.SuperAdmin && !u.IsDeleted);
-            if (!isSuperAdmin)
+            var isDepartmentAdmin = await IsDepartmentAdminForStudentAsync(userId, internship.Student?.DepartmentId);
+            if (!isSuperAdmin && !isDepartmentAdmin)
                 throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessSubmission);
         }
+    }
+
+    private Task<bool> IsDepartmentAdminForStudentAsync(Guid userId, Guid? studentDepartmentId)
+    {
+        if (!studentDepartmentId.HasValue)
+            return Task.FromResult(false);
+
+        return _db.Users.AnyAsync(user => user.Id == userId
+            && user.Role == Role.DepartmentAdmin
+            && user.DepartmentId == studentDepartmentId
+            && !user.IsDeleted);
     }
 
     private async Task<Guid?> ResolveLecturerIdAsync(Guid userId)
@@ -754,6 +865,18 @@ public class SubmissionService : ISubmissionService
         return status;
     }
 
+    private static void ValidateEmployerEvaluation(decimal? score, string? fileName, string? fileUrl)
+    {
+        if (!score.HasValue || score.Value < 0 || score.Value > 10)
+            throw new InvalidOperationException("Vui lòng nhập điểm đánh giá doanh nghiệp từ 0 đến 10.");
+        if (string.IsNullOrWhiteSpace(fileUrl) || !IsEvidenceImage(fileName))
+            throw new InvalidOperationException("Hồ sơ đánh giá doanh nghiệp bắt buộc đính kèm ảnh phiếu xác nhận (.jpg, .png, .webp hoặc .gif).");
+    }
+
+    private static bool IsEvidenceImage(string? fileName)
+        => !string.IsNullOrWhiteSpace(fileName)
+            && EvidenceImageExtensions.Contains(Path.GetExtension(fileName).ToLowerInvariant());
+
     private async Task<(string RelativePath, string SavedFileName)> SaveSubmissionFileAsync(
         Stream fileStream,
         string originalFileName,
@@ -781,6 +904,23 @@ public class SubmissionService : ISubmissionService
         }
 
         return (relativePath, uniqueFileName);
+    }
+
+    private async Task EnsureEvidenceUploadWindowOpenAsync(Guid semesterId)
+    {
+        var setting = await _db.SystemSettings.AsNoTracking()
+            .FirstOrDefaultAsync(item => item.Key == $"EvidenceUploadDeadline:{semesterId:N}" && !item.IsDeleted);
+        var deadline = setting == null
+            ? null
+            : System.Text.Json.JsonSerializer.Deserialize<SupplementalDeadlineDto>(setting.Value);
+        if (deadline == null)
+            throw new InvalidOperationException("Admin khoa chưa cấu hình thời hạn nộp minh chứng cho kỳ này.");
+
+        var now = DateTime.UtcNow;
+        if (now < deadline.StartDate)
+            throw new InvalidOperationException($"Chưa đến thời gian nộp minh chứng. Mở nhận từ {deadline.StartDate:dd/MM/yyyy HH:mm}.");
+        if (now > deadline.EndDate)
+            throw new InvalidOperationException($"Thời hạn nộp minh chứng đã kết thúc vào {deadline.EndDate:dd/MM/yyyy HH:mm}.");
     }
 
     private string GetUploadRoot() => _env.ContentRootPath;

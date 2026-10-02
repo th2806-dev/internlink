@@ -32,6 +32,7 @@ export function mapStudentDtoToRow(
   s: StudentDto,
   context?: {
     assignment?: {
+      internshipId?: string;
       lecturerName: string;
       companyName?: string | null;
       status?: string | null;
@@ -60,6 +61,7 @@ export function mapStudentDtoToRow(
 
   return {
     id: s.id,
+    internshipId: context?.assignment?.internshipId ?? null,
     userId: s.userId ?? null,
     mssv: s.studentCode,
     fullName: s.fullName,

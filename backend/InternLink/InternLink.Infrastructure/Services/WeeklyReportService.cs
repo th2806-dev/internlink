@@ -7,6 +7,9 @@ using InternLink.Domain.Enums;
 using InternLink.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
+using System.Text;
+using System.Text.RegularExpressions;
 
 namespace InternLink.Infrastructure.Services;
 
@@ -74,7 +77,8 @@ public class WeeklyReportService : IWeeklyReportService
         {
             var isSuperAdmin = await _db.Users
                 .AnyAsync(u => u.Id == userId && u.Role == Role.SuperAdmin && !u.IsDeleted);
-            if (!isSuperAdmin)
+            var isDepartmentAdmin = await IsDepartmentAdminForStudentAsync(userId, report.Internship?.Student?.DepartmentId);
+            if (!isSuperAdmin && !isDepartmentAdmin)
                 throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessWeeklyReport);
         }
 
@@ -155,6 +159,7 @@ public class WeeklyReportService : IWeeklyReportService
 
         if (internship.Semester?.TotalWeeks > 0 && (request.WeekNumber < 1 || request.WeekNumber > internship.Semester.TotalWeeks))
             throw new InvalidOperationException($"Tuần báo cáo phải nằm trong khoảng 1 đến {internship.Semester.TotalWeeks}.");
+        await EnsureUploadWindowOpenAsync(internship, request.WeekNumber);
 
         if (internship.Student?.UserId != userId)
             throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NotOwnerInternship);
@@ -199,6 +204,7 @@ public class WeeklyReportService : IWeeklyReportService
 
         if (internship.Semester?.TotalWeeks > 0 && (request.WeekNumber < 1 || request.WeekNumber > internship.Semester.TotalWeeks))
             throw new InvalidOperationException($"Tuần báo cáo phải nằm trong khoảng 1 đến {internship.Semester.TotalWeeks}.");
+        await EnsureUploadWindowOpenAsync(internship, request.WeekNumber);
 
         var duplicate = await _db.WeeklyReports.AnyAsync(r =>
             r.InternshipId == request.InternshipId &&
@@ -207,15 +213,22 @@ public class WeeklyReportService : IWeeklyReportService
         if (duplicate)
             throw new InvalidOperationException($"A weekly report for week {request.WeekNumber} already exists");
 
-        var (relativePath, savedFileName) = await SaveFileAsync(fileStream, originalFileName, request.InternshipId);
+        var savedVersion = GetAvailableReportVersion(
+            request.InternshipId,
+            request.WeekNumber,
+            internship.Student?.FullName,
+            1);
+        var savedFileName = CreateReportFileName(request.WeekNumber, internship.Student?.FullName, savedVersion);
+        var (relativePath, _) = await SaveFileAsync(fileStream, savedFileName, request.InternshipId);
         var report = new WeeklyReport
         {
             Id = Guid.NewGuid(),
             InternshipId = request.InternshipId,
             WeekNumber = request.WeekNumber,
+            Version = savedVersion,
             Title = request.Title,
             Content = savedFileName,
-            FileName = originalFileName,
+            FileName = savedFileName,
             FileUrl = relativePath,
             FileSize = fileSize,
             MimeType = mimeType,
@@ -230,7 +243,7 @@ public class WeeklyReportService : IWeeklyReportService
             Id = Guid.NewGuid(),
             WeeklyReportId = report.Id,
             Version = report.Version,
-            FileName = originalFileName,
+            FileName = savedFileName,
             FileUrl = relativePath,
             FileSize = fileSize,
             MimeType = mimeType,
@@ -279,16 +292,22 @@ public class WeeklyReportService : IWeeklyReportService
         if (report.Status != WeeklyReportStatus.Draft && report.Status != WeeklyReportStatus.RevisionRequested)
             throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.OnlyDraftOrRevisionUpdatable);
 
-        var oldFileUrl = report.FileUrl;
-        var (relativePath, savedFileName) = await SaveFileAsync(fileStream, originalFileName, report.InternshipId);
+        await EnsureUploadWindowOpenAsync(report.Internship, report.WeekNumber);
+        var savedVersion = GetAvailableReportVersion(
+            report.InternshipId,
+            report.WeekNumber,
+            report.Internship.Student?.FullName,
+            report.Version + 1);
+        var savedFileName = CreateReportFileName(report.WeekNumber, report.Internship.Student?.FullName, savedVersion);
+        var (relativePath, _) = await SaveFileAsync(fileStream, savedFileName, report.InternshipId);
         if (!string.IsNullOrWhiteSpace(request.Title))
             report.Title = request.Title;
         report.Content = savedFileName;
-        report.FileName = originalFileName;
+        report.FileName = savedFileName;
         report.FileUrl = relativePath;
         report.FileSize = fileSize;
         report.MimeType = mimeType;
-        report.Version++;
+        report.Version = savedVersion;
         report.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
         _db.WeeklyReportVersions.Add(new WeeklyReportVersion
@@ -296,7 +315,7 @@ public class WeeklyReportService : IWeeklyReportService
             Id = Guid.NewGuid(),
             WeeklyReportId = report.Id,
             Version = report.Version,
-            FileName = originalFileName,
+            FileName = savedFileName,
             FileUrl = relativePath,
             FileSize = fileSize,
             MimeType = mimeType,
@@ -314,6 +333,8 @@ public class WeeklyReportService : IWeeklyReportService
                 .ThenInclude(i => i.Student)
             .Include(r => r.Internship)
                 .ThenInclude(i => i.Lecturer)
+            .Include(r => r.Internship)
+                .ThenInclude(i => i.Semester)
             .FirstOrDefaultAsync(r => r.Id == id && !r.IsDeleted);
 
         if (report == null || string.IsNullOrWhiteSpace(report.FileUrl))
@@ -327,7 +348,8 @@ public class WeeklyReportService : IWeeklyReportService
         if (isLecturerOrAdmin && !ownsInternship && !isAssignedLecturer)
         {
             var isSuperAdmin = await _db.Users.AnyAsync(u => u.Id == userId && u.Role == Role.SuperAdmin && !u.IsDeleted);
-            if (!isSuperAdmin)
+            var isDepartmentAdmin = await IsDepartmentAdminForStudentAsync(userId, report.Internship.Student?.DepartmentId);
+            if (!isSuperAdmin && !isDepartmentAdmin)
                 throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessFile);
         }
 
@@ -363,7 +385,7 @@ public class WeeklyReportService : IWeeklyReportService
         if (report == null)
             return Array.Empty<WeeklyReportVersionDto>();
 
-        EnsureReportAccess(report, userId, isLecturerOrAdmin);
+        await EnsureReportAccessAsync(report, userId, isLecturerOrAdmin);
         return _mapper.Map<List<WeeklyReportVersionDto>>(
             report.Versions.Where(v => !v.IsDeleted).OrderByDescending(v => v.Version));
     }
@@ -385,7 +407,7 @@ public class WeeklyReportService : IWeeklyReportService
         if (version == null)
             return null;
 
-        EnsureReportAccess(version.WeeklyReport, userId, isLecturerOrAdmin);
+        await EnsureReportAccessAsync(version.WeeklyReport, userId, isLecturerOrAdmin);
         var fullPath = ResolveUploadPath(version.FileUrl);
         if (!File.Exists(fullPath))
             return null;
@@ -405,6 +427,8 @@ public class WeeklyReportService : IWeeklyReportService
                 .ThenInclude(i => i.Student)
             .Include(r => r.Internship)
                 .ThenInclude(i => i.Lecturer)
+            .Include(r => r.Internship)
+                .ThenInclude(i => i.Company)
             .FirstOrDefaultAsync(r => r.Id == id && !r.IsDeleted);
 
         if (report == null)
@@ -502,6 +526,8 @@ public class WeeklyReportService : IWeeklyReportService
         if (status is not (WeeklyReportStatus.Reviewed or WeeklyReportStatus.RevisionRequested or WeeklyReportStatus.Approved))
             throw new InvalidOperationException("Review status must be Reviewed, RevisionRequested, or Approved");
 
+        await EnsureReviewWindowOpenAsync(report);
+
         report.Status = status;
         report.LecturerComment = request.LecturerComment;
         report.UpdatedAt = DateTime.UtcNow;
@@ -515,6 +541,28 @@ public class WeeklyReportService : IWeeklyReportService
                 Comment = request.LecturerComment.Trim(),
                 IsPublic = true,
                 CreatedAt = DateTime.UtcNow,
+            });
+        }
+
+        if (report.Internship.Lecturer != null
+            && report.Internship.Lecturer.UserId == userId
+            && report.Internship.SemesterId.HasValue)
+        {
+            _db.LecturerActivityLogs.Add(new LecturerActivityLog
+            {
+                LecturerId = report.Internship.Lecturer.Id,
+                SemesterId = report.Internship.SemesterId.Value,
+                InternshipId = report.InternshipId,
+                RelatedEntityId = report.Id,
+                StudentId = report.Internship.StudentId,
+                WeekNumber = report.WeekNumber,
+                StudentCode = report.Internship.Student?.StudentCode,
+                StudentName = report.Internship.Student?.FullName,
+                CompanyName = report.Internship.Company?.CompanyName,
+                ActivityType = "weekly-report-review",
+                Title = $"Phản hồi báo cáo tuần {report.WeekNumber}",
+                Detail = $"Trạng thái: {status}{(string.IsNullOrWhiteSpace(request.LecturerComment) ? "" : $" · {request.LecturerComment.Trim()}")}",
+                OccurredAt = DateTime.UtcNow,
             });
         }
 
@@ -718,12 +766,20 @@ public class WeeklyReportService : IWeeklyReportService
         return report;
     }
 
-    private static void EnsureReportAccess(WeeklyReport report, Guid userId, bool isLecturerOrAdmin)
+    private async Task EnsureReportAccessAsync(WeeklyReport report, Guid userId, bool isLecturerOrAdmin)
     {
         var ownsInternship = report.Internship.Student?.UserId == userId;
         var isAssignedLecturer = report.Internship.Lecturer?.UserId == userId;
         if (!ownsInternship && !isAssignedLecturer && !isLecturerOrAdmin)
             throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessWeeklyReport);
+
+        if (isLecturerOrAdmin && !ownsInternship && !isAssignedLecturer)
+        {
+            var isSuperAdmin = await _db.Users.AnyAsync(user => user.Id == userId && user.Role == Role.SuperAdmin && !user.IsDeleted);
+            var isDepartmentAdmin = await IsDepartmentAdminForStudentAsync(userId, report.Internship.Student?.DepartmentId);
+            if (!isSuperAdmin && !isDepartmentAdmin)
+                throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessWeeklyReport);
+        }
     }
 
     private async Task EnsureInternshipAccessAsync(Guid internshipId, Guid userId, bool isLecturerOrAdmin)
@@ -746,9 +802,21 @@ public class WeeklyReportService : IWeeklyReportService
         {
             var isSuperAdmin = await _db.Users
                 .AnyAsync(u => u.Id == userId && u.Role == Role.SuperAdmin && !u.IsDeleted);
-            if (!isSuperAdmin)
+            var isDepartmentAdmin = await IsDepartmentAdminForStudentAsync(userId, internship.Student?.DepartmentId);
+            if (!isSuperAdmin && !isDepartmentAdmin)
                 throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessWeeklyReport);
         }
+    }
+
+    private Task<bool> IsDepartmentAdminForStudentAsync(Guid userId, Guid? studentDepartmentId)
+    {
+        if (!studentDepartmentId.HasValue)
+            return Task.FromResult(false);
+
+        return _db.Users.AnyAsync(user => user.Id == userId
+            && user.Role == Role.DepartmentAdmin
+            && user.DepartmentId == studentDepartmentId
+            && !user.IsDeleted);
     }
 
     private async Task<Internship?> GetStudentInternshipAsync(Guid userId)
@@ -784,6 +852,74 @@ public class WeeklyReportService : IWeeklyReportService
             throw new InvalidOperationException("The uploaded file must have PDF content type");
     }
 
+    private async Task EnsureUploadWindowOpenAsync(Internship internship, int weekNumber)
+    {
+        if (internship.Semester == null)
+            return;
+        if (internship.Semester.Status == SemesterStatus.Completed)
+            throw new InvalidOperationException("Kỳ thực tập đã đóng, không thể nộp hoặc cập nhật báo cáo.");
+
+        var schedule = await _db.SemesterReportSchedules
+            .Where(item => item.SemesterId == internship.SemesterId && item.WeekNumber == weekNumber && !item.IsDeleted
+                && (item.LecturerId == null || (internship.LecturerId != null && item.LecturerId == internship.LecturerId)))
+            .OrderByDescending(item => item.LecturerId != null)
+            .ThenByDescending(item => item.UpdatedAt ?? item.CreatedAt)
+            .ThenByDescending(item => item.CreatedAt)
+            .FirstOrDefaultAsync();
+
+        if (schedule?.IsSubmissionOpen == false)
+            throw new InvalidOperationException($"Bài nộp cho {schedule.Title} hiện đang tạm dừng nhận.");
+        if (schedule?.StartDate.HasValue == true && DateTime.UtcNow < schedule.StartDate.Value)
+            throw new InvalidOperationException($"Bài nộp cho {schedule.Title} chưa mở nhận trước ngày {schedule.StartDate.Value:dd/MM/yyyy HH:mm}.");
+        if (schedule != null && !schedule.AllowLateSubmission && DateTime.UtcNow > schedule.DueDate)
+            throw new InvalidOperationException($"Hạn nộp báo cáo tuần {weekNumber} đã kết thúc vào ngày {schedule.DueDate:dd/MM/yyyy HH:mm}. Không cho phép nộp muộn.");
+    }
+
+    private async Task EnsureReviewWindowOpenAsync(WeeklyReport report)
+    {
+        if (report.Internship.Semester?.Status == SemesterStatus.Completed)
+            throw new InvalidOperationException("Kỳ thực tập đã đóng, nhật ký đang ở chế độ chỉ xem.");
+
+        if (report.Internship.SemesterId == null)
+            return;
+
+        var schedule = await _db.SemesterReportSchedules
+            .Where(item => item.SemesterId == report.Internship.SemesterId && item.WeekNumber == report.WeekNumber && !item.IsDeleted
+                && (item.LecturerId == null || (report.Internship.LecturerId != null && item.LecturerId == report.Internship.LecturerId)))
+            .OrderByDescending(item => item.LecturerId != null)
+            .ThenByDescending(item => item.UpdatedAt ?? item.CreatedAt)
+            .ThenByDescending(item => item.CreatedAt)
+            .FirstOrDefaultAsync();
+
+        if (schedule?.IsSubmissionOpen == false)
+            throw new InvalidOperationException("Tuần thực tập đã đóng, nhật ký đang ở chế độ chỉ xem.");
+
+        if (schedule != null && DateTime.UtcNow > schedule.DueDate)
+            throw new InvalidOperationException("Tuần thực tập đã hết hạn, nhật ký đang ở chế độ chỉ xem.");
+    }
+
+    private static string CreateReportFileName(int weekNumber, string? studentName, int version)
+    {
+        var normalized = (studentName ?? "SinhVien").Normalize(NormalizationForm.FormD);
+        var nameWithoutMarks = new string(normalized
+            .Where(character => CharUnicodeInfo.GetUnicodeCategory(character) != UnicodeCategory.NonSpacingMark)
+            .ToArray())
+            .Normalize(NormalizationForm.FormC);
+        var safeName = Regex.Replace(nameWithoutMarks, "[^A-Za-z0-9]", string.Empty);
+        if (string.IsNullOrWhiteSpace(safeName))
+            safeName = "SinhVien";
+        return $"Tuan{weekNumber:D2}_{safeName}_V{version}.pdf";
+    }
+
+    private int GetAvailableReportVersion(Guid internshipId, int weekNumber, string? studentName, int firstVersion)
+    {
+        var directory = Path.Combine(GetUploadRoot(), UploadFolder, internshipId.ToString());
+        var version = firstVersion;
+        while (File.Exists(Path.Combine(directory, CreateReportFileName(weekNumber, studentName, version))))
+            version++;
+        return version;
+    }
+
     private async Task<(string RelativePath, string SavedFileName)> SaveFileAsync(
         Stream fileStream,
         string originalFileName,
@@ -791,8 +927,7 @@ public class WeeklyReportService : IWeeklyReportService
     {
         var uploadPath = Path.Combine(GetUploadRoot(), UploadFolder, internshipId.ToString());
         Directory.CreateDirectory(uploadPath);
-        var safeBase = Path.GetFileNameWithoutExtension(originalFileName);
-        var savedFileName = $"{Guid.NewGuid()}_{safeBase}.pdf";
+        var savedFileName = Path.GetFileName(originalFileName);
         var fullPath = Path.Combine(uploadPath, savedFileName);
         await using var stream = new FileStream(fullPath, FileMode.CreateNew);
         await fileStream.CopyToAsync(stream);

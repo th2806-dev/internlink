@@ -62,6 +62,21 @@ public class LecturerController : ControllerBase
         return (true, lecturerId ?? Guid.Empty);
     }
 
+    /// <summary>Returns only semesters where the signed-in lecturer has assigned internships.</summary>
+    [HttpGet("semesters")]
+    public async Task<IActionResult> GetAssignedSemesters()
+    {
+        if (!User.IsInRole("Lecturer"))
+            return Forbid();
+
+        var userId = User.GetUserId();
+        if (userId == null)
+            return Unauthorized();
+
+        var semesters = await _lecturerService.GetAssignedSemestersAsync(userId.Value);
+        return Ok(ApiResponse<IEnumerable<LecturerSemesterOptionDto>>.Ok(semesters));
+    }
+
     // ==========================================
     // 1. PROFILE & DASHBOARD
     // ==========================================

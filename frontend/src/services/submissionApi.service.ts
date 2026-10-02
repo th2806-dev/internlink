@@ -63,6 +63,7 @@ export const submissionApiService = {
     type: string;
     title: string;
     description?: string;
+    employerScore?: number;
     files: File[];
     links: { label: string; url: string }[];
   }): Promise<SubmissionDto> {
@@ -71,6 +72,7 @@ export const submissionApiService = {
     form.append("Type", params.type);
     form.append("Title", params.title);
     if (params.description) form.append("Description", params.description);
+    if (params.employerScore != null) form.append("EmployerScore", String(params.employerScore));
     form.append("LinksJson", JSON.stringify(params.links));
     params.files.forEach((file) => form.append("Files", file));
     return apiRequest<SubmissionDto>("/api/Submission/bundle", {

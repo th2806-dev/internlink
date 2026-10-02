@@ -52,7 +52,7 @@ public class SubmissionController : ControllerBase
             if (userId == null)
                 return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
-            var isLecturerOrAdmin = User.IsInRole("Lecturer") || User.IsInRole("SuperAdmin");
+            var isLecturerOrAdmin = User.IsInRole("Lecturer") || User.IsInRole("SuperAdmin") || User.IsInRole("DepartmentAdmin");
             var submissions = await _submissionService.GetByInternshipAsync(internshipId, userId.Value, isLecturerOrAdmin);
             return Ok(ApiResponse<IEnumerable<SubmissionDto>>.Ok(submissions));
         }
@@ -80,6 +80,11 @@ public class SubmissionController : ControllerBase
     {
         try
         {
+            if (string.Equals(request.Type, "Evidence", StringComparison.OrdinalIgnoreCase))
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Hồ sơ đánh giá doanh nghiệp phải được nộp kèm tệp ảnh." }));
+            if (string.Equals(request.Type, "FinalReport", StringComparison.OrdinalIgnoreCase))
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Báo cáo cuối kỳ phải được nộp bằng tệp đính kèm." }));
+
             var userId = User.GetUserId();
             if (userId == null)
                 return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
@@ -117,6 +122,7 @@ public class SubmissionController : ControllerBase
                 Type = form.Type,
                 Title = form.Title,
                 Description = form.Description,
+                EmployerScore = form.EmployerScore,
             };
 
             await using var stream = form.File.OpenReadStream();
@@ -165,6 +171,7 @@ public class SubmissionController : ControllerBase
                     Type = form.Type,
                     Title = form.Title,
                     Description = form.Description,
+                    EmployerScore = form.EmployerScore,
                 },
                 files,
                 links);
@@ -225,6 +232,7 @@ public class SubmissionController : ControllerBase
             {
                 Title = form.Title,
                 Description = form.Description,
+                EmployerScore = form.EmployerScore,
             };
 
             await using var stream = form.File.OpenReadStream();
@@ -259,7 +267,7 @@ public class SubmissionController : ControllerBase
             if (userId == null)
                 return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
-            var isLecturerOrAdmin = User.IsInRole("Lecturer") || User.IsInRole("SuperAdmin");
+            var isLecturerOrAdmin = User.IsInRole("Lecturer") || User.IsInRole("SuperAdmin") || User.IsInRole("DepartmentAdmin");
             var file = await _submissionService.DownloadFileAsync(id, userId.Value, isLecturerOrAdmin);
             if (file == null)
                 return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.FileNotFound }));
@@ -281,7 +289,7 @@ public class SubmissionController : ControllerBase
             if (userId == null)
                 return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
-            var isLecturerOrAdmin = User.IsInRole("Lecturer") || User.IsInRole("SuperAdmin");
+            var isLecturerOrAdmin = User.IsInRole("Lecturer") || User.IsInRole("SuperAdmin") || User.IsInRole("DepartmentAdmin");
             var file = await _submissionService.DownloadAssetAsync(id, assetId, userId.Value, isLecturerOrAdmin);
             if (file == null)
                 return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.AssetNotFound }));

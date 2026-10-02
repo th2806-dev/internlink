@@ -22,6 +22,7 @@ export type WeeklyReportRow = {
   deadline: string;
   allowLateSubmission?: boolean;
   scheduleDueDate?: string;
+  scheduleStartDate?: string | null;
   submittedAt: string | null;
   version: string;
   status: string;
