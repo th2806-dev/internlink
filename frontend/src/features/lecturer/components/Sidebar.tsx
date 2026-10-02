@@ -46,16 +46,14 @@ export const Sidebar = ({
 
   const displayName = user?.name || currentLecturer || "Giảng viên";
 
-  // Trình tự theo WORKFLOW hướng dẫn thực tập:
-  // Đối tượng phụ trách (SV, DN) → Vận hành (điểm danh, duyệt báo cáo) → Đánh giá (chấm điểm, thống kê)
-  // → Tổng kết (báo cáo công tác) → Hệ thống.
+  // Trình tự công việc: chuẩn bị nhóm → hướng dẫn hằng ngày → đánh giá → tra cứu và tài khoản.
   const navSections: { title: string; items: NavItem[] }[] = [
     {
       title: "TỔNG QUAN",
       items: [{ id: "dashboard", label: "Tổng quan", icon: LayoutDashboard }],
     },
     {
-      title: "ĐỐI TƯỢNG PHỤ TRÁCH",
+      title: "CHUẨN BỊ HƯỚNG DẪN",
       items: [
         {
           id: "students",
@@ -69,27 +67,24 @@ export const Sidebar = ({
           icon: Building2,
           badge: stats.enterpriseCount > 0 ? String(stats.enterpriseCount) : undefined,
         },
+        { id: "templates", label: "Biểu mẫu", icon: FileText },
       ],
     },
     {
-      title: "VẬN HÀNH HƯỚNG DẪN",
+      title: "HƯỚNG DẪN HẰNG NGÀY",
       items: [
-        {
-          id: "attendance",
-          label: "Điểm danh & Buổi gặp",
-          icon: CalendarCheck,
-        },
         {
           id: "reports",
           label: "Báo cáo & Bài nộp",
           icon: FileCheck,
           badge: stats.pendingReviewCount > 0 ? String(stats.pendingReviewCount) : undefined,
         },
+        {
+          id: "attendance",
+          label: "Điểm danh & Buổi gặp",
+          icon: CalendarCheck,
+        },
       ],
-    },
-    {
-      title: "HỒ SƠ HƯỚNG DẪN",
-      items: [{ id: "history", label: "Lịch sử hướng dẫn", icon: History }],
     },
     {
       title: "ĐÁNH GIÁ & TỔNG KẾT",
@@ -109,9 +104,9 @@ export const Sidebar = ({
       ],
     },
     {
-      title: "TÀI NGUYÊN & HỆ THỐNG",
+      title: "HỒ SƠ & TÀI KHOẢN",
       items: [
-        { id: "templates", label: "Biểu mẫu", icon: FileText },
+        { id: "history", label: "Lịch sử hướng dẫn", icon: History },
         {
           id: "notifications",
           label: "Thông báo",
