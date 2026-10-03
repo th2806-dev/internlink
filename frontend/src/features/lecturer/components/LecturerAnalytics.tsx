@@ -44,6 +44,7 @@ export const LecturerAnalytics = () => {
   const [isComparisonLoading, setIsComparisonLoading] = useState(true);
 
   const semesterId = toApiSemesterId(selectedSemester?.id);
+  const hasStatsData = statsData !== null;
 
   const showToast = useCallback((msg: string) => {
     setToastMsg(msg);
@@ -71,7 +72,7 @@ export const LecturerAnalytics = () => {
       // Lỗi phải hiện cho người dùng (toast) — không chỉ console.error để bảng trống im lặng.
       showToast(getApiErrorMessage(err));
     }
-  }, [semesterId]);
+  }, [semesterId, showToast]);
 
   useEffect(() => {
     fetchData();
@@ -81,8 +82,8 @@ export const LecturerAnalytics = () => {
     let cancelled = false;
     setIsComparisonLoading(true);
     lecturerInternshipsService.getAssignedSemesters()
-      .then((semesters) => Promise.all(
-        semesters.map(async (semester) => ({
+      .then((assignedSemesters) => Promise.all(
+        assignedSemesters.map(async (semester) => ({
           semester,
           stats: await lecturerAnalyticsService.getStats(semester.id),
           activity: await lecturerAnalyticsService.getActivityStats(semester.id),
@@ -112,9 +113,11 @@ export const LecturerAnalytics = () => {
   const interningStudents = statsData?.interningCount ?? 0;
   const overdueCount = statsData?.overdueReportsCount ?? 0;
   const avgGrade = statsData?.averageGrade ?? 0;
+  const assignedShare = totalStudents > 0 ? Math.round((interningStudents / totalStudents) * 100) : 0;
   const complianceRate = totalStudents > 0
     ? `${Math.round(((totalStudents - overdueCount) / totalStudents) * 100)}%`
-    : "100%";
+    : "—";
+  const avgGradeLabel = hasStatsData && totalStudents > 0 ? avgGrade.toFixed(1) : "—";
 
   return (
     <div className="space-y-5 max-w-[1500px] mx-auto animate-in fade-in duration-200 pb-12 font-sans">
@@ -131,34 +134,38 @@ export const LecturerAnalytics = () => {
         <KpiCard
           tone="blue"
           title="Sinh viên hướng dẫn"
-          value={totalStudents}
-          unit="sinh viên"
+          value={hasStatsData ? totalStudents : "—"}
+          unit={hasStatsData ? "sinh viên" : undefined}
           icon={Users}
-          footer={`${totalStudents > 0 ? 100 : 0}% Đã phân công giảng viên`}
+          footer={hasStatsData
+            ? (totalStudents > 0 ? "100% Đã phân công giảng viên" : "Chưa có sinh viên trong học kỳ")
+            : "Chưa có dữ liệu học kỳ"}
         />
         <KpiCard
           tone="emerald"
           title="Đang thực tập tại DN"
-          value={interningStudents}
-          unit="sinh viên"
+          value={hasStatsData ? interningStudents : "—"}
+          unit={hasStatsData ? "sinh viên" : undefined}
           icon={CheckCircle2}
-          footer={`${totalStudents > 0 ? Math.round((interningStudents / totalStudents) * 100) : 0}% Đã có vị trí tại DN`}
+          footer={hasStatsData
+            ? (totalStudents > 0 ? `${assignedShare}% Đã có vị trí tại DN` : "Chưa có sinh viên được ghi nhận")
+            : "Chưa có dữ liệu học kỳ"}
         />
         <KpiCard
           tone="sky"
           title="Tuân thủ Tiến độ Nộp"
-          value={complianceRate}
-          unit="đúng hạn"
+          value={hasStatsData ? complianceRate : "—"}
+          unit={hasStatsData && totalStudents > 0 ? "đúng hạn" : undefined}
           icon={TrendingUp}
-          footer={`${overdueCount} sinh viên trễ báo cáo tuần`}
+          footer={hasStatsData ? `${overdueCount} sinh viên trễ báo cáo tuần` : "Chưa có dữ liệu học kỳ"}
         />
         <KpiCard
           tone="amber"
           title="Điểm Trung Bình Đợt"
-          value={avgGrade}
-          unit="/ 10"
+          value={hasStatsData ? avgGradeLabel : "—"}
+          unit={hasStatsData && totalStudents > 0 ? "/ 10" : undefined}
           icon={Award}
-          footer="Xếp loại Khá - Giỏi - Xuất sắc"
+          footer={hasStatsData && totalStudents > 0 ? "Xếp loại Khá - Giỏi - Xuất sắc" : "Chưa có dữ liệu đánh giá"}
         />
       </KpiGrid>
 
@@ -235,20 +242,25 @@ export const LecturerAnalytics = () => {
             <div>
               <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
                 <BarChart3 className="w-4 h-4 text-blue-600" />
-                {(() => {
-                  const firstLabel = weeklyTrend[0]?.label ?? "Tuần 1";
-                  const lastLabel = weeklyTrend[weeklyTrend.length - 1]?.label ?? `Tuần ${selectedSemester?.totalWeeks ?? 6}`;
-                  return `Xu hướng nộp Báo cáo tuần (${firstLabel} - ${lastLabel})`;
-                })()}
+                {weeklyTrend.length > 0
+                  ? (() => {
+                    const firstLabel = weeklyTrend[0]?.label ?? "Tuần 1";
+                    const lastLabel = weeklyTrend[weeklyTrend.length - 1]?.label ?? "Tuần mới nhất";
+                    return `Xu hướng nộp Báo cáo tuần (${firstLabel} - ${lastLabel})`;
+                  })()
+                  : "Xu hướng nộp Báo cáo tuần"}
               </h3>
               <p className="text-xs text-slate-500">
-                Tỷ lệ sinh viên nộp báo cáo đúng hạn, trễ hạn và quá hạn theo
-                từng tuần
+                {weeklyTrend.length > 0
+                  ? "Tỷ lệ sinh viên nộp báo cáo đúng hạn, trễ hạn và quá hạn theo từng tuần"
+                  : "Chưa có dữ liệu báo cáo tuần trong học kỳ đang chọn"}
               </p>
             </div>
-            <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 font-bold text-xs rounded-lg border border-emerald-200 shrink-0">
-              {complianceRate} Tuân thủ
-            </span>
+            {hasStatsData && totalStudents > 0 ? (
+              <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 font-bold text-xs rounded-lg border border-emerald-200 shrink-0">
+                {complianceRate} Tuân thủ
+              </span>
+            ) : null}
           </div>
 
           {/* Visual Bar Chart from API */}
@@ -291,7 +303,7 @@ export const LecturerAnalytics = () => {
           </div>
 
           <div className="flex items-center justify-between text-[11px] pt-3 border-t border-slate-100 text-slate-600">
-            {(() => {
+            {weeklyTrend.length > 0 ? (() => {
               const totOnTime = weeklyTrend.reduce((a, w) => a + w.onTimeCount, 0);
               const totLate = weeklyTrend.reduce((a, w) => a + w.lateCount, 0);
               const totMissing = weeklyTrend.reduce((a, w) => a + w.missingCount, 0);
@@ -312,10 +324,14 @@ export const LecturerAnalytics = () => {
                   </span>
                 </div>
               );
-            })()}
-            <span className="font-bold text-blue-600">
-              Tổng {weeklyTrend.length} báo cáo tuần / SV
-            </span>
+            })() : (
+              <span className="text-slate-400">Chưa có dữ liệu phân tích tuần</span>
+            )}
+            {weeklyTrend.length > 0 ? (
+              <span className="font-bold text-blue-600">
+                Tổng {weeklyTrend.length} báo cáo tuần / SV
+              </span>
+            ) : null}
           </div>
         </div>
 

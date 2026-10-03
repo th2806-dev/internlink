@@ -990,22 +990,73 @@ public class LecturerService : ILecturerService
         if (semesterId.HasValue)
             query = query.Where(i => i.SemesterId == semesterId.Value);
         var internships = await query.ToListAsync();
-        var totalStudents = internships.Count;
-        var totalWeeks = internships
-            .Select(i => i.Semester?.TotalWeeks ?? 0)
-            .Where(weeks => weeks > 0)
-            .DefaultIfEmpty(6)
-            .Max();
+        var semesterIds = internships
+            .Where(internship => internship.SemesterId.HasValue)
+            .Select(internship => internship.SemesterId!.Value)
+            .Distinct()
+            .ToList();
+        if (semesterIds.Count == 0)
+            return new List<WeeklyTrendDto>();
 
-        // Group weekly reports by week number
-        var allReports = internships.SelectMany(i => i.WeeklyReports.Where(wr => !wr.IsDeleted)).ToList();
+        var schedules = await _db.SemesterReportSchedules
+            .AsNoTracking()
+            .Where(schedule => semesterIds.Contains(schedule.SemesterId)
+                && !schedule.IsDeleted
+                && (!schedule.LecturerId.HasValue || schedule.LecturerId == lecturerId.Value))
+            .ToListAsync();
+        var scheduleBySemesterWeek = schedules
+            .GroupBy(schedule => (schedule.SemesterId, schedule.WeekNumber))
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .OrderByDescending(schedule => schedule.LecturerId == lecturerId.Value)
+                    .ThenByDescending(schedule => schedule.UpdatedAt ?? schedule.CreatedAt)
+                    .First());
+        var openWeeks = scheduleBySemesterWeek.Values
+            .Where(schedule => schedule.IsSubmissionOpen && schedule.WeekNumber > 0)
+            .Select(schedule => schedule.WeekNumber)
+            .Distinct()
+            .OrderBy(week => week)
+            .ToList();
+
         var trend = new List<WeeklyTrendDto>();
-        for (var week = 1; week <= totalWeeks; week++)
+        var now = DateTime.UtcNow;
+        foreach (var week in openWeeks)
         {
-            var weekReports = allReports.Where(r => r.WeekNumber == week).ToList();
-            var onTime = weekReports.Count(r => r.Status == WeeklyReportStatus.Approved || r.Status == WeeklyReportStatus.Submitted);
-            var late = weekReports.Count(r => r.Status == WeeklyReportStatus.RevisionRequested);
-            var missing = totalStudents - weekReports.Count;
+            var scheduledInternships = internships
+                .Where(internship => internship.SemesterId.HasValue
+                    && scheduleBySemesterWeek.TryGetValue((internship.SemesterId.Value, week), out var schedule)
+                    && schedule.IsSubmissionOpen)
+                .ToList();
+            var onTime = 0;
+            var late = 0;
+            var missing = 0;
+            var pending = 0;
+
+            foreach (var internship in scheduledInternships)
+            {
+                var dueDate = scheduleBySemesterWeek[(internship.SemesterId!.Value, week)].DueDate;
+                var submission = internship.WeeklyReports
+                    .Where(report => !report.IsDeleted && report.WeekNumber == week && report.SubmittedAt.HasValue)
+                    .OrderByDescending(report => report.SubmittedAt)
+                    .FirstOrDefault();
+
+                if (submission?.SubmittedAt is DateTime submittedAt)
+                {
+                    if (submittedAt <= dueDate) onTime++;
+                    else late++;
+                }
+                else if (dueDate < now)
+                {
+                    missing++;
+                }
+                else
+                {
+                    pending++;
+                }
+            }
+
+            var totalStudents = scheduledInternships.Count;
 
             trend.Add(new WeeklyTrendDto
             {
@@ -1013,7 +1064,8 @@ public class LecturerService : ILecturerService
                 Label = $"Tuần {week}",
                 OnTimeCount = onTime,
                 LateCount = late,
-                MissingCount = Math.Max(0, missing),
+                MissingCount = missing,
+                PendingCount = pending,
                 TotalStudents = totalStudents,
                 ComplianceRate = totalStudents > 0 ? Math.Round((decimal)onTime / totalStudents * 100, 1) : 0
             });
@@ -1094,13 +1146,16 @@ public class LecturerService : ILecturerService
                 {
                     CompanyName = company?.CompanyName ?? "Unknown",
                     StudentCount = g.Count(),
+                    EvaluatedStudentCount = grades.Count,
                     Positions = positions.Any() ? string.Join(", ", positions) : "—",
                     AverageGrade = grades.Any() ? Math.Round(grades.Average(), 1) : 0,
-                    PartnershipLevel = (g.Count() >= 5 && grades.Any() && grades.Average() >= 8.0m)
-                        ? "Hợp tác Xuất sắc"
-                        : (g.Count() >= 3 && grades.Any() && grades.Average() >= 6.5m)
-                            ? "Hợp tác Tốt"
-                            : "Hợp tác"
+                    PartnershipLevel = !grades.Any()
+                        ? "Chưa đủ dữ liệu"
+                        : (g.Count() >= 5 && grades.Average() >= 8.0m)
+                            ? "Hợp tác Xuất sắc"
+                            : (g.Count() >= 3 && grades.Average() >= 6.5m)
+                                ? "Hợp tác Tốt"
+                                : "Hợp tác"
                 };
             })
             .OrderByDescending(c => c.StudentCount)

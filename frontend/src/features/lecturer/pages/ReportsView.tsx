@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { CalendarClock, ClipboardCheck, FileClock, FileCheck2, FileWarning, SearchX } from "lucide-react";
-import { useState } from "react";
+import { CalendarClock, ClipboardCheck, SearchX } from "lucide-react";
 import { PageHeader } from "../../../components/common/PageHeader";
 import { Panel } from "../../../components/common/Panel";
+import { Toolbar } from "../../../components/common/Toolbar";
 import { EmptyState } from "../../../components/common/EmptyState";
-import { TableSkeleton, SkeletonBox } from "../../../components/common/SkeletonLoader";
+import { SkeletonBox, TableSkeleton } from "../../../components/common/SkeletonLoader";
 import { RequestErrorState } from "../../../components/common/RequestErrorState";
 import { SubmissionsHub } from "../components/SubmissionsHub";
 import { WeeklyReportsReviewPanel } from "../components/WeeklyReportsReviewPanel";
@@ -107,10 +107,6 @@ export const ReportsView = ({
   const reportSummary = totals ?? { total: 0, pending: 0, revision: 0, approved: 0 };
   const hasFilter = Boolean(filter.status || filter.appliedSearchTerm);
 
-  /** Số KPI: hiện skeleton đúng bằng chiều cao chữ khi chưa có dữ liệu totals. */
-  const kpiValue = (value: number) =>
-    isTotalsPending ? <SkeletonBox className="h-8 w-14" /> : value;
-
   const handleRetry = () => {
     void reports.refetch();
   };
@@ -161,36 +157,16 @@ export const ReportsView = ({
         <ScheduleConfigTab onShowToast={showToast} semesterId={semesterId} />
       ) : (
         <>
-      <section className="grid grid-cols-2 lg:grid-cols-4 il-panel overflow-hidden">
-        <div className="p-4 border-r border-b lg:border-b-0 border-slate-100">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Tổng báo cáo</p>
-          <div className="text-2xl font-bold il-kpi-val text-slate-900 mt-1">{kpiValue(reportSummary.total)}</div>
-          <p className="text-[11px] text-slate-500 mt-1">Theo kỳ đang chọn</p>
-        </div>
-        <div className="p-4 lg:border-r border-b lg:border-b-0 border-slate-100 border-l-4 border-l-amber-500">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700 flex items-center gap-1"><FileClock className="w-3.5 h-3.5" /> Chờ xử lý</p>
-          <div className="text-2xl font-bold il-kpi-val text-slate-900 mt-1">{kpiValue(reportSummary.pending)}</div>
-          <p className="text-[11px] text-slate-500 mt-1">Cần nhận xét</p>
-        </div>
-        <div className="p-4 border-r border-slate-100 border-l-4 border-l-rose-500">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-rose-700 flex items-center gap-1"><FileWarning className="w-3.5 h-3.5" /> Cần sửa</p>
-          <div className="text-2xl font-bold il-kpi-val text-slate-900 mt-1">{kpiValue(reportSummary.revision)}</div>
-          <p className="text-[11px] text-slate-500 mt-1">Đang chờ sinh viên cập nhật</p>
-        </div>
-        <div className="p-4 border-l-4 border-l-emerald-500">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1"><FileCheck2 className="w-3.5 h-3.5" /> Đã duyệt</p>
-          <div className="text-2xl font-bold il-kpi-val text-slate-900 mt-1">{kpiValue(reportSummary.approved)}</div>
-          <p className="text-[11px] text-slate-500 mt-1">Hoàn tất phản hồi</p>
-        </div>
-      </section>
-
-      <Panel padding="sm" className="border-blue-100 bg-blue-50/40">
-        <div className="flex items-center gap-2 text-xs font-semibold text-blue-900">
-          <ClipboardCheck className="w-4 h-4 text-blue-700" />
-          <span>Hàng đợi duyệt báo cáo</span>
-          <span className="text-blue-700/70">Chọn một báo cáo bên dưới để xem nội dung và gửi nhận xét.</span>
-        </div>
-      </Panel>
+      <Toolbar
+        left={(
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-medium text-slate-500">
+            <span><strong className="text-slate-800">{isTotalsPending ? "…" : reportSummary.total}</strong> báo cáo</span>
+            <span><strong className="text-amber-700">{isTotalsPending ? "…" : reportSummary.pending}</strong> chờ xử lý</span>
+            <span><strong className="text-rose-700">{isTotalsPending ? "…" : reportSummary.revision}</strong> cần sửa</span>
+            <span><strong className="text-emerald-700">{isTotalsPending ? "…" : reportSummary.approved}</strong> đã duyệt</span>
+          </div>
+        )}
+      />
 
       {/* ── 1. ĐANG TẢI (khởi tạo): skeleton giữ nguyên bố cục, không nhấp nháy ── */}
       {isPending && !isError && (

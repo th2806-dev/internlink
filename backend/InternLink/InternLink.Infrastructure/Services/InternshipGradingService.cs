@@ -114,10 +114,9 @@ public class InternshipGradingService : IInternshipGradingService
             .Where(a => studentIds.Contains(a.StudentId) && !a.IsDeleted
                         && a.AttendanceSession.SemesterId == semesterId
                         && !a.AttendanceSession.IsDeleted
-                        && !a.AttendanceSession.IsLecturerOnly
-                        // Buổi hướng dẫn chung (sinh hoạt lớp) là điểm danh PHỤ — vắng không tính điều kiện dự thi
-                        && !a.AttendanceSession.IsGeneralSession)
-            .Select(a => new { a.StudentId, a.Status, a.AttendanceSession.WeekNumber })
+                        && a.AttendanceSession.Status == AttendanceSessionStatus.Completed
+                        && !a.AttendanceSession.IsLecturerOnly)
+            .Select(a => new { a.StudentId, a.Status, a.AttendanceSession.WeekNumber, a.AttendanceSession.IsGeneralSession })
             .ToListAsync();
 
         // studentId → week → trạng thái điểm danh của buổi gặp tuần đó (nhiều buổi/tuần:Absent ưu tiên)
@@ -129,14 +128,14 @@ public class InternshipGradingService : IInternshipGradingService
                     w => w.Key,
                     w => w.Any(x => x.Status == AttendanceStatus.Absent) ? "absent" : "present"));
 
-        // Tuần có buổi hẹn (để phân bi�“t "chưa có buổi" vs "vắng")
-        var sessionWeeks = await _context.AttendanceSessions
-            .AsNoTracking()
-            .Where(s => s.SemesterId == semesterId && !s.IsDeleted && !s.IsLecturerOnly && !s.IsGeneralSession)
-            .Select(s => new { s.WeekNumber })
-            .Distinct()
-            .ToListAsync();
-        var sessionWeekSet = sessionWeeks.Select(x => x.WeekNumber).ToHashSet();
+        var requiredAbsencesByStudent = attendance
+            .Where(a => !a.IsGeneralSession)
+            .GroupBy(a => a.StudentId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.GroupBy(x => x.WeekNumber).ToDictionary(
+                    w => w.Key,
+                    w => w.Any(x => x.Status == AttendanceStatus.Absent)));
 
         // 5) Điểm giảng viên đã lưu (QualityLevel / HasCreativeProduct / OralExamScore)
         var evaluations = await _context.Evaluations
@@ -152,7 +151,7 @@ public class InternshipGradingService : IInternshipGradingService
         var finalReportWeek = totalWeeks + 1;
         // Tiến độ / điểm QT chỉ tính tuần báo cáo tuần đang bật trong «Cấu hình báo cáo».
         var weekSchedules = schedules
-            .Where(s => s.WeekNumber >= 1 && s.WeekNumber <= totalWeeks && s.IsSubmissionOpen)
+            .Where(s => s.WeekNumber >= 1 && s.WeekNumber <= totalWeeks)
             .ToList();
         var finalSchedule = schedules.FirstOrDefault(s => s.WeekNumber == finalReportWeek && s.IsSubmissionOpen);
 
@@ -205,6 +204,8 @@ public class InternshipGradingService : IInternshipGradingService
                 ? list : new List<(Guid InternshipId, int WeekNumber, DateTime? SubmittedAt)>();
             var attendanceByWeek = attendanceByStudent.TryGetValue(student.Id, out var atMap)
                 ? atMap : new Dictionary<int, string>();
+            var requiredAbsencesByWeek = requiredAbsencesByStudent.TryGetValue(student.Id, out var absenceMap)
+                ? absenceMap : new Dictionary<int, bool>();
 
             var weeks = new List<InternshipWeekStatusDto>();
             var lateCount = 0;
@@ -237,12 +238,12 @@ public class InternshipGradingService : IInternshipGradingService
                 if (status == "missing" && schedule.IsSubmissionOpen) missingCount++;
 
                 // ── Điểm danh buổi hẹn — hệ thống ĐỘC LẬP với nộp bài ──
-                var hasSession = sessionWeekSet.Contains(schedule.WeekNumber);
                 var attendanceStatus = attendanceByWeek.TryGetValue(schedule.WeekNumber, out var at)
                     ? at
-                    : (hasSession ? "absent" : "no_session"); // có buổi nhưng chưa chấm → coi như vắng
-                var absent = attendanceStatus == "absent";
-                if (absent) absentCount++;
+                    : "no_session"; // Không có bản ghi của sinh viên này thì không suy ra là vắng.
+                var isAttendanceAbsent = requiredAbsencesByWeek.TryGetValue(schedule.WeekNumber, out var wasAbsent)
+                    && wasAbsent;
+                if (isAttendanceAbsent) absentCount++;
 
                 weeks.Add(new InternshipWeekStatusDto
                 {
@@ -251,9 +252,10 @@ public class InternshipGradingService : IInternshipGradingService
                     StartDate = schedule.StartDate,
                     Deadline = schedule.DueDate,
                     SubmittedAt = report.SubmittedAt,
+                    IsSubmissionOpen = schedule.IsSubmissionOpen,
                     Status = status,
                     AttendanceStatus = attendanceStatus,
-                    IsAttendanceAbsent = absent,
+                    IsAttendanceAbsent = isAttendanceAbsent,
                 });
             }
 
@@ -387,6 +389,7 @@ public class InternshipGradingService : IInternshipGradingService
                     && a.Status == AttendanceStatus.Absent
                     && a.AttendanceSession.SemesterId == semesterId
                     && !a.AttendanceSession.IsDeleted
+                    && a.AttendanceSession.Status == AttendanceSessionStatus.Completed
                     && !a.AttendanceSession.IsLecturerOnly
                     && !a.AttendanceSession.IsGeneralSession)
                 .Select(a => (int?)a.AttendanceSession.WeekNumber)

@@ -453,6 +453,7 @@ export interface LecturerWeeklyTrendDto {
   onTimeCount: number;
   lateCount: number;
   missingCount: number;
+  pendingCount: number;
   totalStudents: number;
   complianceRate: number;
 }
@@ -471,6 +472,7 @@ export interface LecturerGradeDistributionDto {
 export interface LecturerCompanyStatDto {
   companyName: string;
   studentCount: number;
+  evaluatedStudentCount: number;
   positions: string;
   averageGrade: number;
   partnershipLevel: string;

@@ -260,78 +260,77 @@ export const DashboardView = ({
       : "—";
 
   const isArchived = selectedSemester?.status === "completed";
-  const toggleTask = () => {
-    onShowToast?.("Vui lòng nộp báo cáo qua trang Báo cáo tuần", "info");
-  };
 
   return (
-    <div className="space-y-5 animate-in fade-in duration-200">
+    <div className="mx-auto max-w-[1500px] space-y-5 animate-in fade-in duration-200">
       <PageHeader
         icon={LayoutDashboard}
         title={`Xin chào, ${profile.name}`}
-        subtitle={`Thực tập sinh tại ${profile.company} (${profile.position}) • Hướng dẫn: ${profile.lecturerName}`}
+        subtitle={`Thực tập sinh tại ${profile.company} · ${profile.position} · GVHD: ${profile.lecturerName}`}
         badge={profile.mssv}
         badgeColor="bg-blue-100 text-blue-800 border-blue-200"
       >
-        <span className="px-2 py-0.5 font-semibold text-[10px] rounded-md border bg-emerald-100 text-emerald-800 border-emerald-200">
+        <span className="max-w-full break-words rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-800">
           {profile.statusBadge}
         </span>
       </PageHeader>
 
       {isArchived && (
-        <div className="px-4 py-3 bg-slate-100 border border-slate-300 rounded-lg text-xs text-slate-800 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
+        <div className="flex flex-col gap-2 rounded-md border border-slate-300 bg-slate-100 px-4 py-3 text-xs text-slate-800 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-start gap-2.5">
             <Lock className="w-4 h-4 text-slate-600 shrink-0" />
-            <span>
+            <span className="min-w-0">
               Đợt thực tập <strong>{selectedSemester.name}</strong> đã kết thúc & đóng dữ liệu. Tài khoản của bạn đang ở chế độ <strong>Lưu trữ (Chỉ xem)</strong>.
             </span>
           </div>
-          <span className="px-2.5 py-0.5 bg-slate-200 text-slate-700 font-bold rounded text-[10px] shrink-0">
+          <span className="ml-6 w-fit shrink-0 rounded border border-slate-300 bg-white px-2.5 py-1 text-[10px] font-bold text-slate-700 sm:ml-0">
             Hồ sơ đã lưu trữ
           </span>
         </div>
       )}
 
       {!hasActiveSemester && (
-        <div className="px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800 flex items-center gap-2.5">
+        <div className="flex items-start gap-2.5 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-800">
           <CalendarIcon className="w-4 h-4 text-blue-600 shrink-0" />
-          <span>
+          <span className="min-w-0">
             Chưa có kỳ thực tập nào đang hoạt động. Dữ liệu sẽ tự động hiển thị khi Quản trị hệ thống bắt đầu kỳ thực tập.
           </span>
         </div>
       )}
 
       {showEmptyState ? (
-        <Panel className="p-8 text-center space-y-4 max-w-2xl mx-auto" padding="none">
-          <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
-            <Building2 className="w-10 h-10" />
+        <Panel className="mx-auto max-w-2xl space-y-4 px-5 py-8 text-center sm:px-8" padding="none">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-md border border-blue-100 bg-blue-50 text-blue-700">
+            <Building2 className="h-7 w-7" />
           </div>
           <div className="space-y-2">
-            <h3 className="text-xl font-bold text-slate-800">
+            <h3 className="text-lg font-bold text-slate-900">
               Bạn chưa bắt đầu kỳ thực tập
             </h3>
-            <p className="text-sm text-slate-600 max-w-md mx-auto">
+            <p className="mx-auto max-w-md text-sm leading-6 text-slate-600">
               Vui lòng hoàn tất đăng ký đợt thực tập, chọn doanh nghiệp nguyện
               vọng hoặc nộp hồ sơ xác nhận tiếp nhận để mở khóa toàn bộ tính
               năng báo cáo.
             </p>
           </div>
-          <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
+          <div className="flex flex-col items-stretch justify-center gap-2 pt-2 sm:flex-row sm:items-center">
             <button
+              type="button"
               onClick={() => {
                 setShowEmptyState(false);
                 onShowToast?.(
                   "Đang mở Hướng dẫn Đăng ký thực tập đợt I - 2026",
                 );
               }}
-              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-md shadow-md transition-colors flex items-center gap-2"
+              className="inline-flex min-h-11 items-center justify-center gap-2 whitespace-nowrap rounded-md bg-blue-700 px-5 py-2.5 text-xs font-bold text-white transition-colors hover:bg-blue-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
             >
               <span>Xem hướng dẫn đăng ký đợt</span>
               <ArrowRight className="w-4 h-4" />
             </button>
             <button
+              type="button"
               onClick={() => onNavigate?.("student-templates")}
-              className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-md transition-colors"
+              className="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-md border border-slate-300 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
             >
               Tải mẫu đơn đăng ký
             </button>
@@ -387,11 +386,11 @@ export const DashboardView = ({
 
           {/* PROGRESS BREAKDOWN: operational progress only */}
           {profile.progressBreakdown && (
-            <Panel className="p-4 bg-gradient-to-r from-slate-50 via-blue-50/20 to-slate-50 border border-slate-200/80 rounded-xl shadow-xs">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-200/60">
+            <Panel className="space-y-3">
+              <div className="flex flex-col gap-2 border-b border-slate-100 pb-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="p-1.5 bg-blue-600 text-white rounded-lg">
-                    <Target className="w-4 h-4" />
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-blue-100 bg-blue-50 text-blue-700">
+                    <Target className="h-4 w-4" />
                   </div>
                   <div>
                     <h3 className="text-sm font-bold text-slate-900">
@@ -403,55 +402,65 @@ export const DashboardView = ({
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-slate-700 font-mono">
-                    Tổng: <span className="text-blue-600 text-sm font-black">{profile.overallProgress}%</span> / 100%
+                  <span className="text-xs font-semibold text-slate-600">
+                    Tổng tiến độ
+                  </span>
+                  <span className="font-display text-sm font-bold tabular-nums text-blue-800">
+                    {profile.overallProgress}%
                   </span>
                 </div>
               </div>
 
               {/* Reports account for 80%; final evaluation accounts for 20%. */}
-              <div className="w-full bg-slate-200 rounded-full h-2.5 my-3 flex overflow-hidden">
+              <div
+                role="progressbar"
+                aria-label="Tiến độ thực tập"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.min(Math.max(profile.overallProgress, 0), 100)}
+                className="my-3 flex h-2.5 w-full overflow-hidden rounded-full bg-slate-200"
+              >
                 <div
                   style={{ width: `${profile.progressBreakdown.reportPercent}%` }}
-                  className="bg-blue-600 h-full transition-all duration-300"
+                  className="h-full bg-blue-700 transition-[width] duration-300"
                   title={`Báo cáo tuần: ${profile.progressBreakdown.reportPercent}% / 80%`}
                 />
                 <div
                   style={{ width: `${profile.progressBreakdown.evaluationPercent}%` }}
-                  className="bg-emerald-500 h-full transition-all duration-300"
+                  className="h-full bg-emerald-600 transition-[width] duration-300"
                   title={`Đánh giá cuối kỳ: ${profile.progressBreakdown.evaluationPercent}% / 20%`}
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1 text-xs">
-                <div className="p-2.5 rounded-lg border bg-white shadow-2xs border-slate-100 flex flex-col justify-between">
-                  <div className="flex items-center justify-between text-[11px] font-bold">
-                    <span className="text-slate-600">1. Báo cáo tuần</span>
-                    <span className={profile.progressBreakdown.reportPercent > 0 ? "text-blue-600" : "text-slate-400"}>
+              <div className="grid grid-cols-1 divide-y divide-slate-100 text-xs sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+                <div className="flex flex-col justify-between gap-1.5 py-2 sm:pr-4">
+                  <div className="flex items-center justify-between gap-2 text-[11px] font-bold">
+                    <span className="text-slate-700">Báo cáo tuần</span>
+                    <span className={profile.progressBreakdown.reportPercent > 0 ? "text-blue-800" : "text-slate-500"}>
                       {profile.progressBreakdown.reportPercent}/80%
                     </span>
                   </div>
-                  <div className="text-[10px] text-slate-500 mt-1">
+                  <div className="text-[10px] text-slate-500">
                     <span className="text-slate-600 font-semibold">
                       {profile.progressBreakdown.submittedReportsCount}/{profile.progressBreakdown.requiredWeeksCount} tuần
                     </span>
                   </div>
                 </div>
 
-                <div className="p-2.5 rounded-lg border bg-white shadow-2xs border-slate-100 flex flex-col justify-between">
-                  <div className="flex items-center justify-between text-[11px] font-bold">
-                    <span className="text-slate-600">2. Đánh giá cuối kỳ</span>
-                    <span className={profile.progressBreakdown.evaluationPercent > 0 ? "text-emerald-600" : "text-slate-400"}>
+                <div className="flex flex-col justify-between gap-1.5 py-2 sm:pl-4">
+                  <div className="flex items-center justify-between gap-2 text-[11px] font-bold">
+                    <span className="text-slate-700">Đánh giá cuối kỳ</span>
+                    <span className={profile.progressBreakdown.evaluationPercent > 0 ? "text-emerald-700" : "text-slate-500"}>
                       {profile.progressBreakdown.evaluationPercent}/20%
                     </span>
                   </div>
-                  <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-1">
+                  <div className="flex items-center gap-1 text-[10px] text-slate-500">
                     {profile.progressBreakdown.evaluationPercent > 0 ? (
-                      <span className="text-emerald-600 font-semibold flex items-center gap-1">
+                      <span className="flex items-center gap-1 font-semibold text-emerald-700">
                         <CheckCircle2 className="w-3 h-3" /> Đã chốt điểm
                       </span>
                     ) : (
-                      <span className="text-slate-400 flex items-center gap-1">
+                      <span className="flex items-center gap-1 text-slate-500">
                         <Circle className="w-3 h-3" /> Cuối kỳ
                       </span>
                     )}
@@ -477,43 +486,38 @@ export const DashboardView = ({
                   {currentWeekLabel}
                 </span>
               </div>
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div className="p-3 bg-slate-50 border border-slate-200 rounded-md">
-                  <p className="text-[10px] font-bold text-slate-500 uppercase">
-                    Điểm TB
-                  </p>
-                  <p className="text-2xl font-bold text-emerald-700 mt-1">
+              <dl className="divide-y divide-slate-100">
+                <div className="flex items-center justify-between gap-3 py-2 first:pt-0">
+                  <dt className="text-xs font-medium text-slate-600">Điểm hiện tại</dt>
+                  <dd className="font-display text-xl font-bold tabular-nums text-emerald-800">
                     {currentGrade || "—"}
-                  </p>
+                    {currentGrade > 0 && <span className="ml-1 text-xs font-medium text-slate-500">/ 10</span>}
+                  </dd>
                 </div>
-                <div className="p-3 bg-slate-50 border border-slate-200 rounded-md">
-                  <p className="text-[10px] font-bold text-slate-500 uppercase">
-                    Đúng hạn
-                  </p>
-                  <p className="text-2xl font-bold text-blue-700 mt-1">
+                <div className="flex items-center justify-between gap-3 py-2">
+                  <dt className="text-xs font-medium text-slate-600">Báo cáo được duyệt</dt>
+                  <dd className="font-display text-xl font-bold tabular-nums text-blue-800">
                     {reports.length ? `${onTimeRate}%` : "—"}
-                  </p>
+                  </dd>
                 </div>
-                <div className="p-3 bg-blue-50/60 border border-blue-100 rounded-md col-span-2">
-                  <p className="text-[10px] font-bold text-blue-700 uppercase">
-                    Đánh giá
-                  </p>
-                  <p className="text-sm font-bold text-slate-900 mt-1">
+                <div className="flex items-start justify-between gap-3 py-2 last:pb-0">
+                  <dt className="text-xs font-medium text-slate-600">Đánh giá cuối kỳ</dt>
+                  <dd className="text-right text-xs font-semibold text-slate-900">
                     {evaluation?.isFinalized
                       ? `${currentGrade}/10 · ${gradeLabel(currentGrade)}`
                       : evaluation
                         ? "Đang chấm"
                         : "Chưa có đánh giá"}
-                  </p>
+                  </dd>
                 </div>
-              </div>
+              </dl>
             </Panel>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
             <div className="lg:col-span-2 space-y-5">
               <Panel className="space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex flex-col gap-2 border-b border-slate-100 pb-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
                       <CheckCircle2 className="w-4 h-4 text-blue-600" /> Nhiệm
@@ -523,12 +527,12 @@ export const DashboardView = ({
                       Các công việc ưu tiên giúp duy trì tiến độ thực tập.
                     </p>
                   </div>
-                  <span className="text-xs bg-blue-50 text-blue-700 font-bold px-2.5 py-1 rounded-full border border-blue-100">
+                  <span className="w-fit rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-slate-700">
                     {tasks.length} việc cần làm
                   </span>
                 </div>
 
-                <div className="space-y-2.5">
+                <div className="divide-y divide-slate-100">
                   {reportsLoading ? (
                     <p className="text-xs text-slate-500 py-4">Đang tải...</p>
                   ) : tasks.length === 0 ? (
@@ -539,22 +543,17 @@ export const DashboardView = ({
                     tasks.map((task) => (
                       <div
                         key={task.id}
-                        className={`p-3.5 rounded-md border transition-all flex items-start justify-between gap-3 ${task.priority === "Cao" ? "bg-rose-50/30 border-rose-200/80 hover:border-rose-300" : "bg-white border-slate-200 hover:border-blue-300"}`}
+                        className="flex items-start justify-between gap-3 py-3 first:pt-0 last:pb-0"
                       >
                         <div className="flex items-start gap-3 min-w-0">
-                          <button
-                            onClick={toggleTask}
-                            className="mt-0.5 text-slate-400 hover:text-blue-600 transition-colors shrink-0"
-                          >
-                            <Circle className="w-5 h-5" />
-                          </button>
+                          <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${task.priority === "Cao" ? "bg-rose-600" : task.priority === "Trung bình" ? "bg-amber-500" : "bg-slate-400"}`} aria-hidden="true" />
                           <div className="space-y-1 min-w-0">
-                            <p className="text-xs md:text-sm font-bold text-slate-800 leading-snug">
+                            <p className="break-words text-xs font-semibold leading-snug text-slate-900 md:text-sm">
                               {task.title}
                             </p>
                             <div className="flex flex-wrap items-center gap-2 text-[11px]">
                               <span
-                                className={`px-2 py-0.5 rounded-md font-bold text-[10px] ${task.priority === "Cao" ? "bg-rose-100 text-rose-800" : task.priority === "Trung bình" ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-700"}`}
+                                className={`rounded-sm px-1.5 py-0.5 text-[10px] font-semibold ${task.priority === "Cao" ? "bg-rose-50 text-rose-800" : task.priority === "Trung bình" ? "bg-amber-50 text-amber-800" : "bg-slate-100 text-slate-700"}`}
                               >
                                 Ưu tiên: {task.priority}
                               </span>
@@ -566,10 +565,11 @@ export const DashboardView = ({
                           </div>
                         </div>
                         <button
+                          type="button"
                           onClick={() =>
                             onNavigate?.("student-weekly-reports")
                           }
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold shrink-0 transition-colors ${task.priority === "Cao" ? "bg-rose-600 hover:bg-rose-700 text-white shadow-2xs" : "bg-blue-600 hover:bg-blue-700 text-white"}`}
+                          className={`inline-flex min-h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 ${task.priority === "Cao" ? "bg-rose-700 text-white hover:bg-rose-800" : "bg-blue-700 text-white hover:bg-blue-800"}`}
                         >
                           {task.actionLabel}
                         </button>
@@ -580,7 +580,7 @@ export const DashboardView = ({
               </Panel>
 
               <Panel className="space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex flex-col gap-2 border-b border-slate-100 pb-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
                       <FileCheck2 className="w-4 h-4 text-blue-600" /> Báo cáo
@@ -592,14 +592,15 @@ export const DashboardView = ({
                     </p>
                   </div>
                   <button
+                    type="button"
                     onClick={() => onNavigate?.("student-weekly-reports")}
-                    className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1"
+                    className="inline-flex min-h-10 w-fit items-center gap-1 whitespace-nowrap text-xs font-semibold text-blue-800 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
                   >
                     Xem tất cả <ChevronRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
 
-                <div className="space-y-2.5">
+                <div className="divide-y divide-slate-100">
                   {reports.length === 0 ? (
                     <p className="text-xs text-slate-500 py-4">
                       Chưa có báo cáo nào
@@ -611,26 +612,25 @@ export const DashboardView = ({
                       .map((report) => (
                         <div
                           key={report.id}
-                          className="p-3.5 rounded-md border bg-white border-slate-200"
+                          className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
                         >
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <p className="text-xs font-bold text-slate-800">
-                                Báo cáo tuần {report.weekNumber}
-                              </p>
-                              <p className="text-[11px] text-slate-500">
-                                {report.title}
-                              </p>
-                            </div>
-                            <button
-                              onClick={() =>
-                                onNavigate?.("student-weekly-reports")
-                              }
-                              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white"
-                            >
-                              Chi tiết
-                            </button>
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-slate-900">
+                              Báo cáo tuần {report.weekNumber}
+                            </p>
+                            <p className="break-words text-[11px] text-slate-500">
+                              {report.title}
+                            </p>
                           </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onNavigate?.("student-weekly-reports")
+                            }
+                            className="inline-flex min-h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
+                          >
+                            Chi tiết
+                          </button>
                         </div>
                       ))
                   )}
@@ -650,8 +650,9 @@ export const DashboardView = ({
                     </p>
                   </div>
                   <button
+                    type="button"
                     onClick={() => onNavigate?.("student-feedback")}
-                    className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1"
+                    className="inline-flex min-h-10 items-center gap-1 whitespace-nowrap text-xs font-semibold text-blue-800 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
                   >
                     Xem tất cả
                   </button>
@@ -688,8 +689,9 @@ export const DashboardView = ({
                           </div>
                         </div>
                         <button
+                          type="button"
                           onClick={() => setSelectedFeedback(fb)}
-                          className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-md transition-colors shrink-0 self-end sm:self-center"
+                          className="inline-flex min-h-10 shrink-0 items-center justify-center whitespace-nowrap self-end rounded-md bg-blue-700 px-3 py-1 text-xs font-semibold text-white transition-colors hover:bg-blue-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 sm:self-center"
                         >
                           Xem chi tiết
                         </button>

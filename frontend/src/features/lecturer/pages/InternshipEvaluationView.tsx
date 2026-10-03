@@ -455,6 +455,14 @@ function GradingTab({
     () => students.find((s) => s.studentId === selectedId) ?? null,
     [students, selectedId]
   );
+  const openWeeks = useMemo(
+    () => selected?.weeks.filter((week) => week.isSubmissionOpen) ?? [],
+    [selected],
+  );
+  const openWeeklyQuality = useMemo(
+    () => openWeeks.map((week) => weeklyQuality[week.weekNumber]).filter((score): score is number => score != null),
+    [openWeeks, weeklyQuality],
+  );
 
   const openPanel = (student: StudentGrade) => {
     setSelectedId(student.studentId);
@@ -698,7 +706,7 @@ function GradingTab({
                   Nộp bài & điểm danh theo tuần
                 </p>
                 <div className="flex flex-wrap gap-1.5">
-                  {selected.weeks.map((w) => {
+                  {openWeeks.map((w) => {
                     const badge = WEEK_STATUS_BADGE[w.status];
                     const at = ATTENDANCE_BADGE[w.attendanceStatus] ?? ATTENDANCE_BADGE.no_session;
                     return (
@@ -730,14 +738,14 @@ function GradingTab({
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Chất lượng từng báo cáo (nhận từ duyệt báo cáo)
                   </p>
-                  {Object.keys(weeklyQuality).length > 0 && (
+                  {openWeeklyQuality.length > 0 && (
                     <span className="text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                      TB: {(Object.values(weeklyQuality).reduce((a, b) => a + b, 0) / Object.values(weeklyQuality).length).toFixed(1)} / 5.0đ
+                      TB: {(openWeeklyQuality.reduce((sum, score) => sum + score, 0) / openWeeklyQuality.length).toFixed(1)} / 5.0đ
                     </span>
                   )}
                 </div>
                 <div className="grid grid-cols-1 gap-1.5">
-                  {selected.weeks.map((week) => {
+                  {openWeeks.map((week) => {
                     const score = weeklyQuality[week.weekNumber];
                     const level = score != null ? GR_QUALITY_RUBRIC_LEVELS.find((l) => l.value === score) : null;
 
@@ -766,6 +774,11 @@ function GradingTab({
                       </div>
                     );
                   })}
+                  {openWeeks.length === 0 && (
+                    <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-500">
+                      Chưa mở deadline tuần nào trong học kỳ này.
+                    </p>
+                  )}
                 </div>
                 <p className="mt-1.5 text-[11px] text-slate-500 flex items-center gap-1">
                   <Lock className="h-3 w-3 text-slate-400 shrink-0" />

@@ -231,6 +231,7 @@ public sealed class WeeklyTrendDto
     public int OnTimeCount { get; set; }
     public int LateCount { get; set; }
     public int MissingCount { get; set; }
+    public int PendingCount { get; set; }
     public int TotalStudents { get; set; }
     public decimal ComplianceRate { get; set; }
 }
@@ -257,6 +258,7 @@ public sealed class CompanyStatsDto
 {
     public string CompanyName { get; set; } = null!;
     public int StudentCount { get; set; }
+    public int EvaluatedStudentCount { get; set; }
     public string Positions { get; set; } = null!;
     public decimal AverageGrade { get; set; }
     public string PartnershipLevel { get; set; } = null!;
