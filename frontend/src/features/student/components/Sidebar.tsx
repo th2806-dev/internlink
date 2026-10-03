@@ -13,11 +13,25 @@ import {
 import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
 import { useStudentPortal } from "../../../contexts/StudentPortalContext";
 import type { UserRole } from "../../../types/common";
+
+type StudentNavItem = {
+  id: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  badge?: string;
+  badgeAlert?: boolean;
+};
+
+type StudentNavSection = {
+  title: string;
+  items: StudentNavItem[];
+};
+
 export const Sidebar = ({
   activeTab,
   onNavigate,
   onSwitchPortal: _onSwitchPortal,
-  studentName = "Nguyễn Văn A",
+  studentName = "Sinh viên",
   isOpen = false,
   onClose,
 }: {
@@ -30,24 +44,20 @@ export const Sidebar = ({
 }) => {
   const { profile } = useStudentPortal();
   const displayName = profile.name || studentName;
-  // Trình tự theo WORKFLOW sinh viên thực tập:
-  // Kỳ thực tập (đăng ký, lịch gặp) → Báo cáo & sản phẩm (nộp hằng tuần)
-  // → Phản hồi & kết quả (xem duyệt, chấm điểm) → Hệ thống.
-  const navSections = [
+  const navSections: StudentNavSection[] = [
     {
-      title: "TỔNG QUAN",
+      title: "",
       items: [
         { id: "student-dashboard", label: "Tổng quan", icon: LayoutDashboard },
       ],
     },
     {
-      title: "KỲ THỰC TẬP",
+      title: "THỰC TẬP",
       items: [
         {
           id: "student-internship",
           label: "Kỳ thực tập của tôi",
           icon: Briefcase,
-          badge: "Active",
         },
         {
           id: "student-attendance",
@@ -57,7 +67,7 @@ export const Sidebar = ({
       ],
     },
     {
-      title: "NỘP BÁO CÁO & SẢN PHẨM",
+      title: "BÀI NỘP",
       items: [
         {
           id: "student-weekly-reports",
@@ -92,13 +102,12 @@ export const Sidebar = ({
       ],
     },
     {
-      title: "HỆ THỐNG",
+      title: "",
       items: [
         {
           id: "student-notifications",
           label: "Thông báo",
           icon: Bell,
-          badgeAlert: true,
         },
         { id: "student-account", label: "Tài khoản", icon: User },
       ],
@@ -107,12 +116,13 @@ export const Sidebar = ({
 
   return (
     <aside
-      className={`il-sidebar w-64 flex flex-col justify-between h-screen sticky top-0 z-40 select-none student-sidebar-drawer ${isOpen ? "is-open" : ""}`}
+      id="student-navigation"
+      className={`il-sidebar w-64 shrink-0 flex flex-col justify-between h-screen sticky top-0 z-40 select-none student-sidebar-drawer ${isOpen ? "is-open" : ""}`}
     >
       <button
         type="button"
         aria-label="Đóng menu điều hướng"
-        className="student-sidebar-close md:hidden"
+        className="student-sidebar-close lg:hidden"
         onClick={onClose}
       >
         Đóng
@@ -135,9 +145,9 @@ export const Sidebar = ({
           </div>
         </div>
 
-        <nav className="p-3 space-y-3 overflow-y-auto max-h-[calc(100vh-160px)] il-scrollbar">
-          {navSections.map((section, idx) => (
-            <div key={idx} className="space-y-1">
+        <nav className="p-3 space-y-3 overflow-y-auto max-h-[calc(100dvh-160px)] il-scrollbar" aria-label="Điều hướng sinh viên">
+          {navSections.map((section) => (
+            <div key={section.title || section.items[0]?.id} className="space-y-1">
               {section.title && (
                 <p className="il-sidebar-section">{section.title}</p>
               )}
@@ -163,9 +173,6 @@ export const Sidebar = ({
                       <span className="il-sidebar-badge">{item.badge}</span>
                     )}
 
-                    {item.badgeAlert && !isActive && (
-                      <span className="w-2 h-2 rounded-full bg-rose-500" />
-                    )}
                   </button>
                 );
               })}
@@ -175,19 +182,12 @@ export const Sidebar = ({
       </div>
 
       <div className="il-sidebar-footer">
-        <div
-          onClick={() => onNavigate("student-account")}
-          className="il-sidebar-profile"
-        >
+        <div className="il-sidebar-profile">
           <div className="relative shrink-0">
             <InitialsAvatar
               name={displayName}
               seed={profile.mssv}
               size={36}
-            />
-            <span
-              className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full"
-              title="Trực tuyến"
             />
           </div>
 

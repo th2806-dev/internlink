@@ -401,7 +401,8 @@ export const SubmissionsHub = ({
       const localFeedback = {
         id: `local-${Date.now()}`,
         comment: feedbackInput.trim(),
-        authorRole: "Lecturer",
+        isPublic: true,
+        authorRole: "Lecturer" as const,
         lecturerName: "Giảng viên",
         createdAt: new Date().toISOString(),
       };

@@ -24,7 +24,6 @@ import { mapInternshipStatusToUi } from "../../../lib/portalMappers";
 import { INTERNSHIP_WEEKS } from "../../../config/internship";
 import { WeeklyReportTimeline } from "./WeeklyReportTimeline";
 import { StudentReportsTab } from "./StudentReportsTab";
-import type { EvaluationDetailDto } from "../../../types/api";
 
 import { attendanceService } from "../../../services/attendance.service";
 import type { AttendanceRecordDto } from "../../../types/api";
@@ -80,8 +79,7 @@ export function StudentWorkspace({
   const progressPercent = assignment?.progressPercent ?? 0;
   const finalGrade = assignment?.finalGrade ?? evaluation?.finalGrade ?? null;
 
-  // Đã có điểm trung bình → tiến độ coi như hoàn thành 100%
-  const effectiveProgress = finalGrade != null ? 100 : progressPercent;
+  const effectiveProgress = progressPercent;
 
   const statusClass = useMemo(() => {
     if (internshipStatus === "Completed" || internshipStatus === "Graded")
@@ -267,17 +265,17 @@ export function StudentWorkspace({
             </div>
             <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
               <div
-                className={`h-full rounded-full transition-all ${finalGrade != null ? "bg-emerald-500" : "bg-blue-600"}`}
+                className={`h-full rounded-full transition-all ${effectiveProgress >= 100 ? "bg-emerald-500" : "bg-blue-600"}`}
                 style={{ width: `${effectiveProgress}%` }}
               />
             </div>
             {finalGrade != null && (
               <p className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-2.5 py-1.5 flex items-center gap-1.5">
                 <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                Đã có điểm trung bình ({finalGrade}/10) — tiến độ hoàn thành 100%.
+                Điểm trung bình đã ghi nhận: {finalGrade}/10.
               </p>
             )}
-            {assignment?.progressBreakdown && finalGrade == null && (
+            {assignment?.progressBreakdown && (
               <div className="text-[10px] text-slate-500 bg-slate-50 border border-slate-200/60 rounded-md p-2 space-y-1">
                 <div className="flex justify-between font-semibold text-slate-600">
                   <span>TK: {assignment.progressBreakdown.accountPercent}%</span>

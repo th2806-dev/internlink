@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Building2, ChevronLeft, ChevronRight, Eye, GraduationCap, RefreshCw, Search, ArrowRight } from "lucide-react";
+import { Building2, ChevronLeft, ChevronRight, Eye, RefreshCw, Search, ArrowRight } from "lucide-react";
 import { PageHeader } from "../../../components/common/PageHeader";
 import { Panel } from "../../../components/common/Panel";
 import { Toolbar } from "../../../components/common/Toolbar";
@@ -89,12 +89,12 @@ export const EnterprisesView = ({
             <h2 className="text-base font-bold text-slate-900 tracking-tight">Danh sách Doanh nghiệp ({filteredEnterprises.length})</h2>
             <p className="text-xs text-slate-500 font-medium">Dữ liệu lấy từ các internship được phân công cho giảng viên.</p>
           </div>
-          <div className="flex items-center gap-2 text-xs">
-            <div className="relative min-w-[260px]">
+          <div className="flex flex-col gap-2 text-xs sm:flex-row sm:items-center">
+            <div className="relative w-full min-w-0 sm:w-auto sm:min-w-[260px]">
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
               <input value={search} onChange={(event) => updateFilter(setSearch, event.target.value)} placeholder="Tìm tên, lĩnh vực, liên hệ..." className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-medium outline-none focus:bg-white focus:border-blue-500" />
             </div>
-            <select value={fieldFilter} onChange={(event) => updateFilter(setFieldFilter, event.target.value)} className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-500">
+            <select value={fieldFilter} onChange={(event) => updateFilter(setFieldFilter, event.target.value)} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-500 sm:w-auto">
               <option value="all">Tất cả lĩnh vực</option>
               {fields.map((field) => <option key={field} value={field}>{field}</option>)}
             </select>

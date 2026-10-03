@@ -22,17 +22,15 @@ export const AdminKpiSection = ({
   stats,
   isLoading,
 }: AdminKpiSectionProps) => {
-  const lecturerCount = stats?.lecturerCount ?? "—";
-  const studentCount = stats?.studentCount ?? "—";
-  const companyCount = stats?.companyCount ?? "—";
-  const internshipCount = stats?.internshipInProgress ?? "—";
+  const displayCount = (value: number | undefined) =>
+    isLoading ? "…" : value == null ? "—" : formatCount(value);
 
   return (
     <KpiGrid>
       <KpiCard
         tone="blue"
         title="Giảng viên"
-        value={isLoading ? "…" : formatCount(Number(lecturerCount))}
+        value={displayCount(stats?.lecturerCount)}
         unit="giảng viên"
         icon={UserCheck}
         footer={
@@ -47,7 +45,7 @@ export const AdminKpiSection = ({
       <KpiCard
         tone="emerald"
         title="Sinh viên"
-        value={isLoading ? "…" : formatCount(Number(studentCount))}
+        value={displayCount(stats?.studentCount)}
         unit="sinh viên"
         icon={Users}
         footer={
@@ -64,7 +62,7 @@ export const AdminKpiSection = ({
       <KpiCard
         tone="amber"
         title="Thực tập"
-        value={isLoading ? "…" : formatCount(Number(internshipCount))}
+        value={displayCount(stats?.internshipInProgress)}
         unit="đang thực hiện"
         icon={CalendarDays}
         footer={
@@ -77,7 +75,7 @@ export const AdminKpiSection = ({
       <KpiCard
         tone="sky"
         title="Doanh nghiệp"
-        value={isLoading ? "…" : formatCount(Number(companyCount))}
+        value={displayCount(stats?.companyCount)}
         unit="doanh nghiệp"
         icon={Building2}
         footer={

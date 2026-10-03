@@ -1,19 +1,14 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { Sidebar as LecturerSidebar } from "../features/lecturer/components/Sidebar";
 import { Header as LecturerHeader } from "../features/lecturer/components/Header";
 import { Toast } from "../components/common/Toast";
 import { useToast } from "../hooks/useToast";
 
-import type { UserRole } from "../types/common";
-
 interface LecturerLayoutProps {
   children: ReactNode;
   activeTab: string;
   onNavigate: (tab: string) => void;
-  onSwitchPortal: (role: UserRole) => void;
   onLogout: () => void;
-  searchQuery: string;
-  onSearchChange: (query: string) => void;
   currentLecturer: string;
   assignedStudentsCount: number;
 }
@@ -22,36 +17,54 @@ export default function LecturerLayout({
   children,
   activeTab,
   onNavigate,
-  onSwitchPortal,
   onLogout,
-  searchQuery,
-  onSearchChange,
   currentLecturer,
   assignedStudentsCount,
 }: LecturerLayoutProps) {
   const { message, type, clearToast } = useToast();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isSidebarOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsSidebarOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [isSidebarOpen]);
 
   return (
     <div className="min-h-screen bg-[var(--il-surface-bg)] text-slate-800 font-sans flex antialiased">
+      {isSidebarOpen && (
+        <button
+          type="button"
+          aria-label="Đóng menu điều hướng"
+          className="fixed inset-0 z-40 bg-slate-950/25 lg:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
       <LecturerSidebar
         activeTab={activeTab}
-        onNavigate={onNavigate}
+        onNavigate={(tab) => {
+          onNavigate(tab);
+          setIsSidebarOpen(false);
+        }}
         currentLecturer={currentLecturer}
-        onSwitchPortal={onSwitchPortal}
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
       />
       <div className="flex-1 flex flex-col min-w-0">
         <LecturerHeader
           activeTab={activeTab}
           onNavigate={onNavigate}
-          searchQuery={searchQuery}
-          onSearchChange={onSearchChange}
           currentLecturer={currentLecturer}
           assignedStudentsCount={assignedStudentsCount}
-          onSwitchPortal={onSwitchPortal}
           onLogout={onLogout}
+          onMenuOpen={() => setIsSidebarOpen((open) => !open)}
+          isMenuOpen={isSidebarOpen}
         />
         <Toast message={message} type={type} onClose={clearToast} />
-        <main className="p-4 md:p-6 space-y-4 max-w-[1440px] w-full mx-auto">
+        <main className="min-w-0 w-full max-w-[1440px] mx-auto p-3 sm:p-4 lg:p-6 space-y-4">
           {children}
         </main>
       </div>

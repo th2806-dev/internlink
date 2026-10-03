@@ -64,13 +64,12 @@ export function useLecturerPortalData(
     const countBy = (status: string) =>
       weeklyReportService
         .getAllForLecturer({ semesterId: semesterId ?? undefined, skip: 0, take: 1, status })
-        .then((res) => res.total)
-        .catch(() => 0);
+        .then((res) => res.total);
+    setWeeklyReportTotals({ total: 0, pending: 0, revision: 0, approved: 0 });
     const [allTotal, pending, revision, approved] = await Promise.all([
       weeklyReportService
         .getAllForLecturer({ semesterId: semesterId ?? undefined, skip: 0, take: 1 })
-        .then((res) => res.total)
-        .catch(() => 0),
+        .then((res) => res.total),
       countBy("Submitted"),
       countBy("RevisionRequested"),
       countBy("Approved"),
@@ -94,7 +93,9 @@ export function useLecturerPortalData(
           lecturerDashboardService.getWeeklyTrend(semesterId ?? undefined),
         ]);
       // KPI tổng theo trạng thái (server-side) — chạy nền sau khi dữ liệu chính xong
-      void loadWeeklyReportTotals();
+      void loadWeeklyReportTotals().catch((totalsError: unknown) => {
+        onError?.(getApiErrorMessage(totalsError));
+      });
 
       const studentRows = assignedStudents.map((item: LecturerStudentListItemDto) =>
         mapLecturerStudentDtoToStudent(item, lecturerName),
@@ -134,6 +135,7 @@ export function useLecturerPortalData(
           reportType: "Báo cáo tuần",
           time: submittedAt !== "—" ? submittedAt.split(" ").slice(1).join(" ") : "—",
           date: submittedAt !== "—" ? submittedAt.split(" ")[0] : "—",
+          submittedAt: report.submittedAt ?? undefined,
           status: report.status === "Submitted"
             ? "Chờ duyệt"
             : report.status === "RevisionRequested"
@@ -164,7 +166,7 @@ export function useLecturerPortalData(
     } finally {
       setIsLoading(false);
     }
-  }, [enabled, lecturerName, semesterId, onError, loadWeeklyReports]);
+  }, [enabled, lecturerName, semesterId, onError, loadWeeklyReports, loadWeeklyReportTotals]);
 
   const queryWeeklyReports = useCallback((query: { status: string; searchTerm: string; skip: number }) => {
     setWeeklyReportQuery(query);
@@ -191,7 +193,7 @@ export function useLecturerPortalData(
         throw err;
       }
     },
-    [enabled, load, onError],
+    [enabled, onError],
   );
 
   const reviewWeeklyReport = useCallback(

@@ -18,7 +18,6 @@ import { RecentSubmissions } from "../components/RecentSubmissions";
 import { StatsCards } from "../components/StatsCards";
 import {
   DashboardTrendChart,
-  buildLecturerStatusSlices,
 } from "../../../components/common/DashboardCharts";
 import type { ActionItem } from "../../../types/common";
 import type { Deadline } from "../../../types/common";
@@ -69,7 +68,6 @@ export const DashboardView = ({
   weeklyTrendData = [],
   students = [],
   weeklyReports = [],
-  lecturerName,
   isLoading = false,
   error = null,
   onShowToast,
@@ -91,7 +89,6 @@ export const DashboardView = ({
   weeklyTrendData?: { label: string; value: number; target?: number; late?: number; missing?: number }[];
   students?: Student[];
   weeklyReports?: WeeklyReportDto[];
-  lecturerName?: string;
   isLoading?: boolean;
   error?: string | null;
   onShowToast: (msg: string) => void;
@@ -99,7 +96,6 @@ export const DashboardView = ({
   onRefresh?: () => Promise<void> | void;
 }) => {
   const { selectedSemester, activeSemesterId } = useSemester();
-  const statusSlices = buildLecturerStatusSlices(stats);
   const hasActiveSemester = !!activeSemesterId;
   const studentsWithoutCompany = students.filter(
     (student) => !student.company || student.company === "Chưa có" || student.company === "Chưa phân công doanh nghiệp",
@@ -135,7 +131,7 @@ export const DashboardView = ({
     for (const sub of submissions
       .filter((s) => s.sourceType !== "weeklyReport")
       .slice(0, 15)) {
-      const ts = (sub as any).submittedAt ?? (sub as any).updatedAt ?? null;
+      const ts = sub.submittedAt ?? null;
       if (!ts) continue;
       entries.push({
         id: `act-sub-${sub.id}`,
@@ -338,7 +334,7 @@ export const DashboardView = ({
             <CheckCircle2 className="w-8 h-8 text-emerald-500" />
             <p className="text-sm font-bold text-slate-800">Không có nội dung cần xử lý</p>
             <p className="text-xs text-slate-500">
-              Tất cả {stats.total} sinh viên đang đúng tiến độ.
+              Hiện không có nội dung nào đang chờ bạn xử lý.
             </p>
           </div>
         ) : (

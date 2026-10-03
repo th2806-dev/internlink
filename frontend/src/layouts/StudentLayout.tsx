@@ -32,7 +32,7 @@ export default function StudentLayout({
           <button
             type="button"
             aria-label="Đóng menu điều hướng"
-            className="fixed inset-0 z-40 bg-slate-950/25 md:hidden"
+            className="fixed inset-0 z-40 bg-slate-950/25 lg:hidden"
             onClick={() => setIsSidebarOpen(false)}
           />
         )}
@@ -53,9 +53,10 @@ export default function StudentLayout({
             onSwitchPortal={onSwitchPortal}
             onLogout={onLogout}
             onMenuOpen={() => setIsSidebarOpen(true)}
+            isMenuOpen={isSidebarOpen}
           />
           <Toast message={message} type={type} onClose={clearToast} />
-          <main className="p-4 md:p-6 space-y-4 max-w-[1440px] w-full mx-auto">
+          <main className="min-w-0 p-3 sm:p-4 lg:p-6 space-y-4 max-w-[1440px] w-full mx-auto">
             {children}
           </main>
         </div>

@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { CalendarClock, ClipboardCheck, SearchX } from "lucide-react";
 import { PageHeader } from "../../../components/common/PageHeader";
-import { Panel } from "../../../components/common/Panel";
 import { Toolbar } from "../../../components/common/Toolbar";
 import { EmptyState } from "../../../components/common/EmptyState";
 import { SkeletonBox, TableSkeleton } from "../../../components/common/SkeletonLoader";
@@ -10,7 +9,7 @@ import { SubmissionsHub } from "../components/SubmissionsHub";
 import { WeeklyReportsReviewPanel } from "../components/WeeklyReportsReviewPanel";
 import { useLecturerReportsQuery } from "../../../hooks/useLecturerReportsQuery";
 import { useLecturerSubmissionsQuery } from "../../../hooks/useLecturerSubmissionsQuery";
-import { ApiClientError } from "../../../lib/apiClient";
+import { ApiClientError, getApiErrorMessage } from "../../../lib/apiClient";
 import type { ToastType } from "../../../contexts/ToastContext";
 import type { Submission } from "../../../types/submission";
 import { useSemester } from "../../../contexts/SemesterContext";
@@ -63,8 +62,11 @@ export const ReportsView = ({
     }
     void semesterReportScheduleService.getSchedules(semesterId)
       .then(setSchedules)
-      .catch(() => setSchedules([]));
-  }, [semesterId]);
+      .catch((error: unknown) => {
+        setSchedules([]);
+        showToast?.(getApiErrorMessage(error), "danger");
+      });
+  }, [semesterId, showToast]);
 
   const closedWeekNumbers = schedules
     .filter((schedule) => !schedule.isSubmissionOpen || new Date(schedule.dueDate).getTime() < Date.now())

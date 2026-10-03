@@ -353,7 +353,11 @@ textarea {
 }
 
 .student-menu-button,
-.student-sidebar-close {
+.admin-menu-button,
+.student-sidebar-close,
+.admin-sidebar-close,
+.lecturer-menu-button,
+.lecturer-sidebar-close {
   border: 1px solid var(--il-surface-border);
   background: var(--il-surface-card);
   color: var(--il-text-secondary);
@@ -369,25 +373,59 @@ textarea {
   height: 2rem;
 }
 
-.student-sidebar-close {
+.admin-menu-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+}
+
+.lecturer-menu-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+}
+
+.student-sidebar-close,
+.admin-sidebar-close,
+.lecturer-sidebar-close {
   display: none;
 }
 
-@media (max-width: 767px) {
-  .student-sidebar-drawer {
+@media (max-width: 1023px) {
+  .admin-sidebar-drawer,
+  .student-sidebar-drawer,
+  .lecturer-sidebar-drawer {
     position: fixed;
     inset: 0 auto 0 0;
     width: min(17rem, calc(100vw - 2rem));
+    height: 100dvh;
     transform: translateX(-100%);
     transition: transform var(--il-transition-base);
     box-shadow: 4px 0 16px rgba(15, 23, 42, 0.12);
+    overflow-y: auto;
   }
 
-  .student-sidebar-drawer.is-open {
+  .admin-sidebar-drawer {
+    z-index: 50;
+    display: flex;
+  }
+
+  .admin-sidebar-drawer.is-open {
     transform: translateX(0);
   }
 
-  .student-sidebar-close {
+  .student-sidebar-drawer.is-open,
+  .lecturer-sidebar-drawer.is-open {
+    transform: translateX(0);
+  }
+
+  .admin-sidebar-close,
+  .student-sidebar-close,
+  .lecturer-sidebar-close {
     display: block;
     position: absolute;
     top: 0.75rem;
@@ -395,6 +433,18 @@ textarea {
     padding: 0.25rem 0.5rem;
     font-size: 0.6875rem;
     font-weight: 700;
+  }
+
+  .admin-sidebar-header {
+    padding-right: 3.5rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-sidebar-drawer,
+  .student-sidebar-drawer,
+  .lecturer-sidebar-drawer {
+    transition-duration: 0.01ms;
   }
 }
 

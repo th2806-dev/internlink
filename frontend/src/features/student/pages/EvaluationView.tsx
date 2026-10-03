@@ -1,29 +1,117 @@
-import { Award, CalendarDays, CheckCircle2, ClipboardCheck, FileCheck2, FileText, MessageSquare, Package, UserRound } from "lucide-react";
+import {
+  AlertTriangle,
+  Award,
+  Building2,
+  CalendarDays,
+  CheckCircle2,
+  ClipboardCheck,
+  Clock3,
+  Download,
+  FileCheck2,
+  Image as ImageIcon,
+  MessageSquare,
+  Package,
+  RefreshCw,
+  UserRound,
+  X,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useStudentPortal } from "../../../contexts/StudentPortalContext";
-import { useSemester } from "../../../contexts/SemesterContext";
 import { Panel } from "../../../components/common/Panel";
+import { useSemester } from "../../../contexts/SemesterContext";
+import { useStudentPortal } from "../../../contexts/StudentPortalContext";
+import { getApiErrorMessage } from "../../../lib/apiClient";
 import { evaluationService } from "../../../services/evaluation.service";
+import { semesterReportScheduleService, type SemesterReportScheduleDto } from "../../../services/semesterReportSchedule.service";
 import { submissionApiService } from "../../../services/submissionApi.service";
 import { weeklyReportService } from "../../../services/weeklyReport.service";
-import {
-  semesterReportScheduleService,
-  type SemesterReportScheduleDto,
-} from "../../../services/semesterReportSchedule.service";
-import type { EvaluationDetailDto, SubmissionDto, WeeklyReportDto } from "../../../types/api";
+import type { EvaluationDetailDto, SubmissionAssetDto, SubmissionDto, WeeklyReportDto } from "../../../types/api";
 
-export const EvaluationView = ({
-  onShowToast,
-}: {
-  onShowToast: (msg: string) => void;
-}) => {
+type EvidencePhotoProps = {
+  submissionId: string;
+  asset: SubmissionAssetDto;
+  onPreview: (photo: { url: string; fileName: string }) => void;
+};
+
+const EvidencePhoto = ({ submissionId, asset, onPreview }: EvidencePhotoProps) => {
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const fileName = asset.fileName || asset.label || "Ảnh minh chứng";
+
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    setImageUrl(null);
+    setError(null);
+
+    void submissionApiService
+      .downloadAsset(submissionId, asset.id, fileName, false)
+      .then(({ blob }) => {
+        objectUrl = URL.createObjectURL(blob);
+        if (cancelled) {
+          URL.revokeObjectURL(objectUrl);
+        } else {
+          setImageUrl(objectUrl);
+        }
+      })
+      .catch((downloadError: unknown) => {
+        if (!cancelled) setError(getApiErrorMessage(downloadError));
+      });
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [asset.id, fileName, submissionId]);
+
+  if (error) {
+    return (
+      <div className="flex min-h-28 items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+        <AlertTriangle className="h-4 w-4 shrink-0" />
+        <span className="min-w-0 break-words">{fileName}: {error}</span>
+      </div>
+    );
+  }
+
+  if (!imageUrl) {
+    return <div className="flex min-h-28 items-center justify-center rounded-md border border-slate-200 bg-slate-50 text-xs text-slate-500">Đang tải ảnh minh chứng…</div>;
+  }
+
+  return (
+    <div className="overflow-hidden rounded-md border border-slate-200 bg-white">
+      <button
+        type="button"
+        onClick={() => onPreview({ url: imageUrl, fileName })}
+        className="group block aspect-[4/3] w-full overflow-hidden bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+        aria-label={`Xem ảnh ${fileName}`}
+      >
+        <img src={imageUrl} alt={fileName} className="h-full w-full object-cover transition-transform duration-150 group-hover:scale-[1.02]" />
+      </button>
+      <div className="flex min-w-0 items-center justify-between gap-2 px-3 py-2">
+        <span className="truncate text-xs text-slate-600" title={fileName}>{fileName}</span>
+        <a
+          href={imageUrl}
+          download={fileName}
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600"
+          aria-label={`Tải ảnh ${fileName}`}
+          title="Tải ảnh"
+        >
+          <Download className="h-4 w-4" />
+        </a>
+      </div>
+    </div>
+  );
+};
+
+export const EvaluationView = ({ onShowToast }: { onShowToast: (msg: string) => void }) => {
   const { profile, internshipId } = useStudentPortal();
   const { selectedSemester, activeSemesterId } = useSemester();
   const [evaluation, setEvaluation] = useState<EvaluationDetailDto | null>(null);
   const [weeklyReports, setWeeklyReports] = useState<WeeklyReportDto[]>([]);
   const [submissions, setSubmissions] = useState<SubmissionDto[]>([]);
   const [schedules, setSchedules] = useState<SemesterReportScheduleDto[]>([]);
+  const [loadErrors, setLoadErrors] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [previewPhoto, setPreviewPhoto] = useState<{ url: string; fileName: string } | null>(null);
 
   const loadEvaluation = useCallback(async () => {
     if (!internshipId) {
@@ -31,84 +119,96 @@ export const EvaluationView = ({
       setWeeklyReports([]);
       setSubmissions([]);
       setSchedules([]);
+      setLoadErrors([]);
       setIsLoading(false);
       return;
     }
+
     setIsLoading(true);
-    try {
-      const [detailResult, reportsResult, submissionsResult, schedulesResult] = await Promise.allSettled([
-        evaluationService.getByInternship(internshipId),
-        weeklyReportService.getMine(),
-        submissionApiService.getMine(),
-        activeSemesterId
-          ? semesterReportScheduleService.getSchedules(activeSemesterId)
-          : Promise.resolve([] as SemesterReportScheduleDto[]),
-      ]);
-      setEvaluation(detailResult.status === "fulfilled" ? detailResult.value : null);
-      setWeeklyReports(
-        reportsResult.status === "fulfilled"
-          ? reportsResult.value.filter((report) => report.internshipId === internshipId)
-          : [],
-      );
-      setSubmissions(
-        submissionsResult.status === "fulfilled"
-          ? submissionsResult.value.filter((submission) => submission.internshipId === internshipId)
-          : [],
-      );
-      setSchedules(schedulesResult.status === "fulfilled" ? schedulesResult.value : []);
-    } catch {
+    const [evaluationResult, reportsResult, submissionsResult, schedulesResult] = await Promise.allSettled([
+      evaluationService.getByInternship(internshipId),
+      weeklyReportService.getMine(),
+      submissionApiService.getMine(),
+      activeSemesterId
+        ? semesterReportScheduleService.getSchedules(activeSemesterId)
+        : Promise.resolve([] as SemesterReportScheduleDto[]),
+    ]);
+
+    const errors: string[] = [];
+    if (evaluationResult.status === "fulfilled") {
+      setEvaluation(evaluationResult.value);
+    } else {
       setEvaluation(null);
-      setWeeklyReports([]);
-      setSubmissions([]);
-      setSchedules([]);
-    } finally {
-      setIsLoading(false);
+      errors.push("Không tải được kết quả đánh giá.");
     }
-  }, [internshipId, activeSemesterId]);
+    if (reportsResult.status === "fulfilled") {
+      setWeeklyReports(reportsResult.value.filter((report) => report.internshipId === internshipId));
+    } else {
+      setWeeklyReports([]);
+      errors.push("Không tải được dữ liệu báo cáo tuần.");
+    }
+    if (submissionsResult.status === "fulfilled") {
+      setSubmissions(submissionsResult.value.filter((submission) => submission.internshipId === internshipId));
+    } else {
+      setSubmissions([]);
+      errors.push("Không tải được điểm doanh nghiệp và minh chứng.");
+    }
+    if (schedulesResult.status === "fulfilled") {
+      setSchedules(schedulesResult.value);
+    } else {
+      setSchedules([]);
+      errors.push("Không tải được lịch báo cáo tuần.");
+    }
+    setLoadErrors(errors);
+    setIsLoading(false);
+  }, [activeSemesterId, internshipId]);
 
   useEffect(() => {
     void loadEvaluation();
   }, [loadEvaluation]);
 
-  const currentGrade = evaluation?.finalGrade ?? profile.currentGrade;
-  const semesterTotalWeeks = selectedSemester?.totalWeeks || 6;
-  const openWeeklySchedules = useMemo(
-    () =>
-      schedules.filter(
-        (schedule) =>
-          schedule.isSubmissionOpen &&
-          schedule.weekNumber >= 1 &&
-          schedule.weekNumber <= semesterTotalWeeks,
-      ),
-    [schedules, semesterTotalWeeks],
+  const maxWeeks = selectedSemester?.totalWeeks;
+  const trackedWeeks = useMemo(() => {
+    const scheduled = schedules
+      .map((schedule) => schedule.weekNumber)
+      .filter((week) => week >= 1 && (!maxWeeks || week <= maxWeeks));
+    const reported = weeklyReports
+      .map((report) => report.weekNumber)
+      .filter((week) => week >= 1 && (!maxWeeks || week <= maxWeeks));
+    return [...new Set([...scheduled, ...reported])].sort((a, b) => a - b);
+  }, [maxWeeks, schedules, weeklyReports]);
+
+  const reportByWeek = useMemo(
+    () => new Map(weeklyReports.map((report) => [report.weekNumber, report])),
+    [weeklyReports],
   );
-  const trackedWeeks =
-    openWeeklySchedules.length > 0
-      ? openWeeklySchedules.map((schedule) => schedule.weekNumber)
-      : Array.from({ length: profile.progressBreakdown?.requiredWeeksCount || semesterTotalWeeks }, (_, index) => index + 1);
+  const scheduleByWeek = useMemo(
+    () => new Map(schedules.map((schedule) => [schedule.weekNumber, schedule])),
+    [schedules],
+  );
+  const evidenceSubmissions = useMemo(
+    () =>
+      submissions
+        .filter((item) => item.type.toLowerCase() === "evidence" && !["rejected", "draft"].includes(item.status.toLowerCase()))
+        .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()),
+    [submissions],
+  );
+  const employerScoreSubmission = evidenceSubmissions.find((item) => item.employerScore != null);
   const finalReport = submissions.find((item) => item.type.toLowerCase() === "finalreport" && item.status.toLowerCase() !== "rejected");
   const product = submissions.find((item) => item.type.toLowerCase() === "product" && item.status.toLowerCase() !== "rejected");
-  const reportByWeek = new Map(weeklyReports.map((report) => [report.weekNumber, report]));
-  const now = new Date();
-  const missingCount = trackedWeeks.filter((week) => {
+  const submittedWeekCount = trackedWeeks.filter((week) => Boolean(reportByWeek.get(week)?.submittedAt)).length;
+  const lateWeekCount = trackedWeeks.filter((week) => {
     const report = reportByWeek.get(week);
-    const schedule = openWeeklySchedules.find((item) => item.weekNumber === week);
-    const due = schedule?.dueDate ?? report?.dueDate;
-    return !report?.submittedAt && due && new Date(due) < now;
+    const dueDate = scheduleByWeek.get(week)?.dueDate ?? report?.dueDate;
+    return Boolean(report?.submittedAt && dueDate && new Date(report.submittedAt) > new Date(dueDate));
   }).length;
-  const lateCount = trackedWeeks.filter((week) => {
-    const report = reportByWeek.get(week);
-    const schedule = openWeeklySchedules.find((item) => item.weekNumber === week);
-    const due = schedule?.dueDate ?? report?.dueDate;
-    return report?.submittedAt && due && new Date(report.submittedAt) > new Date(due);
-  }).length;
-  const ratedQuality = evaluation?.weeklyQualityScores ? Object.values(evaluation.weeklyQualityScores) : [];
-  const qualityScore = ratedQuality.length > 0
-    ? ratedQuality.reduce((sum, score) => sum + score, 0) / ratedQuality.length
-    : evaluation?.qualityLevel ?? null;
-  const submittedWeekCount = trackedWeeks.filter((week) => reportByWeek.get(week)?.submittedAt).length;
-  const processScore = Math.min(10, Math.max(0, 2 - missingCount * 0.5) + (submittedWeekCount > 0 ? Math.max(0, 2 - lateCount * 0.5) : 0) + (qualityScore ?? 0) + (evaluation?.hasCreativeProduct ? 1 : 0));
-  const classification = currentGrade >= 8.5 ? "Xuất sắc" : currentGrade >= 8 ? "Giỏi" : currentGrade >= 6.5 ? "Khá" : currentGrade >= 5 ? "Trung bình" : currentGrade > 0 ? "Không đạt" : "—";
+  const finalGrade = evaluation?.finalGrade ?? (profile.currentGrade > 0 ? profile.currentGrade : null);
+  const classification = finalGrade == null
+    ? "—"
+    : finalGrade >= 8.5 ? "Xuất sắc"
+      : finalGrade >= 8 ? "Giỏi"
+        : finalGrade >= 6.5 ? "Khá"
+          : finalGrade >= 5 ? "Trung bình" : "Không đạt";
   const formatDate = (value?: string | null) =>
     value ? new Date(value).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "—";
   const statusLabel = (status: string) => ({
@@ -118,148 +218,338 @@ export const EvaluationView = ({
     Approved: "Đã duyệt",
     RevisionRequested: "Cần sửa",
   }[status] ?? status);
+  const criteria = evaluation?.criteriaScores?.length
+    ? evaluation.criteriaScores.map((criterion) => ({
+        name: criterion.criterionName,
+        score: criterion.score,
+        maxScore: criterion.maxScore,
+        comment: criterion.comment,
+      }))
+    : evaluation
+      ? [
+          { name: "Chuyên môn kỹ thuật", score: evaluation.technicalScore, maxScore: 10 },
+          { name: "Giao tiếp", score: evaluation.communicationScore, maxScore: 10 },
+          { name: "Làm việc nhóm", score: evaluation.teamworkScore, maxScore: 10 },
+          { name: "Chủ động", score: evaluation.initiativeScore, maxScore: 10 },
+        ]
+      : [];
+  const displayedGrade = loadErrors.includes("Không tải được kết quả đánh giá.")
+    ? null
+    : finalGrade;
+
+  const retryLoading = () => {
+    void loadEvaluation().catch((error: unknown) => onShowToast(getApiErrorMessage(error)));
+  };
 
   return (
-    <div className="mx-auto max-w-[1000px] space-y-4 animate-in fade-in duration-200">
-      <Panel className="flex items-center gap-3">
-        <div className="rounded-lg bg-blue-600 p-3 text-white"><Award className="h-6 w-6" /></div>
+    <div className="mx-auto max-w-6xl space-y-5 pb-6">
+      <header className="flex flex-col gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-lg font-bold text-slate-900">Kết quả đánh giá thực tập</h1>
-          <p className="text-xs text-slate-500">Theo dõi điểm số, nhận xét và trạng thái công bố từ giảng viên.</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Thực tập · Kết quả</p>
+          <h1 className="mt-1 text-xl font-bold text-slate-900">Kết quả đánh giá</h1>
+          <p className="mt-1 text-sm text-slate-600">Điểm số, tiến độ, minh chứng và nhận xét dành cho bạn.</p>
         </div>
-      </Panel>
+        <div className="flex items-center gap-2 text-sm text-slate-600">
+          <Building2 className="h-4 w-4 shrink-0 text-slate-500" />
+          <span>{profile.company || "Chưa có doanh nghiệp"}{profile.position && profile.position !== "—" ? ` · ${profile.position}` : ""}</span>
+        </div>
+      </header>
 
-      {isLoading ? <Panel className="py-12 text-center text-sm text-slate-500">Đang tải bảng tổng hợp...</Panel> : <>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-[1.1fr_2fr]">
-        <Panel className="flex flex-col items-center justify-center text-center">
-          <p className="text-xs font-medium text-slate-500">Điểm tổng kết</p>
-          <p className="mt-2 text-5xl font-black text-slate-900">
-            {evaluation ? evaluation.finalGrade.toFixed(1) : currentGrade || "—"}
-          </p>
-          <span className={`mt-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
-            evaluation?.isFinalized
-              ? "bg-emerald-100 text-emerald-700"
-              : evaluation
-                ? "bg-amber-100 text-amber-700"
-                : "bg-slate-100 text-slate-500"
-          }`}>
-            <CheckCircle2 className="h-3.5 w-3.5" />
-            {evaluation?.isFinalized ? "Đã công bố" : evaluation ? "Đã cập nhật điểm" : "Chưa có kết quả"}
-          </span>
-          <p className="mt-3 text-xs text-slate-500">
-            {evaluation ? `Cập nhật ngày ${formatDate(evaluation.updatedAt ?? evaluation.evaluatedAt)}` : "Kết quả sẽ hiển thị sau khi giảng viên lưu đánh giá."}
-          </p>
-        </Panel>
-
-        <Panel>
-          <div className="mb-3 flex items-center gap-2">
-            <ClipboardCheck className="h-4 w-4 text-blue-600" />
-            <h2 className="text-sm font-bold text-slate-900">Các cột điểm tổng hợp</h2>
+      {loadErrors.length > 0 && (
+        <div role="alert" className="flex gap-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <p className="font-semibold">Một số thông tin chưa tải được</p>
+            <ul className="mt-1 list-inside list-disc text-xs leading-5">{loadErrors.map((error) => <li key={error}>{error}</li>)}</ul>
           </div>
-          {evaluation ? (
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                  <p className="text-[11px] text-slate-500">Điểm QT</p>
-                  <strong className="text-sm text-slate-900">{processScore.toFixed(1)}/10</strong>
-                </div>
-                <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2">
-                  <p className="text-[11px] text-blue-600">Điểm thi vấn đáp</p>
-                  <strong className="text-sm text-blue-900">{evaluation.oralExamScore != null ? `${evaluation.oralExamScore}/10` : "Chưa nhập"}</strong>
-                </div>
-                <div className="rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2">
-                  <p className="text-[11px] text-indigo-600">Chất lượng báo cáo</p>
-                  <strong className="text-sm text-indigo-900">{evaluation.qualityLevel != null ? `${evaluation.qualityLevel}/5` : "Chưa chấm"}</strong>
-                </div>
-                <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2">
-                  <p className="text-[11px] text-emerald-600">Sản phẩm sáng tạo</p>
-                  <strong className="text-sm text-emerald-900">{evaluation.hasCreativeProduct ? "+1.0 điểm" : "Không cộng"}</strong>
-                </div>
-                <div className="rounded-lg border border-violet-100 bg-violet-50 px-3 py-2">
-                  <p className="text-[11px] text-violet-600">Xếp loại</p>
-                  <strong className="text-sm text-violet-900">{classification}</strong>
-                </div>
-              </div>
-              {evaluation.weeklyQualityScores && Object.keys(evaluation.weeklyQualityScores).length > 0 && (
-                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
-                  <p className="mb-2 text-xs font-semibold text-slate-700">Chất lượng từng báo cáo tuần</p>
-                  <div className="flex flex-wrap gap-2">
-                    {Object.entries(evaluation.weeklyQualityScores)
-                      .sort(([first], [second]) => Number(first) - Number(second))
-                      .map(([week, score]) => (
-                        <span key={week} className="rounded-md bg-white px-2.5 py-1 text-xs text-slate-600 ring-1 ring-slate-200">
-                          Tuần {week}: <strong className="text-slate-900">{score}/5</strong>
-                        </span>
-                      ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            <p className="text-sm text-slate-500">Chưa có dữ liệu chi tiết.</p>
-          )}
-        </Panel>
-      </div>
-
-      <Panel>
-        <div className="mb-3 flex items-center gap-2">
-          <ClipboardCheck className="h-4 w-4 text-blue-600" />
-          <h2 className="text-sm font-bold text-slate-900">Theo dõi báo cáo theo tuần</h2>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[680px] text-sm">
-            <thead><tr className="border-b border-slate-200 text-left text-xs uppercase text-slate-500"><th className="px-3 py-2">Tuần</th><th className="px-3 py-2">Báo cáo</th><th className="px-3 py-2">Hạn nộp</th><th className="px-3 py-2">Đã nộp</th><th className="px-3 py-2">Trạng thái</th><th className="px-3 py-2 text-center">Điểm chất lượng</th></tr></thead>
-            <tbody className="divide-y divide-slate-100">
-              {trackedWeeks.map((week) => {
-                const report = reportByWeek.get(week);
-                const schedule = openWeeklySchedules.find((item) => item.weekNumber === week);
-                const score = evaluation?.weeklyQualityScores?.[week];
-                return <tr key={week}><td className="px-3 py-2.5 font-semibold">Tuần {week}</td><td className="px-3 py-2.5">{report?.title || schedule?.title || "Chưa nộp"}</td><td className="px-3 py-2.5 text-slate-500">{formatDate(schedule?.dueDate ?? report?.dueDate)}</td><td className="px-3 py-2.5 text-slate-500">{formatDate(report?.submittedAt)}</td><td className="px-3 py-2.5"><span className={`rounded-full px-2 py-1 text-xs ${report ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{report ? statusLabel(report.status) : "Chưa nộp"}</span></td><td className="px-3 py-2.5 text-center font-semibold">{score != null ? `${score}/5` : "—"}</td></tr>;
-              })}
-            </tbody>
-          </table>
-        </div>
-      </Panel>
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <Panel>
-          <div className="mb-3 flex items-center gap-2"><FileCheck2 className="h-4 w-4 text-blue-600" /><h2 className="text-sm font-bold text-slate-900">Báo cáo cuối kỳ</h2></div>
-          {finalReport ? <div className="space-y-1 text-sm"><p className="font-semibold text-slate-900">{finalReport.title || finalReport.fileName || "Báo cáo thực tập tốt nghiệp"}</p><p className="text-xs text-slate-500">Nộp ngày {formatDate(finalReport.submittedAt)} · {statusLabel(finalReport.status)}</p></div> : <p className="text-sm text-slate-500">Chưa nộp báo cáo cuối kỳ.</p>}
-        </Panel>
-        <Panel>
-          <div className="mb-3 flex items-center gap-2"><Package className="h-4 w-4 text-emerald-600" /><h2 className="text-sm font-bold text-slate-900">Sản phẩm thực tế</h2></div>
-          {product ? <div className="space-y-1 text-sm"><p className="font-semibold text-slate-900">{product.title || product.fileName || "Sản phẩm thực tế"}</p><p className="text-xs text-slate-500">Nộp ngày {formatDate(product.submittedAt)} · {statusLabel(product.status)}</p></div> : <p className="text-sm text-slate-500">Chưa nộp sản phẩm. Không cộng điểm sáng tạo.</p>}
-        </Panel>
-      </div>
-
-      {evaluation && (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Panel>
-            <div className="mb-3 flex items-center gap-2">
-              <MessageSquare className="h-4 w-4 text-blue-600" />
-              <h2 className="text-sm font-bold text-slate-900">Nhận xét của giảng viên</h2>
-            </div>
-            <p className="whitespace-pre-wrap text-sm leading-6 text-slate-600">{evaluation.comments || "Chưa có nhận xét."}</p>
-          </Panel>
-          <Panel className="space-y-4">
-            <div>
-              <p className="text-xs font-semibold text-emerald-700">Điểm mạnh</p>
-              <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-600">{evaluation.strengths || "Chưa cập nhật."}</p>
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-amber-700">Cần cải thiện</p>
-              <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-600">{evaluation.areasForImprovement || "Chưa cập nhật."}</p>
-            </div>
-          </Panel>
+          <button
+            type="button"
+            onClick={retryLoading}
+            className="ml-auto inline-flex shrink-0 items-center gap-1.5 self-start rounded-md border border-amber-300 px-2.5 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-700"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />Tải lại
+          </button>
         </div>
       )}
-      </>}
 
-      {evaluation && (
-        <Panel className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-slate-500">
-          <span className="inline-flex items-center gap-1.5"><UserRound className="h-3.5 w-3.5" /> {evaluation.evaluatedBy?.fullName || "Giảng viên phụ trách"}</span>
-          <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" /> Đánh giá ngày {formatDate(evaluation.evaluatedAt)}</span>
+      {isLoading ? (
+        <Panel className="py-14 text-center text-sm text-slate-500">Đang tải kết quả thực tập…</Panel>
+      ) : !internshipId ? (
+        <Panel className="py-12 text-center">
+          <ClipboardCheck className="mx-auto h-8 w-8 text-slate-400" />
+          <p className="mt-3 text-sm font-semibold text-slate-800">Chưa có kỳ thực tập để hiển thị</p>
+          <p className="mt-1 text-xs text-slate-500">Thông tin kết quả sẽ xuất hiện khi hồ sơ thực tập được tạo.</p>
         </Panel>
+      ) : (
+        <>
+          <section className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,0.85fr)_minmax(0,1.6fr)]">
+            <Panel className="border-l-4 border-l-blue-600">
+              <div className="flex h-full flex-col justify-between gap-5">
+                <div>
+                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                    <Award className="h-4 w-4 text-blue-700" />
+                    Điểm tổng kết
+                  </div>
+                  <div className="mt-4 flex flex-wrap items-end gap-x-3 gap-y-1">
+                    <strong className="font-display text-5xl leading-none text-slate-950">{displayedGrade == null ? "—" : displayedGrade.toFixed(1)}</strong>
+                    <span className="pb-1 text-sm text-slate-500">/ 10 · {classification}</span>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                    evaluation?.isFinalized ? "bg-emerald-50 text-emerald-800" : evaluation ? "bg-amber-50 text-amber-800" : "bg-slate-100 text-slate-700"
+                  }`}>
+                    {evaluation?.isFinalized ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Clock3 className="h-3.5 w-3.5" />}
+                    {loadErrors.includes("Không tải được kết quả đánh giá.")
+                      ? "Chưa tải được kết quả"
+                      : evaluation?.isFinalized ? "Đã công bố" : evaluation ? "Chưa công bố" : displayedGrade != null ? "Điểm trên hồ sơ" : "Chưa có kết quả"}
+                  </span>
+                  {evaluation && <span className="text-xs text-slate-500">Cập nhật {formatDate(evaluation.updatedAt ?? evaluation.evaluatedAt)}</span>}
+                </div>
+              </div>
+            </Panel>
+
+            <Panel>
+              <div className="flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 pb-3">
+                <div>
+                  <h2 className="text-sm font-bold text-slate-900">Chi tiết đánh giá của giảng viên</h2>
+                  <p className="mt-1 text-xs text-slate-500">Điểm theo tiêu chí được lưu trên hệ thống.</p>
+                </div>
+                {evaluation?.evaluatedBy?.fullName && (
+                  <span className="inline-flex items-center gap-1.5 text-xs text-slate-600">
+                    <UserRound className="h-3.5 w-3.5" />{evaluation.evaluatedBy.fullName}
+                  </span>
+                )}
+              </div>
+              {criteria.length > 0 ? (
+                <dl className="mt-1 divide-y divide-slate-100">
+                  {criteria.map((criterion, index) => (
+                    <div key={`${criterion.name}-${index}`} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1 py-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+                      <dt className="text-sm font-medium text-slate-800">{criterion.name}</dt>
+                      <dd className="row-span-2 text-right text-sm font-bold tabular-nums text-slate-900">
+                        {criterion.score}/{criterion.maxScore}
+                      </dd>
+                      {criterion.comment && <dd className="text-xs leading-5 text-slate-500">{criterion.comment}</dd>}
+                    </div>
+                  ))}
+                </dl>
+              ) : (
+                <p className="pt-4 text-sm text-slate-500">Chưa có điểm chi tiết từ giảng viên.</p>
+              )}
+              {evaluation?.oralExamScore != null && (
+                <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 text-sm">
+                  <span className="text-slate-700">Thi vấn đáp</span>
+                  <strong className="tabular-nums text-slate-900">{evaluation.oralExamScore}/10</strong>
+                </div>
+              )}
+              {evaluation && (
+                <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 border-t border-slate-100 pt-3 text-xs text-slate-600">
+                  <span>Chất lượng báo cáo: <strong className="text-slate-900">{evaluation.qualityLevel != null ? `${evaluation.qualityLevel}/5` : "Chưa chấm"}</strong></span>
+                  <span>Sản phẩm sáng tạo: <strong className="text-slate-900">{evaluation.hasCreativeProduct ? "Có" : "Không ghi nhận"}</strong></span>
+                  <span>Bảo vệ: <strong className="text-slate-900">{evaluation.defenseStatus === "Completed" ? "Đã hoàn thành" : evaluation.defenseStatus === "Scheduled" ? `Đã lên lịch${evaluation.defenseDate ? ` · ${formatDate(evaluation.defenseDate)}` : ""}` : "Chưa lên lịch"}</strong></span>
+                </div>
+              )}
+            </Panel>
+          </section>
+
+          <section className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+            <Panel>
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-3">
+                <div>
+                  <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                    <Building2 className="h-4 w-4 text-blue-700" />Đánh giá từ doanh nghiệp
+                  </h2>
+                  <p className="mt-1 text-xs text-slate-500">Điểm doanh nghiệp được hiển thị riêng, không cộng vào điểm tổng kết.</p>
+                </div>
+                <strong className="font-display text-2xl tabular-nums text-slate-900">
+                  {employerScoreSubmission?.employerScore != null ? `${employerScoreSubmission.employerScore}/10` : "—"}
+                </strong>
+              </div>
+              {loadErrors.includes("Không tải được điểm doanh nghiệp và minh chứng.") ? (
+                <p className="pt-4 text-sm text-amber-800">Không thể xác nhận điểm và minh chứng doanh nghiệp do dữ liệu chưa tải được.</p>
+              ) : evidenceSubmissions.length === 0 ? (
+                <p className="pt-4 text-sm text-slate-500">Chưa có phiếu đánh giá hoặc minh chứng doanh nghiệp được nộp.</p>
+              ) : (
+                <div className="space-y-5 pt-4">
+                  {evidenceSubmissions.map((submission) => {
+                    const imageAssets = (submission.assets ?? []).filter((asset) =>
+                      asset.mimeType?.toLowerCase().startsWith("image/") ||
+                      /\.(jpe?g|png|gif|webp|bmp|avif)$/i.test(asset.fileName ?? ""),
+                    );
+                    return (
+                      <div key={submission.id} className="border-b border-slate-100 pb-4 last:border-0 last:pb-0">
+                        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                          <p className="text-sm font-semibold text-slate-800">{submission.title || "Phiếu đánh giá doanh nghiệp"}</p>
+                          <span className="text-xs text-slate-500">{statusLabel(submission.status)} · {formatDate(submission.submittedAt)}</span>
+                        </div>
+                        {submission.employerScore != null && (
+                          <p className="mt-1 text-xs text-slate-600">Điểm doanh nghiệp: <strong className="text-slate-900">{submission.employerScore}/10</strong> <span className="text-slate-500">(tham khảo)</span></p>
+                        )}
+                        {submission.description && <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600">{submission.description}</p>}
+                        {imageAssets.length > 0 ? (
+                          <div className="mt-3">
+                            <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                              <ImageIcon className="h-3.5 w-3.5" />Ảnh minh chứng ({imageAssets.length})
+                            </p>
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                              {imageAssets.map((asset) => (
+                                <EvidencePhoto
+                                  key={asset.id}
+                                  submissionId={submission.id}
+                                  asset={asset}
+                                  onPreview={setPreviewPhoto}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="mt-2 inline-flex items-center gap-1.5 text-xs text-slate-500">
+                            <ImageIcon className="h-3.5 w-3.5" />Phiếu này không có tệp ảnh đính kèm.
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </Panel>
+
+            <Panel>
+              <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
+                <div>
+                  <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                    <ClipboardCheck className="h-4 w-4 text-blue-700" />Tiến độ báo cáo tuần
+                  </h2>
+                  <p className="mt-1 text-xs text-slate-500">Tình trạng nộp và điểm chất lượng được ghi nhận.</p>
+                </div>
+                {trackedWeeks.length > 0 && (
+                  <span className="shrink-0 text-xs font-semibold text-slate-700">{submittedWeekCount}/{trackedWeeks.length} đã nộp</span>
+                )}
+              </div>
+              {trackedWeeks.length === 0 ? (
+                <p className="pt-4 text-sm text-slate-500">
+                  {loadErrors.includes("Không tải được lịch báo cáo tuần.") || loadErrors.includes("Không tải được dữ liệu báo cáo tuần.")
+                    ? "Không đủ dữ liệu để hiển thị tiến độ báo cáo."
+                    : "Chưa có lịch hoặc báo cáo tuần cho kỳ thực tập này."}
+                </p>
+              ) : (
+                <div className="mt-2 divide-y divide-slate-100">
+                  {trackedWeeks.map((week) => {
+                    const report = reportByWeek.get(week);
+                    const schedule = scheduleByWeek.get(week);
+                    const dueDate = schedule?.dueDate ?? report?.dueDate;
+                    const isLate = Boolean(report?.submittedAt && dueDate && new Date(report.submittedAt) > new Date(dueDate));
+                    const score = evaluation?.weeklyQualityScores?.[week] ?? report?.qualityScore;
+                    return (
+                      <div key={week} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 py-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-slate-800">Tuần {week} · {report?.title || "Báo cáo tuần"}</p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {report?.submittedAt ? `Nộp ${formatDate(report.submittedAt)}` : "Chưa nộp"}
+                            {dueDate ? ` · Hạn ${formatDate(dueDate)}` : ""}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                            report?.submittedAt ? (isLate ? "bg-amber-50 text-amber-800" : "bg-emerald-50 text-emerald-800") : "bg-slate-100 text-slate-600"
+                          }`}>
+                            {report?.submittedAt ? (isLate ? "Đã nộp trễ" : statusLabel(report.status)) : "Chưa nộp"}
+                          </span>
+                          <p className="mt-1 text-xs tabular-nums text-slate-600">Chất lượng: {score != null ? `${score}/5` : "—"}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {lateWeekCount > 0 && <p className="mt-3 border-t border-slate-100 pt-3 text-xs text-amber-800">Báo cáo nộp trễ: {lateWeekCount} tuần.</p>}
+            </Panel>
+          </section>
+
+          <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <Panel>
+              <h2 className="flex items-center gap-2 border-b border-slate-100 pb-3 text-sm font-bold text-slate-900">
+                <FileCheck2 className="h-4 w-4 text-blue-700" />Báo cáo cuối kỳ
+              </h2>
+              {finalReport ? (
+                <div className="pt-3">
+                  <p className="text-sm font-semibold text-slate-800">{finalReport.title || finalReport.fileName || "Báo cáo thực tập"}</p>
+                  <p className="mt-1 text-xs text-slate-500">Nộp {formatDate(finalReport.submittedAt)} · {statusLabel(finalReport.status)}</p>
+                </div>
+              ) : (
+                <p className="pt-3 text-sm text-slate-500">Chưa có báo cáo cuối kỳ được ghi nhận.</p>
+              )}
+            </Panel>
+            <Panel>
+              <h2 className="flex items-center gap-2 border-b border-slate-100 pb-3 text-sm font-bold text-slate-900">
+                <Package className="h-4 w-4 text-blue-700" />Sản phẩm thực tập
+              </h2>
+              {product ? (
+                <div className="pt-3">
+                  <p className="text-sm font-semibold text-slate-800">{product.title || product.fileName || "Sản phẩm thực tập"}</p>
+                  <p className="mt-1 text-xs text-slate-500">Nộp {formatDate(product.submittedAt)} · {statusLabel(product.status)}</p>
+                </div>
+              ) : (
+                <p className="pt-3 text-sm text-slate-500">Chưa có sản phẩm thực tập được ghi nhận.</p>
+              )}
+            </Panel>
+          </section>
+
+          {evaluation && (
+            <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <Panel>
+                <h2 className="flex items-center gap-2 border-b border-slate-100 pb-3 text-sm font-bold text-slate-900">
+                  <MessageSquare className="h-4 w-4 text-blue-700" />Nhận xét của giảng viên
+                </h2>
+                <p className="whitespace-pre-wrap pt-3 text-sm leading-6 text-slate-700">{evaluation.comments || "Chưa có nhận xét."}</p>
+              </Panel>
+              <Panel className="space-y-4">
+                <div>
+                  <h2 className="text-sm font-bold text-emerald-800">Điểm mạnh</h2>
+                  <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{evaluation.strengths || "Chưa có nội dung được cập nhật."}</p>
+                </div>
+                <div className="border-t border-slate-100 pt-3">
+                  <h2 className="text-sm font-bold text-amber-800">Điểm cần cải thiện</h2>
+                  <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{evaluation.areasForImprovement || "Chưa có nội dung được cập nhật."}</p>
+                </div>
+              </Panel>
+            </section>
+          )}
+          {evaluation && (
+            <p className="flex items-center gap-1.5 text-xs text-slate-500">
+              <CalendarDays className="h-3.5 w-3.5" />Ngày đánh giá: {formatDate(evaluation.evaluatedAt)}
+              {evaluation.defenseCouncilName ? ` · Hội đồng: ${evaluation.defenseCouncilName}` : ""}
+              {evaluation.defenseExaminerName ? ` · Giám khảo: ${evaluation.defenseExaminerName}` : ""}
+            </p>
+          )}
+        </>
+      )}
+
+      {previewPhoto && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Xem ảnh ${previewPhoto.fileName}`}
+          onMouseDown={(event) => { if (event.target === event.currentTarget) setPreviewPhoto(null); }}
+        >
+          <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-md border border-slate-200 bg-white">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+              <p className="truncate text-sm font-semibold text-slate-900">{previewPhoto.fileName}</p>
+              <button
+                type="button"
+                onClick={() => setPreviewPhoto(null)}
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600"
+                aria-label="Đóng xem ảnh"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-auto bg-slate-100 p-3">
+              <img src={previewPhoto.url} alt={previewPhoto.fileName} className="mx-auto max-h-[78vh] max-w-full object-contain" />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -15,6 +15,7 @@ export interface Submission {
   fileName?: string;
   fileUrl: string;
   fileSize: string;
+  submittedAt?: string;
   assetId?: string;
   summary: string;
   assetCount?: number;

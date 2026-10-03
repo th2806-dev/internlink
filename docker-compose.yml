@@ -14,6 +14,9 @@ services:
       - "host.docker.internal:host-gateway"
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
+      - Backups__Directory=/var/opt/mssql/backup
+      - Backups__SqlServerDataDirectory=/var/opt/mssql/data
+      - Backups__SqlServerLogDirectory=/var/opt/mssql/data
       - ConnectionStrings__DefaultConnection=Server=database,1433;Database=InternLink;User Id=sa;Password=${MSSQL_SA_PASSWORD:-InternLink_Sa123!};TrustServerCertificate=True;MultipleActiveResultSets=true;IPAddressPreference=IPv4First
       - Jwt__Secret=${JWT_SECRET:-InternLink_SecretKey_Production_SuperSecure_32BytesLength!}
       - Jwt__Issuer=InternLink
@@ -38,6 +41,7 @@ services:
       - "0.0.0.0:7109:8080"
     volumes:
       - internlink_uploads_data:/app/uploads
+      - internlink_backups_data:/var/opt/mssql/backup
     networks:
       - internlink_network
     healthcheck:
@@ -66,6 +70,7 @@ services:
       - "0.0.0.0:14330:1433"
     volumes:
       - internlink_database_data:/var/opt/mssql
+      - internlink_backups_data:/var/opt/mssql/backup
     networks:
       - internlink_network
     healthcheck:
@@ -109,6 +114,9 @@ volumes:
   internlink_database_data:
     driver: local
     name: internlink_database_data
+  internlink_backups_data:
+    driver: local
+    name: internlink_backups_data
 
 networks:
   internlink_network:

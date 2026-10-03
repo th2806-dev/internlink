@@ -14,6 +14,7 @@ import {
   Hourglass,
   Table2,
   Download,
+  FileSpreadsheet,
   Eye,
   CalendarDays,
   UserCheck,
@@ -21,9 +22,10 @@ import {
   CalendarClock,
   Lock,
   Hourglass as HourglassIcon,
-  ShieldAlert,
   BarChart3,
   X,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { useSemester } from "../../../contexts/SemesterContext";
 import {
@@ -1010,6 +1012,9 @@ function SummaryTab({
   const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "finalized" | "pending">("all");
+  const [pageIndex, setPageIndex] = useState(0);
+  const [pageSize, setPageSize] = useState(15);
   const [oralDrafts, setOralDrafts] = useState<Record<string, string>>({});
   const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
   // Lịch tuần của kỳ (từ API summary) — nguồn cho header cột T1..TN đúng số tuần
@@ -1073,14 +1078,31 @@ function SummaryTab({
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return students;
-    return students.filter(
-      (s) =>
-        s.fullName.toLowerCase().includes(q) ||
-        s.studentCode.toLowerCase().includes(q) ||
-        s.className.toLowerCase().includes(q)
-    );
-  }, [students, search]);
+    return students.filter((s) => {
+      const matchesQuery = !q || [
+        s.fullName,
+        s.studentCode,
+        s.className,
+        s.companyName,
+      ].some((value) => value?.toLowerCase().includes(q));
+      const isFinalized = s.averageScore != null;
+      const matchesStatus = statusFilter === "all"
+        || (statusFilter === "finalized" && isFinalized)
+        || (statusFilter === "pending" && !isFinalized);
+      return matchesQuery && matchesStatus;
+    });
+  }, [students, search, statusFilter]);
+
+  useEffect(() => {
+    setPageIndex(0);
+  }, [search, statusFilter, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePageIndex = Math.min(pageIndex, totalPages - 1);
+  const pagedStudents = useMemo(
+    () => filtered.slice(safePageIndex * pageSize, safePageIndex * pageSize + pageSize),
+    [filtered, safePageIndex, pageSize],
+  );
 
   const commitOralScore = async (studentId: string) => {
     if (!semesterId) return;
@@ -1130,122 +1152,102 @@ function SummaryTab({
     }
   };
 
-  const stats = useMemo(() => {
-    let eligible = 0;
-    let ineligible = 0;
-    for (const s of students) {
-      if (!s.isEligible) ineligible++;
-      else eligible++;
-    }
-    return { eligible, ineligible };
-  }, [students]);
-
   return (
     <div className="space-y-4">
       {error && (
-        <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div role="alert" className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           <AlertCircle className="h-4 w-4 shrink-0" />
           {error}
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Panel className="flex items-center gap-3">
-          <div className="rounded-lg bg-emerald-100 p-2.5 text-emerald-600">
-            <Table2 className="h-5 w-5" />
-          </div>
+      <Panel padding="none" className="overflow-hidden">
+        <div className="flex flex-col gap-3 border-b border-slate-100 p-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-xs text-slate-500">Đủ điều kiện dự thi</p>
-            <p className="text-xl font-semibold text-slate-900">{stats.eligible}/{students.length}</p>
-          </div>
-        </Panel>
-        <Panel className="flex items-center gap-3">
-          <div className="rounded-lg bg-red-100 p-2.5 text-red-600">
-            <ShieldAlert className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-xs text-slate-500">Không đủ điều kiện</p>
-            <p className="text-xl font-semibold text-slate-900">{stats.ineligible}</p>
-          </div>
-        </Panel>
-      </div>
-
-      <Panel>
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-            <Table2 className="h-4 w-4" /> Tổng hợp điểm thực tập
-          </h3>
-          <div className="flex items-center gap-2">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2 h-4 w-4 text-slate-400" />
+              <Table2 className="h-4 w-4" /> Tổng hợp điểm thực tập
+            </h3>
+            <p className="mt-1 text-[11px] text-slate-500">
+              Trên: bài nộp (✓ đúng hạn, Trễ, X chưa nộp) · Dưới: điểm danh (✓ có mặt, V vắng, – không có buổi)
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+            <div className="relative min-w-0 sm:w-52">
+              <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Tìm tên / MSSV / lớp..."
-                className="w-56 rounded-lg border border-slate-200 py-1.5 pl-8 pr-3 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                placeholder="Tìm tên, MSSV, lớp…"
+                aria-label="Tìm sinh viên"
+                className="w-full rounded-md border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-3 text-xs outline-none focus:border-blue-500 focus:bg-white"
               />
             </div>
+            <select
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}
+              aria-label="Lọc theo trạng thái điểm"
+              className="rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs outline-none focus:border-blue-500 focus:bg-white"
+            >
+              <option value="all">Mọi trạng thái</option>
+              <option value="finalized">Đã chốt điểm</option>
+              <option value="pending">Chưa hoàn tất</option>
+            </select>
             <button
               type="button"
               onClick={() => void load()}
               disabled={isLoading}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+              aria-label="Làm mới bảng điểm"
+              title="Làm mới"
+              className="inline-flex items-center justify-center gap-1.5 rounded-md border border-slate-200 px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-50"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
             </button>
             <button
               type="button"
               onClick={exportExcel}
-              disabled={isExporting || students.length === 0}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+              disabled={isExporting || !semesterId || students.length === 0}
+              className="il-btn il-btn-primary justify-center disabled:opacity-50"
             >
-              {isExporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-              Export Excel
+              {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
+              Bảng điểm Excel
             </button>
           </div>
         </div>
 
-        {isLoading && students.length === 0 ? (
-          <div className="flex items-center justify-center py-12 text-slate-400">
-            <Loader2 className="h-6 w-6 animate-spin" />
-          </div>
-        ) : filtered.length === 0 ? (
-          <p className="py-10 text-center text-sm text-slate-400">Không có dữ liệu.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
-              <span><strong className="text-slate-700">Trên:</strong> bài nộp (✓ đúng hạn, Trễ, X chưa nộp)</span>
-              <span><strong className="text-slate-700">Dưới:</strong> điểm danh (✓ có mặt, V vắng, – không có buổi)</span>
-            </div>
-            <table className="w-full min-w-[1150px] text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
-                  <th className="px-2 py-2.5">STT</th>
-                  <th className="px-2 py-2.5">HỌ TÊN</th>
-                  <th className="px-2 py-2.5">LỚP</th>
-                  <th className="px-2 py-2.5 text-center">ĐIỂM QT</th>
-                  <th className="px-2 py-2.5 text-center">ĐIỂM THI</th>
-                  <th className="px-2 py-2.5 text-center">ĐIỂM TB</th>
-                  <th className="px-2 py-2.5 text-center">XẾP LOẠI</th>
-                  {/* Cột tuần render theo lịch kỳ (schedule) — không hardcode T1..T6 */}
-                  {schedule.map((week) => (
-                    <th key={week.weekNumber} className="px-2 py-2.5 text-center">T{week.weekNumber}</th>
-                  ))}
-                  <th className="px-2 py-2.5 text-center">NỘP BC</th>
-                  <th className="px-2 py-2.5 text-center">VẮNG</th>
-                  <th className="px-2 py-2.5 text-center">TỔNG</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filtered.map((s, idx) => {
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[1320px] text-left text-xs">
+            <thead className="border-b border-slate-200 bg-slate-50 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+              <tr>
+                <th className="px-2 py-2.5 text-center">STT</th>
+                <th className="px-2 py-2.5">Họ tên</th>
+                <th className="px-2 py-2.5 text-center">Lớp</th>
+                <th className="px-2 py-2.5 text-center">Điểm QT</th>
+                <th className="px-2 py-2.5 text-center">Điểm thi</th>
+                <th className="px-2 py-2.5 text-center">Điểm TB</th>
+                <th className="px-2 py-2.5 text-center">Xếp loại</th>
+                {schedule.map((week) => (
+                  <th key={week.weekNumber} className="px-1.5 py-2.5 text-center">T{week.weekNumber}</th>
+                ))}
+                <th className="px-2 py-2.5 text-center">Nộp BC</th>
+                <th className="px-2 py-2.5 text-center">Vắng</th>
+                <th className="px-2 py-2.5 text-center">Tổng</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {isLoading && students.length === 0 ? (
+                <tr><td colSpan={10 + schedule.length} className="px-4 py-10 text-center text-slate-500">Đang tải bảng điểm…</td></tr>
+              ) : filtered.length === 0 ? (
+                <tr><td colSpan={10 + schedule.length} className="px-4 py-10 text-center text-slate-500">Không có sinh viên phù hợp.</td></tr>
+              ) : (
+                pagedStudents.map((s, idx) => {
                   const preview = rowPreview[s.studentId];
                   const isSaving = savingIds.has(s.studentId);
                   return (
-                    <tr key={s.studentId} className={s.isEligible ? undefined : "bg-red-50/50"}>
-                      <td className="px-2 py-2.5 text-center text-slate-500">{idx + 1}</td>
+                    <tr key={s.studentId} className={s.isEligible ? "hover:bg-slate-50" : "bg-rose-50/40 hover:bg-rose-50/70"}>
+                      <td className="px-2 py-2.5 text-center text-slate-500">{safePageIndex * pageSize + idx + 1}</td>
                       <td className="px-2 py-2.5">
-                        <p className="font-medium text-slate-900">{s.fullName}</p>
-                        <p className="text-xs text-slate-400">{s.studentCode}</p>
+                        <p className="font-semibold text-slate-900">{s.fullName}</p>
+                        <p className="text-[11px] text-slate-400">{s.studentCode}</p>
                       </td>
                       <td className="px-2 py-2.5 text-center">{s.className || "—"}</td>
                       <td className="px-2 py-2.5 text-center font-semibold">{s.processScore.toFixed(1)}</td>
@@ -1268,7 +1270,7 @@ function SummaryTab({
                               ? undefined
                               : `Không đủ điều kiện dự thi: ${s.ineligibleReasons.join("; ")}`
                           }
-                          className={`w-16 rounded-md border border-slate-200 px-1.5 py-1 text-center text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400 ${
+                          className={`w-16 rounded-md border border-slate-200 px-1.5 py-1 text-center text-xs focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400 ${
                             !s.isEligible ? "cursor-not-allowed bg-slate-100 text-slate-400" : ""
                           }`}
                         />
@@ -1279,67 +1281,106 @@ function SummaryTab({
                       </td>
                       <td className="px-2 py-2.5 text-center">
                         <span
-                          className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${getClassificationTone(
+                          className={`inline-flex rounded border px-2 py-0.5 text-[10px] font-semibold ${getClassificationTone(
                             preview?.classification ?? ""
                           )}`}
                         >
                           {preview?.classification || "—"}
                         </span>
                       </td>
-                      {s.weeks.map((w) => (
-                        <td key={w.weekNumber} className="px-2 py-2.5 text-center">
+                      {schedule.map((weekColumn) => {
+                        const w = s.weeks.find((week) => week.weekNumber === weekColumn.weekNumber);
+                        const attendanceStatus = w?.attendanceStatus ?? "no_session";
+                        const attendanceTone = attendanceStatus === "present"
+                          ? "bg-emerald-50 text-emerald-700"
+                          : attendanceStatus === "absent"
+                            ? "bg-rose-100 text-rose-700"
+                            : "bg-slate-50 text-slate-400";
+                        return (
+                        <td key={weekColumn.weekNumber} className="px-1.5 py-2 text-center">
                           <span
-                            title={`Bài nộp: ${w.status === "on_time" ? "Đúng hạn" : w.status === "late" ? "Trễ" : w.status === "missing" ? "Chưa nộp" : "Chưa đến hạn"} · Điểm danh: ${w.attendanceStatus === "present" ? "Có mặt" : w.attendanceStatus === "absent" ? "Vắng" : "Không có buổi"}`}
-                            className="inline-flex w-10 flex-col items-center gap-0.5"
+                            title={`Bài nộp: ${w?.status === "on_time" ? "Đúng hạn" : w?.status === "late" ? "Trễ" : w?.status === "missing" ? "Chưa nộp" : "Chưa đến hạn"} · Điểm danh: ${attendanceStatus === "present" ? "Có mặt" : attendanceStatus === "absent" ? "Vắng" : "Không có buổi"}`}
+                            className="mx-auto flex w-8 flex-col gap-0.5"
                           >
-                            <span className={`inline-flex min-h-5 w-full justify-center rounded px-1 py-0.5 text-[10px] ${WEEK_CELL_STYLE[w.status]}`}>
-                              {weekCellLabel(w)}
+                            <span className={`inline-flex min-h-5 items-center justify-center rounded px-1 text-[10px] ${w ? WEEK_CELL_STYLE[w.status] : "bg-slate-50 text-slate-400"}`}>
+                              {w ? weekCellLabel(w) : "–"}
                             </span>
-                            <span className={`inline-flex min-h-4 w-full justify-center rounded px-1 text-[10px] font-semibold ${
-                              w.attendanceStatus === "absent"
-                                ? "bg-red-100 text-red-700"
-                                : w.attendanceStatus === "present"
-                                  ? "bg-emerald-50 text-emerald-700"
-                                  : "bg-slate-50 text-slate-400"
-                            }`}>
-                              {attendanceCellLabel(w.attendanceStatus)}
+                            <span className={`inline-flex min-h-4 items-center justify-center rounded px-1 text-[10px] font-semibold ${attendanceTone}`}>
+                              {attendanceCellLabel(attendanceStatus === "no_session" ? null : attendanceStatus)}
                             </span>
                           </span>
                         </td>
-                      ))}
+                        );
+                      })}
                       <td className="px-2 py-2.5 text-center">
                         <span
-                          className={`inline-flex rounded px-1.5 py-0.5 text-xs font-medium ${
+                          className={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-semibold ${
                             s.finalReportSubmitted
                               ? "bg-emerald-50 text-emerald-700"
-                              : "bg-red-100 text-red-700 font-bold"
+                              : "bg-rose-100 text-rose-700"
                           }`}
                         >
                           {s.finalReportSubmitted ? "Đã nộp" : "X"}
                         </span>
                       </td>
                       <td className="px-2 py-2.5 text-center">
-                        <span className={`font-semibold ${s.absentCount >= 2 ? "text-red-600" : "text-slate-600"}`}>
+                        <span className={`font-semibold ${s.absentCount >= 2 ? "text-rose-600" : "text-slate-600"}`}>
                           {s.absentCount}
                         </span>
                       </td>
                       <td className="px-2 py-2.5 text-center">
-                        {!s.isEligible && (
-                          <span
-                            title={s.ineligibleReasons.join("; ")}
-                            className="inline-flex rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white"
-                          >
-                            Không đủ ĐK
-                          </span>
-                        )}
+                        <span
+                          title={s.isEligible ? "Đủ điều kiện dự thi" : s.ineligibleReasons.join("; ")}
+                          className={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-bold ${s.isEligible ? "bg-emerald-50 text-emerald-700" : "bg-rose-600 text-white"}`}
+                        >
+                          {s.isEligible ? "Đủ ĐK" : "Không đủ ĐK"}
+                        </span>
                       </td>
                     </tr>
                   );
-                })}
-              </tbody>
-            </table>
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex flex-col gap-2 border-t border-slate-100 px-3 py-2.5 text-xs sm:flex-row sm:items-center sm:justify-between">
+          <span className="text-slate-500">
+            Hiển thị {filtered.length ? safePageIndex * pageSize + 1 : 0}–{Math.min((safePageIndex + 1) * pageSize, filtered.length)} / {filtered.length} sinh viên
+          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-1.5 text-slate-500">
+              Số dòng
+              <select
+                value={pageSize}
+                onChange={(event) => setPageSize(Number(event.target.value))}
+                className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-slate-800"
+              >
+                <option value={15}>15</option>
+                <option value={30}>30</option>
+                <option value={50}>50</option>
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={() => setPageIndex((page) => Math.max(0, page - 1))}
+              disabled={safePageIndex === 0}
+              className="rounded bg-slate-100 p-1.5 text-slate-700 hover:bg-slate-200 disabled:opacity-40"
+              aria-label="Trang trước"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <span className="min-w-12 text-center font-semibold text-slate-700">{safePageIndex + 1} / {totalPages}</span>
+            <button
+              type="button"
+              onClick={() => setPageIndex((page) => Math.min(totalPages - 1, page + 1))}
+              disabled={safePageIndex >= totalPages - 1}
+              className="rounded bg-slate-100 p-1.5 text-slate-700 hover:bg-slate-200 disabled:opacity-40"
+              aria-label="Trang sau"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
           </div>
-        )}
+        </div>
       </Panel>
     </div>
   );

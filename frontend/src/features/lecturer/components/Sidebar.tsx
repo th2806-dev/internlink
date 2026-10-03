@@ -10,14 +10,13 @@ import {
   History,
   User,
   CalendarCheck,
+  X,
 } from "lucide-react";
 import { FEATURES } from "../../../config/featureFlags";
 import { useAuth } from "../../../hooks/useAuth";
 import { useLecturerNavStats } from "../../../hooks/useLecturerNavStats";
 import { toApiSemesterId, useSemester } from "../../../contexts/SemesterContext";
 import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
-
-import type { UserRole } from "../../../types/common";
 
 type NavItem = {
   id: string;
@@ -32,11 +31,14 @@ export const Sidebar = ({
   activeTab,
   onNavigate,
   currentLecturer = "Giảng viên",
+  isOpen = false,
+  onClose,
 }: {
   activeTab: string;
   onNavigate: (id: string) => void;
   currentLecturer?: string;
-  onSwitchPortal?: (role: UserRole) => void;
+  isOpen?: boolean;
+  onClose?: () => void;
 }) => {
   const { user } = useAuth();
   // Badge sidebar theo HỌC KỲ đang chọn ("all" → toàn bộ kỳ) — đổi kỳ là tự reload,
@@ -128,7 +130,18 @@ export const Sidebar = ({
     .filter((section) => section.items.length > 0);
 
   return (
-    <aside className="il-sidebar w-64 flex flex-col justify-between h-screen sticky top-0 z-40 select-none">
+    <aside
+      id="lecturer-navigation"
+      className={`il-sidebar lecturer-sidebar-drawer w-64 flex flex-col justify-between h-screen sticky top-0 z-40 select-none ${isOpen ? "is-open" : ""}`}
+    >
+      <button
+        type="button"
+        aria-label="Đóng menu điều hướng"
+        className="lecturer-sidebar-close lg:hidden"
+        onClick={onClose}
+      >
+        <X className="h-4 w-4" />
+      </button>
       <div>
         <div className="il-sidebar-header">
           <div className="il-sidebar-logo">
@@ -147,7 +160,7 @@ export const Sidebar = ({
           </div>
         </div>
 
-        <nav className="p-3 space-y-3 overflow-y-auto max-h-[calc(100vh-160px)] il-scrollbar">
+        <nav className="p-3 space-y-3 overflow-y-auto max-h-[calc(100dvh-160px)] il-scrollbar" aria-label="Điều hướng giảng viên">
           {visibleSections.map((section, idx) => (
             <div key={idx} className="space-y-1">
               {section.title && (
@@ -184,9 +197,11 @@ export const Sidebar = ({
       </div>
 
       <div className="il-sidebar-footer">
-        <div
+        <button
+          type="button"
           onClick={() => onNavigate("account")}
-          className="il-sidebar-profile"
+          className="il-sidebar-profile w-full text-left"
+          aria-label="Mở tài khoản giảng viên"
         >
           <div className="relative shrink-0">
             <InitialsAvatar
@@ -195,10 +210,6 @@ export const Sidebar = ({
               size={36}
               className="border border-slate-200"
             />
-            <span
-              className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full"
-              title="Đang hoạt động"
-            />
           </div>
 
           <div className="overflow-hidden min-w-0 flex-1">
@@ -206,10 +217,10 @@ export const Sidebar = ({
               {displayName}
             </p>
             <p className="il-sidebar-profile-meta truncate">
-              {user?.email || "Khoa Công nghệ Thông tin"}
+              {user?.email || "Giảng viên hướng dẫn"}
             </p>
           </div>
-        </div>
+        </button>
       </div>
     </aside>
   );

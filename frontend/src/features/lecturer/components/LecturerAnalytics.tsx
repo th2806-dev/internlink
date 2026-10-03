@@ -114,10 +114,15 @@ export const LecturerAnalytics = () => {
   const overdueCount = statsData?.overdueReportsCount ?? 0;
   const avgGrade = statsData?.averageGrade ?? 0;
   const assignedShare = totalStudents > 0 ? Math.round((interningStudents / totalStudents) * 100) : 0;
-  const complianceRate = totalStudents > 0
-    ? `${Math.round(((totalStudents - overdueCount) / totalStudents) * 100)}%`
+  const latestWeeklyTrend = weeklyTrend.reduce<LecturerWeeklyTrendDto | null>(
+    (latest, item) => !latest || item.weekNumber > latest.weekNumber ? item : latest,
+    null,
+  );
+  const complianceRate = latestWeeklyTrend
+    ? `${Math.round(latestWeeklyTrend.complianceRate)}%`
     : "—";
-  const avgGradeLabel = hasStatsData && totalStudents > 0 ? avgGrade.toFixed(1) : "—";
+  const hasGrades = hasStatsData && (statsData?.evaluatedCount ?? 0) > 0;
+  const avgGradeLabel = hasGrades ? avgGrade.toFixed(1) : "—";
 
   return (
     <div className="space-y-5 max-w-[1500px] mx-auto animate-in fade-in duration-200 pb-12 font-sans">
@@ -138,7 +143,7 @@ export const LecturerAnalytics = () => {
           unit={hasStatsData ? "sinh viên" : undefined}
           icon={Users}
           footer={hasStatsData
-            ? (totalStudents > 0 ? "100% Đã phân công giảng viên" : "Chưa có sinh viên trong học kỳ")
+            ? (totalStudents > 0 ? "Sinh viên thuộc nhóm hướng dẫn" : "Chưa có sinh viên trong học kỳ")
             : "Chưa có dữ liệu học kỳ"}
         />
         <KpiCard
@@ -155,17 +160,17 @@ export const LecturerAnalytics = () => {
           tone="sky"
           title="Tuân thủ Tiến độ Nộp"
           value={hasStatsData ? complianceRate : "—"}
-          unit={hasStatsData && totalStudents > 0 ? "đúng hạn" : undefined}
+          unit={latestWeeklyTrend ? "đúng hạn ở tuần gần nhất" : undefined}
           icon={TrendingUp}
-          footer={hasStatsData ? `${overdueCount} sinh viên trễ báo cáo tuần` : "Chưa có dữ liệu học kỳ"}
+          footer={hasStatsData ? `${overdueCount} báo cáo quá hạn` : "Chưa có dữ liệu học kỳ"}
         />
         <KpiCard
           tone="amber"
           title="Điểm Trung Bình Đợt"
-          value={hasStatsData ? avgGradeLabel : "—"}
-          unit={hasStatsData && totalStudents > 0 ? "/ 10" : undefined}
+          value={avgGradeLabel}
+          unit={hasGrades ? "/ 10" : undefined}
           icon={Award}
-          footer={hasStatsData && totalStudents > 0 ? "Xếp loại Khá - Giỏi - Xuất sắc" : "Chưa có dữ liệu đánh giá"}
+          footer={hasGrades ? `${statsData?.evaluatedCount} sinh viên đã có điểm` : "Chưa có dữ liệu đánh giá"}
         />
       </KpiGrid>
 
@@ -270,7 +275,7 @@ export const LecturerAnalytics = () => {
             ) : (
               weeklyTrend.map((item, idx) => (
                 <div key={idx} className="space-y-1.5">
-                  <div className="flex justify-between text-xs font-bold text-slate-800">
+                  <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-xs font-bold text-slate-800">
                     <span>{item.label}</span>
                     <span className="text-slate-500 text-[11px]">
                       <strong className="text-emerald-600">{item.onTimeCount}</strong>{" "}
@@ -309,7 +314,7 @@ export const LecturerAnalytics = () => {
               const totMissing = weeklyTrend.reduce((a, w) => a + w.missingCount, 0);
               const totAll = totOnTime + totLate + totMissing || 1;
               return (
-                <div className="flex items-center gap-4">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                   <span className="flex items-center gap-1.5 font-semibold">
                     <span className="w-3 h-3 rounded-sm bg-emerald-500 inline-block" />
                     Nộp đúng hạn ({((totOnTime / totAll) * 100).toFixed(1)}%)
@@ -329,7 +334,7 @@ export const LecturerAnalytics = () => {
             )}
             {weeklyTrend.length > 0 ? (
               <span className="font-bold text-blue-600">
-                Tổng {weeklyTrend.length} báo cáo tuần / SV
+                {weeklyTrend.length} tuần có dữ liệu
               </span>
             ) : null}
           </div>
@@ -440,7 +445,7 @@ export const LecturerAnalytics = () => {
                     <td className="p-3">
                       <div className="flex items-center gap-1 font-bold text-amber-600">
                         <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                        <span>{item.averageGrade} / 10</span>
+                        <span>{item.evaluatedStudentCount > 0 ? `${item.averageGrade} / 10` : "Chưa có đánh giá"}</span>
                       </div>
                     </td>
                     <td className="p-3 text-right">

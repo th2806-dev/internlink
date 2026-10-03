@@ -2,9 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   CalendarDays,
-  CheckCircle2,
   ClipboardCheck,
-  Clock3,
   FileCheck2,
   Package,
   FileCode,
@@ -458,7 +456,47 @@ export const SubmissionsView = ({ onShowToast }) => {
               </h2>
             </div>
 
-            <div className="overflow-x-auto -mx-4 md:-mx-5 px-4 md:px-5">
+            <div className="space-y-3 pt-3 md:hidden">
+              {uploads.length === 0 ? (
+                <EmptyState
+                  title="Chưa có hồ sơ nào được nộp"
+                  description="Dùng các mục bên trên để nộp báo cáo cuối kỳ, sản phẩm tùy chọn hoặc phiếu đánh giá doanh nghiệp."
+                  action={{ label: "Nộp báo cáo cuối kỳ", onClick: () => openUploadFor("FinalReport") }}
+                />
+              ) : uploads.map((item) => {
+                const revisionSubmission = rawSubmissions.find((submission) => submission.id === item.id && submission.status === "RevisionRequested");
+                return (
+                  <article key={item.id} className="rounded-md border border-slate-200 bg-white p-3">
+                    <div className="flex items-start gap-2">
+                      <span className="mt-0.5 shrink-0">{getCategoryIcon(item.category)}</span>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="break-words text-sm font-semibold text-slate-900">{item.title}</h3>
+                        <p className="mt-1 break-words text-xs text-slate-600">{item.category} · {item.fileType}</p>
+                        <p className="mt-1 text-xs text-slate-500">{item.version} · {item.size} · {item.uploadDate}</p>
+                        <span className={`mt-2 inline-flex rounded-md border px-2 py-1 text-[10px] font-semibold ${
+                          item.status === "Đã hoàn thành" ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                            : item.status === "Cần chỉnh sửa" ? "border-rose-200 bg-rose-50 text-rose-800"
+                              : "border-amber-200 bg-amber-50 text-amber-800"
+                        }`}>{item.status}</span>
+                        {item.notes && <p className="mt-2 break-words text-xs leading-5 text-slate-600">{item.notes}</p>}
+                      </div>
+                    </div>
+                    <div className="mt-3 flex gap-2 border-t border-slate-100 pt-3">
+                      <button type="button" onClick={() => void handleDownloadUpload(item)} className="il-btn il-btn-secondary min-h-10 flex-1 justify-center text-xs">
+                        <Download className="h-4 w-4" />Tải về
+                      </button>
+                      {revisionSubmission && (
+                        <button type="button" onClick={() => openRevisionUpload(revisionSubmission)} className="il-btn il-btn-secondary min-h-10 flex-1 justify-center text-xs">
+                          <RefreshCw className="h-4 w-4" />Nộp bản sửa
+                        </button>
+                      )}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+
+            <div className="hidden overflow-x-auto md:block md:-mx-5 md:px-5">
               <table className="w-full text-left border-collapse text-xs mt-3">
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-600 font-bold">
@@ -677,9 +715,8 @@ export const SubmissionsView = ({ onShowToast }) => {
                       ? uploadFiles.map((file) => file.name).join(", ")
                       : uploadCategory === "Evidence" ? "Chọn ảnh phiếu xác nhận" : "Chọn tệp trên thiết bị"}
                   </p>
-                  <p className="text-[11px] text-slate-400 font-medium">
-                    {uploadCategory === "Evidence" ? "Ảnh phiếu đánh giá/xác nhận của doanh nghiệp (bắt buộc)" : "PDF, ZIP, DOCX, PPTX, MP4, ảnh hoặc tài liệu liên quan (tùy chọn)"}
-                                      {uploadCategory === "FinalReport" ? "Tệp báo cáo PDF hoặc Word (bắt buộc)" : uploadCategory === "Evidence" ? "Ảnh phiếu đánh giá/xác nhận của doanh nghiệp (bắt buộc)" : "PDF, ZIP, DOCX, PPTX, MP4, ảnh hoặc tài liệu liên quan (tùy chọn)"}
+                  <p className="break-words text-[11px] font-medium text-slate-500">
+                    {uploadCategory === "FinalReport" ? "Tệp báo cáo PDF hoặc Word (bắt buộc)" : uploadCategory === "Evidence" ? "Ảnh phiếu đánh giá/xác nhận của doanh nghiệp (bắt buộc)" : "PDF, ZIP, DOCX, PPTX, MP4, ảnh hoặc tài liệu liên quan (tùy chọn)"}
                   </p>
                 </label>
               </div>
@@ -699,7 +736,7 @@ export const SubmissionsView = ({ onShowToast }) => {
                 </div>
                 <div className="space-y-2">
                   {uploadLinks.map((link, index) => (
-                    <div key={index} className="grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)_auto] gap-2">
+                    <div key={index} className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)_auto]">
                       <input
                         type="text"
                         placeholder="GitHub / Website / Docker"

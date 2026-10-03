@@ -1,6 +1,45 @@
 @InternLink.API_HostAddress = http://localhost:5275
+@apiAddress = http://localhost:7109
+@superAdminToken = replace-with-super-admin-jwt
+@backupFile = InternLink_20261003_120000_000Z.bak
 
 GET {{InternLink.API_HostAddress}}/weatherforecast/
 Accept: application/json
 
 ###
+
+### List database backups (Super Admin)
+GET {{apiAddress}}/api/SuperAdmin/backups
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### Create a database backup (Super Admin)
+POST {{apiAddress}}/api/SuperAdmin/backups
+Authorization: Bearer {{superAdminToken}}
+
+### Download one backup
+GET {{apiAddress}}/api/SuperAdmin/backups/{{backupFile}}/download
+Authorization: Bearer {{superAdminToken}}
+
+### Delete one backup
+DELETE {{apiAddress}}/api/SuperAdmin/backups/{{backupFile}}
+Authorization: Bearer {{superAdminToken}}
+
+### Restore rejects a request without the exact confirmation word
+POST {{apiAddress}}/api/SuperAdmin/backups/{{backupFile}}/restore
+Authorization: Bearer {{superAdminToken}}
+Content-Type: application/json
+
+{
+  "confirmation": "CONFIRM"
+}
+
+### DESTRUCTIVE: successful restore replaces the current database.
+### Only send this request after selecting a backup and intentionally replacing current data.
+# POST {{apiAddress}}/api/SuperAdmin/backups/{{backupFile}}/restore
+# Authorization: Bearer {{superAdminToken}}
+# Content-Type: application/json
+#
+# {
+#   "confirmation": "RESTORE"
+# }

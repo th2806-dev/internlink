@@ -140,6 +140,7 @@ public static class DependencyInjection
 
         // System settings (DB-backed)
         services.AddScoped<Application.Interfaces.ISettingsService, Services.SettingsService>();
+        services.AddScoped<InternLink.Application.Interfaces.IDatabaseBackupService, Services.DatabaseBackupService>();
 
         // Account requests management
         services.AddScoped<IAccountRequestService, Services.AccountRequestService>();

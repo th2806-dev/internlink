@@ -13,11 +13,6 @@ import type { Submission } from "../types/submission";
 import type { Enterprise } from "../types/enterprise";
 import type { EnterpriseDetail } from "../types/enterprise";
 
-/** Check if a URL is an external placeholder (Unsplash) or empty. */
-function isPlaceholderAvatar(url: string): boolean {
-  return !url || url.includes("unsplash.com");
-}
-
 const DEFAULT_AVATAR = "";
 
 export function formatViDate(iso?: string | null): string {
@@ -269,6 +264,7 @@ export function mapSubmissionDtoToRow(
     reportType: mapSubmissionTypeToUi(s.type),
     time: formatViDate(s.submittedAt).split(" ")[1] ?? "—",
     date: formatViDate(s.submittedAt).split(" ")[0] ?? "—",
+    submittedAt: s.submittedAt,
     status: mapSubmissionStatusToUi(s.status),
     fileName: s.fileName ?? firstFile?.fileName ?? firstAsset?.label ?? "",
     fileUrl: s.fileUrl ?? firstFile?.fileUrl ?? "",
@@ -279,8 +275,6 @@ export function mapSubmissionDtoToRow(
     lecturerNote: latestFeedback?.comment ?? "",
     feedbacks: s.feedbacks ?? [],
     assets: s.assets ?? [],
-    approvedAt:
-      s.status === "Approved" ? formatViDate(s.submittedAt) : undefined,
   };
 }
 

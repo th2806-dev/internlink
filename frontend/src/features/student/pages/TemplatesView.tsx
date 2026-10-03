@@ -134,20 +134,11 @@ export const TemplatesView = ({ onShowToast }: { onShowToast: (msg: string) => v
         subtitle="Kho biểu mẫu Word, Slide và Quy định chính thức đang lưu hành do Giảng viên & Khoa ban hành. Tải về để thực hiện theo đợt thực tập."
         badge={`${templates.length} biểu mẫu đang lưu hành`}
         badgeColor="bg-emerald-100 text-emerald-800 border-emerald-200"
-        actions={[
-          {
-            label: "Tải tất cả mẫu (.ZIP)",
-            icon: Download,
-            onClick: () =>
-              onShowToast("Đang đóng gói và tải tất cả biểu mẫu đang lưu hành (.ZIP)..."),
-            variant: "primary",
-          },
-        ]}
       >
         <div className="flex items-center gap-2 flex-wrap">
           <span className="px-2 py-0.5 font-semibold text-[10px] rounded-md border bg-emerald-50 text-emerald-700 border-emerald-200 flex items-center gap-1">
             <CheckCircle2 className="w-3 h-3" />
-            Đợt thực tập: {profile?.semester || "HK I - 2026"}
+            Đợt thực tập: {profile?.semester || "Chưa có thông tin"}
           </span>
           <span className="px-2 py-0.5 font-semibold text-[10px] rounded-md border bg-rose-100 text-rose-800 border-rose-200">
             {templates.filter((t) => t.isRequired).length} bắt buộc
@@ -250,10 +241,7 @@ export const TemplatesView = ({ onShowToast }: { onShowToast: (msg: string) => v
                         <span className="text-[10px] text-slate-500 font-semibold">Bản {doc.version}</span>
                       </div>
 
-                      <h3
-                        onClick={() => setSelectedDoc(doc)}
-                        className="font-bold text-xs sm:text-sm text-slate-900 group-hover:text-blue-600 transition-colors cursor-pointer leading-snug"
-                      >
+                      <h3 className="break-words font-bold text-xs leading-snug text-slate-900 sm:text-sm">
                         {doc.name}
                       </h3>
 

@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   Routes,
   Route,
@@ -10,7 +9,6 @@ import { useAuth } from "../hooks/useAuth";
 import { useToast } from "../hooks/useToast";
 import { FEATURES } from "../config/featureFlags";
 import { useSemester } from "../contexts/SemesterContext";
-import { lecturerInternshipsService } from "../services/lecturerInternships.service";
 
 
 // Auth & Layouts
@@ -40,6 +38,7 @@ import { TemplatesView as AdminTemplatesView } from "../features/admin/pages/Tem
 import { DepartmentsView as AdminDepartmentsView } from "../features/admin/pages/DepartmentsView";
 import { AttendanceView as AdminAttendanceView } from "../features/admin/pages/AttendanceView";
 import { ReportArchiveView as AdminReportArchiveView } from "../features/admin/pages/ReportArchiveView";
+import { BackupsView as AdminBackupsView } from "../features/admin/pages/BackupsView";
 
 // Lecturer Pages
 import { DashboardView as LecturerDashboardView } from "../features/lecturer/pages/DashboardView";
@@ -78,8 +77,6 @@ export function AppRoutes() {
   const { showToast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
-
-  const [searchQuery, setSearchQuery] = useState("");
 
   const { selectedSemesterId } = useSemester();
   const realState = useRealAppState(role, isLoggedIn, user, showToast, selectedSemesterId);
@@ -348,6 +345,16 @@ export function AppRoutes() {
                   element={<AdminAccountView onShowToast={showToast} />}
                 />
                 <Route
+                  path="backups"
+                  element={
+                    isSuperAdmin ? (
+                      <AdminBackupsView onShowToast={showToast} />
+                    ) : (
+                      <Navigate to="/admin/dashboard" replace />
+                    )
+                  }
+                />
+                <Route
                   path="*"
                   element={<Navigate to="/admin/dashboard" replace />}
                 />
@@ -365,16 +372,10 @@ export function AppRoutes() {
             <LecturerLayout
               activeTab={currentTabFromPath}
               onNavigate={(tab) => navigate(`/lecturer/${tab}`)}
-              onSwitchPortal={(r) => {
-                switchRole(r);
-                navigate(`/${r}/dashboard`);
-              }}
               onLogout={async () => {
                 await logout();
                 navigate("/login");
               }}
-              searchQuery={searchQuery}
-              onSearchChange={setSearchQuery}
               currentLecturer={appState.currentLecturer}
               assignedStudentsCount={appState.assignedStudents.length}
             >
@@ -390,7 +391,6 @@ export function AppRoutes() {
                       weeklyTrendData={appState.weeklyTrendData}
                       students={appState.assignedStudents}
                       weeklyReports={appState.weeklyReports}
-                      lecturerName={appState.currentLecturer}
                       isLoading={appState.isLecturerLoading}
                       error={appState.lecturerError}
                       onShowToast={showToast}

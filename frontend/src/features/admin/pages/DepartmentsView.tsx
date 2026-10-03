@@ -1,15 +1,15 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Building2, AlertTriangle } from 'lucide-react';
+import { Plus, Edit2, Trash2, Building2, AlertTriangle, RefreshCw } from 'lucide-react';
 import { adminDepartmentsService, type DepartmentDto, type CreateDepartmentRequest, type UpdateDepartmentRequest } from '../../../services/adminDepartments.service';
-import { useToast } from '../../../hooks/useToast';
+import { PageHeader } from "../../../components/common/PageHeader";
+import { Panel } from "../../../components/common/Panel";
 import type { ToastType } from '../../../contexts/ToastContext';
 
 function formatDate(iso: string) {
-  try {
-    return new Date(iso).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  } catch {
-    return '-';
-  }
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime())
+    ? '—'
+    : date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
 function DepartmentRow({ department, onEdit, onDelete }: { department: DepartmentDto; onEdit: (d: DepartmentDto) => void; onDelete: (d: DepartmentDto) => void }) {
@@ -43,10 +43,10 @@ function DepartmentRow({ department, onEdit, onDelete }: { department: Departmen
       </td>
       <td className="px-4 py-3 text-sm align-middle whitespace-nowrap">
         <div className="flex items-center gap-1">
-          <button type="button" onClick={() => onEdit(department)} className="text-slate-600 hover:text-blue-600 p-1 rounded hover:bg-slate-100" title="Sửa khoa">
+          <button type="button" onClick={() => onEdit(department)} className="text-slate-600 hover:text-blue-600 p-1 rounded hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600" title="Sửa khoa" aria-label={`Sửa khoa ${department.name}`}>
             <Edit2 className="w-4 h-4" />
           </button>
-          <button type="button" onClick={() => onDelete(department)} className="text-slate-600 hover:text-rose-600 p-1 rounded hover:bg-slate-100" title="Xóa khoa">
+          <button type="button" onClick={() => onDelete(department)} className="text-slate-600 hover:text-rose-600 p-1 rounded hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600" title="Xóa khoa" aria-label={`Xóa khoa ${department.name}`}>
             <Trash2 className="w-4 h-4" />
           </button>
         </div>
@@ -105,8 +105,8 @@ function DepartmentModal({ department, onClose, onSave }: { department?: Departm
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md p-5">
-        <h3 className="text-lg font-semibold text-slate-800 mb-4">
+      <div role="dialog" aria-modal="true" aria-labelledby="department-modal-title" className="relative max-h-[calc(100dvh-2rem)] overflow-y-auto bg-white rounded-lg shadow-xl w-full max-w-md p-5">
+        <h3 id="department-modal-title" className="text-lg font-semibold text-slate-800 mb-4">
           {isEdit ? 'Sửa thông tin khoa' : 'Thêm khoa mới'}
         </h3>
         {error && (
@@ -169,6 +169,7 @@ function DepartmentModal({ department, onClose, onSave }: { department?: Departm
 export function DepartmentsView({ onShowToast }: { onShowToast?: (msg: string, type?: ToastType) => void }) {
   const [departments, setDepartments] = useState<DepartmentDto[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [modalDepartment, setModalDepartment] = useState<DepartmentDto | null>(null);
   const [isCreatingDepartment, setIsCreatingDepartment] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -178,7 +179,9 @@ export function DepartmentsView({ onShowToast }: { onShowToast?: (msg: string, t
     try {
       const data = await adminDepartmentsService.getAll();
       setDepartments(data);
+      setLoadError(null);
     } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Không tải được danh sách khoa.');
       onShowToast?.('Không tải được danh sách khoa.', 'danger');
     } finally {
       setLoading(false);
@@ -226,25 +229,72 @@ export function DepartmentsView({ onShowToast }: { onShowToast?: (msg: string, t
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-800">Quản lý Khoa</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Duy trì danh sách khoa trong hệ thống. Chỉ Quản trị hệ thống mới có thể thêm/sửa/xóa.</p>
-        </div>
-        <button
-          type="button"
-          onClick={() => {
+      <PageHeader
+        icon={Building2}
+        title="Quản lý khoa"
+        subtitle="Danh sách đơn vị, trạng thái hoạt động và quy mô dữ liệu theo khoa."
+        actions={[{
+          label: "Thêm khoa",
+          icon: Plus,
+          onClick: () => {
             setIsCreatingDepartment(true);
             setModalDepartment(null);
-          }}
-          className="flex items-center gap-1.5 px-3 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition"
-        >
-          <Plus className="w-4 h-4" /> Thêm khoa
-        </button>
-      </div>
+          },
+          variant: "primary",
+        }]}
+      />
 
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-        <div className="overflow-x-auto">
+      <Panel padding="none" className="overflow-hidden">
+        {loadError && (
+          <div role="alert" className="flex flex-col gap-3 border-b border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 sm:flex-row sm:items-center sm:justify-between">
+            <span>{loadError}</span>
+            <button type="button" onClick={() => void load()} disabled={loading} className="inline-flex items-center gap-2 self-start rounded-md border border-rose-300 bg-white px-3 py-1.5 text-xs font-semibold text-rose-800 disabled:opacity-50 sm:self-auto">
+              <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+              Thử tải lại
+            </button>
+          </div>
+        )}
+        <div className="divide-y divide-slate-100 md:hidden">
+          {loading ? (
+            <p className="p-6 text-center text-sm text-slate-500">Đang tải danh sách khoa…</p>
+          ) : loadError ? null : departments.length === 0 ? (
+            <p className="p-6 text-center text-sm text-slate-500">Hiện chưa có khoa nào.</p>
+          ) : departments.map((department) => (
+            <article key={department.id} className="space-y-3 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-start gap-2.5">
+                  <Building2 className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" />
+                  <div className="min-w-0">
+                    <h2 className="font-semibold text-slate-900">{department.name}</h2>
+                    <p className="mt-0.5 font-mono text-xs text-slate-500">{department.code}</p>
+                  </div>
+                </div>
+                <span className={`shrink-0 rounded-md border px-2 py-0.5 text-[10px] font-semibold ${department.isActive ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-slate-100 text-slate-600'}`}>
+                  {department.isActive ? 'Hoạt động' : 'Tạm ngưng'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-600">{department.description || "Chưa có mô tả."}</p>
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-md bg-slate-50 p-3 text-xs sm:grid-cols-4">
+                <div><dt className="text-slate-500">Sinh viên</dt><dd className="font-semibold text-slate-800">{department.studentCount}</dd></div>
+                <div><dt className="text-slate-500">Giảng viên</dt><dd className="font-semibold text-slate-800">{department.lecturerCount}</dd></div>
+                <div><dt className="text-slate-500">Tài khoản</dt><dd className="font-semibold text-slate-800">{department.userCount}</dd></div>
+                <div><dt className="text-slate-500">Học kỳ</dt><dd className="font-semibold text-slate-800">{department.semesterCount}</dd></div>
+              </dl>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[11px] text-slate-500">Tạo ngày {formatDate(department.createdAt)}</span>
+                <div className="flex items-center gap-1">
+                  <button type="button" onClick={() => { setIsCreatingDepartment(false); setModalDepartment(department); }} className="rounded-md p-2 text-slate-600 hover:bg-slate-100 hover:text-blue-700" aria-label={`Sửa khoa ${department.name}`}>
+                    <Edit2 className="h-4 w-4" />
+                  </button>
+                  <button type="button" onClick={() => void handleDelete(department)} className="rounded-md p-2 text-slate-600 hover:bg-rose-50 hover:text-rose-700" aria-label={`Xóa khoa ${department.name}`}>
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
@@ -267,6 +317,8 @@ export function DepartmentsView({ onShowToast }: { onShowToast?: (msg: string, t
                     </div>
                   </td>
                 </tr>
+              ) : loadError ? (
+                <tr><td className="px-4 py-8 text-center text-slate-500" colSpan={7}>Không thể hiển thị dữ liệu khi tải danh sách khoa thất bại.</td></tr>
               ) : departments.length === 0 ? (
                 <tr>
                   <td className="px-4 py-8 text-center text-slate-400" colSpan={7}>
@@ -289,7 +341,7 @@ export function DepartmentsView({ onShowToast }: { onShowToast?: (msg: string, t
             </tbody>
           </table>
         </div>
-      </div>
+      </Panel>
 
       {(modalDepartment !== null || isCreatingDepartment) && (
         <DepartmentModal

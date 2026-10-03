@@ -299,7 +299,6 @@ export const InternshipView = ({ onShowToast, onNavigate }: { onShowToast: (msg:
   }, [internship, progressSummary, schedules, dynamicWeeks]);
 
   const milestones = useMemo(() => {
-    const start = internship?.startDate;
     const end = internship?.endDate;
     const nextWeek = weeklyPlans.find((w) => w.progress < 100);
     const scheduleByWeek = new Map(schedules.map((s) => [s.weekNumber, s]));
@@ -616,7 +615,26 @@ export const InternshipView = ({ onShowToast, onNavigate }: { onShowToast: (msg:
         </div>
 
         {/* Timeline Steps Bar */}
-        <div className="pt-2 overflow-x-auto">
+        <ol className="space-y-3 pt-2 md:hidden" aria-label="Các mốc thực tập">
+          {timelineSteps.map((step, index) => {
+            const done = step.status === "done";
+            const active = step.status === "active";
+            return (
+              <li key={step.label} className="flex items-start gap-3">
+                <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                  done || active ? "bg-blue-600 text-white" : "border border-slate-300 bg-white text-slate-500"
+                }`}>
+                  {done ? <CheckCircle2 className="h-4 w-4" /> : index + 1}
+                </span>
+                <span className="min-w-0 flex-1 border-b border-slate-100 pb-3">
+                  <span className={`block text-sm font-semibold ${active ? "text-blue-700" : "text-slate-800"}`}>{step.label}</span>
+                  <span className="mt-0.5 block text-xs text-slate-500">{step.date}</span>
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+        <div className="hidden overflow-x-auto pt-2 md:block">
           <div className="min-w-[550px] flex items-start justify-between px-2 py-1">
             {timelineSteps.map((step, idx, arr) => {
               const isDone = step.status === "done";
@@ -676,7 +694,42 @@ export const InternshipView = ({ onShowToast, onNavigate }: { onShowToast: (msg:
               </div>
             </div>
 
-            <div className="overflow-x-auto">
+            <div className="space-y-3 md:hidden">
+              {weeklyPlans.map((item) => (
+                <article key={item.week} className="rounded-md border border-slate-200 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-blue-700">Tuần {item.week}</p>
+                      <h3 className="mt-1 break-words text-sm font-semibold text-slate-900">{item.title}</h3>
+                    </div>
+                    <span className={`shrink-0 rounded-md px-2 py-1 text-[10px] font-bold ${
+                      item.status === "Đã hoàn thành" ? "bg-emerald-50 text-emerald-800"
+                        : item.status === "Cần chỉnh sửa" ? "bg-amber-50 text-amber-800"
+                          : item.status === "Đã nộp" || item.status === "Đã xem" ? "bg-blue-50 text-blue-800"
+                            : "bg-slate-100 text-slate-600"
+                    }`}>{item.status}</span>
+                  </div>
+                  <p className="mt-2 text-xs leading-5 text-slate-600">{item.goal}</p>
+                  {item.dueDate && <p className="mt-2 flex items-center gap-1 text-xs text-slate-500"><Clock className="h-3.5 w-3.5" />Hạn nộp: {item.dueDate}</p>}
+                  <div className="mt-3 flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 flex-1 items-center gap-2">
+                      <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-slate-100">
+                        <div className={`h-full rounded-full ${item.progress === 100 ? "bg-emerald-500" : "bg-blue-600"}`} style={{ width: `${item.progress}%` }} />
+                      </div>
+                      <span className="shrink-0 text-xs font-semibold tabular-nums text-slate-600">{item.progress}%</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedWeekDetail(item)}
+                      className="il-btn il-btn-secondary min-h-10 shrink-0 px-3 text-xs"
+                    >
+                      Xem chi tiết
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50/80 text-slate-600 font-bold">

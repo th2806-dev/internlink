@@ -11,7 +11,6 @@ import {
   Video,
   ExternalLink,
   MessageSquare,
-  Award,
 } from "lucide-react";
 import { useSemester } from "../../../contexts/SemesterContext";
 import { attendanceService } from "../../../services/attendance.service";
@@ -20,7 +19,7 @@ import { Panel } from "../../../components/common/Panel";
 import { KpiCard, KpiGrid } from "../../../components/common/KpiCard";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { parseBackendDate } from "../../../lib/formatDateTimeVi";
-import type { StudentAttendanceOverviewDto, StudentAttendanceItemDto } from "../../../types/api";
+import type { StudentAttendanceOverviewDto } from "../../../types/api";
 
 export const StudentAttendanceView: React.FC<{
   onShowToast?: (msg: string, type?: string) => void;
@@ -54,9 +53,9 @@ export const StudentAttendanceView: React.FC<{
   }, [loadData]);
 
   const totalSessions = data?.totalSessions ?? 0;
-  const presentCount = data?.presentCount ?? 0;
-  const absentCount = data?.absentCount ?? 0;
-  const rate = data?.attendanceRate ?? 100;
+  const presentCount = data?.presentCount ?? null;
+  const absentCount = data?.absentCount ?? null;
+  const rate = data?.attendanceRate ?? null;
 
   // Next upcoming session
   const now = new Date();
@@ -86,25 +85,33 @@ export const StudentAttendanceView: React.FC<{
         <KpiCard
           tone="blue"
           title="Tỷ lệ chuyên cần"
-          value={`${rate}%`}
+          value={rate == null ? "—" : `${rate}%`}
           icon={CalendarCheck}
-          footer={`${presentCount} / ${totalSessions} buổi đã tham dự`}
+          footer={data ? `${presentCount ?? 0} / ${totalSessions} buổi đã tham dự` : "Chưa có dữ liệu điểm danh"}
         />
         <KpiCard
           tone="emerald"
           title="Số buổi có mặt"
-          value={presentCount}
+          value={presentCount ?? "—"}
           unit="buổi"
           icon={CheckCircle2}
-          footer={rate >= 80 ? "Đạt chuẩn chuyên cần" : "Cần chú ý tham dự đầy đủ"}
+          footer={
+            !data
+              ? "Chưa có dữ liệu điểm danh"
+              : rate == null
+                ? "Chưa có tỷ lệ chuyên cần"
+                : rate >= 80
+                  ? "Đạt chuẩn chuyên cần"
+                  : "Cần chú ý tham dự đầy đủ"
+          }
         />
         <KpiCard
-          tone={absentCount > 0 ? "rose" : "emerald"}
+          tone={absentCount == null ? "blue" : absentCount > 0 ? "rose" : "emerald"}
           title="Số buổi vắng"
-          value={absentCount}
+          value={absentCount ?? "—"}
           unit="buổi"
           icon={XCircle}
-          footer={absentCount === 0 ? "Không có buổi vắng" : "Vui lòng liên hệ giảng viên"}
+          footer={!data ? "Chưa có dữ liệu điểm danh" : absentCount === 0 ? "Không có buổi vắng" : "Vui lòng liên hệ giảng viên"}
         />
         <KpiCard
           tone="sky"
@@ -121,9 +128,9 @@ export const StudentAttendanceView: React.FC<{
 
       {/* Upcoming Session Banner (if any) */}
       {upcomingSession && (
-        <Panel className="border-blue-200 bg-gradient-to-r from-blue-50/70 to-indigo-50/50 p-5 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-600 text-white uppercase tracking-wider">
+        <Panel className="space-y-3 border-blue-200 bg-blue-50/60 p-4 sm:p-5">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <span className="w-fit rounded-md border border-blue-200 bg-white px-2.5 py-1 text-xs font-semibold text-blue-800">
               Buổi gặp kế tiếp • Tuần {upcomingSession.weekNumber}
             </span>
             <span className="text-xs font-bold text-blue-700">

@@ -293,15 +293,27 @@ export const DashboardView = ({
             <DashboardSemesterComparisonChart data={semesterComparison} />
           </Panel>
           <Panel className="lg:col-span-4">
-            <DashboardDonutChart
-              title="Kết quả thực tập"
-              subtitle="Tổng hợp trạng thái đánh giá của kỳ đang chọn"
-              data={
-                outcomeSlices.length > 0
-                  ? outcomeSlices
-                  : [{ name: "Chưa có dữ liệu", value: 1, tone: "slate" as const }]
-              }
-            />
+            {isLoading ? (
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Kết quả thực tập</h3>
+                  <p className="mt-0.5 text-[11px] text-slate-500">Tổng hợp trạng thái đánh giá của kỳ đang chọn</p>
+                </div>
+                <p className="py-16 text-center text-xs text-slate-500">Đang tải dữ liệu…</p>
+              </div>
+            ) : outcomeSlices.length > 0 ? (
+              <DashboardDonutChart
+                title="Kết quả thực tập"
+                subtitle="Tổng hợp trạng thái đánh giá của kỳ đang chọn"
+                data={outcomeSlices}
+              />
+            ) : (
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">Kết quả thực tập</h3>
+                <p className="mt-0.5 text-[11px] text-slate-500">Tổng hợp trạng thái đánh giá của kỳ đang chọn</p>
+                <p className="py-16 text-center text-xs text-slate-500">Chưa có dữ liệu đánh giá trong kỳ này.</p>
+              </div>
+            )}
           </Panel>
         </div>
       ) : (

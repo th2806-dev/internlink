@@ -1,4 +1,5 @@
 import {
+  X,
   LayoutDashboard,
   UserCheck,
   Users,
@@ -13,6 +14,7 @@ import {
   ClipboardList,
   CalendarCheck,
   Archive,
+  DatabaseBackup,
 } from "lucide-react";
 import { FEATURES } from "../../../config/featureFlags";
 import { formatCountBadge } from "../../../lib/userDisplay";
@@ -36,11 +38,15 @@ export const Sidebar = ({
   onNavigate,
   stats,
   user,
+  isOpen = false,
+  onClose,
 }: {
   activeTab: string;
   onNavigate: (id: string) => void;
   stats?: AdminNavStats;
   user?: AuthUser | null;
+  isOpen?: boolean;
+  onClose?: () => void;
 }) => {
   const { isSuperAdmin, roleDisplayLabel } = useAdminCapabilities();
   const unassigned = stats?.unassignedCount ?? 0;
@@ -153,6 +159,7 @@ export const Sidebar = ({
           icon: KeyRound,
         },
         { id: "admin-settings", label: "Cài đặt", icon: Settings },
+        { id: "admin-backups", label: "Sao lưu & Khôi phục", icon: DatabaseBackup },
         { id: "admin-account", label: "Tài khoản", icon: User },
       ],
     },
@@ -172,6 +179,7 @@ export const Sidebar = ({
             "admin-semesters",
             "admin-users",
             "admin-settings",
+            "admin-backups",
             "admin-account",
           ]);
           if (!superAdminItems.has(item.id)) return false;
@@ -189,9 +197,13 @@ export const Sidebar = ({
     : filteredSections;
 
   return (
-    <aside className="il-sidebar w-64 flex flex-col justify-between h-screen sticky top-0 z-40 select-none">
+    <aside
+      id="admin-navigation"
+      aria-label="Điều hướng quản trị"
+      className={`il-sidebar admin-sidebar-drawer w-64 flex flex-col justify-between h-screen sticky top-0 z-40 select-none ${isOpen ? "is-open" : ""}`}
+    >
       <div>
-        <div className="il-sidebar-header">
+        <div className="il-sidebar-header admin-sidebar-header">
           <div className="il-sidebar-logo">
             <img
               src="/logo/logo_internlink-02.png"
@@ -206,6 +218,14 @@ export const Sidebar = ({
             </div>
             <p className="il-portal-badge">{isSuperAdmin ? "QUẢN TRỊ HỆ THỐNG" : "QUẢN TRỊ KHOA"}</p>
           </div>
+          <button
+            type="button"
+            className="admin-sidebar-close"
+            onClick={onClose}
+            aria-label="Đóng menu điều hướng"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
 
         <nav className="p-3 space-y-3 overflow-y-auto max-h-[calc(100vh-170px)] il-scrollbar">
@@ -230,6 +250,7 @@ export const Sidebar = ({
                         ? "border-t border-slate-200 mt-2 pt-3"
                         : ""
                     }`}
+                    aria-current={isActive ? "page" : undefined}
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <Icon className="w-4 h-4 shrink-0" />
@@ -257,9 +278,11 @@ export const Sidebar = ({
       </div>
 
       <div className="il-sidebar-footer">
-        <div
+        <button
+          type="button"
           onClick={() => onNavigate("admin-account")}
-          className="il-sidebar-profile"
+          className="il-sidebar-profile w-full text-left"
+          aria-label={`Mở tài khoản ${displayName}`}
         >
           <div className="relative shrink-0">
             <InitialsAvatar
@@ -268,17 +291,13 @@ export const Sidebar = ({
               size={36}
               className="border border-slate-200"
             />
-            <span
-              className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full"
-              title="Trực tuyến"
-            />
           </div>
 
           <div className="overflow-hidden min-w-0 flex-1">
             <p className="il-sidebar-profile-name truncate">{displayName}</p>
             <p className="il-sidebar-profile-meta truncate">{displayRole}</p>
-          </div>
         </div>
+        </button>
       </div>
     </aside>
   );

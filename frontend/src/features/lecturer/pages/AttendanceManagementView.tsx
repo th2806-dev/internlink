@@ -720,7 +720,7 @@ export const AttendanceManagementView: React.FC<{
       {/* ========================================================================= */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl border border-slate-200 max-w-lg w-full overflow-hidden flex flex-col max-h-[90vh]">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-200 max-w-lg w-full overflow-hidden flex flex-col max-h-[90dvh]">
             <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <CalendarCheck className="w-5 h-5 text-blue-600" />
@@ -735,7 +735,7 @@ export const AttendanceManagementView: React.FC<{
             </div>
 
             <form onSubmit={handleSubmitCreate} className="p-5 overflow-y-auto space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">
                     Tuần thực tập <span className="text-rose-500">*</span>
@@ -802,7 +802,7 @@ export const AttendanceManagementView: React.FC<{
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">
                     Thời gian bắt đầu <span className="text-rose-500">*</span>
@@ -977,7 +977,7 @@ export const AttendanceManagementView: React.FC<{
 
             {/* Quick Actions & Search */}
             <div className="px-5 py-3 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3 bg-white">
-              <div className="relative flex-1 min-w-[200px]">
+              <div className="relative min-w-0 w-full flex-1 sm:min-w-[200px]">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                 <input
                   type="text"
@@ -1023,12 +1023,12 @@ export const AttendanceManagementView: React.FC<{
                     }`}
                   >
                     {/* Student Info */}
-                    <div className="flex items-center gap-3 min-w-[220px]">
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
                       <InitialsAvatar name={r.studentName} size="sm" />
                       <div>
                         <div className="flex items-center gap-1.5">
-                          <span className="font-bold text-xs text-slate-900">{r.studentName}</span>
-                          <span className="font-mono text-[10px] text-blue-600 font-bold">
+                          <span className="break-words font-bold text-xs text-slate-900">{r.studentName}</span>
+                          <span className="shrink-0 font-mono text-[10px] text-blue-600 font-bold">
                             {r.studentCode}
                           </span>
                           {isHighRisk && (
@@ -1160,7 +1160,7 @@ export const AttendanceManagementView: React.FC<{
       {/* ========================================================================= */}
       {isEditModalOpen && editingSession && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl border border-slate-200 max-w-md w-full overflow-hidden flex flex-col">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-200 max-w-md w-full overflow-hidden flex max-h-[90dvh] flex-col">
             <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
               <h3 className="font-bold text-sm text-slate-900">Sửa thông tin buổi gặp</h3>
               <button
@@ -1171,8 +1171,8 @@ export const AttendanceManagementView: React.FC<{
               </button>
             </div>
 
-            <form onSubmit={handleSubmitEdit} className="p-5 space-y-3.5 text-xs">
-              <div className="grid grid-cols-2 gap-3">
+            <form onSubmit={handleSubmitEdit} className="overflow-y-auto p-5 space-y-3.5 text-xs">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">
                     Tuần thực tập <span className="text-rose-500">*</span>
@@ -1216,7 +1216,9 @@ export const AttendanceManagementView: React.FC<{
                   <label className="block font-bold text-slate-700 mb-1">Trạng thái buổi gặp</label>
                   <select
                     value={editStatus}
-                    onChange={(e) => setEditStatus(e.target.value as any)}
+                    onChange={(e) =>
+                      setEditStatus(e.target.value as "Scheduled" | "Completed" | "Cancelled")
+                    }
                     className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 focus:border-blue-500 font-medium outline-none"
                   >
                     <option value="Scheduled">Sắp diễn ra (Scheduled)</option>
@@ -1226,7 +1228,7 @@ export const AttendanceManagementView: React.FC<{
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Thời gian bắt đầu</label>
                   <input

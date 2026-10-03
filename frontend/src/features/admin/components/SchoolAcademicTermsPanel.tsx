@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { CalendarPlus, CalendarRange, PencilLine, Save, X } from "lucide-react";
+import { CalendarPlus, CalendarRange, PencilLine, Save, X, RefreshCw } from "lucide-react";
 import { Panel } from "../../../components/common/Panel";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import {
@@ -43,14 +43,18 @@ export function SchoolAcademicTermsPanel({ onShowToast }: { onShowToast: (messag
   const [showYearForm, setShowYearForm] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isSavingYear, setIsSavingYear] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
   const refresh = async () => {
+    setIsLoading(true);
     try {
       setTerms(await schoolAcademicTermsService.getAll());
       setError("");
     } catch (loadError) {
       setError(getApiErrorMessage(loadError));
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -139,7 +143,7 @@ export function SchoolAcademicTermsPanel({ onShowToast }: { onShowToast: (messag
     yearForm.term2Start && yearForm.term2End &&
     yearForm.summerStart && yearForm.summerEnd;
 
-  const inputCls = "rounded-md border border-slate-300 bg-white px-3 py-2 text-sm";
+  const inputCls = "min-w-0 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm";
   const dateInput = (
     key: keyof typeof yearForm,
     label: string,
@@ -163,29 +167,41 @@ export function SchoolAcademicTermsPanel({ onShowToast }: { onShowToast: (messag
   );
 
   return (
-    <Panel className="space-y-4 border-emerald-200 bg-emerald-50/30">
+    <Panel className="space-y-4">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="flex items-center gap-2 text-base font-bold text-slate-900">
-            <CalendarPlus className="h-4 w-4 text-emerald-700" /> Cấu hình thời gian học kỳ
+            <CalendarPlus className="h-4 w-4 text-blue-700" /> Cấu hình thời gian học kỳ
           </h2>
           <p className="mt-1 text-xs text-slate-600">
             Khung ngày và số tuần chuẩn áp dụng toàn trường. Admin khoa chỉ được chọn tuần trong khung này.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setShowYearForm((v) => !v)}
-          className="il-btn il-btn-secondary flex items-center gap-1.5 text-xs"
-        >
-          <CalendarRange className="h-3.5 w-3.5" />
-          {showYearForm ? "Thu gọn" : "Tạo nhanh cả năm học (3 học kỳ)"}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => void refresh()}
+            disabled={isLoading}
+            className="il-btn il-btn-secondary flex items-center gap-1.5 text-xs"
+            aria-label="Tải lại khung học kỳ"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
+            <span className="hidden sm:inline">Tải lại</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowYearForm((v) => !v)}
+            className="il-btn il-btn-secondary flex items-center gap-1.5 text-xs"
+          >
+            <CalendarRange className="h-3.5 w-3.5" />
+            {showYearForm ? "Thu gọn" : "Tạo nhanh cả năm học"}
+          </button>
+        </div>
       </div>
 
       {showYearForm && (
-        <form onSubmit={saveAcademicYear} className="rounded-md border border-emerald-300 bg-white p-3 space-y-3">
-          <div className="flex flex-wrap items-end gap-3">
+        <form onSubmit={saveAcademicYear} className="rounded-md border border-slate-200 bg-slate-50 p-3 space-y-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <label className="flex flex-col gap-1">
               <span className="text-[11px] font-bold text-slate-500">Niên khóa *</span>
               <input
@@ -194,7 +210,7 @@ export function SchoolAcademicTermsPanel({ onShowToast }: { onShowToast: (messag
                 aria-label="Niên khóa"
                 value={yearForm.academicYear}
                 onChange={(e) => setYearForm({ ...yearForm, academicYear: e.target.value })}
-                className={`${inputCls} w-40`}
+                className={inputCls}
               />
             </label>
             {dateInput("term1Start", "HK I bắt đầu")}
@@ -235,7 +251,7 @@ export function SchoolAcademicTermsPanel({ onShowToast }: { onShowToast: (messag
         </form>
       )}
 
-      <form onSubmit={save} className="grid grid-cols-1 gap-3 md:grid-cols-5">
+      <form onSubmit={save} className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <input
           aria-label="Niên khóa"
           required
@@ -283,9 +299,37 @@ export function SchoolAcademicTermsPanel({ onShowToast }: { onShowToast: (messag
         </div>
       </form>
 
-      {error && <p role="alert" className="text-xs font-medium text-rose-700">{error}</p>}
+      {error && (
+        <div role="alert" className="flex flex-col gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800 sm:flex-row sm:items-center sm:justify-between">
+          <span>{error}</span>
+          <button type="button" onClick={() => void refresh()} disabled={isLoading} className="inline-flex items-center gap-1.5 self-start font-semibold underline disabled:opacity-50 sm:self-auto">
+            <RefreshCw className={`h-3 w-3 ${isLoading ? "animate-spin" : ""}`} />
+            Thử tải lại
+          </button>
+        </div>
+      )}
 
-      <div className="overflow-x-auto">
+      <div className="divide-y divide-slate-100 md:hidden">
+        {isLoading ? (
+          <p className="py-6 text-center text-xs text-slate-500">Đang tải khung học kỳ…</p>
+        ) : error ? null : terms.length === 0 ? (
+          <p className="py-6 text-center text-xs text-slate-500">Chưa có khung học kỳ.</p>
+        ) : terms.map((term) => (
+          <article key={term.id} className="flex items-start justify-between gap-3 py-3">
+            <div className="min-w-0">
+              <h3 className="font-semibold text-slate-900">{term.term} · {term.academicYear}</h3>
+              <p className="mt-1 text-xs text-slate-600">
+                {new Date(term.startDate).toLocaleDateString("vi-VN")} – {new Date(term.endDate).toLocaleDateString("vi-VN")}
+              </p>
+              <p className="mt-1 text-[11px] text-slate-500">{term.totalWeeks} tuần</p>
+            </div>
+            <button type="button" onClick={() => editTerm(term)} aria-label={`Sửa ${term.term} ${term.academicYear}`} className="shrink-0 rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-blue-700">
+              <PencilLine className="h-4 w-4" />
+            </button>
+          </article>
+        ))}
+      </div>
+      <div className="hidden overflow-x-auto md:block">
         <table className="w-full min-w-[620px] text-left text-xs">
           <thead className="border-b border-slate-200 text-slate-500">
             <tr>
@@ -297,20 +341,24 @@ export function SchoolAcademicTermsPanel({ onShowToast }: { onShowToast: (messag
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {terms.map((term) => (
+            {isLoading ? (
+              <tr><td colSpan={5} className="px-2 py-5 text-center text-slate-500">Đang tải khung học kỳ…</td></tr>
+            ) : error ? (
+              <tr><td colSpan={5} className="px-2 py-5 text-center text-slate-500">Không thể hiển thị dữ liệu khi tải thất bại.</td></tr>
+            ) : terms.map((term) => (
               <tr key={term.id}>
                 <td className="px-2 py-2 font-semibold text-slate-800">{term.academicYear}</td>
                 <td className="px-2 py-2">{term.term}</td>
                 <td className="px-2 py-2">{new Date(term.startDate).toLocaleDateString("vi-VN")} – {new Date(term.endDate).toLocaleDateString("vi-VN")}</td>
                 <td className="px-2 py-2 text-center">{term.totalWeeks}</td>
                 <td className="px-2 py-2 text-right">
-                  <button type="button" onClick={() => editTerm(term)} aria-label={`Sửa ${term.term} ${term.academicYear}`} title="Sửa khung học kỳ" className="rounded p-1.5 text-slate-500 hover:bg-white hover:text-emerald-700">
+                  <button type="button" onClick={() => editTerm(term)} aria-label={`Sửa ${term.term} ${term.academicYear}`} title="Sửa khung học kỳ" className="rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-blue-700">
                     <PencilLine className="h-4 w-4" />
                   </button>
                 </td>
               </tr>
             ))}
-            {terms.length === 0 && <tr><td colSpan={5} className="px-2 py-5 text-center text-slate-500">Chưa có khung học kỳ.</td></tr>}
+            {!isLoading && !error && terms.length === 0 && <tr><td colSpan={5} className="px-2 py-5 text-center text-slate-500">Chưa có khung học kỳ.</td></tr>}
           </tbody>
         </table>
       </div>
