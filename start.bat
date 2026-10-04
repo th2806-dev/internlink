@@ -35,10 +35,10 @@ echo [3/3] Dang bat Ngrok chia se mang ngoai...
 echo.
 echo =====================================================================
 echo   🌐 LINK TRUY CAP CO DINH (KHONG BAO GIO DOI):
-echo   👉 https://unwithholding-lieselotte-unapprovingly.ngrok-free.dev
+echo   👉 https://babble-flavorful-oops.ngrok-free.dev
 echo =====================================================================
 echo.
 echo (Luu y: Giu cua so nay de duy tri ket noi ra ngoai mang. Nhan Ctrl+C de dung)
 echo.
 
-"%LOCALAPPDATA%\ngrok\ngrok.exe" http 3000 --url unwithholding-lieselotte-unapprovingly.ngrok-free.dev
+"%LOCALAPPDATA%\ngrok\ngrok.exe" http 3000 --url https://babble-flavorful-oops.ngrok-free.dev

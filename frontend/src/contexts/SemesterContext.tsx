@@ -149,11 +149,7 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [role, selectedDepartmentId, backendRole]);
 
   useEffect(() => {
-    refreshApiCounts();
-    const timer = window.setInterval(() => {
-      void refreshApiCounts();
-    }, 30000);
-    return () => window.clearInterval(timer);
+    void refreshApiCounts();
   }, [refreshApiCounts]);
 
   useEffect(() => {

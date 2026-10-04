@@ -25,6 +25,7 @@ export function useAdminAssignmentMatrix(
   const [lecturers, setLecturers] = useState<AssignmentLecturerRow[]>([]);
   const [students, setStudents] = useState<AssignmentStudentRow[]>([]);
   const [isLoading, setIsLoading] = useState(enabled);
+  const [error, setError] = useState<string | null>(null);
   const [selectedLecturerId, setSelectedLecturerId] = useState<string | null>(
     null,
   );
@@ -32,15 +33,14 @@ export function useAdminAssignmentMatrix(
   const load = useCallback(async () => {
     if (!enabled) return;
     setIsLoading(true);
+    setError(null);
     try {
       const effectiveSemesterId = semesterId === "all" || !semesterId ? undefined : semesterId;
       const effectiveDepartmentId = departmentId === "all" || !departmentId ? undefined : departmentId;
       const [lecturerDtos, studentDtos, allAssignments] = await Promise.all([
         adminLecturersService.getAll(0, 500, effectiveSemesterId, effectiveDepartmentId),
         adminStudentsService.getAll(0, 500, effectiveSemesterId, effectiveDepartmentId),
-        adminAssignmentsService
-          .getAll(effectiveSemesterId, effectiveDepartmentId)
-          .catch(() => []),
+        adminAssignmentsService.getAll(effectiveSemesterId, effectiveDepartmentId),
       ]);
 
       const { studentAssignment, lecturerCounts } = buildAssignmentMaps(
@@ -63,7 +63,9 @@ export function useAdminAssignmentMatrix(
         return lecturerRows[0]?.id ?? null;
       });
     } catch (err) {
-      onError?.(getApiErrorMessage(err));
+      const message = getApiErrorMessage(err);
+      setError(message);
+      onError?.(message);
     } finally {
       setIsLoading(false);
     }
@@ -79,6 +81,7 @@ export function useAdminAssignmentMatrix(
     setLecturers,
     setStudents,
     isLoading,
+    error,
     selectedLecturerId,
     setSelectedLecturerId,
     reload: load,
