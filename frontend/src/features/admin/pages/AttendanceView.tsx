@@ -260,23 +260,23 @@ export const AttendanceView: React.FC<{
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!attendanceSemesterId) {
-      onShowToast?.("Chưa xác định được học kỳ.", "error");
+      onShowToast?.("Chưa xác định được học kỳ.", "danger");
       return;
     }
     if (!createLecturerId) {
-      onShowToast?.("Vui lòng chọn giảng viên chủ trì buổi gặp.", "error");
+      onShowToast?.("Vui lòng chọn giảng viên chủ trì buổi gặp.", "danger");
       return;
     }
     if (!createTitle.trim()) {
-      onShowToast?.("Vui lòng nhập tiêu đề buổi sinh hoạt.", "error");
+      onShowToast?.("Vui lòng nhập tiêu đề buổi sinh hoạt.", "danger");
       return;
     }
     if (!createDate) {
-      onShowToast?.("Vui lòng chọn thời gian buổi sinh hoạt.", "error");
+      onShowToast?.("Vui lòng chọn thời gian buổi sinh hoạt.", "danger");
       return;
     }
     if (selectedStudentIds.size === 0) {
-      onShowToast?.("Vui lòng chọn ít nhất một sinh viên tham gia.", "error");
+      onShowToast?.("Vui lòng chọn ít nhất một sinh viên tham gia.", "danger");
       return;
     }
 
@@ -292,7 +292,7 @@ export const AttendanceView: React.FC<{
         : "";
       onShowToast?.(
         `Ngày đã chọn không rơi vào ${weekLabel(createWeek)}${bounds}. Vui lòng chọn ngày hợp lệ.`,
-        "error"
+        "danger"
       );
       return;
     }
@@ -316,7 +316,7 @@ export const AttendanceView: React.FC<{
       onShowToast?.("Tạo buổi sinh hoạt khoa thành công!", "success");
       setIsCreateModalOpen(false);
     } catch (err) {
-      onShowToast?.(getApiErrorMessage(err), "error");
+      onShowToast?.(getApiErrorMessage(err), "danger");
     }
   };
 
@@ -336,7 +336,7 @@ export const AttendanceView: React.FC<{
         }))
       );
     } catch (err) {
-      onShowToast?.(getApiErrorMessage(err), "error");
+      onShowToast?.(getApiErrorMessage(err), "danger");
       setIsMarkModalOpen(false);
     } finally {
       setIsLoadingMarkDetail(false);
@@ -388,7 +388,7 @@ export const AttendanceView: React.FC<{
       onShowToast?.("Cập nhật điểm danh thành công!", "success");
       setIsMarkModalOpen(false);
     } catch (err) {
-      onShowToast?.(getApiErrorMessage(err), "error");
+      onShowToast?.(getApiErrorMessage(err), "danger");
     }
   };
 
@@ -412,7 +412,7 @@ export const AttendanceView: React.FC<{
     e.preventDefault();
     if (!editingSession) return;
     if (!editTitle.trim()) {
-      onShowToast?.("Vui lòng nhập tiêu đề.", "error");
+      onShowToast?.("Vui lòng nhập tiêu đề.", "danger");
       return;
     }
     const dateObj = new Date(editDate);
@@ -424,7 +424,7 @@ export const AttendanceView: React.FC<{
       const bounds = window
         ? ` (từ ${window.from.toLocaleDateString("vi-VN")} đến ${new Date(window.to.getTime() - 1).toLocaleDateString("vi-VN")})`
         : "";
-      onShowToast?.(`Ngày đã chọn không rơi vào ${weekLabel(editWeek)}${bounds}. Vui lòng chọn ngày hợp lệ.`, "error");
+      onShowToast?.(`Ngày đã chọn không rơi vào ${weekLabel(editWeek)}${bounds}. Vui lòng chọn ngày hợp lệ.`, "danger");
       return;
     }
 
@@ -444,7 +444,7 @@ export const AttendanceView: React.FC<{
       onShowToast?.("Cập nhật buổi sinh hoạt thành công!", "success");
       setIsEditModalOpen(false);
     } catch (err) {
-      onShowToast?.(getApiErrorMessage(err), "error");
+      onShowToast?.(getApiErrorMessage(err), "danger");
     }
   };
 
@@ -456,7 +456,7 @@ export const AttendanceView: React.FC<{
       onShowToast?.(`Đã xóa buổi sinh hoạt "${deleteTarget.title}"`, "success");
       setDeleteTarget(null);
     } catch (err) {
-      onShowToast?.(getApiErrorMessage(err), "error");
+      onShowToast?.(getApiErrorMessage(err), "danger");
     }
   };
 

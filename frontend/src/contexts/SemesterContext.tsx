@@ -122,6 +122,7 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const [selectedSemesterId, setSelectedSemesterId] = useState<string>("");
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>("all");
+  const backendRole = user?.backendRole;
 
   const refreshApiCounts = useCallback(async () => {
     // Wait for AuthProvider to resolve the token before choosing the portal endpoint.
@@ -132,7 +133,7 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         // SuperAdmin picks a department -> only that department's terms show up.
         const backendSemesters = await adminSemestersService.getAll(
           selectedDepartmentId && selectedDepartmentId !== "all" ? selectedDepartmentId : undefined,
-          user?.backendRole,
+          backendRole,
         );
         setSemesters(backendSemesters.map(mapBackendToFrontend));
         return;
@@ -145,7 +146,7 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     } catch (err) {
       console.warn("Error refreshing semester API counts:", err);
     }
-  }, [role, selectedDepartmentId, user?.backendRole]);
+  }, [role, selectedDepartmentId, backendRole]);
 
   useEffect(() => {
     refreshApiCounts();

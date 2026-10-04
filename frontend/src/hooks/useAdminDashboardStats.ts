@@ -143,6 +143,7 @@ export function useAdminDashboardStats(
   platformOverview = false,
 ) {
   const { user } = useAuth();
+  const backendRole = user?.backendRole;
   const [stats, setStats] = useState<AdminDashboardStats | null>(null);
   const [isLoading, setIsLoading] = useState(enabled);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
@@ -154,7 +155,7 @@ export function useAdminDashboardStats(
     try {
       const effectiveDepartmentId = departmentId === "all" || !departmentId ? undefined : departmentId;
       if (platformOverview) {
-        const overview = await adminDashboardService.getOverview(semesterId ?? undefined, effectiveDepartmentId, user?.backendRole);
+        const overview = await adminDashboardService.getOverview(semesterId ?? undefined, effectiveDepartmentId, backendRole);
         setStats({
           lecturerCount: overview.lecturerCount,
           lecturersWithStudents: 0,
@@ -190,7 +191,7 @@ export function useAdminDashboardStats(
         adminLecturersService.getAll(0, 500, semesterId ?? undefined, effectiveDepartmentId),
         adminCompaniesService.getAll(0, 500, semesterId ?? undefined, effectiveDepartmentId),
         adminDashboardService
-          .getInternshipStats(semesterId ?? undefined, effectiveDepartmentId, user?.backendRole)
+          .getInternshipStats(semesterId ?? undefined, effectiveDepartmentId, backendRole)
           .catch(() => ({ ...EMPTY_INTERNSHIP_STATS })),
         notificationService.getMine().catch(() => []),
         adminAssignmentsService
@@ -269,7 +270,7 @@ export function useAdminDashboardStats(
     } finally {
       setIsLoading(false);
     }
-  }, [enabled, semesterId, onError, departmentId, platformOverview, user?.backendRole]);
+  }, [enabled, semesterId, onError, departmentId, platformOverview, backendRole]);
 
   useEffect(() => {
     void load();

@@ -273,7 +273,7 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
                           endDate: currentActiveSem.endDate,
                           totalWeeks: "totalWeeks" in currentActiveSem ? currentActiveSem.totalWeeks : undefined,
                           internshipStartWeek: "internshipStartWeek" in currentActiveSem ? currentActiveSem.internshipStartWeek : undefined,
-                          targetStudents: currentActiveSem.targetStudents,
+                          targetStudents: "targetStudents" in currentActiveSem ? currentActiveSem.targetStudents : undefined,
                           description: currentActiveSem.description,
                         });
                         setShowCreateModal(true);

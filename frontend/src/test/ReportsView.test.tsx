@@ -16,6 +16,16 @@ vi.mock("../services/weeklyReport.service", () => ({
   },
 }));
 
+vi.mock("../contexts/SemesterContext", () => ({
+  useSemester: () => ({ semesters: [] }),
+}));
+
+vi.mock("../services/semesterReportSchedule.service", () => ({
+  semesterReportScheduleService: {
+    getSchedules: vi.fn().mockResolvedValue([]),
+  },
+}));
+
 // Khu vực bài nộp dùng portal legacy — ngoài phạm vi lát dọc tiên phong.
 vi.mock("../features/lecturer/components/SubmissionsHub", () => ({
   SubmissionsHub: () => <div data-testid="submissions-hub" />,

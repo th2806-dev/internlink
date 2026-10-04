@@ -21,13 +21,13 @@ vi.mock("../services/attendance.service", () => ({
 
 vi.mock("../services/adminLecturers.service", () => ({
   adminLecturersService: {
-    getPaged: vi.fn(),
+    getAll: vi.fn(),
   },
 }));
 
 vi.mock("../services/adminStudents.service", () => ({
   adminStudentsService: {
-    getStudents: vi.fn(),
+    getAll: vi.fn(),
   },
 }));
 
@@ -42,8 +42,11 @@ const mockSessions: AttendanceSessionDto[] = [
     meetingDate: "2026-02-01T09:00:00Z",
     durationMinutes: 90,
     location: "Hội trường A",
+    semesterName: "Học kỳ I",
+    lecturerName: "TS. Nguyễn Văn A",
+    status: "Scheduled",
     isLecturerOnly: false,
-    studentCount: 120,
+    totalStudents: 120,
     presentCount: 115,
     absentCount: 5,
     attendanceRate: 95.8,
@@ -73,12 +76,15 @@ describe("useAdminAttendanceQuery", () => {
 
   it("fetches sessions for the active semester with AbortSignal", async () => {
     vi.mocked(attendanceService.getLecturerSessions).mockResolvedValue(mockSessions);
-    vi.mocked(adminLecturersService.getPaged).mockResolvedValue({
-      items: [{ id: "lec-1", fullName: "TS. Nguyễn Văn A", departmentId: "dept-1" }] as any,
-      totalCount: 1,
-    });
-    vi.mocked(adminStudentsService.getStudents).mockResolvedValue([
-      { id: "stu-1", fullName: "Lê Văn C", studentCode: "SV01" } as any,
+    vi.mocked(adminLecturersService.getAll).mockResolvedValue([{
+        id: "lec-1",
+        staffCode: "GV01",
+        fullName: "TS. Nguyễn Văn A",
+        createdAt: "2026-01-01T00:00:00Z",
+        departmentId: "dept-1",
+      }]);
+    vi.mocked(adminStudentsService.getAll).mockResolvedValue([
+      { id: "stu-1", fullName: "Lê Văn C", studentCode: "SV01", createdAt: "2026-01-01T00:00:00Z" },
     ]);
 
     const { result } = renderHook(
@@ -103,14 +109,26 @@ describe("useAdminAttendanceQuery", () => {
 
   it("creates a department meeting session and invalidates sessions cache", async () => {
     vi.mocked(attendanceService.getLecturerSessions).mockResolvedValue(mockSessions);
-    vi.mocked(adminLecturersService.getPaged).mockResolvedValue({ items: [], totalCount: 0 });
-    vi.mocked(adminStudentsService.getStudents).mockResolvedValue([]);
+    vi.mocked(adminLecturersService.getAll).mockResolvedValue([]);
+    vi.mocked(adminStudentsService.getAll).mockResolvedValue([]);
     vi.mocked(attendanceService.createSession).mockResolvedValue({
       id: "session-2",
       semesterId: "sem-1",
+      semesterName: "Học kỳ I",
       lecturerId: "lec-1",
+      lecturerName: "TS. Nguyễn Văn A",
+      weekNumber: 1,
       title: "Họp triển khai thực tập",
-    } as any);
+      meetingDate: "2026-02-05T08:00:00Z",
+      status: "Scheduled",
+      isLecturerOnly: false,
+      totalStudents: 2,
+      presentCount: 0,
+      absentCount: 0,
+      attendanceRate: 0,
+      createdAt: "2026-01-20T00:00:00Z",
+      records: [],
+    });
 
     const { result } = renderHook(
       () =>
@@ -145,8 +163,8 @@ describe("useAdminAttendanceQuery", () => {
 
   it("marks attendance directly and invalidates detail query", async () => {
     vi.mocked(attendanceService.getLecturerSessions).mockResolvedValue(mockSessions);
-    vi.mocked(adminLecturersService.getPaged).mockResolvedValue({ items: [], totalCount: 0 });
-    vi.mocked(adminStudentsService.getStudents).mockResolvedValue([]);
+    vi.mocked(adminLecturersService.getAll).mockResolvedValue([]);
+    vi.mocked(adminStudentsService.getAll).mockResolvedValue([]);
     vi.mocked(attendanceService.markAttendance).mockResolvedValue({
       ...mockSessions[0],
       records: [],
@@ -170,7 +188,7 @@ describe("useAdminAttendanceQuery", () => {
             {
               studentId: "stu-1",
               status: "Present",
-              note: "Có mặt đúng giờ",
+              notes: "Có mặt đúng giờ",
             },
           ],
         },
@@ -182,7 +200,7 @@ describe("useAdminAttendanceQuery", () => {
         {
           studentId: "stu-1",
           status: "Present",
-          note: "Có mặt đúng giờ",
+          notes: "Có mặt đúng giờ",
         },
       ],
     });
