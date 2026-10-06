@@ -5,6 +5,7 @@
 > **Stack:** ASP.NET Core 10 (Clean Architecture) · React 19 + TypeScript + Vite · SQL Server 2022 · JWT RBAC · SignalR (thông báo real-time) · Docker.
 
 📚 **Đây là tài liệu hướng dẫn sử dụng** — chạy hệ thống bằng Docker, đăng nhập, demo 4 phân quyền và vận hành hằng ngày.
+> Triển khai trên **AWS Windows Server 2019 không dùng Docker**: xem [hướng dẫn IIS + SQL Server](docs/current/14-Windows-Server-2019-AWS.md).
 
 ---
 
