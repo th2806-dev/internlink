@@ -250,7 +250,7 @@ Seed Production hiện chỉ tạo tài khoản `admin`; tài liệu dự án gh
   .\scripts\update-windows-server.ps1
   ```
 
-  Script pull `main`, tạo SQL backup không nén trước khi triển khai, build frontend/API, giữ nguyên uploads và `web.config`, cập nhật binding IIS sang port 80, recycle site/API rồi kiểm tra health. Lệnh `git stash` giữ lại các chỉnh sửa code tracked cục bộ trước khi pull; không tự động áp dụng lại stash sau deploy.
+  Script pull `main`, tạo SQL backup không nén trước khi triển khai, build frontend/API, đưa API offline và đợi IIS worker thoát trước khi chép DLL; uploads và `web.config` được giữ nguyên. Script cập nhật binding sang port 80, khởi động lại API rồi kiểm tra health. Nếu port 80 đã được một IIS site đang chạy khác sử dụng, script sẽ dừng trước khi triển khai và nêu tên binding xung đột. Lệnh `git stash` giữ lại các chỉnh sửa code tracked cục bộ trước khi pull; không tự động áp dụng lại stash sau deploy.
 - Sau khi cập nhật, đảm bảo AWS Security Group vẫn có **Custom TCP** port `80` từ các client dự định truy cập; đóng inbound port `8000` nếu còn rule cũ.
 - Lên lịch backup SQL Server và thư mục uploads cùng nhau, rồi sao chép backup ra ngoài EC2. Hướng dẫn script hiện có nằm trong [08-Operations.md](08-Operations.md).
 - Không dùng Docker Desktop/Compose hoặc `start.bat` cho quy trình native Windows Server này.

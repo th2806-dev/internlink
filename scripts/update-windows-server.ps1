@@ -94,71 +94,97 @@ if (-not (Test-Path $backupPath) -or (Get-Item $backupPath).Length -eq 0) {
 Import-Module WebAdministration -ErrorAction Stop
 $apiSite = Get-Website -Name 'InternLinkApi' -ErrorAction Stop
 $webSite = Get-Website -Name 'InternLink' -ErrorAction Stop
+$otherPort80Bindings = @(
+    Get-Website | Where-Object { $_.Name -ne 'InternLink' -and $_.State -eq 'Started' } |
+        ForEach-Object {
+            $siteName = $_.Name
+            $_.Bindings.Collection |
+                Where-Object {
+                    $_.protocol -eq 'http' -and
+                    $_.bindingInformation -match '^\*:80:(.*)$' -and
+                    ($Matches[1] -eq '' -or $Matches[1] -eq 'internlink.duckdns.org')
+                } |
+                ForEach-Object { "$siteName ($($_.bindingInformation))" }
+        }
+)
+if ($otherPort80Bindings.Count -gt 0) {
+    throw "Port 80 conflicts with another started IIS site: $($otherPort80Bindings -join ', '). Resolve this binding before deploying."
+}
+
+$webWasStarted = $webSite.State -eq 'Started'
+$offlinePath = Join-Path $apiRoot 'app_offline.htm'
+Set-Content -Path $offlinePath -Value 'InternLink update in progress.' -Encoding ASCII
 if ($apiSite.State -eq 'Started') {
     Stop-Website -Name 'InternLinkApi'
 }
 if ((Get-WebAppPoolState -Name 'InternLinkApi').Value -eq 'Started') {
     Stop-WebAppPool -Name 'InternLinkApi'
 }
-if ($webSite.State -eq 'Started') {
-    Stop-Website -Name 'InternLink'
+
+$workerDeadline = (Get-Date).AddSeconds(90)
+do {
+    $apiWorkers = @(
+        Get-CimInstance Win32_Process -Filter "Name = 'w3wp.exe'" |
+            Where-Object { $_.CommandLine -match '(?i)-ap\s+"?InternLinkApi"?' }
+    )
+    if ($apiWorkers.Count -eq 0) {
+        break
+    }
+    if ((Get-Date) -ge $workerDeadline) {
+        throw "IIS worker process for InternLinkApi is still running (PID $($apiWorkers.ProcessId -join ', ')); deployment stopped before copying API files."
+    }
+    Start-Sleep -Seconds 2
+} while ($true)
+
+if ((Get-WebAppPoolState -Name 'InternLinkApi').Value -ne 'Stopped') {
+    throw 'InternLinkApi application pool did not stop; deployment stopped before copying API files.'
 }
 
-try {
-    Write-Host 'Deploying files without deleting persistent uploads or web.config...'
-    & robocopy.exe $apiStage $apiRoot /E `
-        /XD (Join-Path $apiStage 'Logs') `
-            (Join-Path $apiStage 'uploads') `
-            (Join-Path $apiStage 'wwwroot\uploads') `
-        /NFL /NDL /NJH /NJS /NP
-    if ($LASTEXITCODE -ge 8) {
-        throw "API file deployment failed with robocopy exit code $LASTEXITCODE."
-    }
+Write-Host 'Deploying API files while the application is offline; persistent folders are excluded...'
+& robocopy.exe $apiStage $apiRoot /E `
+    /XD (Join-Path $apiStage 'Logs') `
+        (Join-Path $apiStage 'uploads') `
+        (Join-Path $apiStage 'wwwroot\uploads') `
+    /NFL /NDL /NJH /NJS /NP
+if ($LASTEXITCODE -ge 8) {
+    throw "API file deployment failed with robocopy exit code $LASTEXITCODE. The API remains stopped and app_offline.htm is retained; rerun this script after resolving the file lock."
+}
 
-    & robocopy.exe $frontendDist $webRoot /E /XF 'web.config' /NFL /NDL /NJH /NJS /NP
-    if ($LASTEXITCODE -ge 8) {
-        throw "Frontend file deployment failed with robocopy exit code $LASTEXITCODE."
-    }
+Write-Host 'Deploying frontend files while preserving web.config...'
+& robocopy.exe $frontendDist $webRoot /E /XF 'web.config' /NFL /NDL /NJH /NJS /NP
+if ($LASTEXITCODE -ge 8) {
+    throw "Frontend file deployment failed with robocopy exit code $LASTEXITCODE. The API remains stopped and app_offline.htm is retained; rerun this script after resolving the file copy error."
+}
 
-    Set-ItemProperty 'IIS:\Sites\InternLinkApi' -Name physicalPath -Value $apiRoot
-    Set-ItemProperty 'IIS:\Sites\InternLinkApi' -Name applicationPool -Value 'InternLinkApi'
-    Remove-WebBinding -Name 'InternLink' -Protocol 'http' -Port 8000 `
-        -ErrorAction SilentlyContinue
-    if (-not (Get-WebBinding -Name 'InternLink' -Protocol 'http' |
-            Where-Object { $_.bindingInformation -eq '*:80:internlink.duckdns.org' })) {
-        New-WebBinding -Name 'InternLink' -Protocol 'http' -IPAddress '*' `
-            -Port 80 -HostHeader 'internlink.duckdns.org'
-    }
+Set-ItemProperty 'IIS:\Sites\InternLinkApi' -Name physicalPath -Value $apiRoot
+Set-ItemProperty 'IIS:\Sites\InternLinkApi' -Name applicationPool -Value 'InternLinkApi'
+Remove-WebBinding -Name 'InternLink' -Protocol 'http' -Port 8000 `
+    -ErrorAction SilentlyContinue
+if (-not (Get-WebBinding -Name 'InternLink' -Protocol 'http' |
+        Where-Object { $_.bindingInformation -eq '*:80:internlink.duckdns.org' })) {
+    New-WebBinding -Name 'InternLink' -Protocol 'http' -IPAddress '*' `
+        -Port 80 -HostHeader 'internlink.duckdns.org'
+}
 
-    [Environment]::SetEnvironmentVariable(
-        'Email__PortalUrl', 'http://internlink.duckdns.org', 'Machine'
-    )
-    [Environment]::SetEnvironmentVariable(
-        'Cors__AllowedOrigins__0', 'http://internlink.duckdns.org', 'Machine'
-    )
-    [Environment]::SetEnvironmentVariable('Cors__AllowedOrigins__1', $null, 'Machine')
+[Environment]::SetEnvironmentVariable(
+    'Email__PortalUrl', 'http://internlink.duckdns.org', 'Machine'
+)
+[Environment]::SetEnvironmentVariable(
+    'Cors__AllowedOrigins__0', 'http://internlink.duckdns.org', 'Machine'
+)
+[Environment]::SetEnvironmentVariable('Cors__AllowedOrigins__1', $null, 'Machine')
 
-    New-NetFirewallRule -DisplayName 'InternLink HTTP 80' `
-        -Direction Inbound -Protocol TCP -LocalPort 80 -Action Allow `
-        -ErrorAction SilentlyContinue | Out-Null
-    Get-NetFirewallRule -DisplayName 'InternLink HTTP 8000' `
-        -ErrorAction SilentlyContinue | Remove-NetFirewallRule
+New-NetFirewallRule -DisplayName 'InternLink HTTP 80' `
+    -Direction Inbound -Protocol TCP -LocalPort 80 -Action Allow `
+    -ErrorAction SilentlyContinue | Out-Null
+Get-NetFirewallRule -DisplayName 'InternLink HTTP 8000' `
+    -ErrorAction SilentlyContinue | Remove-NetFirewallRule
 
-    Start-WebAppPool -Name 'InternLinkApi'
-    Start-Website -Name 'InternLinkApi'
+Remove-Item $offlinePath -Force
+Start-WebAppPool -Name 'InternLinkApi'
+Start-Website -Name 'InternLinkApi'
+if (-not $webWasStarted) {
     Start-Website -Name 'InternLink'
-}
-catch {
-    if ((Get-WebAppPoolState -Name 'InternLinkApi').Value -ne 'Started') {
-        Start-WebAppPool -Name 'InternLinkApi'
-    }
-    if ((Get-Website -Name 'InternLinkApi').State -ne 'Started') {
-        Start-Website -Name 'InternLinkApi'
-    }
-    if ((Get-Website -Name 'InternLink').State -ne 'Started') {
-        Start-Website -Name 'InternLink'
-    }
-    throw
 }
 
 Write-Host 'Checking API readiness and the IIS frontend binding...'
