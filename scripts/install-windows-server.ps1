@@ -121,7 +121,6 @@ $webConfig = @'
 <?xml version="1.0" encoding="utf-8"?>
 <configuration>
   <system.webServer>
-    <webSocket enabled="true" />
     <rewrite>
       <rules>
         <rule name="Proxy API, SignalR and health checks" stopProcessing="true">
@@ -172,6 +171,10 @@ Invoke-ExternalCommand -FilePath $appcmd -Arguments @(
     'set', 'config', '-section:system.webServer/proxy',
     '/enabled:true', '/commit:apphost'
 )
+Invoke-ExternalCommand -FilePath $appcmd -Arguments @(
+    'set', 'config', '-section:system.webServer/webSocket',
+    '/enabled:true', '/commit:apphost'
+)
 
 Write-Host 'Preparing persistent uploads and log folders...'
 New-Item -ItemType Directory -Force `
@@ -198,11 +201,11 @@ if (-not (Get-Module -ListAvailable -Name SqlServer)) {
 }
 Import-Module SqlServer
 $sqlInstance = 'localhost\SQLEXPRESS'
-Invoke-Sqlcmd -ServerInstance $sqlInstance -Query @'
+Invoke-Sqlcmd -ServerInstance $sqlInstance -TrustServerCertificate -Query @'
 IF DB_ID(N'InternLink') IS NULL
     CREATE DATABASE [InternLink];
 '@
-Invoke-Sqlcmd -ServerInstance $sqlInstance -Database 'InternLink' -Query @'
+Invoke-Sqlcmd -ServerInstance $sqlInstance -Database 'InternLink' -TrustServerCertificate -Query @'
 IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = N'IIS APPPOOL\InternLinkApi')
     CREATE LOGIN [IIS APPPOOL\InternLinkApi] FROM WINDOWS;
 IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'IIS APPPOOL\InternLinkApi')
@@ -264,7 +267,7 @@ iisreset
 Write-Host ''
 Write-Host 'Deployment finished. Verify SQL migrations and site health before first login:'
 Write-Host '  http://internlink.duckdns.org:8000'
-Write-Host '  http://localhost:7109/health/ready'
+Write-Host '  http://127.0.0.1:7109/health/ready'
 Write-Host ''
 Write-Warning 'Add inbound TCP 8000 to the EC2 Security Group. Keep ports 1433 and 7109 closed publicly.'
 Write-Warning 'HTTP is not encrypted. Configure HTTPS before using real credentials over the Internet.'

@@ -70,12 +70,20 @@ Set-Location C:\src\InternLink
 
 Script tự cài IIS, Git, Node.js LTS, .NET 10 SDK, ASP.NET Core Hosting Bundle, SQL Server 2022 Express, IIS URL Rewrite và ARR; sau đó build/publish source, tạo database, cấu hình IIS và mở Windows Firewall TCP 8000.
 
-Script chạy lại được sau khi cài dở hoặc khởi động lại. Nó tải Chocolatey packages, PowerShell SQLServer module và .NET Hosting Bundle từ Internet. SQL Express được cài làm instance `SQLEXPRESS`; script tạo database `InternLink`, cấp quyền migrations cho IIS App Pool bằng Windows Integrated Authentication, cấu hình thư mục uploads/log/backup, rồi build frontend/API. Script không mở SQL/API port ra ngoài.
+Script chạy lại được sau khi cài dở hoặc khởi động lại. Nó tải Chocolatey packages, PowerShell SQLServer module và .NET Hosting Bundle từ Internet. SQL Express được cài làm instance `SQLEXPRESS`; script tạo database `InternLink`, cấp quyền migrations cho IIS App Pool bằng Windows Integrated Authentication, cấu hình thư mục uploads/log/backup, rồi build frontend/API. Kết nối provisioning tới SQL Express dùng `-TrustServerCertificate` cho certificate tự ký ở local server. Script không mở SQL/API port ra ngoài.
+
+Nếu script trước đó đã dừng ở lỗi SQL certificate chain, bản sửa cần có `-TrustServerCertificate` trên hai lệnh `Invoke-Sqlcmd`. Cập nhật source rồi chạy lại:
+
+```powershell
+Set-Location C:\src\InternLink
+git pull --ff-only origin main
+.\scripts\install-windows-server.ps1 -AllowLowMemory
+```
 
 Sau khi lệnh hoàn thành, trong AWS Security Group thêm inbound TCP `8000`, rồi kiểm tra:
 
 ```powershell
-Invoke-WebRequest http://localhost:7109/health/ready
+Invoke-WebRequest http://127.0.0.1:7109/health/ready
 Invoke-WebRequest http://internlink.duckdns.org:8000/
 ```
 
@@ -173,7 +181,6 @@ Tạo `C:\inetpub\wwwroot\InternLink\web.config`:
 <?xml version="1.0" encoding="utf-8"?>
 <configuration>
   <system.webServer>
-    <webSocket enabled="true" />
     <rewrite>
       <rules>
         <rule name="Proxy API, SignalR and health checks" stopProcessing="true">
