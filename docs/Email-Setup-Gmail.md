@@ -85,6 +85,6 @@ git pull --ff-only origin main
 .\scripts\update-windows-server.ps1
 ```
 
-Script cập nhật ứng dụng, đọc SMTP từ `backend\InternLink\InternLink.API\appsettings.local.json`, chép file đó vào thư mục API đang chạy với quyền đọc giới hạn cho IIS, khởi động lại IIS và gửi tự động một email kiểm tra tới `Email:SupportEmail` (mặc định lấy từ `appsettings.json`). Không cần nhập mật khẩu hay đăng nhập SuperAdmin trong quá trình cập nhật. Các website trên IIS có thể gián đoạn ngắn khi WAS khởi động lại.
+Script cập nhật ứng dụng, đọc SMTP từ `backend\InternLink\InternLink.API\appsettings.local.json` hoặc file hiện có tại `C:\Apps\InternLink\Api\appsettings.local.json`, chép cấu hình vào thư mục API đang chạy với quyền đọc giới hạn cho IIS, khởi động lại IIS và gửi tự động một email kiểm tra tới `Email:SupportEmail` (mặc định lấy từ `appsettings.json`). Không cần nhập mật khẩu hay đăng nhập SuperAdmin trong quá trình cập nhật. Các website trên IIS có thể gián đoạn ngắn khi WAS khởi động lại.
 
 Giữ `appsettings.local.json` trong `.gitignore`; không commit file này. Thu hồi mọi App Password đã dán vào chat, tạo mật khẩu mới và chỉ lưu mật khẩu mới trong file local trên server trước khi chạy script. Nếu Gmail từ chối xác thực, script sẽ báo lỗi gửi kiểm tra.

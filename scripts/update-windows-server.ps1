@@ -52,14 +52,18 @@ try {
         throw "Tracked server-side changes remain in the repository. Preserve or commit them before deploying:`n$($dirtyFiles -join "`n")"
     }
 
-    $localSettingsPath = Join-Path $sourceRoot 'backend\InternLink\InternLink.API\appsettings.local.json'
-    if (-not (Test-Path $localSettingsPath)) {
-        throw "SMTP settings file is missing: $localSettingsPath"
+    $sourceLocalSettingsPath = Join-Path $sourceRoot 'backend\InternLink\InternLink.API\appsettings.local.json'
+    $apiRoot = 'C:\Apps\InternLink\Api'
+    $deployedLocalSettingsPath = Join-Path $apiRoot 'appsettings.local.json'
+    if (Test-Path $sourceLocalSettingsPath) {
+        $localSettingsPath = $sourceLocalSettingsPath
     }
-    & icacls.exe $localSettingsPath /inheritance:r `
-        /grant:r '*S-1-5-18:F' '*S-1-5-32-544:F' | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        throw 'Could not restrict access to the source appsettings.local.json secret file.'
+    elseif (Test-Path $deployedLocalSettingsPath) {
+        $localSettingsPath = $deployedLocalSettingsPath
+        Write-Host "Using server-local settings: $localSettingsPath"
+    }
+    else {
+        throw "SMTP settings file not found. Create it at '$sourceLocalSettingsPath' or '$deployedLocalSettingsPath'."
     }
     try {
         $localSettings = Get-Content $localSettingsPath -Raw | ConvertFrom-Json
@@ -209,7 +213,9 @@ if ($LASTEXITCODE -ge 8) {
 }
 
 $deployedSettingsPath = Join-Path $apiRoot 'appsettings.local.json'
-Copy-Item -LiteralPath $localSettingsPath -Destination $deployedSettingsPath -Force
+if ([IO.Path]::GetFullPath($localSettingsPath) -ne [IO.Path]::GetFullPath($deployedSettingsPath)) {
+    Copy-Item -LiteralPath $localSettingsPath -Destination $deployedSettingsPath -Force
+}
 $runtimeSettings = Get-Content $deployedSettingsPath -Raw | ConvertFrom-Json
 $runtimeSettings.Email.Password = $smtpPassword
 $runtimeSettings | ConvertTo-Json -Depth 100 |
