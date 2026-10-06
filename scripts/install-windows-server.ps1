@@ -160,10 +160,18 @@ else {
 Set-ItemProperty 'IIS:\Sites\InternLinkApi' -Name applicationPool -Value 'InternLinkApi'
 
 if (-not (Get-Website -Name 'InternLink' -ErrorAction SilentlyContinue)) {
-    New-Website -Name 'InternLink' -PhysicalPath $webRoot -IPAddress '*' -Port 8000 | Out-Null
+    New-Website -Name 'InternLink' -PhysicalPath $webRoot -IPAddress '*' `
+        -Port 80 -HostHeader 'internlink.duckdns.org' | Out-Null
 }
 else {
     Set-ItemProperty 'IIS:\Sites\InternLink' -Name physicalPath -Value $webRoot
+}
+Remove-WebBinding -Name 'InternLink' -Protocol 'http' -Port 8000 `
+    -ErrorAction SilentlyContinue
+if (-not (Get-WebBinding -Name 'InternLink' -Protocol 'http' |
+        Where-Object { $_.bindingInformation -eq '*:80:internlink.duckdns.org' })) {
+    New-WebBinding -Name 'InternLink' -Protocol 'http' -IPAddress '*' `
+        -Port 80 -HostHeader 'internlink.duckdns.org'
 }
 
 $appcmd = Join-Path $env:windir 'System32\inetsrv\appcmd.exe'
@@ -233,14 +241,12 @@ $connectionString = 'Server=localhost\SQLEXPRESS;Database=InternLink;Integrated 
 [Environment]::SetEnvironmentVariable('ASPNETCORE_ENVIRONMENT', 'Production', 'Machine')
 [Environment]::SetEnvironmentVariable('Email__Enabled', 'false', 'Machine')
 [Environment]::SetEnvironmentVariable(
-    'Email__PortalUrl', 'http://internlink.duckdns.org:8000', 'Machine'
+    'Email__PortalUrl', 'http://internlink.duckdns.org', 'Machine'
 )
 [Environment]::SetEnvironmentVariable(
-    'Cors__AllowedOrigins__0', 'http://internlink.duckdns.org:8000', 'Machine'
+    'Cors__AllowedOrigins__0', 'http://internlink.duckdns.org', 'Machine'
 )
-[Environment]::SetEnvironmentVariable(
-    'Cors__AllowedOrigins__1', 'http://171.246.98.49:8000', 'Machine'
-)
+[Environment]::SetEnvironmentVariable('Cors__AllowedOrigins__1', $null, 'Machine')
 
 if (-not [Environment]::GetEnvironmentVariable('Jwt__Secret', 'Machine')) {
     $secretBytes = New-Object byte[] 64
@@ -257,17 +263,19 @@ if (-not [Environment]::GetEnvironmentVariable('Jwt__Secret', 'Machine')) {
     $secretBytes = $null
 }
 
-New-NetFirewallRule -DisplayName 'InternLink HTTP 8000' `
-    -Direction Inbound -Protocol TCP -LocalPort 8000 -Action Allow `
+New-NetFirewallRule -DisplayName 'InternLink HTTP 80' `
+    -Direction Inbound -Protocol TCP -LocalPort 80 -Action Allow `
     -ErrorAction SilentlyContinue | Out-Null
+Get-NetFirewallRule -DisplayName 'InternLink HTTP 8000' `
+    -ErrorAction SilentlyContinue | Remove-NetFirewallRule
 
 Write-Host 'Restarting IIS to load the installed Hosting Bundle and settings...'
 iisreset
 
 Write-Host ''
 Write-Host 'Deployment finished. Verify SQL migrations and site health before first login:'
-Write-Host '  http://internlink.duckdns.org:8000'
+Write-Host '  http://internlink.duckdns.org/'
 Write-Host '  http://127.0.0.1:7109/health/ready'
 Write-Host ''
-Write-Warning 'Add inbound TCP 8000 to the EC2 Security Group. Keep ports 1433 and 7109 closed publicly.'
+Write-Warning 'Add inbound Custom TCP port 80 to the EC2 Security Group. Keep ports 1433 and 7109 closed publicly.'
 Write-Warning 'HTTP is not encrypted. Configure HTTPS before using real credentials over the Internet.'

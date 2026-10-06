@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import {
   Search,
   User,
-  ShieldCheck,
   Settings,
   Calendar,
   Building2,
@@ -96,8 +95,8 @@ export const Header = ({
   };
 
   return (
-    <header className="sticky top-0 z-30 bg-white border-b border-slate-200 px-3 sm:px-4 lg:px-6 py-2.5 flex flex-wrap items-center gap-2">
-      <div className="flex flex-1 items-center justify-between gap-2 min-w-0">
+    <header className="sticky top-0 z-30 flex flex-col border-b border-slate-200 bg-white px-3 sm:px-4 lg:px-6">
+      <div className="flex h-16 w-full min-w-0 items-center justify-between gap-3">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <button
             type="button"
@@ -123,27 +122,9 @@ export const Header = ({
             </span>
           </nav>
 
-          <div className="hidden xl:flex items-center gap-2 px-3 py-1.5 bg-slate-50 text-slate-800 rounded-md border border-slate-200 font-semibold text-xs shrink-0">
-            <ShieldCheck className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-            <span className="text-slate-600">{roleDisplayLabel}</span>
-          </div>
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <form
-            onSubmit={handleSearchSubmit}
-            className="relative w-64 xl:w-80 hidden xl:block"
-          >
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Tìm sinh viên theo MSSV hoặc tên..."
-              aria-label="Tìm sinh viên theo MSSV hoặc tên"
-              className="w-full pl-9 pr-3 py-1.5 text-xs md:text-sm bg-slate-100 hover:bg-slate-100 focus:bg-white border border-transparent focus:border-blue-500 rounded-md outline-none transition-colors placeholder:text-slate-400"
-            />
-          </form>
           <NotificationDropdown
             role="admin"
             backendRole={user?.backendRole}
@@ -228,8 +209,8 @@ export const Header = ({
         </div>
       </div>
 
-      <div className="flex w-full flex-1 min-w-0 items-center gap-2 lg:w-auto">
-        <div className="relative min-w-0 flex-1 lg:flex-initial">
+      <div className="flex w-full min-w-0 flex-wrap items-center gap-2 border-t border-slate-100 bg-slate-50/60 py-2">
+        <div className="relative min-w-[180px] flex-1 sm:max-w-[360px]">
           <button
             type="button"
             onClick={() => setShowSemesterMenu(!showSemesterMenu)}
@@ -327,7 +308,7 @@ export const Header = ({
         </div>
 
         {isSuperAdmin && departments.length > 0 && (
-          <div className="relative min-w-0 flex-1 lg:flex-initial">
+          <div className="relative min-w-[180px] flex-1 sm:max-w-[360px]">
             <button
               type="button"
               onClick={() => setShowDepartmentMenu(!showDepartmentMenu)}
@@ -398,6 +379,20 @@ export const Header = ({
             )}
           </div>
         )}
+        <form
+          onSubmit={handleSearchSubmit}
+          className="relative ml-auto hidden w-64 shrink-0 xl:block 2xl:w-80"
+        >
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Tìm sinh viên theo MSSV hoặc tên..."
+            aria-label="Tìm sinh viên theo MSSV hoặc tên"
+            className="w-full pl-9 pr-3 py-2 text-xs md:text-sm bg-white hover:bg-white focus:bg-white border border-slate-200 focus:border-blue-500 rounded-lg outline-none transition-colors placeholder:text-slate-400"
+          />
+        </form>
       </div>
     </header>
   );

@@ -31,15 +31,14 @@ Inbound rules của Security Group:
 | Port | Source | Mục đích |
 |:--|:--|:--|
 | TCP 3389 | IP quản trị của bạn `/32` | Remote Desktop |
-| TCP 8000 | `0.0.0.0/0` | Website HTTP |
-| TCP 80 | `0.0.0.0/0` | Tùy chọn: Let's Encrypt HTTP validation/redirect |
+| TCP 80 | `0.0.0.0/0` | Website HTTP |
 | TCP 443 | `0.0.0.0/0` | HTTPS |
 
-Không mở TCP `1433` (SQL Server) hoặc `7109` (API) ra Internet. Trên Windows Firewall, mở cổng 8000 cho HTTP; chỉ mở 80/443 nếu cấu hình HTTPS. Giữ RDP giới hạn vào IP quản trị. Lệnh mở firewall cho cổng web:
+Trong AWS Security Group, chọn **Custom TCP** (protocol TCP), port `80`, source `0.0.0.0/0` để URL dùng được mà không hiện port. Không mở TCP `1433` (SQL Server) hoặc `7109` (API) ra Internet. Giữ RDP giới hạn vào IP quản trị. Lệnh mở Windows Firewall:
 
 ```powershell
-New-NetFirewallRule -DisplayName "InternLink HTTP 8000" `
-  -Direction Inbound -Protocol TCP -LocalPort 8000 -Action Allow
+New-NetFirewallRule -DisplayName "InternLink HTTP 80" `
+  -Direction Inbound -Protocol TCP -LocalPort 80 -Action Allow
 ```
 
 ## 3. Cài thành phần Windows
@@ -68,7 +67,7 @@ Set-Location C:\src\InternLink
 .\scripts\install-windows-server.ps1
 ```
 
-Script tự cài IIS, Git, Node.js LTS, .NET 10 SDK, ASP.NET Core Hosting Bundle, SQL Server 2022 Express, IIS URL Rewrite và ARR; sau đó build/publish source, tạo database, cấu hình IIS và mở Windows Firewall TCP 8000.
+Script tự cài IIS, Git, Node.js LTS, .NET 10 SDK, ASP.NET Core Hosting Bundle, SQL Server 2022 Express, IIS URL Rewrite và ARR; sau đó build/publish source, tạo database, cấu hình IIS với hostname `internlink.duckdns.org` trên port 80 và mở Windows Firewall TCP 80.
 
 Script chạy lại được sau khi cài dở hoặc khởi động lại. Nó tải Chocolatey packages, PowerShell SQLServer module và .NET Hosting Bundle từ Internet. SQL Express được cài làm instance `SQLEXPRESS`; script tạo database `InternLink`, cấp quyền migrations cho IIS App Pool bằng Windows Integrated Authentication, cấu hình thư mục uploads/log/backup, rồi build frontend/API. Kết nối provisioning tới SQL Express dùng `-TrustServerCertificate` cho certificate tự ký ở local server. Script không mở SQL/API port ra ngoài.
 
@@ -80,11 +79,11 @@ git pull --ff-only origin main
 .\scripts\install-windows-server.ps1 -AllowLowMemory
 ```
 
-Sau khi lệnh hoàn thành, trong AWS Security Group thêm inbound TCP `8000`, rồi kiểm tra:
+Sau khi lệnh hoàn thành, trong AWS Security Group thêm inbound **Custom TCP** `80`, rồi kiểm tra:
 
 ```powershell
 Invoke-WebRequest http://127.0.0.1:7109/health/ready
-Invoke-WebRequest http://internlink.duckdns.org:8000/
+Invoke-WebRequest http://internlink.duckdns.org/
 ```
 
 Nếu quá trình dừng do cần reboot, khởi động lại Windows Server, vào lại `C:\src\InternLink` và chạy script lần nữa.
@@ -134,9 +133,9 @@ Khi cập nhật phiên bản, build/publish lại, chép đè frontend `dist`, 
 )
 [Environment]::SetEnvironmentVariable('ASPNETCORE_ENVIRONMENT', 'Production', 'Machine')
 [Environment]::SetEnvironmentVariable('Email__Enabled', 'false', 'Machine')
-[Environment]::SetEnvironmentVariable('Email__PortalUrl', 'http://internlink.duckdns.org:8000', 'Machine')
-[Environment]::SetEnvironmentVariable('Cors__AllowedOrigins__0', 'http://internlink.duckdns.org:8000', 'Machine')
-[Environment]::SetEnvironmentVariable('Cors__AllowedOrigins__1', 'http://171.246.98.49:8000', 'Machine')
+[Environment]::SetEnvironmentVariable('Email__PortalUrl', 'http://internlink.duckdns.org', 'Machine')
+[Environment]::SetEnvironmentVariable('Cors__AllowedOrigins__0', 'http://internlink.duckdns.org', 'Machine')
+[Environment]::SetEnvironmentVariable('Cors__AllowedOrigins__1', $null, 'Machine')
 ```
 
 `Email__Enabled=false` phù hợp khi chưa cấu hình SMTP. Nếu cần gửi email, bật sau khi cài SMTP credentials an toàn. Frontend và API dùng cùng origin nên browser traffic được chuyển qua IIS; không cần mở API riêng ra Internet.
@@ -203,23 +202,23 @@ Tạo `C:\inetpub\wwwroot\InternLink\web.config`:
 </configuration>
 ```
 
-Tạo frontend site trong IIS với physical path `C:\inetpub\wwwroot\InternLink`, binding HTTP port `8000`, host name `internlink.duckdns.org`. Ban đầu kiểm tra bằng:
+Tạo frontend site trong IIS với physical path `C:\inetpub\wwwroot\InternLink`, binding HTTP port `80`, host name `internlink.duckdns.org`. Binding theo hostname giữ URL gọn, không cần nhập `:80`.
 
 ```text
-http://internlink.duckdns.org:8000
+http://internlink.duckdns.org/
 ```
 
 Nếu không mở được từ bên ngoài, kiểm tra cả DNS, AWS Security Group, Windows Firewall và IIS binding. Kiểm tra local trên server bằng:
 
 ```powershell
-Invoke-WebRequest http://localhost:8000/
+curl.exe --resolve internlink.duckdns.org:80:127.0.0.1 http://internlink.duckdns.org/
 ```
 
 ## 9. Bật HTTPS bằng Let's Encrypt
 
 Chỉ làm bước này sau khi domain trỏ đúng Public/Elastic IP, site HTTP truy cập được từ Internet và TCP 80 đã mở.
 
-1. Đảm bảo TCP 80 được mở từ Internet để hoàn thành HTTP validation; truy cập công khai vẫn dùng cổng 8000.
+1. Đảm bảo TCP 80 được mở từ Internet để hoàn thành HTTP validation và phục vụ website.
 2. Tải **win-acme** từ trang phát hành chính thức của dự án `win-acme`.
 3. Chạy `wacs.exe` bằng quyền Administrator.
 4. Chọn tạo certificate cho IIS site/binding `internlink.duckdns.org`, dùng HTTP validation.
@@ -234,15 +233,24 @@ Trên server:
 
 ```powershell
 Invoke-WebRequest http://127.0.0.1:7109/health/live
-Invoke-WebRequest http://internlink.duckdns.org:8000/health/live
+Invoke-WebRequest http://internlink.duckdns.org/health/live
 ```
 
-Trên máy người dùng, truy cập `http://internlink.duckdns.org:8000`, đăng nhập và kiểm tra một thao tác gọi API, upload/download tệp và SignalR nếu dùng tính năng realtime. Địa chỉ HTTP không mã hóa lưu lượng; cấu hình HTTPS trước khi dùng tài khoản thật qua Internet.
+Trên máy người dùng, truy cập `http://internlink.duckdns.org/`, đăng nhập và kiểm tra một thao tác gọi API, upload/download tệp và SignalR nếu dùng tính năng realtime. Địa chỉ HTTP không mã hóa lưu lượng; cấu hình HTTPS trước khi dùng tài khoản thật qua Internet.
 
 Seed Production hiện chỉ tạo tài khoản `admin`; tài liệu dự án ghi mật khẩu khởi tạo là `Password123!`. Đổi mật khẩu ngay sau lần đăng nhập đầu tiên. Không sử dụng mật khẩu mặc định trên server công khai.
 
 ## 11. Cập nhật và backup
 
-- Khi cập nhật code, publish API và build frontend lại theo bước 5, sau đó recycle `InternLinkApi` và kiểm tra health endpoint.
+- Để triển khai bản mới mà không thay database hoặc uploads, mở PowerShell bằng quyền Administrator và chạy:
+
+  ```powershell
+  Set-Location C:\src\InternLink
+  git stash push -m "server changes before update"
+  .\scripts\update-windows-server.ps1
+  ```
+
+  Script pull `main`, tạo SQL backup không nén trước khi triển khai, build frontend/API, giữ nguyên uploads và `web.config`, cập nhật binding IIS sang port 80, recycle site/API rồi kiểm tra health. Lệnh `git stash` giữ lại các chỉnh sửa code tracked cục bộ trước khi pull; không tự động áp dụng lại stash sau deploy.
+- Sau khi cập nhật, đảm bảo AWS Security Group vẫn có **Custom TCP** port `80` từ các client dự định truy cập; đóng inbound port `8000` nếu còn rule cũ.
 - Lên lịch backup SQL Server và thư mục uploads cùng nhau, rồi sao chép backup ra ngoài EC2. Hướng dẫn script hiện có nằm trong [08-Operations.md](08-Operations.md).
 - Không dùng Docker Desktop/Compose hoặc `start.bat` cho quy trình native Windows Server này.

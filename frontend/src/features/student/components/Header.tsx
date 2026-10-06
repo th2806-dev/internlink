@@ -54,92 +54,95 @@ export const Header = ({
   };
   
   return (
-    <header className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-2.5 sm:gap-4 sm:px-4 lg:px-6">
-      <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
-        <button
-          type="button"
-          aria-label={isMenuOpen ? "Đóng menu điều hướng" : "Mở menu điều hướng"}
-          aria-expanded={isMenuOpen}
-          aria-controls="student-navigation"
-          className="student-menu-button lg:hidden"
-          onClick={onMenuOpen}
-        >
-          <Menu className="w-5 h-5" />
-        </button>
-        {/* Navigation Breadcrumb */}
-        <nav aria-label="Điều hướng" className="flex min-w-0 items-center gap-2 text-xs font-medium text-slate-500 sm:text-sm">
+    <header className="sticky top-0 z-30 flex flex-col border-b border-slate-200 bg-white px-3 sm:px-4 lg:px-6">
+      <div className="flex h-16 min-w-0 items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
           <button
             type="button"
-            onClick={() => onNavigate("student-dashboard")}
-            className="hidden whitespace-nowrap hover:text-blue-600 sm:inline"
+            aria-label={isMenuOpen ? "Đóng menu điều hướng" : "Mở menu điều hướng"}
+            aria-expanded={isMenuOpen}
+            aria-controls="student-navigation"
+            className="student-menu-button lg:hidden"
+            onClick={onMenuOpen}
           >
-            Cổng Sinh viên
+            <Menu className="w-5 h-5" />
           </button>
-          <span className="hidden sm:inline">›</span>
-          <span className="truncate font-semibold text-slate-900">
-            {getTabLabel(activeTab)}
-          </span>
-        </nav>
-        <StudentSemesterBadge profile={profile} />
-      </div>
+          <nav aria-label="Điều hướng" className="flex min-w-0 items-center gap-2 text-xs font-medium text-slate-500 sm:text-sm">
+            <button
+              type="button"
+              onClick={() => onNavigate("student-dashboard")}
+              className="hidden whitespace-nowrap hover:text-blue-600 sm:inline"
+            >
+              Cổng Sinh viên
+            </button>
+            <span className="hidden sm:inline">›</span>
+            <span className="truncate font-semibold text-slate-900">
+              {getTabLabel(activeTab)}
+            </span>
+          </nav>
+        </div>
 
-      <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">
-        <NotificationDropdown role="student" onNavigate={onNavigate} />
+        <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">
+          <NotificationDropdown role="student" onNavigate={onNavigate} />
 
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setShowProfileMenu(!showProfileMenu)}
-            className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
-            aria-label="Mở menu tài khoản"
-            aria-expanded={showProfileMenu}
-            aria-controls="student-profile-menu"
-          >
-            <InitialsAvatar name={profile.name} seed={profile.mssv} size={32} />
-          </button>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowProfileMenu(!showProfileMenu)}
+              className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+              aria-label="Mở menu tài khoản"
+              aria-expanded={showProfileMenu}
+              aria-controls="student-profile-menu"
+            >
+              <InitialsAvatar name={profile.name} seed={profile.mssv} size={32} />
+            </button>
 
-          {showProfileMenu && (
-            <div id="student-profile-menu" className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-md border border-slate-200 p-3 z-50">
-              <div className="pb-3 border-b border-slate-100">
-                <p className="text-xs font-bold text-slate-800">
-                  {profile.name}
-                </p>
-                <p className="text-[11px] text-blue-600 font-semibold">
-                  MSSV: {profile.mssv} • Lớp {profile.class}
-                </p>
-                <p className="text-[10px] text-slate-500 mt-1">
-                  GVHD: {profile.lecturerName}
-                </p>
-              </div>
+            {showProfileMenu && (
+              <div id="student-profile-menu" className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-md border border-slate-200 p-3 z-50">
+                <div className="pb-3 border-b border-slate-100">
+                  <p className="text-xs font-bold text-slate-800">
+                    {profile.name}
+                  </p>
+                  <p className="text-[11px] text-blue-600 font-semibold">
+                    MSSV: {profile.mssv} • Lớp {profile.class}
+                  </p>
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    GVHD: {profile.lecturerName}
+                  </p>
+                </div>
 
-              <div className="py-1 text-xs space-y-0.5">
-                <button
-                  onClick={() => {
-                    setShowProfileMenu(false);
-                    onNavigate("student-account");
-                  }}
-                  className="w-full text-left px-3 py-2 text-slate-700 hover:bg-slate-100 hover:text-blue-600 rounded-lg flex items-center justify-between font-medium transition-colors"
-                >
-                  <span>Hồ sơ cá nhân</span>
-                  <User className="w-3.5 h-3.5 text-slate-400" />
-                </button>
-
-                {onLogout && (
+                <div className="py-1 text-xs space-y-0.5">
                   <button
                     onClick={() => {
                       setShowProfileMenu(false);
-                      onLogout();
+                      onNavigate("student-account");
                     }}
-                    className="w-full text-left px-3 py-2 text-rose-600 hover:bg-rose-50 rounded-lg flex items-center justify-between font-bold transition-colors border-t border-slate-100 pt-2.5 mt-1"
+                    className="w-full text-left px-3 py-2 text-slate-700 hover:bg-slate-100 hover:text-blue-600 rounded-lg flex items-center justify-between font-medium transition-colors"
                   >
-                    <span>Đăng xuất hệ thống</span>
-                    <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
+                    <span>Hồ sơ cá nhân</span>
+                    <User className="w-3.5 h-3.5 text-slate-400" />
                   </button>
-                )}
+
+                  {onLogout && (
+                    <button
+                      onClick={() => {
+                        setShowProfileMenu(false);
+                        onLogout();
+                      }}
+                      className="w-full text-left px-3 py-2 text-rose-600 hover:bg-rose-50 rounded-lg flex items-center justify-between font-bold transition-colors border-t border-slate-100 pt-2.5 mt-1"
+                    >
+                      <span>Đăng xuất hệ thống</span>
+                      <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
+      </div>
+      <div className="hidden justify-end border-t border-slate-100 py-2 xl:flex">
+        <StudentSemesterBadge profile={profile} />
       </div>
     </header>
   );
@@ -153,7 +156,7 @@ function StudentSemesterBadge({ profile }: { profile: { company: string; positio
     : "Chưa có kỳ hoạt động";
 
   return (
-    <div className="hidden min-w-0 max-w-[520px] items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-800 xl:flex">
+    <div className="flex min-w-0 max-w-full items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-800 xl:max-w-[720px]">
       <CalendarDays className="w-3.5 h-3.5 text-slate-400 shrink-0" />
       <span className="max-w-[180px] truncate">
         {semesterLabel}
