@@ -21,6 +21,7 @@
 | [`current/06-Storage.md`](current/06-Storage.md) | Upload, volume, backup và retention |
 | [`current/07-Development.md`](current/07-Development.md) | Setup, build, test và migration |
 | [`current/08-Operations.md`](current/08-Operations.md) | Docker, healthcheck, logging và sự cố |
+| [`current/14-Windows-Server-2019-AWS.md`](current/14-Windows-Server-2019-AWS.md) | Triển khai native trên AWS Windows Server 2019, DuckDNS và HTTPS |
 | [`current/09-Demo-Accounts.md`](current/09-Demo-Accounts.md) | Seed account và dữ liệu demo |
 | [`current/10-Documentation-Maintenance.md`](current/10-Documentation-Maintenance.md) | Quy trình cập nhật docs |
 

@@ -70,4 +70,4 @@ Admin routes require the mapped `admin` role, backed by `SuperAdmin` authorizati
 - A protected route remembers the requested path and returns there after login.
 - Unknown portal routes fall back to that portal dashboard.
 - Role mapping is defined in `frontend/src/lib/roleMap.ts`.
-- Development Vite uses port `3000` according to `frontend/package.json`; production Docker also exposes `3000` through Nginx.
+- Development Vite uses port `3000` according to `frontend/package.json`; production Docker exposes host port `8000` through Nginx.

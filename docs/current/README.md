@@ -13,8 +13,8 @@ This directory describes the system that is present in the repository today. Whe
 - Authentication: JWT access token plus refresh token.
 - Roles: `SuperAdmin`, `Lecturer`, `Student`.
 - Runtime: Docker Compose services `frontend`, `backend`, `database`.
-- Web entrypoint: `http://localhost:3000`.
-- Backend internal HTTP port: `8080`; direct host publishing is optional/commented in Compose.
+- Docker web entrypoint: `http://localhost:8000` (host port 8000 → container port 80).
+- Backend internal HTTP port: `8080`; host mapping `127.0.0.1:7109` is loopback-only.
 - Database and uploads are persisted in Docker volumes.
 - Current seed creates only `admin / Password123!`; it does not create lecturer/student fixture accounts or populated business data.
 
@@ -35,6 +35,7 @@ This directory describes the system that is present in the repository today. Whe
 | [11-Product-Scope.md](11-Product-Scope.md) | Implemented and partial capabilities |
 | [12-Email-and-Configuration.md](12-Email-and-Configuration.md) | SMTP and secret configuration |
 | [13-Ubuntu-VMware-Demo.md](13-Ubuntu-VMware-Demo.md) | Ubuntu VM and VMware lab deployment |
+| [14-Windows-Server-2019-AWS.md](14-Windows-Server-2019-AWS.md) | Native IIS deployment on AWS Windows Server 2019 with DuckDNS and HTTPS |
 
 ## Authoritative source locations
 

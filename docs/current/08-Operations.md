@@ -8,14 +8,14 @@ docker compose up -d --build
 docker compose ps
 ```
 
-The normal entrypoint is `http://localhost:3000`. The backend and SQL Server ports are internal to the Compose network in the current configuration. Do not assume `localhost:7109` or `localhost:1433` are published unless those lines are explicitly enabled in `docker-compose.yml`.
+The normal entrypoint is `http://localhost:8000` (host port 8000 → frontend container port 80). The backend and SQL Server are bound to host loopback only; do not expose ports 7109 or 14330 to the public network.
 
 ## Service health
 
 ```powershell
 docker compose ps
 docker logs --tail 200 internlink_api
-Invoke-WebRequest http://localhost:3000/
+Invoke-WebRequest http://localhost:8000/
 ```
 
 Health endpoints are `/health`, `/health/live` and `/health/ready`. The backend healthcheck uses `/health/live`; readiness also verifies database connectivity.

@@ -19,7 +19,7 @@ npm run lint
 npm run test
 ```
 
-The current Vite development server listens on port `3000`. The frontend API base URL is defined in `frontend/src/config/env.ts`; direct local API access may use the backend URL, while Compose uses the same-origin Nginx proxy.
+The current Vite development server listens on port `3000`. The frontend API base URL is defined in `frontend/src/config/env.ts`; direct local API access may use the backend URL, while Compose publishes the same-origin Nginx proxy on host port `8000`.
 
 ## Backend
 

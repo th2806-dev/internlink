@@ -1,44 +1,38 @@
 @echo off
 chcp 65001 > nul
-title InternLink - Khoi Dong He Thong
+title InternLink - Khoi Dong Docker
 echo =====================================================================
-echo           KHOI DONG HE THONG INTERNLINK (DOCKER + NGROK)
+echo           KHOI DONG HE THONG INTERNLINK (DOCKER)
 echo =====================================================================
 echo.
 
-:: 1. Kiem tra va khoi dong Docker Engine neu chua bat
-echo [1/3] Kiem tra Docker Desktop...
+:: 1. Kiem tra Docker Engine
+echo [1/2] Kiem tra Docker Engine...
 docker info > nul 2>&1
 if %errorlevel% neq 0 (
-    echo [!] Docker Desktop chua chay. Dang tu dong bat Docker Desktop...
-    if exist "C:\Program Files\Docker\Docker\Docker Desktop.exe" (
-        start "" "C:\Program Files\Docker\Docker\Docker Desktop.exe"
-    )
-    echo Dang cho Docker Engine khoi dong (vui long doi giay lat)...
-    :wait_docker
-    timeout /t 5 /nobreak > nul
-    docker info > nul 2>&1
-    if %errorlevel% neq 0 goto wait_docker
+    echo [!] Docker Engine chua san sang. Hay khoi dong Docker service roi chay lai.
+    pause
+    exit /b 1
 )
 echo [OK] Docker Engine da san sang!
 echo.
 
 :: 2. Bat cac Docker container
-echo [2/3] Bat cac Docker container (Database, API, Frontend)...
+echo [2/2] Bat cac Docker container (Database, API, Frontend)...
 cd /d "%~dp0"
 docker compose up -d
+if %errorlevel% neq 0 (
+    echo [!] Khong the khoi dong Docker Compose. Kiem tra log va cau hinh .env.
+    pause
+    exit /b 1
+)
 echo [OK] Cac container da chay thanh cong!
 echo.
 
-:: 3. Chay Ngrok voi Static Domain co dinh
-echo [3/3] Dang bat Ngrok chia se mang ngoai...
-echo.
 echo =====================================================================
-echo   🌐 LINK TRUY CAP CO DINH (KHONG BAO GIO DOI):
-echo   👉 https://babble-flavorful-oops.ngrok-free.dev
+echo   Truy cap bang domain: http://internlink.duckdns.org:8000
+echo   Truy cap bang IP:     http://171.246.98.49:8000
 echo =====================================================================
 echo.
-echo (Luu y: Giu cua so nay de duy tri ket noi ra ngoai mang. Nhan Ctrl+C de dung)
-echo.
-
-"%LOCALAPPDATA%\ngrok\ngrok.exe" http 3000 --url https://babble-flavorful-oops.ngrok-free.dev
+docker compose ps
+pause

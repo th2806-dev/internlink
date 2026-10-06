@@ -114,7 +114,7 @@ Lần đầu tiên cần **build vài phút** và backend cần ~1 phút để c
 
 | Container | Tên | Vai trò |
 | :--- | :--- | :--- |
-| `internlink_frontend` | Nginx | Giao diện React + reverse proxy API (cổng 3000) |
+| `internlink_frontend` | Nginx | Giao diện React + reverse proxy API (cổng 8000) |
 | `internlink_api` | ASP.NET Core | REST API + SignalR + Swagger |
 | `internlink_database` | SQL Server 2022 | Cơ sở dữ liệu (volume `internlink_database_data`) |
 
@@ -126,7 +126,7 @@ docker compose logs -f backend
 ### ✅ Truy cập
 
 ```
-http://localhost:3000
+http://localhost:8000
 ```
 
 ---
@@ -137,21 +137,12 @@ http://localhost:3000
 
 | Dịch vụ | URL | Ghi chú |
 | :--- | :--- | :--- |
-| **Giao diện (Web)** | **<http://localhost:3000>** | Dùng cho cả 4 phân quyền |
-| REST API (qua Nginx) | <http://localhost:3000/api/...> | Proxy sang backend bên trong Docker network |
-| Health check | <http://localhost:3000/health> | Trả về JSON trạng thái (`.live` / `.ready` cũng có) |
-| Swagger UI | *xem mục bên dưới* | Backend **không** publish port ra ngoài mặc định |
+| **Giao diện (Web)** | **<http://localhost:8000>** | Dùng cho cả 4 phân quyền |
+| REST API (qua Nginx) | <http://localhost:8000/api/...> | Proxy sang backend bên trong Docker network |
+| Health check | <http://localhost:8000/health> | Trả về JSON trạng thái (`.live` / `.ready` cũng có) |
+| Swagger UI | <http://localhost:7109/swagger> | Chỉ truy cập được từ chính máy host |
 
-**Bật Swagger (tuỳ chọn, dành cho dev):** mở `docker-compose.yml`, bỏ comment 2 dòng `ports` của service `backend`:
-
-```yaml
-    ports:
-      - "127.0.0.1:7109:8080"
-```
-
-rồi chạy `docker compose up -d backend` → mở <http://localhost:7109/swagger>.
-
-> ⚠️ Chỉ có **cổng 3000** được publish ra ngoài (cố ý — bảo mật). Backend và SQL Server nằm trong Docker network riêng.
+> ⚠️ Website được publish trên **cổng 8000**. Backend (7109) và SQL Server (14330) chỉ được bind vào localhost của host, không mở các cổng này trong AWS Security Group.
 
 ---
 
@@ -184,7 +175,7 @@ Bộ template Excel dùng cho **demo nhập liệu** được lưu trên Google 
 
 ### Các bước đăng nhập
 
-1. Mở trình duyệt → truy cập **<http://localhost:3000>**
+1. Mở trình duyệt → truy cập **<http://localhost:8000>**
 2. Tại màn hình **Đăng nhập**, nhập:
 
    | Field | Giá trị |
@@ -361,7 +352,7 @@ git pull
 docker compose up -d --build
 
 # Chạy lại health check
-curl http://localhost:3000/health
+curl http://localhost:8000/health
 ```
 
 **Dữ liệu được lưu ở Docker volume (không mất khi `docker compose down` thường):**
@@ -443,14 +434,14 @@ npm run build         # build frontend
 | `Docker Desktop is not running` | Mở Docker Desktop, chờ nó khởi động xong rồi chạy lại `docker compose up -d --build`. |
 | Build lần đầu rất lâu (5–10 phút) | Bình thường (build image .NET + npm). Chờ, xem tiến độ: `docker compose logs -f`. |
 | Container `internlink_api` chưa `healthy` | Backend đang chạy migration/seed (cần ~60s). Vẫn lỗi → `docker compose logs backend`. |
-| Lỗi port 3000 đã được sử dụng | Sửa `docker-compose.yml`: đổi `"3000:80"` của service `frontend` thành `"3001:80"` và đổi biến `PORTAL_URL` thành `http://localhost:3001` → truy cập `http://localhost:3001`. |
+| Lỗi port 8000 đã được sử dụng | Đổi host port ở service `frontend` trong `docker-compose.yml` (ví dụ `"8001:80"`), cập nhật `PORTAL_URL` trong `.env`, rồi chạy lại `docker compose up -d`. |
 | Đăng nhập `admin` bị sai mật khẩu | Mật khẩu SuperAdmin là **`Password123!`** (không phải `Admin123!`). Nếu DB đã bị đổi từ trước → reset: `docker compose down --volumes && docker compose up -d --build`. |
 | Không đăng nhập được tài khoản GV/SV | DB mới chỉ có tài khoản `admin`. Phải tạo/import GV-SV theo [Quy trình demo 4 phân quyền](#demo-4-phan-quyen) rồi lấy mật khẩu tạm. |
 | Import báo `Failed to send email` / không có mật khẩu tạm | Chưa cấu hình SMTP → đặt `EMAIL_ENABLED=false` trong `.env` rồi `docker compose up -d backend`, rồi `docker compose logs backend --tail 300`. |
-| Trang trắng / không gọi được API | Xem log: `docker compose logs backend frontend`. Kiểm tra CORS origin phải khớp `http://localhost:3000`. |
+| Trang trắng / không gọi được API | Xem log: `docker compose logs backend frontend`. Kiểm tra CORS origin phải khớp URL frontend đang dùng, mặc định `http://localhost:8000`. |
 | SV nộp báo cáo bị báo “quá hạn” | Portal Giảng viên → **Đánh giá & Chấm điểm** → tab **Cấu hình báo cáo**: bật lại tuần nộp hoặc đẩy deadline của tuần đó sang tương lai. |
 | Không nhập được điểm thi | SV thiếu báo cáo cuối kỳ hoặc vắng ≥ 2 buổi → **đúng thiết kế**, không phải lỗi. |
-| Muốn mở Swagger | Bỏ comment `ports` của service `backend` trong `docker-compose.yml` (mục III). |
+| Muốn mở Swagger | Trên chính Docker host, truy cập `http://localhost:7109/swagger`; không mở port 7109 ra Internet. |
 | Muốn demo lại từ đầu | `docker compose down --volumes && docker compose up -d --build`. |
 
 **Lệnh chẩn đoán nhanh:**
@@ -458,7 +449,7 @@ npm run build         # build frontend
 ```bash
 docker compose ps                       # trạng thái & health
 docker compose logs --tail 200 backend  # lỗi API/seed
-curl http://localhost:3000/health       # health check qua Nginx
+curl http://localhost:8000/health       # health check qua Nginx
 ```
 
 ---

@@ -1,7 +1,7 @@
 # InternLink - API Reference
 
-**Base URL:** `http://localhost:3000/api` through Nginx  
-**Direct backend:** internal container port `8080`; host port is not published by current Compose  
+**Base URL:** `http://localhost:8000/api` through Nginx
+**Direct backend:** internal container port `8080`; host port `7109` is bound to host loopback only
 **Verified:** 2026-09-08
 
 ## Conventions

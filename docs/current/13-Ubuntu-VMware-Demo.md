@@ -8,9 +8,9 @@ Dùng VMware Workstation/Player với Ubuntu Server 24.04 LTS:
 - RAM: 8 GB khuyến nghị, tối thiểu 4 GB
 - Disk: 40 GB trở lên, SSD nếu có
 - Network: **Bridged** để VM nhận IP trong cùng mạng LAN với máy trình diễn
-- Nếu bắt buộc dùng NAT, cấu hình port forwarding từ host vào VM cho cổng 3000
+- Nếu bắt buộc dùng NAT, cấu hình port forwarding từ host vào VM cho cổng 8000
 
-SQL Server, backend và frontend chạy trong Docker Compose bên trong VM. Máy người dùng chỉ cần truy cập frontend qua IP VM, ví dụ `http://192.168.1.50:3000`.
+SQL Server, backend và frontend chạy trong Docker Compose bên trong VM. Máy người dùng chỉ cần truy cập frontend qua IP VM, ví dụ `http://192.168.1.50:8000`.
 
 ## Cài Ubuntu dependencies
 
@@ -65,7 +65,7 @@ Mở firewall chỉ cho frontend:
 ```bash
 sudo apt install -y ufw
 sudo ufw allow OpenSSH
-sudo ufw allow 3000/tcp
+sudo ufw allow 8000/tcp
 sudo ufw enable
 sudo ufw status
 ```
@@ -73,7 +73,7 @@ sudo ufw status
 Trên máy khác trong LAN mở:
 
 ```text
-http://<VM_IP>:3000
+http://<VM_IP>:8000
 ```
 
 Không mở cổng `1433` database ra LAN. Backend và SQL Server chỉ cần giao tiếp trong Docker network. Cổng backend host cũng không cần mở trong cấu hình Compose hiện tại.
@@ -84,7 +84,7 @@ Trong VMware Network Adapter NAT, tạo port forwarding:
 
 | Host port | VM port | Protocol |
 |:--:|:--:|:--:|
-| 3000 | 3000 | TCP |
+| 8000 | 8000 | TCP |
 
 Bridged vẫn được ưu tiên cho buổi demo nhiều máy vì người dùng truy cập trực tiếp IP LAN của VM.
 
@@ -92,8 +92,8 @@ Bridged vẫn được ưu tiên cho buổi demo nhiều máy vì người dùng
 
 ```bash
 docker compose ps
-curl -I http://localhost:3000/
-curl -fsS http://localhost:3000/health/live
+curl -I http://localhost:8000/
+curl -fsS http://localhost:8000/health/live
 ```
 
 Xem log:

@@ -6,7 +6,7 @@
 
 ```mermaid
 flowchart LR
-  Browser[Browser :3000] --> Frontend[Nginx + React SPA]
+  Browser[Browser :8000] --> Frontend[Nginx + React SPA]
   Frontend -->|/api, /health| Backend[ASP.NET Core API :8080]
   Frontend -->|/hubs| Backend
   Backend --> Database[(SQL Server 2022 :1433)]
@@ -17,9 +17,9 @@ Docker Compose defines three application services:
 
 | Service | Image/build | Internal port | Host access |
 |:--|:--|:--:|:--|
-| `frontend` | `frontend/Dockerfile` | 80 | `localhost:3000` |
-| `backend` | `backend/InternLink/Dockerfile` | 8080 | normally through Nginx; direct mapping is commented |
-| `database` | `mcr.microsoft.com/mssql/server:2022-latest` | 1433 | normally Docker network only |
+| `frontend` | `frontend/Dockerfile` | 80 | `localhost:8000` |
+| `backend` | `backend/InternLink/Dockerfile` | 8080 | through Nginx; host loopback `127.0.0.1:7109` |
+| `database` | `mcr.microsoft.com/mssql/server:2022-latest` | 1433 | Docker network; host loopback `127.0.0.1:14330` |
 
 `backend` connects to `Server=database,1433`. The database is not the host SQL Server when using the current Compose file.
 
