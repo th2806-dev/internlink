@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace InternLink.Application.DTOs;
 
 /// <summary>
@@ -66,5 +68,7 @@ public sealed class TestEmailRequest
 {
     public string ToEmail { get; set; } = null!;
     public string? FullName { get; set; }
+
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public InvitationRole Role { get; set; } = InvitationRole.Student;
 }
