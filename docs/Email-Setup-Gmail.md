@@ -85,6 +85,6 @@ git pull --ff-only origin main
 .\scripts\update-windows-server.ps1
 ```
 
-Script cập nhật ứng dụng, dùng `internlink.cntt@gmail.com` làm tài khoản gửi mặc định, hỏi App Password (không hiển thị khi gõ), bật SMTP bằng biến môi trường của máy và khởi động lại IIS để API nạp cấu hình mới. IIS sẽ gián đoạn ngắn. Sau đó script đăng nhập bằng tài khoản SuperAdmin để lấy địa chỉ email hỗ trợ đã lưu trong Cài đặt hệ thống; nó hiển thị người nhận và chỉ gửi một email chẩn đoán sau khi xác nhận `Y`.
+Script cập nhật ứng dụng, đọc SMTP từ `backend\InternLink\InternLink.API\appsettings.local.json`, chép file đó vào thư mục API đang chạy với quyền đọc giới hạn cho IIS, khởi động lại IIS và gửi tự động một email kiểm tra tới `Email:SupportEmail` (mặc định lấy từ `appsettings.json`). Không cần nhập mật khẩu hay đăng nhập SuperAdmin trong quá trình cập nhật. Các website trên IIS có thể gián đoạn ngắn khi WAS khởi động lại.
 
-Không dán App Password hoặc mật khẩu SuperAdmin vào lệnh hay chat. Nếu Gmail từ chối xác thực, hãy thu hồi App Password bị lộ/từ chối, tạo App Password mới cho đúng tài khoản gửi, rồi chạy lại script.
+Giữ `appsettings.local.json` trong `.gitignore`; không commit file này. Thu hồi mọi App Password đã dán vào chat, tạo mật khẩu mới và chỉ lưu mật khẩu mới trong file local trên server trước khi chạy script. Nếu Gmail từ chối xác thực, script sẽ báo lỗi gửi kiểm tra.

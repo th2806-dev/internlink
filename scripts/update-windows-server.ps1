@@ -24,46 +24,6 @@ function Invoke-ExternalCommand {
     }
 }
 
-function Read-PlainTextSecret {
-    param([Parameter(Mandatory = $true)][string]$Prompt)
-
-    $secureValue = Read-Host -Prompt $Prompt -AsSecureString
-    $pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureValue)
-    try {
-        return [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer)
-    }
-    finally {
-        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer)
-        $secureValue.Dispose()
-    }
-}
-
-function Get-ApiErrorBody {
-    param([Parameter(Mandatory = $true)]$ErrorRecord)
-
-    $response = $ErrorRecord.Exception.Response
-    if ($null -eq $response) {
-        return $ErrorRecord.Exception.Message
-    }
-
-    $stream = $response.GetResponseStream()
-    if ($null -eq $stream) {
-        return $ErrorRecord.Exception.Message
-    }
-
-    $reader = New-Object System.IO.StreamReader($stream)
-    try {
-        $body = $reader.ReadToEnd()
-        if ([string]::IsNullOrWhiteSpace($body)) {
-            return $ErrorRecord.Exception.Message
-        }
-        return $body
-    }
-    finally {
-        $reader.Dispose()
-    }
-}
-
 if (-not (Test-Administrator)) {
     throw 'Open Windows PowerShell with Run as administrator and run this script again.'
 }
@@ -92,6 +52,62 @@ try {
         throw "Tracked server-side changes remain in the repository. Preserve or commit them before deploying:`n$($dirtyFiles -join "`n")"
     }
 
+    $localSettingsPath = Join-Path $sourceRoot 'backend\InternLink\InternLink.API\appsettings.local.json'
+    if (-not (Test-Path $localSettingsPath)) {
+        throw "SMTP settings file is missing: $localSettingsPath"
+    }
+    & icacls.exe $localSettingsPath /inheritance:r `
+        /grant:r '*S-1-5-18:F' '*S-1-5-32-544:F' | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Could not restrict access to the source appsettings.local.json secret file.'
+    }
+    try {
+        $localSettings = Get-Content $localSettingsPath -Raw | ConvertFrom-Json
+        $defaultSettingsPath = Join-Path $sourceRoot 'backend\InternLink\InternLink.API\appsettings.json'
+        $defaultSettings = Get-Content $defaultSettingsPath -Raw | ConvertFrom-Json
+    }
+    catch {
+        throw "Could not read the local SMTP settings JSON: $($_.Exception.Message)"
+    }
+
+    $localEmail = $localSettings.Email
+    $defaultEmail = $defaultSettings.Email
+    $smtpUsername = [string]$localEmail.Username
+    if ([string]::IsNullOrWhiteSpace($smtpUsername)) {
+        $smtpUsername = [Environment]::GetEnvironmentVariable('Email__Username', 'Machine')
+    }
+    if ([string]::IsNullOrWhiteSpace($smtpUsername)) {
+        $smtpUsername = [string]$defaultEmail.Username
+    }
+    $smtpPassword = [string]$localEmail.Password
+    $smtpPassword = $smtpPassword -replace '\s', ''
+    $smtpEnabled = $null -ne $localEmail.Enabled -and [bool]$localEmail.Enabled
+    if (-not $smtpEnabled -or [string]::IsNullOrWhiteSpace($smtpPassword)) {
+        throw 'SMTP must be enabled and Email.Password must contain a current Gmail App Password in appsettings.local.json.'
+    }
+    if ($smtpUsername -notmatch '^[^@\s]+@[^@\s]+\.[^@\s]+$') {
+        throw 'Email.Username in appsettings.local.json (or existing server SMTP configuration) is missing or invalid.'
+    }
+
+    $smtpHost = [string]$localEmail.SmtpHost
+    if ([string]::IsNullOrWhiteSpace($smtpHost)) { $smtpHost = [string]$defaultEmail.SmtpHost }
+    $smtpPort = [int]$defaultEmail.SmtpPort
+    if ($null -ne $localEmail.SmtpPort) { $smtpPort = [int]$localEmail.SmtpPort }
+    $smtpFrom = [string]$localEmail.FromAddress
+    if ([string]::IsNullOrWhiteSpace($smtpFrom)) { $smtpFrom = $smtpUsername }
+    $smtpFromName = [string]$localEmail.FromName
+    if ([string]::IsNullOrWhiteSpace($smtpFromName)) { $smtpFromName = [string]$defaultEmail.FromName }
+    $testRecipient = [string]$localEmail.SupportEmail
+    if ([string]::IsNullOrWhiteSpace($testRecipient)) {
+        $testRecipient = [Environment]::GetEnvironmentVariable('Email__SupportEmail', 'Machine')
+    }
+    if ([string]::IsNullOrWhiteSpace($testRecipient)) {
+        $testRecipient = [string]$defaultEmail.SupportEmail
+    }
+    if ($testRecipient -notmatch '^[^@\s]+@[^@\s]+\.[^@\s]+$') {
+        throw 'Email.SupportEmail in appsettings.local.json or appsettings.json is missing or invalid.'
+    }
+
     Write-Host 'Building the frontend and publishing the API to a staging directory...'
     Invoke-ExternalCommand -FilePath $npm -Arguments @('ci')
     Invoke-ExternalCommand -FilePath $npm -Arguments @('run', 'build', '--workspace=frontend')
@@ -104,6 +120,8 @@ try {
         '-c', 'Release',
         '-o', $apiStage
     )
+    Remove-Item (Join-Path $apiStage 'appsettings.local.json') `
+        -Force -ErrorAction SilentlyContinue
 }
 finally {
     Pop-Location
@@ -190,6 +208,18 @@ if ($LASTEXITCODE -ge 8) {
     throw "API file deployment failed with robocopy exit code $LASTEXITCODE. The API remains stopped and app_offline.htm is retained; rerun this script after resolving the file lock."
 }
 
+$deployedSettingsPath = Join-Path $apiRoot 'appsettings.local.json'
+Copy-Item -LiteralPath $localSettingsPath -Destination $deployedSettingsPath -Force
+$runtimeSettings = Get-Content $deployedSettingsPath -Raw | ConvertFrom-Json
+$runtimeSettings.Email.Password = $smtpPassword
+$runtimeSettings | ConvertTo-Json -Depth 100 |
+    Set-Content -LiteralPath $deployedSettingsPath -Encoding UTF8
+& icacls.exe $deployedSettingsPath /inheritance:r `
+    /grant:r '*S-1-5-18:F' '*S-1-5-32-544:F' 'IIS AppPool\InternLinkApi:R' | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    throw 'Could not restrict access to the deployed appsettings.local.json secret file.'
+}
+
 Write-Host 'Deploying frontend files while preserving web.config...'
 & robocopy.exe $frontendDist $webRoot /E /XF 'web.config' /NFL /NDL /NJH /NJS /NP
 if ($LASTEXITCODE -ge 8) {
@@ -215,33 +245,13 @@ if (-not (Get-WebBinding -Name 'InternLink' -Protocol 'http' |
 [Environment]::SetEnvironmentVariable('Cors__AllowedOrigins__1', $null, 'Machine')
 
 Write-Host ''
-Write-Host 'Configure Gmail SMTP for this server.'
-$smtpUsername = 'internlink.cntt@gmail.com'
-Write-Host "SMTP sender is fixed to $smtpUsername."
+[Environment]::SetEnvironmentVariable('Email__Enabled', $null, 'Machine')
+[Environment]::SetEnvironmentVariable('Email__Username', $null, 'Machine')
+[Environment]::SetEnvironmentVariable('Email__Password', $null, 'Machine')
+[Environment]::SetEnvironmentVariable('Email__FromAddress', $null, 'Machine')
+[Environment]::SetEnvironmentVariable('Email__SupportEmail', $null, 'Machine')
 
-$smtpPassword = Read-PlainTextSecret -Prompt 'New Gmail App Password (input is hidden)'
-$smtpPassword = $smtpPassword -replace '\s', ''
-if ([string]::IsNullOrWhiteSpace($smtpPassword)) {
-    throw 'The Gmail App Password cannot be empty. SMTP has not been enabled.'
-}
-
-$adminUsername = Read-Host 'SuperAdmin username'
-if ([string]::IsNullOrWhiteSpace($adminUsername)) {
-    throw 'SuperAdmin username cannot be empty. SMTP has not been enabled.'
-}
-$adminPassword = Read-PlainTextSecret -Prompt 'SuperAdmin password (input is hidden)'
-if ([string]::IsNullOrWhiteSpace($adminPassword)) {
-    throw 'SuperAdmin password cannot be empty. SMTP has not been enabled.'
-}
-
-[Environment]::SetEnvironmentVariable('Email__Enabled', 'true', 'Machine')
-[Environment]::SetEnvironmentVariable('Email__Username', $smtpUsername, 'Machine')
-[Environment]::SetEnvironmentVariable('Email__Password', $smtpPassword, 'Machine')
-[Environment]::SetEnvironmentVariable('Email__FromAddress', $smtpUsername, 'Machine')
-[Environment]::SetEnvironmentVariable('Email__SupportEmail', $smtpUsername, 'Machine')
-$smtpPassword = $null
-
-Write-Warning 'Restarting Windows Process Activation Service to reload machine SMTP variables; all IIS sites may be briefly unavailable.'
+Write-Warning 'Restarting Windows Process Activation Service so IIS reloads appsettings.local.json; all IIS sites may be briefly unavailable.'
 Restart-Service -Name WAS -Force
 Start-Service -Name W3SVC
 
@@ -283,68 +293,32 @@ if ($healthResponse.StatusCode -ne 200) {
     throw "API readiness returned HTTP $($healthResponse.StatusCode)."
 }
 
-Write-Host 'Signing in to read the configured test-recipient address...'
-$apiBaseUrl = 'http://127.0.0.1:7109/api'
-try {
-    $loginResponse = Invoke-RestMethod -UseBasicParsing -Method Post `
-        -Uri "$apiBaseUrl/Auth/login" `
-        -ContentType 'application/json' `
-        -Body (@{ username = $adminUsername; password = $adminPassword } | ConvertTo-Json -Compress)
-}
-catch {
-    throw "Could not sign in to the API to run the SMTP test: $(Get-ApiErrorBody -ErrorRecord $_)"
-}
-finally {
-    $adminPassword = $null
-}
-
-if (-not $loginResponse.success -or
-    [string]::IsNullOrWhiteSpace($loginResponse.data.token) -or
-    $loginResponse.data.role -ne 'SuperAdmin') {
-    throw 'The supplied account must be an active SuperAdmin account to run the SMTP test.'
-}
-
-$authHeaders = @{ Authorization = "Bearer $($loginResponse.data.token)" }
-try {
-    $settingsResponse = Invoke-RestMethod -UseBasicParsing -Method Get `
-        -Uri "$apiBaseUrl/SuperAdmin/settings" `
-        -Headers $authHeaders
-}
-catch {
-    throw "Could not read the saved system settings: $(Get-ApiErrorBody -ErrorRecord $_)"
-}
-
-$testRecipient = [string]$settingsResponse.data.supportEmail
-if (-not $settingsResponse.success -or
-    $testRecipient -notmatch '^[^@\s]+@[^@\s]+\.[^@\s]+$') {
-    throw 'The saved support email is missing or invalid. Set a valid recipient in System Settings, then rerun the deployment script.'
-}
-
-Write-Host "SMTP test will send one diagnostic email to: $testRecipient"
-$sendTest = Read-Host 'Send the test email now? (Y/N)'
+Write-Host "Sending SMTP diagnostic email to $testRecipient..."
+$smtpClient = [System.Net.Mail.SmtpClient]::new($smtpHost, $smtpPort)
+$smtpClient.EnableSsl = $true
+$smtpClient.Credentials = [System.Net.NetworkCredential]::new($smtpUsername, $smtpPassword)
+$smtpMessage = [System.Net.Mail.MailMessage]::new()
+$smtpMessage.From = [System.Net.Mail.MailAddress]::new($smtpFrom, $smtpFromName)
+$smtpMessage.To.Add($testRecipient)
+$smtpMessage.Subject = '[InternLink] SMTP configuration test'
+$smtpMessage.Body = 'This is an SMTP delivery test for http://internlink.duckdns.org/'
 $smtpTestSent = $false
-if ($sendTest -match '^(?i)y(es)?$') {
-    try {
-        $testResponse = Invoke-RestMethod -UseBasicParsing -Method Post `
-            -Uri "$apiBaseUrl/SuperAdmin/email/test" `
-            -Headers $authHeaders `
-            -ContentType 'application/json' `
-            -Body (@{ toEmail = $testRecipient; fullName = 'InternLink Administrator'; role = 'Lecturer' } | ConvertTo-Json -Compress)
-    }
-    catch {
-        throw "SMTP test failed: $(Get-ApiErrorBody -ErrorRecord $_)"
-    }
-
-    if (-not $testResponse.success) {
-        throw "SMTP test failed: $($testResponse.error.title)"
-    }
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+try {
+    $smtpClient.Send($smtpMessage)
     $smtpTestSent = $true
 }
-else {
-    Write-Warning 'SMTP is enabled, but the test email was skipped because it was not confirmed.'
+catch {
+    throw "SMTP test failed: $($_.Exception.Message)"
 }
-$authHeaders = $null
-$loginResponse = $null
+finally {
+    $smtpMessage.Dispose()
+    $smtpClient.Dispose()
+    $smtpPassword = $null
+    $localSettings = $null
+    $localEmail = $null
+    $runtimeSettings = $null
+}
 
 & $curl --fail --silent --show-error --resolve `
     'internlink.duckdns.org:80:127.0.0.1' `
