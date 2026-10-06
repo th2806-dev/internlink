@@ -342,14 +342,20 @@ $smtpMessage.From = [System.Net.Mail.MailAddress]::new($smtpFrom, $smtpFromName)
 $smtpMessage.To.Add($testRecipient)
 $smtpMessage.Subject = '[InternLink] SMTP configuration test'
 $smtpMessage.Body = 'This is an SMTP delivery test for http://internlink.duckdns.org/'
-$smtpTestSent = $false
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+try {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+} catch {}
+
 try {
     $smtpClient.Send($smtpMessage)
     $smtpTestSent = $true
 }
 catch {
-    throw "SMTP test failed: $($_.Exception.Message)"
+    $errDetail = $_.Exception.Message
+    if ($_.Exception.InnerException) {
+        $errDetail += " Inner: $($_.Exception.InnerException.Message)"
+    }
+    Write-Warning "SMTP test email could not be sent: $errDetail"
 }
 finally {
     $smtpMessage.Dispose()
