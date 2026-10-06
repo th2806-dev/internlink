@@ -21,12 +21,12 @@ services:
       - Jwt__Secret=${JWT_SECRET:-InternLink_SecretKey_Production_SuperSecure_32BytesLength!}
       - Jwt__Issuer=InternLink
       - Jwt__Audience=InternLinkClients
-      - Email__Enabled=${EMAIL_ENABLED:-true}
+      - Email__Enabled=${EMAIL_ENABLED:-false}
       - Email__SmtpHost=smtp.gmail.com
       - Email__SmtpPort=587
-      - Email__Username=${EMAIL_USERNAME:-internlink.cntt@gmail.com}
+      - Email__Username=${EMAIL_USERNAME:-thachhien2000@gmail.com}
       - Email__Password=${EMAIL_PASSWORD:-}
-      - Email__FromAddress=${EMAIL_USERNAME:-internlink.cntt@gmail.com}
+      - Email__FromAddress=${EMAIL_USERNAME:-thachhien2000@gmail.com}
       - Email__PortalUrl=${PORTAL_URL:-http://internlink.duckdns.org:8000}
       - Cors__AllowedOrigins__0=${PORTAL_URL:-http://internlink.duckdns.org:8000}
       - Cors__AllowedOrigins__1=http://localhost:8000

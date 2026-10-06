@@ -15,13 +15,13 @@ public sealed class EmailSettings
     public string? Username { get; set; }
     public string? Password { get; set; }
 
-    public string FromAddress { get; set; } = "internlink.cntt@gmail.com";
+    public string FromAddress { get; set; } = "thachhien2000@gmail.com";
     public string FromName { get; set; } = "InternLink - Ban Quản lý Thực tập";
 
     public string PortalUrl { get; set; } = "http://localhost:5173";
     public string PasswordResetPath { get; set; } = "/reset-password";
     public int PasswordResetTokenExpiryHours { get; set; } = 24;
     public string InstitutionName { get; set; } = "Khoa Công nghệ Thông tin";
-    public string SupportEmail { get; set; } = "internlink.cntt@gmail.com";
+    public string SupportEmail { get; set; } = "thachhien2000@gmail.com";
     public string? SupportPhone { get; set; }
 }

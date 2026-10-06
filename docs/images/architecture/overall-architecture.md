@@ -68,7 +68,7 @@ flowchart TB
 
     APP_SVC --> DB_SQL
     APP_SVC --> STORAGE_VOL
-    MAIL_SVC -->|SMTP Port 587| GMAIL_EXT["Google SMTP Server<br/>(internlink.cntt@gmail.com)"]
+    MAIL_SVC -->|SMTP Port 587| GMAIL_EXT["Google SMTP Server<br/>(thachhien2000@gmail.com)"]
 ```
 
 ---
