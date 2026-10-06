@@ -74,3 +74,17 @@ Nếu `Enabled=false`, endpoint báo chưa gửi thay vì trả thành công; xe
 - Không commit App Password vào git
 - Import hàng loạt: gửi từng lô nhỏ để tránh quota Gmail
 - Production (Docker): đặt trong file `.env` ở thư mục gốc — `EMAIL_ENABLED`, `EMAIL_USERNAME`, `EMAIL_PASSWORD` (docker compose tự nạp vào container), không hardcode
+
+## 6. Cập nhật và kiểm tra SMTP trên Windows Server
+
+Mở PowerShell **Run as Administrator** trên server, sau đó chạy:
+
+```powershell
+cd C:\src\InternLink
+git pull --ff-only origin main
+.\scripts\update-windows-server.ps1
+```
+
+Script cập nhật ứng dụng, yêu cầu nhập tài khoản Gmail và App Password (không hiển thị khi gõ), bật SMTP bằng biến môi trường của máy, rồi đăng nhập bằng tài khoản SuperAdmin để lấy địa chỉ email hỗ trợ đã lưu trong Cài đặt hệ thống. Script hiển thị người nhận và chỉ gửi một email chẩn đoán sau khi xác nhận `Y`.
+
+Không dán App Password hoặc mật khẩu SuperAdmin vào lệnh hay chat. Nếu Gmail từ chối xác thực, hãy thu hồi App Password bị lộ/từ chối, tạo App Password mới cho đúng tài khoản gửi, rồi chạy lại script.
