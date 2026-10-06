@@ -216,16 +216,8 @@ if (-not (Get-WebBinding -Name 'InternLink' -Protocol 'http' |
 
 Write-Host ''
 Write-Host 'Configure Gmail SMTP for this server.'
-do {
-    $smtpUsername = Read-Host 'SMTP Gmail account (e.g. thachhien2000@gmail.com; Enter uses the default)'
-    if ([string]::IsNullOrWhiteSpace($smtpUsername)) {
-        $smtpUsername = 'thachhien2000@gmail.com'
-    }
-    $smtpUsername = $smtpUsername.Trim().Trim('"', "'")
-    if ($smtpUsername -notmatch '^[^@\s]+@[^@\s]+\.[^@\s]+$') {
-        Write-Warning 'Invalid email address. Enter the full Gmail address, for example thachhien2000@gmail.com.'
-    }
-} while ($smtpUsername -notmatch '^[^@\s]+@[^@\s]+\.[^@\s]+$')
+$smtpUsername = 'internlink.cntt@gmail.com'
+Write-Host "SMTP sender is fixed to $smtpUsername."
 
 $smtpPassword = Read-PlainTextSecret -Prompt 'New Gmail App Password (input is hidden)'
 $smtpPassword = $smtpPassword -replace '\s', ''
@@ -249,6 +241,10 @@ if ([string]::IsNullOrWhiteSpace($adminPassword)) {
 [Environment]::SetEnvironmentVariable('Email__SupportEmail', $smtpUsername, 'Machine')
 $smtpPassword = $null
 
+Write-Warning 'Restarting Windows Process Activation Service to reload machine SMTP variables; all IIS sites may be briefly unavailable.'
+Restart-Service -Name WAS -Force
+Start-Service -Name W3SVC
+
 New-NetFirewallRule -DisplayName 'InternLink HTTP 80' `
     -Direction Inbound -Protocol TCP -LocalPort 80 -Action Allow `
     -ErrorAction SilentlyContinue | Out-Null
@@ -256,9 +252,13 @@ Get-NetFirewallRule -DisplayName 'InternLink HTTP 8000' `
     -ErrorAction SilentlyContinue | Remove-NetFirewallRule
 
 Remove-Item $offlinePath -Force
-Start-WebAppPool -Name 'InternLinkApi'
-Start-Website -Name 'InternLinkApi'
-if (-not $webWasStarted) {
+if ((Get-WebAppPoolState -Name 'InternLinkApi').Value -ne 'Started') {
+    Start-WebAppPool -Name 'InternLinkApi'
+}
+if ((Get-Website -Name 'InternLinkApi').State -ne 'Started') {
+    Start-Website -Name 'InternLinkApi'
+}
+if ($webWasStarted -and (Get-Website -Name 'InternLink').State -ne 'Started') {
     Start-Website -Name 'InternLink'
 }
 

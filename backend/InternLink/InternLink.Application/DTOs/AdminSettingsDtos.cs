@@ -3,7 +3,7 @@ namespace InternLink.Application.DTOs;
 public class AdminSettingsDto
 {
     public string DepartmentName { get; set; } = "Khoa Công nghệ Thông tin";
-    public string SupportEmail { get; set; } = "thachhien2000@gmail.com";
+    public string SupportEmail { get; set; } = "internlink.cntt@gmail.com";
     public string Phone { get; set; } = "0906891704";
     public string Address { get; set; } = "Tòa nhà A, 227 Nguyễn Văn Cừ, Q.5, TP.HCM";
     public int MaxStudentsPerLecturer { get; set; } = 30;

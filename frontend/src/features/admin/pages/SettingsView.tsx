@@ -28,7 +28,7 @@ type FacultySettings = AdminFacultySettings;
 
 const DEFAULT_FACULTY_SETTINGS: FacultySettings = {
   departmentName: "Khoa Công nghệ Thông tin",
-  supportEmail: "thachhien2000@gmail.com",
+  supportEmail: "internlink.cntt@gmail.com",
   phone: "0906891704",
   address: "",
   maxStudentsPerLecturer: 30,
@@ -342,7 +342,7 @@ export const SettingsView = ({
                     onChange={(e) =>
                       setSettings({ ...settings, supportEmail: e.target.value })
                     }
-                    placeholder="thachhien2000@gmail.com"
+                    placeholder="internlink.cntt@gmail.com"
                     className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-blue-500 font-medium text-slate-900"
                   />
                 </div>

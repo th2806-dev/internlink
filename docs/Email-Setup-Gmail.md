@@ -1,13 +1,13 @@
 # Cấu hình Gmail SMTP — InternLink
 
-**Tài khoản gửi mặc định:** `thachhien2000@gmail.com`
+**Tài khoản gửi mặc định:** `internlink.cntt@gmail.com`
 **FromName:** `InternLink - Ban Quản lý Thực tập`
 
 ---
 
 ## 1. Tạo App Password (Gmail)
 
-1. Đăng nhập https://myaccount.google.com với `thachhien2000@gmail.com`
+1. Đăng nhập https://myaccount.google.com với `internlink.cntt@gmail.com`
 2. Bật **Xác minh 2 bước** (bắt buộc)
 3. Vào **Bảo mật** → **Mật khẩu ứng dụng** (App passwords)  
    hoặc mở: https://myaccount.google.com/apppasswords
@@ -25,10 +25,10 @@ cd e:\InternLink\backend\InternLink\InternLink.API
 
 dotnet user-secrets init
 dotnet user-secrets set "Email:Enabled" "true"
-dotnet user-secrets set "Email:Username" "thachhien2000@gmail.com"
+dotnet user-secrets set "Email:Username" "internlink.cntt@gmail.com"
 dotnet user-secrets set "Email:Password" "<APP_PASSWORD>"
-dotnet user-secrets set "Email:FromAddress" "thachhien2000@gmail.com"
-dotnet user-secrets set "Email:SupportEmail" "thachhien2000@gmail.com"
+dotnet user-secrets set "Email:FromAddress" "internlink.cntt@gmail.com"
+dotnet user-secrets set "Email:SupportEmail" "internlink.cntt@gmail.com"
 ```
 
 Thay `<APP_PASSWORD>` bằng App Password vừa tạo (có thể bỏ khoảng trắng).
@@ -44,7 +44,7 @@ Thay `<APP_PASSWORD>` bằng App Password vừa tạo (có thể bỏ khoảng t
 | SmtpHost | `smtp.gmail.com` |
 | SmtpPort | `587` |
 | UseSsl | `true` |
-| FromAddress / Username / SupportEmail mặc định | `thachhien2000@gmail.com` |
+| FromAddress / Username / SupportEmail mặc định | `internlink.cntt@gmail.com` |
 | FromName | `InternLink - Ban Quản lý Thực tập` |
 
 ---
@@ -85,6 +85,6 @@ git pull --ff-only origin main
 .\scripts\update-windows-server.ps1
 ```
 
-Script cập nhật ứng dụng, yêu cầu nhập tài khoản Gmail và App Password (không hiển thị khi gõ), bật SMTP bằng biến môi trường của máy, rồi đăng nhập bằng tài khoản SuperAdmin để lấy địa chỉ email hỗ trợ đã lưu trong Cài đặt hệ thống. Script hiển thị người nhận và chỉ gửi một email chẩn đoán sau khi xác nhận `Y`.
+Script cập nhật ứng dụng, dùng `internlink.cntt@gmail.com` làm tài khoản gửi mặc định, hỏi App Password (không hiển thị khi gõ), bật SMTP bằng biến môi trường của máy và khởi động lại IIS để API nạp cấu hình mới. IIS sẽ gián đoạn ngắn. Sau đó script đăng nhập bằng tài khoản SuperAdmin để lấy địa chỉ email hỗ trợ đã lưu trong Cài đặt hệ thống; nó hiển thị người nhận và chỉ gửi một email chẩn đoán sau khi xác nhận `Y`.
 
 Không dán App Password hoặc mật khẩu SuperAdmin vào lệnh hay chat. Nếu Gmail từ chối xác thực, hãy thu hồi App Password bị lộ/từ chối, tạo App Password mới cho đúng tài khoản gửi, rồi chạy lại script.
