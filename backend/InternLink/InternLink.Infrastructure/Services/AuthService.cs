@@ -292,7 +292,7 @@ public class AuthService : IAuthService
     public async Task ForgotPasswordAsync(string email)
     {
         if (string.IsNullOrWhiteSpace(email))
-            return;
+            throw new ArgumentException("Vui lòng nhập địa chỉ email.", nameof(email));
 
         var normalizedEmail = email.Trim().ToLowerInvariant();
         var user = await _db.Users.FirstOrDefaultAsync(u =>
@@ -304,7 +304,7 @@ public class AuthService : IAuthService
         if (user == null)
         {
             _logger.LogInformation("ForgotPassword requested for unknown or inactive email {Email}", email);
-            return;
+            throw new KeyNotFoundException(InternLink.Shared.Responses.ErrorMessage.EmailNotFound);
         }
 
         var rawToken = ResetTokenGenerator.GenerateToken();
@@ -354,9 +354,12 @@ public class AuthService : IAuthService
         });
 
         if (!emailResult.Success)
+        {
             _logger.LogWarning("ForgotPassword email failed for {Email}: {Message}", user.Email, emailResult.Message);
-        else
-            _logger.LogInformation("ForgotPassword email sent for user {UserId}", user.Id);
+            throw new InvalidOperationException(emailResult.Message ?? InternLink.Shared.Responses.ErrorMessage.EmailSendFailed);
+        }
+
+        _logger.LogInformation("ForgotPassword email sent for user {UserId}", user.Id);
     }
 
     public async Task ResetPasswordAsync(string token, string newPassword)

@@ -101,14 +101,14 @@ public class AuthServiceTests
     }
 
     [Fact]
-    public async Task ForgotPasswordAsync_UnknownEmail_ShouldNotThrowOrSendEmail()
+    public async Task ForgotPasswordAsync_UnknownEmail_ShouldThrowKeyNotFoundException()
     {
         var db = GetDb();
         var email = new Mock<IEmailService>();
         var service = CreateService(db, email.Object);
 
         await service.Invoking(s => s.ForgotPasswordAsync("unknown@test.com"))
-            .Should().NotThrowAsync();
+            .Should().ThrowAsync<KeyNotFoundException>();
 
         email.Verify(e => e.SendForgotPasswordAsync(It.IsAny<ForgotPasswordEmailRequest>(), It.IsAny<CancellationToken>()), Times.Never);
     }

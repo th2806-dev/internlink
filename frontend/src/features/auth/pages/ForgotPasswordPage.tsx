@@ -53,11 +53,10 @@ export function ForgotPasswordPage() {
             <div className="p-4 rounded-md border border-emerald-200 bg-emerald-50 text-emerald-900 text-center">
               <CheckCircle2 className="w-9 h-9 mx-auto text-emerald-600 mb-2" />
               <p className="text-sm font-bold font-display">
-                Yêu cầu đã được ghi nhận
+                Đã gửi email khôi phục mật khẩu thành công!
               </p>
               <p className="mt-1.5 text-xs font-medium leading-relaxed text-slate-600">
-                Nếu email khớp hệ thống, hướng dẫn đặt lại mật khẩu sẽ được gửi
-                tới <strong>{email.trim()}</strong>.
+                Liên kết đặt lại mật khẩu đã được gửi tới địa chỉ <strong>{email.trim()}</strong>. Vui lòng kiểm tra hộp thư đến (hoặc thư mục Spam) để tạo mật khẩu mới.
               </p>
             </div>
             <Link

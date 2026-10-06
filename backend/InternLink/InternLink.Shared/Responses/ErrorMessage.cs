@@ -19,6 +19,8 @@ public static class ErrorMessage
     public const string UserInactive = "Tài khoản đã bị vô hiệu hóa hoặc không còn hoạt động.";
     public const string CurrentPasswordInvalid = "Mật khẩu hiện tại không đúng.";
     public const string InvalidOrExpiredPasswordResetLink = "Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.";
+    public const string EmailNotFound = "Email này không tồn tại trong hệ thống hoặc tài khoản chưa được kích hoạt.";
+    public const string EmailSendFailed = "Không thể gửi email lúc này. Vui lòng thử lại sau.";
     public const string AccessDenied = "Bạn không có quyền thực hiện thao tác này.";
     public const string ForbiddenRole = "Tài khoản của bạn không được phép truy cập chức năng này.";
 

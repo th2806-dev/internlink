@@ -170,8 +170,23 @@ public class AuthController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InvalidInput }));
 
-        await _auth.ForgotPasswordAsync(request.Email);
-        return Ok(ApiResponse<object>.Ok(null));
+        try
+        {
+            await _auth.ForgotPasswordAsync(request.Email);
+            return Ok(ApiResponse<string>.Ok("Đã gửi liên kết đặt lại mật khẩu đến email của bạn. Vui lòng kiểm tra hộp thư."));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = ex.Message }));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return StatusCode(502, ApiResponse<object>.Fail(new ApiError { Title = ex.Message }));
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = ex.Message }));
+        }
     }
 
     [HttpPost("reset-password")]
