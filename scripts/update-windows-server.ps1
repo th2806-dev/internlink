@@ -255,6 +255,20 @@ if ($localSettingsPath -and (Test-Path $localSettingsPath)) {
     }
 }
 
+Write-Host 'Ensuring upload directories exist on the server...'
+$uploadDirs = @(
+    (Join-Path $apiRoot 'uploads\documents'),
+    (Join-Path $apiRoot 'uploads\submissions'),
+    (Join-Path $apiRoot 'uploads\weekly-reports')
+)
+foreach ($dir in $uploadDirs) {
+    New-Item -ItemType Directory -Force $dir | Out-Null
+}
+& icacls.exe (Join-Path $apiRoot 'uploads') /grant 'IIS AppPool\InternLinkApi:(OI)(CI)M' /T | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    Write-Warning 'Could not grant IIS write access to the uploads directory.'
+}
+
 $deployedAppSettings = Join-Path $apiRoot 'appsettings.json'
 if (Test-Path $deployedAppSettings) {
     & icacls.exe $deployedAppSettings /grant 'IIS AppPool\InternLinkApi:R' | Out-Null
