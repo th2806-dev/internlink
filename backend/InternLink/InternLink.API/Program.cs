@@ -10,6 +10,8 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Load local overrides (email passwords, etc.) — this file is gitignored
 builder.Configuration.AddJsonFile("appsettings.local.json", optional: true, reloadOnChange: true);
+builder.Configuration.AddEnvironmentVariables();
+builder.Configuration.AddCommandLine(args);
 
 // Serilog
 Log.Logger = new LoggerConfiguration()

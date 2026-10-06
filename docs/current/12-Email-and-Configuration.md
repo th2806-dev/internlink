@@ -28,11 +28,11 @@ ASP.NET Core reads `appsettings.json`, optional `appsettings.local.json`, and en
 
 ## Gmail setup
 
-Use a Gmail App Password, not the normal account password. Keep `Email:Enabled=false` until SMTP connectivity is verified. The admin email test endpoint is `POST /api/Admin/email/test` and requires admin authorization.
+Use a Gmail App Password, not the normal account password. Email is disabled by default; set `Email:Enabled=true` and configure SMTP credentials only after SMTP connectivity is verified. The admin email test endpoint is `POST /api/SuperAdmin/email/test` and requires SuperAdmin authorization. The test sends a neutral diagnostic message (never a sample invitation password) to the support email currently shown in System Settings.
 
 ## Functional behavior
 
-Email-backed workflows include invitation/password-related operations where the service is configured. When email is disabled or unavailable, the API may log/fallback according to the service implementation; this must not be described as successful external delivery.
+Email-backed workflows include invitation/password-related operations where the service is configured. When email is disabled, the API logs the message for diagnostics and reports delivery as failed; it must not be described as successful external delivery.
 
 ## Security
 

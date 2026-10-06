@@ -26,7 +26,7 @@ public class EmailServiceTests
     }
 
     [Fact]
-    public async Task SendInvitationAsync_ValidRecipient_ShouldReturnSuccess()
+    public async Task SendInvitationAsync_EmailDisabled_ShouldReportNotSent()
     {
         var service = CreateService();
         var request = new InvitationEmailRequest
@@ -40,8 +40,9 @@ public class EmailServiceTests
 
         var result = await service.SendInvitationAsync(request);
 
-        result.Success.Should().BeTrue();
+        result.Success.Should().BeFalse();
         result.To.Should().Be("student@test.com");
+        result.Message.Should().Contain("logged but not sent");
     }
 
     [Fact]
@@ -64,7 +65,7 @@ public class EmailServiceTests
     }
 
     [Fact]
-    public async Task SendPasswordResetAsync_ValidRecipient_ShouldReturnSuccess()
+    public async Task SendPasswordResetAsync_EmailDisabled_ShouldReportNotSent()
     {
         var service = CreateService();
         var request = new PasswordResetEmailRequest
@@ -77,6 +78,7 @@ public class EmailServiceTests
 
         var result = await service.SendPasswordResetAsync(request);
 
-        result.Success.Should().BeTrue();
+        result.Success.Should().BeFalse();
+        result.Message.Should().Contain("logged but not sent");
     }
 }

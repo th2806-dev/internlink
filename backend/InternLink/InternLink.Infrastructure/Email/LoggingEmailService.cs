@@ -67,6 +67,8 @@ public sealed class LoggingEmailService : IEmailService
             plainTextBody ?? "(none)",
             htmlBody);
 
-        return Task.FromResult(SendEmailResult.Ok(toEmail, "Email logged (Email:Enabled=false)"));
+        return Task.FromResult(SendEmailResult.Fail(
+            toEmail,
+            "Email delivery is disabled; the message was logged but not sent."));
     }
 }

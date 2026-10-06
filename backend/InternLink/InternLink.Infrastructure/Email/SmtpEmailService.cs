@@ -78,7 +78,7 @@ public sealed class SmtpEmailService : IEmailService
 
             using var client = new SmtpClient();
             var secureSocket = _settings.UseSsl
-                ? SecureSocketOptions.StartTlsWhenAvailable
+                ? SecureSocketOptions.StartTls
                 : SecureSocketOptions.None;
 
             await client.ConnectAsync(_settings.SmtpHost, _settings.SmtpPort, secureSocket, cancellationToken);
