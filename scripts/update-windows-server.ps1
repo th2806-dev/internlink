@@ -216,14 +216,16 @@ if (-not (Get-WebBinding -Name 'InternLink' -Protocol 'http' |
 
 Write-Host ''
 Write-Host 'Configure Gmail SMTP for this server.'
-$smtpUsername = Read-Host 'SMTP Gmail account'
-if ([string]::IsNullOrWhiteSpace($smtpUsername)) {
-    $smtpUsername = 'thachhien2000@gmail.com'
-}
-$smtpUsername = $smtpUsername.Trim()
-if ($smtpUsername -notmatch '^[^@\s]+@[^@\s]+\.[^@\s]+$') {
-    throw 'The SMTP Gmail account is not a valid email address.'
-}
+do {
+    $smtpUsername = Read-Host 'SMTP Gmail account (e.g. thachhien2000@gmail.com; Enter uses the default)'
+    if ([string]::IsNullOrWhiteSpace($smtpUsername)) {
+        $smtpUsername = 'thachhien2000@gmail.com'
+    }
+    $smtpUsername = $smtpUsername.Trim().Trim('"', "'")
+    if ($smtpUsername -notmatch '^[^@\s]+@[^@\s]+\.[^@\s]+$') {
+        Write-Warning 'Invalid email address. Enter the full Gmail address, for example thachhien2000@gmail.com.'
+    }
+} while ($smtpUsername -notmatch '^[^@\s]+@[^@\s]+\.[^@\s]+$')
 
 $smtpPassword = Read-PlainTextSecret -Prompt 'New Gmail App Password (input is hidden)'
 $smtpPassword = $smtpPassword -replace '\s', ''
