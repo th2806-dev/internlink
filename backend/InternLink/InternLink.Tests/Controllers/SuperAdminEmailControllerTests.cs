@@ -23,7 +23,7 @@ public class SuperAdminEmailControllerTests
                 It.IsAny<string>(),
                 It.IsAny<string?>(),
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync(SendEmailResult.Ok("thachhien2000@gmail.com"));
+            .ReturnsAsync(SendEmailResult.Ok("recipient@example.com"));
 
         var controller = new SuperAdminEmailController(
             emailService.Object,
@@ -32,7 +32,7 @@ public class SuperAdminEmailControllerTests
         var result = await controller.TestEmail(
             new TestEmailRequest
             {
-                ToEmail = " thachhien2000@gmail.com ",
+                ToEmail = " recipient@example.com ",
                 FullName = "Test recipient",
                 Role = InvitationRole.Lecturer
             },
@@ -40,7 +40,7 @@ public class SuperAdminEmailControllerTests
 
         result.Should().BeOfType<OkObjectResult>();
         emailService.Verify(service => service.SendAsync(
-            "thachhien2000@gmail.com",
+            "recipient@example.com",
             "[InternLink] Email kiểm tra gửi thư",
             It.Is<string>(body =>
                 body.Contains("http://internlink.duckdns.org") &&
