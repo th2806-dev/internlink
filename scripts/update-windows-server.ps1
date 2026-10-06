@@ -52,9 +52,23 @@ try {
         throw "Tracked server-side changes remain in the repository. Preserve or commit them before deploying:`n$($dirtyFiles -join "`n")"
     }
 
+    $defaultSettingsPath = Join-Path $sourceRoot 'backend\InternLink\InternLink.API\appsettings.json'
+    if (-not (Test-Path $defaultSettingsPath)) {
+        throw "Configuration file not found: $defaultSettingsPath"
+    }
+    try {
+        $defaultSettings = Get-Content $defaultSettingsPath -Raw | ConvertFrom-Json
+    }
+    catch {
+        throw "Could not read appsettings.json: $($_.Exception.Message)"
+    }
+
     $sourceLocalSettingsPath = Join-Path $sourceRoot 'backend\InternLink\InternLink.API\appsettings.local.json'
     $apiRoot = 'C:\Apps\InternLink\Api'
     $deployedLocalSettingsPath = Join-Path $apiRoot 'appsettings.local.json'
+    $localSettingsPath = $null
+    $localSettings = $null
+
     if (Test-Path $sourceLocalSettingsPath) {
         $localSettingsPath = $sourceLocalSettingsPath
     }
@@ -62,54 +76,67 @@ try {
         $localSettingsPath = $deployedLocalSettingsPath
         Write-Host "Using server-local settings: $localSettingsPath"
     }
-    else {
-        throw "SMTP settings file not found. Create it at '$sourceLocalSettingsPath' or '$deployedLocalSettingsPath'."
-    }
-    try {
-        $localSettings = Get-Content $localSettingsPath -Raw | ConvertFrom-Json
-        $defaultSettingsPath = Join-Path $sourceRoot 'backend\InternLink\InternLink.API\appsettings.json'
-        $defaultSettings = Get-Content $defaultSettingsPath -Raw | ConvertFrom-Json
-    }
-    catch {
-        throw "Could not read the local SMTP settings JSON: $($_.Exception.Message)"
+
+    if ($localSettingsPath) {
+        try {
+            $localSettings = Get-Content $localSettingsPath -Raw | ConvertFrom-Json
+        }
+        catch {
+            Write-Warning "Could not read local settings JSON: $($_.Exception.Message)"
+        }
     }
 
-    $localEmail = $localSettings.Email
     $defaultEmail = $defaultSettings.Email
-    $smtpUsername = [string]$localEmail.Username
+    $localEmail = if ($localSettings) { $localSettings.Email } else { $null }
+
+    $smtpUsername = [string]$defaultEmail.Username
+    if ($localEmail -and -not [string]::IsNullOrWhiteSpace($localEmail.Username)) {
+        $smtpUsername = [string]$localEmail.Username
+    }
     if ([string]::IsNullOrWhiteSpace($smtpUsername)) {
         $smtpUsername = [Environment]::GetEnvironmentVariable('Email__Username', 'Machine')
     }
-    if ([string]::IsNullOrWhiteSpace($smtpUsername)) {
-        $smtpUsername = [string]$defaultEmail.Username
+
+    $smtpPassword = [string]$defaultEmail.Password
+    if ($localEmail -and -not [string]::IsNullOrWhiteSpace($localEmail.Password)) {
+        $smtpPassword = [string]$localEmail.Password
     }
-    $smtpPassword = [string]$localEmail.Password
     $smtpPassword = $smtpPassword -replace '\s', ''
-    $smtpEnabled = $null -ne $localEmail.Enabled -and [bool]$localEmail.Enabled
-    if (-not $smtpEnabled -or [string]::IsNullOrWhiteSpace($smtpPassword)) {
-        throw 'SMTP must be enabled and Email.Password must contain a current Gmail App Password in appsettings.local.json.'
-    }
-    if ($smtpUsername -notmatch '^[^@\s]+@[^@\s]+\.[^@\s]+$') {
-        throw 'Email.Username in appsettings.local.json (or existing server SMTP configuration) is missing or invalid.'
+
+    $smtpEnabled = $null -ne $defaultEmail.Enabled -and [bool]$defaultEmail.Enabled
+    if ($localEmail -and $null -ne $localEmail.Enabled) {
+        $smtpEnabled = [bool]$localEmail.Enabled
     }
 
-    $smtpHost = [string]$localEmail.SmtpHost
-    if ([string]::IsNullOrWhiteSpace($smtpHost)) { $smtpHost = [string]$defaultEmail.SmtpHost }
+    if (-not $smtpEnabled -or [string]::IsNullOrWhiteSpace($smtpPassword)) {
+        throw 'SMTP must be enabled (Email.Enabled = true) and Email.Password must contain a valid Gmail App Password in appsettings.json.'
+    }
+    if ($smtpUsername -notmatch '^[^@\s]+@[^@\s]+\.[^@\s]+$') {
+        throw 'Email.Username in appsettings.json (or environment) is missing or invalid.'
+    }
+
+    $smtpHost = [string]$defaultEmail.SmtpHost
+    if ($localEmail -and -not [string]::IsNullOrWhiteSpace($localEmail.SmtpHost)) { $smtpHost = [string]$localEmail.SmtpHost }
+    if ([string]::IsNullOrWhiteSpace($smtpHost)) { $smtpHost = 'smtp.gmail.com' }
+
     $smtpPort = [int]$defaultEmail.SmtpPort
-    if ($null -ne $localEmail.SmtpPort) { $smtpPort = [int]$localEmail.SmtpPort }
-    $smtpFrom = [string]$localEmail.FromAddress
+    if ($localEmail -and $null -ne $localEmail.SmtpPort) { $smtpPort = [int]$localEmail.SmtpPort }
+    if ($smtpPort -le 0) { $smtpPort = 587 }
+
+    $smtpFrom = [string]$defaultEmail.FromAddress
+    if ($localEmail -and -not [string]::IsNullOrWhiteSpace($localEmail.FromAddress)) { $smtpFrom = [string]$localEmail.FromAddress }
     if ([string]::IsNullOrWhiteSpace($smtpFrom)) { $smtpFrom = $smtpUsername }
-    $smtpFromName = [string]$localEmail.FromName
-    if ([string]::IsNullOrWhiteSpace($smtpFromName)) { $smtpFromName = [string]$defaultEmail.FromName }
-    $testRecipient = [string]$localEmail.SupportEmail
+
+    $smtpFromName = [string]$defaultEmail.FromName
+    if ($localEmail -and -not [string]::IsNullOrWhiteSpace($localEmail.FromName)) { $smtpFromName = [string]$localEmail.FromName }
+
+    $testRecipient = [string]$defaultEmail.SupportEmail
+    if ($localEmail -and -not [string]::IsNullOrWhiteSpace($localEmail.SupportEmail)) { $testRecipient = [string]$localEmail.SupportEmail }
     if ([string]::IsNullOrWhiteSpace($testRecipient)) {
         $testRecipient = [Environment]::GetEnvironmentVariable('Email__SupportEmail', 'Machine')
     }
-    if ([string]::IsNullOrWhiteSpace($testRecipient)) {
-        $testRecipient = [string]$defaultEmail.SupportEmail
-    }
     if ($testRecipient -notmatch '^[^@\s]+@[^@\s]+\.[^@\s]+$') {
-        throw 'Email.SupportEmail in appsettings.local.json or appsettings.json is missing or invalid.'
+        throw 'Email.SupportEmail in appsettings.json is missing or invalid.'
     }
 
     Write-Host 'Building the frontend and publishing the API to a staging directory...'
@@ -212,18 +239,25 @@ if ($LASTEXITCODE -ge 8) {
     throw "API file deployment failed with robocopy exit code $LASTEXITCODE. The API remains stopped and app_offline.htm is retained; rerun this script after resolving the file lock."
 }
 
-$deployedSettingsPath = Join-Path $apiRoot 'appsettings.local.json'
-if ([IO.Path]::GetFullPath($localSettingsPath) -ne [IO.Path]::GetFullPath($deployedSettingsPath)) {
-    Copy-Item -LiteralPath $localSettingsPath -Destination $deployedSettingsPath -Force
+if ($localSettingsPath -and (Test-Path $localSettingsPath)) {
+    $deployedSettingsPath = Join-Path $apiRoot 'appsettings.local.json'
+    if ([IO.Path]::GetFullPath($localSettingsPath) -ne [IO.Path]::GetFullPath($deployedSettingsPath)) {
+        Copy-Item -LiteralPath $localSettingsPath -Destination $deployedSettingsPath -Force
+    }
+    $runtimeSettings = Get-Content $deployedSettingsPath -Raw | ConvertFrom-Json
+    $runtimeSettings.Email.Password = $smtpPassword
+    $runtimeSettings | ConvertTo-Json -Depth 100 |
+        Set-Content -LiteralPath $deployedSettingsPath -Encoding UTF8
+    & icacls.exe $deployedSettingsPath /inheritance:r `
+        /grant:r '*S-1-5-18:F' '*S-1-5-32-544:F' 'IIS AppPool\InternLinkApi:R' | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning 'Could not restrict access to the deployed appsettings.local.json secret file.'
+    }
 }
-$runtimeSettings = Get-Content $deployedSettingsPath -Raw | ConvertFrom-Json
-$runtimeSettings.Email.Password = $smtpPassword
-$runtimeSettings | ConvertTo-Json -Depth 100 |
-    Set-Content -LiteralPath $deployedSettingsPath -Encoding UTF8
-& icacls.exe $deployedSettingsPath /inheritance:r `
-    /grant:r '*S-1-5-18:F' '*S-1-5-32-544:F' 'IIS AppPool\InternLinkApi:R' | Out-Null
-if ($LASTEXITCODE -ne 0) {
-    throw 'Could not restrict access to the deployed appsettings.local.json secret file.'
+
+$deployedAppSettings = Join-Path $apiRoot 'appsettings.json'
+if (Test-Path $deployedAppSettings) {
+    & icacls.exe $deployedAppSettings /grant 'IIS AppPool\InternLinkApi:R' | Out-Null
 }
 
 Write-Host 'Deploying frontend files while preserving web.config...'
@@ -257,7 +291,7 @@ Write-Host ''
 [Environment]::SetEnvironmentVariable('Email__FromAddress', $null, 'Machine')
 [Environment]::SetEnvironmentVariable('Email__SupportEmail', $null, 'Machine')
 
-Write-Warning 'Restarting Windows Process Activation Service so IIS reloads appsettings.local.json; all IIS sites may be briefly unavailable.'
+Write-Warning 'Restarting Windows Process Activation Service so IIS reloads configuration; all IIS sites may be briefly unavailable.'
 Restart-Service -Name WAS -Force
 Start-Service -Name W3SVC
 
