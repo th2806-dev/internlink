@@ -76,7 +76,7 @@ export function buildWordReportPreviewData(input: {
       completedStudents: input.completedStudents ?? 0,
       incompleteStudents: input.incompleteStudents ?? 0,
     },
-    gradeSummary: (input.gradeSummary?.length ? input.gradeSummary : GradeSummaryDefault).map((item) => ({
+    gradeSummary: (input.gradeSummary ?? GradeSummaryDefault).map((item) => ({
       ...item,
       label: item.label,
       quantity: Number(item.quantity) || 0,

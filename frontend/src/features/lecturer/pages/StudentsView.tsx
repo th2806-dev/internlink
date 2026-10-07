@@ -1,29 +1,51 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  AlertTriangle,
   Building2,
   ChevronLeft,
   ChevronRight,
   Eye,
-  GraduationCap,
   RefreshCw,
   Search,
+  Users,
+  GraduationCap,
 } from "lucide-react";
-import { PageHeader } from "../../../components/common/PageHeader";
 import { Panel } from "../../../components/common/Panel";
 import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
-import { useSemester } from "../../../contexts/SemesterContext";
 import type { Student } from "../../../types/student";
+
+const UNASSIGNED_COMPANY_LABEL = "Chưa phân công doanh nghiệp";
+const UNASSIGNED_COMPANY_VALUES = new Set([
+  "",
+  "Chưa có",
+  "Chưa phân công",
+  UNASSIGNED_COMPANY_LABEL,
+  "—",
+]);
+
+function getCompanyLabel(company: string): string {
+  return UNASSIGNED_COMPANY_VALUES.has(company.trim())
+    ? UNASSIGNED_COMPANY_LABEL
+    : company;
+}
+
+function getPositionLabel(position: string): string {
+  return position.trim() && position !== "—" ? position : "Chưa cập nhật";
+}
 
 export const StudentsView = ({
   students = [],
   onRefresh,
+  isLoading = false,
+  error = null,
 }: {
   students?: Student[];
   onRefresh?: () => Promise<void> | void;
+  isLoading?: boolean;
+  error?: string | null;
 }) => {
   const navigate = useNavigate();
-  const { selectedSemester } = useSemester();
   const [searchQuery, setSearchQuery] = useState("");
   const [classFilter, setClassFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -38,7 +60,10 @@ export const StudentsView = ({
     [students],
   );
   const companyOptions = useMemo(
-    () => [...new Set(students.map((student) => student.company).filter(Boolean))].sort(),
+    () =>
+      [...new Set(students.map((student) => getCompanyLabel(student.company)))].sort(
+        (a, b) => a.localeCompare(b, "vi"),
+      ),
     [students],
   );
   const statusOptions = useMemo(
@@ -54,14 +79,16 @@ export const StudentsView = ({
           !query ||
           student.name.toLowerCase().includes(query) ||
           student.mssv.toLowerCase().includes(query) ||
-          student.company.toLowerCase().includes(query) ||
+          getCompanyLabel(student.company).toLowerCase().includes(query) ||
           student.class.toLowerCase().includes(query) ||
-          student.major.toLowerCase().includes(query);
+          student.major.toLowerCase().includes(query) ||
+          getPositionLabel(student.position).toLowerCase().includes(query);
         return (
           matchesSearch &&
           (classFilter === "all" || student.class === classFilter) &&
           (statusFilter === "all" || student.status === statusFilter) &&
-          (companyFilter === "all" || student.company === companyFilter)
+          (companyFilter === "all" ||
+            getCompanyLabel(student.company) === companyFilter)
         );
       })
       .sort((a, b) => {
@@ -83,6 +110,16 @@ export const StudentsView = ({
     setCurrentPage(1);
   };
 
+  const handleRefresh = async () => {
+    if (!onRefresh || isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      await onRefresh();
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   const statusClass = (student: Student) => {
     if (student.riskFlag || student.status === "Quá hạn") {
       return "bg-rose-50 text-rose-700 border-rose-200";
@@ -90,77 +127,121 @@ export const StudentsView = ({
     if (student.status === "Chờ phản hồi") {
       return "bg-amber-50 text-amber-700 border-amber-200";
     }
-    if (student.status === "Hoàn thành") {
-      return "bg-emerald-50 text-emerald-700 border-emerald-200";
+    if (student.status === "Đang chỉnh sửa") {
+      return "bg-amber-50 text-amber-700 border-amber-200";
     }
-    return "bg-blue-50 text-blue-700 border-blue-200";
+    if (student.status === "Hoàn thành") {
+      return "bg-[#7bc043]/10 text-[#446d20] border-[#7bc043]/40";
+    }
+    return "bg-[#026aa7]/5 text-[#025a8e] border-[#026aa7]/20";
   };
 
   return (
-    <div className="space-y-5 max-w-[1500px] mx-auto">
-      <PageHeader
-        icon={GraduationCap}
-        title="Sinh viên được phân công"
-        subtitle="Sinh viên thuộc nhóm hướng dẫn trong học kỳ đang chọn."
-        actions={[
-          {
-            label: "Làm mới",
-            icon: RefreshCw,
-            onClick: async () => {
-              if (isRefreshing) return;
-              setIsRefreshing(true);
-              try {
-                await onRefresh?.();
-              } finally {
-                setIsRefreshing(false);
-              }
-            },
-            variant: "secondary",
-            loading: isRefreshing,
-            disabled: isRefreshing,
-          },
-        ]}
-      />
-
-      <Panel className="space-y-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-3">
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-base font-bold text-slate-900 tracking-tight">Danh sách sinh viên</h2>
-              {selectedSemester?.name && (
-                <span className="rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-800">
-                  {selectedSemester.name}
-                </span>
-              )}
+    <div className="mx-auto max-w-[1300px] space-y-4 animate-in fade-in duration-200 font-sans pb-12">
+      <section className="overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-2xs">
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-[#026aa7] px-4 py-3 text-white">
+          <div className="flex min-w-0 items-center gap-2">
+            <GraduationCap className="h-5 w-5 shrink-0 text-white/90" aria-hidden="true" />
+            <div className="min-w-0">
+              <h1 className="text-base font-bold tracking-wide">Danh sách sinh viên</h1>
+              <p className="mt-0.5 text-xs text-white/80">
+                Theo dõi sinh viên được phân công hướng dẫn trong học kỳ đang chọn.
+              </p>
             </div>
-            <p className="mt-0.5 text-xs font-medium text-slate-500">
-              {filteredStudents.length} / {students.length} sinh viên
+          </div>
+          {onRefresh && (
+            <button
+              type="button"
+              onClick={() => void handleRefresh()}
+              disabled={isRefreshing}
+              aria-label="Làm mới danh sách sinh viên"
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-white/30 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin" : ""}`} aria-hidden="true" />
+              Làm mới
+            </button>
+          )}
+        </div>
+      </section>
+
+      {isLoading ? (
+        <div role="status" aria-live="polite" className="space-y-3">
+          <span className="sr-only">Đang tải danh sách sinh viên...</span>
+          <div className="rounded-xl border border-slate-200/90 bg-white p-5 shadow-2xs animate-pulse">
+            <div className="h-3 w-44 bg-slate-200 rounded mb-4" />
+            <div className="space-y-3">
+              {[1, 2, 3, 4, 5].map((row) => (
+                <div key={row} className="flex items-center gap-3">
+                  <div className="h-8 w-8 shrink-0 rounded-full bg-slate-200" />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <div className="h-3 w-1/3 bg-slate-200 rounded" />
+                    <div className="h-2.5 w-1/4 bg-slate-100 rounded" />
+                  </div>
+                  <div className="h-4 w-20 shrink-0 bg-slate-100 rounded" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : error ? (
+        <Panel
+          role="alert"
+          className="space-y-4 rounded-xl border border-slate-200/90 p-8 text-center shadow-2xs"
+        >
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-rose-50 text-rose-600">
+            <AlertTriangle className="h-7 w-7" aria-hidden="true" />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-base font-bold text-slate-800">
+              Không thể tải danh sách sinh viên
+            </h3>
+            <p className="text-xs text-slate-500">
+              {error} — vui lòng bấm thử lại.
             </p>
           </div>
-
-          <div className="flex flex-col gap-2 text-xs sm:flex-row sm:flex-wrap sm:items-center sm:gap-2.5">
-            <div className="relative w-full min-w-0 sm:w-auto sm:min-w-[220px]">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+          {onRefresh && (
+            <button
+              type="button"
+              onClick={() => void handleRefresh()}
+              className="min-h-11 rounded-lg bg-[#026aa7] px-5 text-xs font-bold text-white transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 cursor-pointer"
+            >
+              Thử lại
+            </button>
+          )}
+        </Panel>
+      ) : (
+      <Panel className="space-y-4 rounded-xl border border-slate-200/90 shadow-2xs">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+          <h2 className="text-sm font-bold text-slate-900">Sinh viên được phân công</h2>
+          <p className="text-xs font-medium text-slate-500">
+            {filteredStudents.length} / {students.length} sinh viên
+          </p>
+        </div>
+        <div className="space-y-4 border-b border-slate-100 pb-4">
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-[minmax(240px,1.6fr)_repeat(4,minmax(130px,1fr))]">
+            <div className="relative min-w-0">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
               <input
+                aria-label="Tìm sinh viên"
                 value={searchQuery}
                 onChange={(event) => updateFilter(setSearchQuery, event.target.value)}
-                placeholder="Tìm tên, MSSV, lớp, doanh nghiệp..."
-                className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-medium outline-none focus:bg-white focus:border-blue-500"
+                placeholder="Tìm tên, MSSV, lớp, ngành, doanh nghiệp, vị trí..."
+                className="min-h-11 w-full rounded-full border border-slate-300 bg-white pl-9 pr-4 text-base font-medium text-slate-800 outline-none transition-colors placeholder:font-normal placeholder:text-slate-500 hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20 sm:text-xs"
               />
             </div>
-            <select value={classFilter} onChange={(event) => updateFilter(setClassFilter, event.target.value)} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-500 sm:w-auto">
-              <option value="all">Tất cả Lớp</option>
+            <select aria-label="Lọc theo lớp" value={classFilter} onChange={(event) => updateFilter(setClassFilter, event.target.value)} className="min-h-11 w-full rounded-full border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20">
+              <option value="all">Tất cả lớp</option>
               {classOptions.map((item) => <option key={item} value={item}>Lớp {item}</option>)}
             </select>
-            <select value={companyFilter} onChange={(event) => updateFilter(setCompanyFilter, event.target.value)} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-500 sm:w-auto">
-              <option value="all">Tất cả DN</option>
+            <select aria-label="Lọc theo doanh nghiệp" value={companyFilter} onChange={(event) => updateFilter(setCompanyFilter, event.target.value)} className="min-h-11 w-full rounded-full border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20">
+              <option value="all">Tất cả doanh nghiệp</option>
               {companyOptions.map((item) => <option key={item} value={item}>{item}</option>)}
             </select>
-            <select value={statusFilter} onChange={(event) => updateFilter(setStatusFilter, event.target.value)} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-500 sm:w-auto">
+            <select aria-label="Lọc theo trạng thái" value={statusFilter} onChange={(event) => updateFilter(setStatusFilter, event.target.value)} className="min-h-11 w-full rounded-full border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20">
               <option value="all">Tất cả trạng thái</option>
               {statusOptions.map((item) => <option key={item} value={item}>{item}</option>)}
             </select>
-            <select value={sortBy} onChange={(event) => updateFilter(setSortBy, event.target.value)} className="w-full px-3 py-2 bg-blue-50/80 border border-blue-200 rounded-md font-bold text-blue-900 outline-none focus:bg-white focus:border-blue-500 sm:w-auto">
+            <select aria-label="Sắp xếp sinh viên" value={sortBy} onChange={(event) => updateFilter(setSortBy, event.target.value)} className="min-h-11 w-full rounded-full border border-[#026aa7]/25 bg-[#026aa7]/5 px-4 text-xs font-semibold text-[#025a8e] outline-none transition-colors hover:border-[#026aa7]/50 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20">
               <option value="name">Sắp xếp: Tên A-Z</option>
               <option value="class">Sắp xếp: Lớp</option>
               <option value="progress">Sắp xếp: Tiến độ</option>
@@ -170,9 +251,21 @@ export const StudentsView = ({
 
         <div className="divide-y divide-slate-200 md:hidden">
           {paginatedStudents.length === 0 ? (
-            <p className="py-8 text-center text-sm text-slate-500">
-              Không tìm thấy sinh viên phù hợp với bộ lọc hiện tại.
-            </p>
+            <div className="py-12 text-center space-y-2">
+              <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-[#026aa7]/5 text-[#026aa7]">
+                <Users className="h-5 w-5" aria-hidden="true" />
+              </div>
+              <p className="text-xs font-semibold text-slate-700">
+                {students.length === 0
+                  ? "Chưa có sinh viên được phân công trong học kỳ này."
+                  : "Không tìm thấy sinh viên phù hợp."}
+              </p>
+              <p className="text-[11px] text-slate-500 max-w-xs mx-auto">
+                {students.length === 0
+                  ? "Kiểm tra lại học kỳ đang chọn hoặc làm mới dữ liệu."
+                  : "Thử thay đổi từ khóa tìm kiếm hoặc bộ lọc."}
+              </p>
+            </div>
           ) : paginatedStudents.map((student) => (
             <article key={student.id} className="py-4 first:pt-0 last:pb-0">
               <div className="flex min-w-0 items-start gap-3">
@@ -189,13 +282,13 @@ export const StudentsView = ({
                   </div>
                   <dl className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 border-t border-slate-100 pt-3 text-xs">
                     <dt className="text-slate-500">Doanh nghiệp</dt>
-                    <dd className="break-words text-right font-medium text-slate-800">{student.company || "Chưa phân công"}</dd>
+                    <dd className="break-words text-right font-medium text-slate-800">{getCompanyLabel(student.company)}</dd>
                     <dt className="text-slate-500">Vị trí</dt>
-                    <dd className="break-words text-right font-medium text-slate-800">{student.position || "Chưa cập nhật"}</dd>
+                    <dd className="break-words text-right font-medium text-slate-800">{getPositionLabel(student.position)}</dd>
                     <dt className="text-slate-500">Tiến độ</dt>
                     <dd className="flex items-center justify-end gap-2 font-semibold text-slate-800">
                       <span className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-100">
-                        <span className="block h-full rounded-full bg-blue-600" style={{ width: `${Math.min(100, Math.max(0, student.progress))}%` }} />
+                        <span className="block h-full rounded-full bg-[#4d74c9]" style={{ width: `${Math.min(100, Math.max(0, student.progress))}%` }} />
                       </span>
                       {student.progress}%
                     </dd>
@@ -203,9 +296,9 @@ export const StudentsView = ({
                   <button
                     type="button"
                     onClick={() => navigate(`/lecturer/students/${student.id}`)}
-                    className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-xs font-semibold text-blue-700 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                    className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-[#026aa7]/25 bg-white px-3 text-xs font-semibold text-[#026aa7] transition-colors hover:bg-[#026aa7]/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2"
                   >
-                    <Eye className="h-4 w-4" /> Xem hồ sơ
+                    <Eye className="h-4 w-4" aria-hidden="true" /> Xem hồ sơ
                   </button>
                 </div>
               </div>
@@ -213,25 +306,39 @@ export const StudentsView = ({
           ))}
         </div>
 
-        <div className="hidden overflow-x-auto border border-slate-200/80 rounded-md md:block">
+        <div className="hidden overflow-x-auto rounded-xl border border-slate-200/90 md:block">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
-                <th className="py-2.5 px-3 text-center w-12">STT</th>
-                <th className="py-2.5 px-3">Họ & tên</th>
-                <th className="py-2.5 px-3">MSSV & Lớp</th>
-                <th className="py-2.5 px-3">Doanh nghiệp</th>
-                <th className="py-2.5 px-3">Vị trí</th>
-                <th className="py-2.5 px-3">Tiến độ</th>
-                <th className="py-2.5 px-3 text-center">Trạng thái</th>
-                <th className="py-2.5 px-3 text-center">Thao tác</th>
+              <tr className="bg-slate-50 border-b border-slate-200 text-slate-700 font-bold uppercase tracking-wider text-[10px]">
+                <th scope="col" className="py-2.5 px-3 text-center w-12">STT</th>
+                <th scope="col" className="py-2.5 px-3">Họ & tên</th>
+                <th scope="col" className="py-2.5 px-3">MSSV & Lớp</th>
+                <th scope="col" className="py-2.5 px-3">Doanh nghiệp</th>
+                <th scope="col" className="py-2.5 px-3">Vị trí</th>
+                <th scope="col" className="py-2.5 px-3">Tiến độ</th>
+                <th scope="col" className="py-2.5 px-3 text-center">Trạng thái</th>
+                <th scope="col" className="py-2.5 px-3 text-center">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {paginatedStudents.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-slate-500">
-                    Không tìm thấy sinh viên phù hợp với bộ lọc hiện tại.
+                  <td colSpan={8} className="p-10 text-center">
+                    <div className="space-y-2 text-center">
+                      <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-[#026aa7]/5 text-[#026aa7]">
+                        <Users className="h-5 w-5" aria-hidden="true" />
+                      </div>
+                      <p className="text-xs font-semibold text-slate-700">
+                        {students.length === 0
+                          ? "Chưa có sinh viên được phân công trong học kỳ này."
+                          : "Không tìm thấy sinh viên phù hợp."}
+                      </p>
+                      <p className="text-[11px] text-slate-500 max-w-xs mx-auto">
+                        {students.length === 0
+                          ? "Kiểm tra lại học kỳ đang chọn hoặc làm mới dữ liệu."
+                          : "Thử thay đổi từ khóa tìm kiếm hoặc bộ lọc."}
+                      </p>
+                    </div>
                   </td>
                 </tr>
               ) : paginatedStudents.map((student, index) => (
@@ -250,19 +357,19 @@ export const StudentsView = ({
                   </td>
                   <td className="py-3 px-3">
                     <p className="font-mono font-bold text-slate-800">{student.mssv}</p>
-                    <p className="text-[10px] text-blue-600 font-bold">{student.class}</p>
+                    <p className="text-[10px] font-bold text-[#025a8e]">{student.class}</p>
                   </td>
                   <td className="py-3 px-3">
                     <div className="flex items-center gap-1.5 font-bold text-slate-800">
                       <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      <span>{student.company}</span>
+                      <span>{getCompanyLabel(student.company)}</span>
                     </div>
                   </td>
-                  <td className="py-3 px-3 font-medium text-slate-700">{student.position}</td>
+                  <td className="py-3 px-3 font-medium text-slate-700">{getPositionLabel(student.position)}</td>
                   <td className="py-3 px-3 min-w-[150px]">
                     <div className="flex items-center gap-2">
                       <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
-                        <div className="h-full rounded-full bg-blue-600" style={{ width: `${Math.min(100, Math.max(0, student.progress))}%` }} />
+                        <div className="h-full rounded-full bg-[#4d74c9]" style={{ width: `${Math.min(100, Math.max(0, student.progress))}%` }} />
                       </div>
                       <span className="font-bold text-slate-700">{student.progress}%</span>
                     </div>
@@ -276,10 +383,10 @@ export const StudentsView = ({
                     <button
                       type="button"
                       onClick={() => navigate(`/lecturer/students/${student.id}`)}
-                      className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-blue-600 rounded-lg transition-colors cursor-pointer"
-                      title="Xem chi tiết"
+                      aria-label={`Xem hồ sơ ${student.name}`}
+                      className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-[#026aa7] transition-colors hover:bg-[#026aa7]/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2"
                     >
-                      <Eye className="w-4 h-4" />
+                      <Eye className="w-4 h-4" aria-hidden="true" />
                     </button>
                   </td>
                 </tr>
@@ -293,7 +400,7 @@ export const StudentsView = ({
             <span>Hiển thị {paginatedStudents.length} / {filteredStudents.length} sinh viên</span>
             <div className="flex items-center gap-1.5">
               <span>Số dòng:</span>
-              <select value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setCurrentPage(1); }} className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-500 cursor-pointer text-xs">
+              <select aria-label="Số dòng mỗi trang" value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setCurrentPage(1); }} className="min-h-11 rounded-full border border-slate-300 bg-white px-3 text-xs font-bold text-slate-800 outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20">
                 <option value={5}>5 dòng</option>
                 <option value={10}>10 dòng</option>
                 <option value={20}>20 dòng</option>
@@ -301,12 +408,13 @@ export const StudentsView = ({
             </div>
           </div>
           <div className="flex items-center gap-1.5 font-bold">
-            <button type="button" onClick={() => setCurrentPage((page) => Math.max(page - 1, 1))} disabled={visiblePage === 1} className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg disabled:opacity-40 transition-colors cursor-pointer" aria-label="Trang trước"><ChevronLeft className="w-4 h-4" /></button>
+            <button type="button" onClick={() => setCurrentPage((page) => Math.max(page - 1, 1))} disabled={visiblePage === 1} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full bg-slate-100 text-slate-700 transition-colors hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Trang trước"><ChevronLeft className="w-4 h-4" aria-hidden="true" /></button>
             <span className="px-2.5 py-1 bg-slate-50 rounded-lg border border-slate-200 text-slate-800">{visiblePage} / {totalPages}</span>
-            <button type="button" onClick={() => setCurrentPage((page) => Math.min(page + 1, totalPages))} disabled={visiblePage === totalPages} className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg disabled:opacity-40 transition-colors cursor-pointer" aria-label="Trang sau"><ChevronRight className="w-4 h-4" /></button>
+            <button type="button" onClick={() => setCurrentPage((page) => Math.min(page + 1, totalPages))} disabled={visiblePage === totalPages} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full bg-slate-100 text-slate-700 transition-colors hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Trang sau"><ChevronRight className="w-4 h-4" aria-hidden="true" /></button>
           </div>
         </div>
       </Panel>
+      )}
     </div>
   );
 };

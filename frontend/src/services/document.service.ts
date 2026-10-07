@@ -3,6 +3,7 @@ import type {
   CreateTemplatePayload,
   DocumentDetailDto,
   DocumentListItemDto,
+  DocumentVersionDto,
   TemplateStatsDto,
   UpdateTemplatePayload,
 } from "../types/api";
@@ -63,6 +64,10 @@ export const documentService = {
       `/api/Document/${id}/download`,
       fallbackFilename,
     );
+  },
+
+  getVersions(id: string): Promise<DocumentVersionDto[]> {
+    return apiRequest<DocumentVersionDto[]>(`/api/Document/${id}/versions`);
   },
 
   getTemplates(params?: {

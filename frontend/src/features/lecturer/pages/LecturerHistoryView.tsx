@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  AlertCircle,
+  AlertTriangle,
   Award,
   Building2,
   CalendarCheck2,
@@ -11,11 +11,11 @@ import {
   History,
   MessageSquareText,
   Search,
+  Users,
   X,
 } from "lucide-react";
-import { PageHeader } from "../../../components/common/PageHeader";
 import { Panel } from "../../../components/common/Panel";
-import { Toolbar } from "../../../components/common/Toolbar";
+import { LecturerSubPageHeader } from "../components/LecturerSubPageHeader";
 import { useSemester } from "../../../contexts/SemesterContext";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { lecturerHistoryService, type LecturerParticipationHistory } from "../../../services/lecturerHistory.service";
@@ -45,6 +45,7 @@ export const LecturerHistoryView = () => {
   const [isLoadingSemesters, setIsLoadingSemesters] = useState(true);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [error, setError] = useState("");
+  const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,11 +66,12 @@ export const LecturerHistoryView = () => {
         if (!cancelled) setIsLoadingSemesters(false);
       });
     return () => { cancelled = true; };
-  }, [selectedSemesterId]);
+  }, [selectedSemesterId, reloadToken]);
 
   useEffect(() => {
     if (!semesterId) {
       setHistory(null);
+      setIsLoadingHistory(false);
       return;
     }
     let cancelled = false;
@@ -85,7 +87,7 @@ export const LecturerHistoryView = () => {
       })
       .finally(() => { if (!cancelled) setIsLoadingHistory(false); });
     return () => { cancelled = true; };
-  }, [semesterId]);
+  }, [semesterId, reloadToken]);
 
   const students = useMemo(() => {
     const query = search.trim().toLocaleLowerCase("vi");
@@ -114,70 +116,118 @@ export const LecturerHistoryView = () => {
   const reviewedCount = (history?.students ?? []).reduce((total, student) => total + student.reviewedReportCount, 0);
   const finalizedCount = (history?.students ?? []).filter((student) => student.isFinalized).length;
 
+  const handleRetry = () => {
+    setError("");
+    setReloadToken((token) => token + 1);
+  };
+
   return (
-    <div className="mx-auto max-w-[1500px] space-y-4">
-      <PageHeader
+    <div className="mx-auto max-w-[1300px] space-y-4 animate-in fade-in duration-200 font-sans pb-12">
+      <LecturerSubPageHeader
         icon={History}
         title="Lịch sử hướng dẫn"
         subtitle="Tra cứu sinh viên, kết quả và hoạt động hướng dẫn theo từng học kỳ."
       />
 
-      <Toolbar
-        left={(
-          <div className="flex w-full flex-col gap-1.5 sm:w-auto">
-            <label htmlFor="history-semester" className="text-[11px] font-semibold text-slate-600">Học kỳ tham gia</label>
-            <select
-              id="history-semester"
-              value={semesterId}
-              onChange={(event) => {
-                setSemesterId(event.target.value);
-                setStudentPage(1);
-                setActivityPage(1);
-              }}
-              disabled={isLoadingSemesters || semesters.length === 0}
-              className="w-full min-w-0 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500 sm:min-w-64"
-            >
-              {isLoadingSemesters && <option value="">Đang tải học kỳ…</option>}
-              {semesters.length === 0 && <option value="">Chưa có học kỳ tham gia</option>}
-              {semesters.map((semester) => (
-                <option key={semester.id} value={semester.id}>
-                  {semester.name || `${semester.term} · ${semester.academicYear}`}
-                </option>
-              ))}
-            </select>
+      <Panel className="flex flex-col gap-4 rounded-xl border border-slate-200/90 shadow-2xs lg:flex-row lg:items-center lg:justify-between">
+        {history && (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-600">
+            <span className="inline-flex items-center gap-1.5">
+              <Users className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+              <strong className="font-bold text-slate-800">{history.students.length}</strong> sinh viên
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <Building2 className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+              <strong className="font-bold text-slate-800">{companyCount}</strong> doanh nghiệp
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <MessageSquareText className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+              <strong className="font-bold text-slate-800">{reviewedCount}</strong> báo cáo đã phản hồi
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <Award className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+              <strong className="font-bold text-slate-800">{finalizedCount}</strong> kết quả đã chốt
+            </span>
           </div>
         )}
-        right={history?.lastActivityAt && (
-          <span className="text-xs text-slate-500">
-            Hoạt động gần nhất <time className="font-medium text-slate-700">{formatDateTime(history.lastActivityAt)}</time>
-          </span>
-        )}
-      />
+        <div className="flex w-full flex-col gap-1.5 lg:w-auto lg:min-w-64">
+          <label htmlFor="history-semester" className="text-[11px] font-semibold text-slate-600">Học kỳ tham gia</label>
+          <select
+            id="history-semester"
+            value={semesterId}
+            onChange={(event) => {
+              setSemesterId(event.target.value);
+              setStudentPage(1);
+              setActivityPage(1);
+            }}
+            disabled={isLoadingSemesters || semesters.length === 0}
+            className="min-h-10 w-full rounded-full border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-800 outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
+          >
+            {isLoadingSemesters && <option value="">Đang tải học kỳ…</option>}
+            {semesters.length === 0 && <option value="">Chưa có học kỳ tham gia</option>}
+            {semesters.map((semester) => (
+              <option key={semester.id} value={semester.id}>
+                {semester.name || `${semester.term} · ${semester.academicYear}`}
+              </option>
+            ))}
+          </select>
+          {history?.lastActivityAt && (
+            <span className="text-xs text-slate-500">
+              Hoạt động gần nhất <time className="font-medium text-slate-700">{formatDateTime(history.lastActivityAt)}</time>
+            </span>
+          )}
+        </div>
+      </Panel>
 
       {error && (
-        <Panel role="alert" className="flex items-start gap-2.5 border-rose-200 bg-rose-50 text-sm text-rose-800">
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-          <p>{error}</p>
+        <Panel
+          role="alert"
+          className="flex flex-col items-center gap-3 rounded-xl border border-slate-200/90 p-8 text-center shadow-2xs"
+        >
+          <span className="flex h-14 w-14 items-center justify-center rounded-full bg-rose-50 text-rose-600">
+            <AlertTriangle className="h-7 w-7" aria-hidden="true" />
+          </span>
+          <div className="space-y-1">
+            <h3 className="text-base font-bold text-slate-800">Không thể tải lịch sử hướng dẫn</h3>
+            <p className="text-xs text-slate-500">{error} — vui lòng bấm thử lại.</p>
+          </div>
+          <button
+            type="button"
+            onClick={handleRetry}
+            className="min-h-11 rounded-lg bg-[#026aa7] px-5 text-xs font-bold text-white transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 cursor-pointer"
+          >
+            Thử lại
+          </button>
         </Panel>
       )}
 
       {isLoadingHistory || isLoadingSemesters ? (
-        <Panel className="py-12 text-center text-sm text-slate-500">Đang tải lịch sử hướng dẫn…</Panel>
+        <div role="status" aria-live="polite" className="space-y-3">
+          <span className="sr-only">Đang tải lịch sử hướng dẫn…</span>
+          <div className="bg-white rounded-xl border border-slate-200/80 p-5 shadow-2xs animate-pulse">
+            <div className="h-3 w-44 bg-slate-200 rounded mb-4" />
+            <div className="space-y-3">
+              {[1, 2, 3, 4, 5].map((row) => (
+                <div key={row} className="flex items-center gap-3">
+                  <div className="h-8 w-8 shrink-0 rounded-full bg-slate-200" />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <div className="h-3 w-1/3 bg-slate-200 rounded" />
+                    <div className="h-2.5 w-1/4 bg-slate-100 rounded" />
+                  </div>
+                  <div className="h-4 w-20 shrink-0 bg-slate-100 rounded" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       ) : !error && history ? (
         <>
-          <section aria-label="Tổng quan học kỳ" className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-slate-200 bg-slate-200 lg:grid-cols-4">
-            <Metric icon={History} label="Sinh viên" value={history.students.length} />
-            <Metric icon={Building2} label="Doanh nghiệp" value={companyCount} />
-            <Metric icon={MessageSquareText} label="Báo cáo đã phản hồi" value={reviewedCount} />
-            <Metric icon={Award} label="Kết quả đã chốt" value={finalizedCount} />
-          </section>
-
           <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(360px,0.75fr)]">
-            <Panel className="space-y-4">
+            <Panel className="space-y-4 rounded-xl border border-slate-200/90 shadow-2xs">
               <div className="flex flex-col gap-3 border-b border-slate-100 pb-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <div className="flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-blue-700" />
+                    <FileText className="h-4 w-4 text-[#026aa7]" />
                     <h2 className="text-sm font-bold text-slate-900">Sinh viên trong kỳ</h2>
                   </div>
                   <p className="mt-1 pl-6 text-[11px] text-slate-500">
@@ -195,7 +245,7 @@ export const LecturerHistoryView = () => {
                     }}
                     placeholder="Tìm SV, lớp, doanh nghiệp"
                     aria-label="Tìm sinh viên theo tên, mã, lớp hoặc doanh nghiệp"
-                    className="w-full rounded-md border border-slate-300 py-2 pl-8 pr-9 text-xs outline-none transition-colors focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+                    className="w-full rounded-full border border-slate-300 bg-white py-2 pl-8 pr-9 text-xs outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
                   />
                   {search && (
                     <button
@@ -205,7 +255,7 @@ export const LecturerHistoryView = () => {
                         setStudentPage(1);
                       }}
                       aria-label="Xóa nội dung tìm kiếm"
-                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-blue-600"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-[#026aa7]"
                     >
                       <X className="h-3.5 w-3.5" />
                     </button>
@@ -223,7 +273,7 @@ export const LecturerHistoryView = () => {
                         </p>
                       </div>
                       {student.isFinalized && student.finalGrade != null ? (
-                        <span className="shrink-0 rounded-sm bg-emerald-50 px-2 py-1 text-xs font-bold tabular-nums text-emerald-700">
+                        <span className="shrink-0 rounded-md border border-[#7bc043]/40 bg-[#7bc043]/10 px-2 py-1 text-xs font-bold tabular-nums text-[#446d20]">
                           {student.finalGrade.toFixed(1)} / 10
                         </span>
                       ) : (
@@ -241,14 +291,22 @@ export const LecturerHistoryView = () => {
                   </article>
                 ))}
                 {students.length === 0 && (
-                  <p className="py-8 text-center text-sm text-slate-500">
-                    {search.trim() ? "Không tìm thấy sinh viên phù hợp." : "Chưa có sinh viên trong học kỳ này."}
-                  </p>
+                  <div className="py-12 text-center space-y-2">
+                    <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-[#026aa7]/5 text-[#026aa7]">
+                      <Users className="h-5 w-5" aria-hidden="true" />
+                    </div>
+                    <p className="text-xs font-semibold text-slate-700">
+                      {search.trim() ? "Không tìm thấy sinh viên phù hợp." : "Chưa có sinh viên trong học kỳ này."}
+                    </p>
+                    <p className="text-[11px] text-slate-500 max-w-xs mx-auto">
+                      {search.trim() ? "Thử thay đổi từ khóa tìm kiếm." : "Chọn học kỳ khác hoặc làm mới dữ liệu."}
+                    </p>
+                  </div>
                 )}
               </div>
-              <div className="hidden overflow-x-auto rounded-md border border-slate-200/80 lg:block">
+              <div className="hidden overflow-x-auto rounded-xl border border-slate-200/90 lg:block">
                 <table className="w-full min-w-[680px] text-left text-xs">
-                  <thead className="border-b border-slate-200 bg-slate-50 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                  <thead className="border-b border-slate-200 bg-slate-50 text-[10px] font-bold uppercase tracking-wide text-slate-700">
                     <tr>
                       <th className="px-4 py-2.5">Sinh viên</th>
                       <th className="px-4 py-2.5">Doanh nghiệp</th>
@@ -258,7 +316,7 @@ export const LecturerHistoryView = () => {
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {paginatedStudents.map((student) => (
-                      <tr key={student.internshipId} className="hover:bg-slate-50">
+                      <tr key={student.internshipId} className="hover:bg-slate-50/80 transition-colors">
                         <td className="px-4 py-3">
                           <p className="font-semibold text-slate-900">{student.studentName}</p>
                           <p className="mt-0.5 text-slate-500">{student.studentCode}{student.className ? ` · ${student.className}` : ""}</p>
@@ -267,14 +325,24 @@ export const LecturerHistoryView = () => {
                         <td className="px-4 py-3 text-center font-medium text-slate-700">{student.reviewedReportCount}</td>
                         <td className="px-4 py-3 text-right">
                           {student.isFinalized && student.finalGrade != null ? (
-                            <span className="font-bold text-emerald-700">{student.finalGrade.toFixed(1)} / 10</span>
+                            <span className="font-bold text-[#446d20]">{student.finalGrade.toFixed(1)} / 10</span>
                           ) : <span className="text-slate-500">Chưa chốt</span>}
                         </td>
                       </tr>
                     ))}
                     {students.length === 0 && (
-                      <tr><td colSpan={4} className="px-4 py-10 text-center text-sm text-slate-500">
-                        {search.trim() ? "Không tìm thấy sinh viên phù hợp." : "Chưa có sinh viên trong học kỳ này."}
+                      <tr><td colSpan={4} className="px-4 py-10 text-center">
+                        <div className="space-y-2 text-center">
+                          <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-[#026aa7]/5 text-[#026aa7]">
+                            <Users className="h-5 w-5" aria-hidden="true" />
+                          </div>
+                          <p className="text-xs font-semibold text-slate-700">
+                            {search.trim() ? "Không tìm thấy sinh viên phù hợp." : "Chưa có sinh viên trong học kỳ này."}
+                          </p>
+                          <p className="text-[11px] text-slate-500 max-w-xs mx-auto">
+                            {search.trim() ? "Thử thay đổi từ khóa tìm kiếm." : "Chọn học kỳ khác hoặc làm mới dữ liệu."}
+                          </p>
+                        </div>
                       </td></tr>
                     )}
                   </tbody>
@@ -292,10 +360,10 @@ export const LecturerHistoryView = () => {
               />
             </Panel>
 
-            <Panel padding="none" className="min-w-0 overflow-hidden">
-              <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+            <Panel padding="none" className="min-w-0 overflow-hidden rounded-xl border border-slate-200/90 shadow-2xs">
+              <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
                 <div className="flex items-center gap-2">
-                  <Clock3 className="h-4 w-4 text-emerald-700" />
+                  <Clock3 className="h-4 w-4 text-[#026aa7]" />
                   <h2 className="text-sm font-bold text-slate-900">Hoạt động theo thời gian</h2>
                 </div>
                 <span className="shrink-0 text-[11px] text-slate-500">{history.activities.length} hoạt động</span>
@@ -321,9 +389,12 @@ export const LecturerHistoryView = () => {
                   );
                 })}
                 {activities.length === 0 && (
-                  <div className="px-4 py-10 text-center">
-                    <Clock3 className="mx-auto h-5 w-5 text-slate-300" />
-                    <p className="mt-2 text-sm font-medium text-slate-600">Chưa có hoạt động được lưu cho học kỳ này.</p>
+                  <div className="px-4 py-12 text-center space-y-2">
+                    <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-[#026aa7]/5 text-[#026aa7]">
+                      <Clock3 className="h-5 w-5" aria-hidden="true" />
+                    </div>
+                    <p className="text-xs font-semibold text-slate-700">Chưa có hoạt động được lưu cho học kỳ này.</p>
+                    <p className="text-[11px] text-slate-500 max-w-xs mx-auto">Hoạt động sẽ hiển thị khi bạn phản hồi báo cáo hoặc chấm kết quả trong học kỳ.</p>
                   </div>
                 )}
               </div>
@@ -346,7 +417,15 @@ export const LecturerHistoryView = () => {
           </div>
         </>
       ) : !error && !isLoadingSemesters ? (
-        <Panel className="py-12 text-center text-sm text-slate-500">Chưa có học kỳ hướng dẫn được ghi nhận.</Panel>
+        <Panel className="rounded-xl border border-slate-200/90 p-10 text-center shadow-2xs">
+          <div className="space-y-2">
+            <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-[#026aa7]/5 text-[#026aa7]">
+              <History className="h-5 w-5" aria-hidden="true" />
+            </div>
+            <p className="text-xs font-semibold text-slate-700">Chưa có học kỳ hướng dẫn được ghi nhận.</p>
+            <p className="text-[11px] text-slate-500 max-w-xs mx-auto">Dữ liệu lịch sử sẽ xuất hiện sau khi bạn hướng dẫn sinh viên trong một học kỳ.</p>
+          </div>
+        </Panel>
       ) : null}
     </div>
   );
@@ -380,7 +459,8 @@ function PaginationControls({
           <select
             value={pageSize}
             onChange={(event) => onPageSizeChange(Number(event.target.value))}
-            className="cursor-pointer rounded-md border border-slate-200 bg-slate-50 px-2 py-1 font-bold text-slate-800 outline-none focus:border-blue-500 focus:bg-white"
+            aria-label="Số dòng mỗi trang"
+            className="min-h-9 cursor-pointer rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-bold text-slate-800 outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
           >
             <option value={5}>5 dòng</option>
             <option value={10}>10 dòng</option>
@@ -394,7 +474,7 @@ function PaginationControls({
           onClick={() => onPageChange(Math.max(page - 1, 1))}
           disabled={page === 1}
           aria-label="Trang trước"
-          className="cursor-pointer rounded-md bg-slate-100 p-1.5 text-slate-700 transition-colors hover:bg-slate-200 disabled:opacity-40"
+          className="inline-flex min-h-9 min-w-9 cursor-pointer items-center justify-center rounded-full bg-slate-100 p-1.5 text-slate-700 transition-colors hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
@@ -404,22 +484,11 @@ function PaginationControls({
           onClick={() => onPageChange(Math.min(page + 1, totalPages))}
           disabled={page === totalPages}
           aria-label="Trang sau"
-          className="cursor-pointer rounded-md bg-slate-100 p-1.5 text-slate-700 transition-colors hover:bg-slate-200 disabled:opacity-40"
+          className="inline-flex min-h-9 min-w-9 cursor-pointer items-center justify-center rounded-full bg-slate-100 p-1.5 text-slate-700 transition-colors hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <ChevronRight className="h-4 w-4" />
         </button>
       </div>
-    </div>
-  );
-}
-
-function Metric({ icon: Icon, label, value }: { icon: typeof History; label: string; value: number }) {
-  return (
-    <div className="bg-white px-4 py-3.5">
-      <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">
-        <Icon className="h-3.5 w-3.5" /> {label}
-      </p>
-      <p className="mt-1 text-xl font-bold tabular-nums text-slate-900">{value}</p>
     </div>
   );
 }

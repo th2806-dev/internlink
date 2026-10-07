@@ -172,6 +172,9 @@ export function useLecturerReportsQuery(options: UseLecturerReportsQueryOptions 
     items,
     totals: totalsQuery.data,
     isTotalsPending: totalsQuery.isPending,
+    isTotalsError: totalsQuery.isError,
+    totalsError: totalsQuery.error,
+    refetchTotals: totalsQuery.refetch,
     // Trạng thái 3 chiều (Loading / Error / Empty) — UI KHÔNG được trộn lẫn.
     isPending: listQuery.isPending,
     isError: listQuery.isError,

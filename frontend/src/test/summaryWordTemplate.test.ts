@@ -28,4 +28,13 @@ describe("summaryWordTemplate", () => {
     expect(result.stats.completedStudents).toBe(165);
     expect(result.gradeSummary[0].label).toBe("Xuất sắc");
   });
+
+  it("preserves an empty classification list instead of adding placeholder rows", () => {
+    const result = buildWordReportPreviewData({
+      semesterName: "Kỳ thực tập",
+      gradeSummary: [],
+    });
+
+    expect(result.gradeSummary).toEqual([]);
+  });
 });

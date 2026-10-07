@@ -1,7 +1,5 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { Toast } from "../../../components/common/Toast";
-import { PageHeader } from "../../../components/common/PageHeader";
-import { KpiCard, KpiGrid } from "../../../components/common/KpiCard";
 import {
   Download,
   Eye,
@@ -15,11 +13,14 @@ import {
   CheckCircle2,
   RotateCcw,
   AlertTriangle,
+  RefreshCw,
   X,
 } from "lucide-react";
+import { Panel } from "../../../components/common/Panel";
 import { UploadDocumentWorkspace } from "../components/UploadDocumentWorkspace";
 import { DocumentDetailWorkspace } from "../components/DocumentDetailWorkspace";
 import { StudentDocumentLibrary } from "../components/StudentDocumentLibrary";
+import { LecturerSubPageHeader } from "../components/LecturerSubPageHeader";
 import { useSemester } from "../../../contexts/SemesterContext";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { mapDocumentListItemToUi } from "../../../lib/documentMappers";
@@ -29,17 +30,24 @@ import type { DocumentItem } from "../../../types/document";
 
 export const TemplatesView = () => {
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
-  const [defaultInternshipId, setDefaultInternshipId] = useState<string | null>(null);
+  const [internships, setInternships] = useState<
+    Awaited<ReturnType<typeof lecturerInternshipsService.getAll>>
+  >([]);
+  const [selectedInternshipId, setSelectedInternshipId] = useState<string | null>(null);
   const [isLoadingDocs, setIsLoadingDocs] = useState(true);
+  const [documentsError, setDocumentsError] = useState<string | null>(null);
+  const [isLoadingInternship, setIsLoadingInternship] = useState(true);
+  const [internshipError, setInternshipError] = useState<string | null>(null);
   const [subView, setSubView] = useState<"list" | "upload" | "detail" | "student_library">("list");
   const [activeTab, setActiveTab] = useState<"ALL" | "CIRCULATING" | "ARCHIVED">("CIRCULATING");
   const [selectedCategory, setSelectedCategory] = useState("Tất cả");
-  const { semesters, selectedSemester, selectSemester } = useSemester();
+  const { semesters, selectedSemester } = useSemester();
   const [semesterFilter, setSemesterFilter] = useState("Tất cả");
-  const [majorFilter, setMajorFilter] = useState("Tất cả");
+  const [departmentFilter, setDepartmentFilter] = useState("Tất cả");
   const [fileTypeFilter, setFileTypeFilter] = useState("Tất cả");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDoc, setSelectedDoc] = useState<DocumentItem | null>(null);
+  const [isLoadingVersions, setIsLoadingVersions] = useState(false);
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -55,66 +63,114 @@ export const TemplatesView = () => {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setIsLoadingDocs(true);
-      try {
-        const [documentsResult, templatesResult] = await Promise.allSettled([
-          documentService.getAll(),
-          documentService.getTemplates(),
-        ]);
-        if (cancelled) return;
-
-        const docMap = new Map<string, any>();
-        if (templatesResult.status === "fulfilled") {
-          templatesResult.value.forEach((d) => docMap.set(d.id, d));
-        }
-        if (documentsResult.status === "fulfilled") {
-          documentsResult.value.forEach((d) => docMap.set(d.id, d));
-        }
-
-        const mapped = Array.from(docMap.values()).map(mapDocumentListItemToUi) as unknown as DocumentItem[];
-        setDocuments(mapped);
-      } catch (err) {
-        showToast(getApiErrorMessage(err));
-      } finally {
-        if (!cancelled) setIsLoadingDocs(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+  const loadDocuments = useCallback(async () => {
+    setIsLoadingDocs(true);
+    setDocumentsError(null);
+    try {
+      const [documentsResult, templatesResult] = await Promise.all([
+        documentService.getAll(),
+        documentService.getTemplates(),
+      ]);
+      const documentMap = new Map(
+        [...templatesResult, ...documentsResult].map((document) => [
+          document.id,
+          document,
+        ]),
+      );
+      setDocuments(
+        Array.from(documentMap.values()).map(mapDocumentListItemToUi),
+      );
+    } catch (err) {
+      setDocumentsError(getApiErrorMessage(err));
+    } finally {
+      setIsLoadingDocs(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadDocuments();
+  }, [loadDocuments]);
+
+  useEffect(() => {
+    setSemesterFilter(
+      selectedSemester?.id && selectedSemester.id !== "all"
+        ? selectedSemester.id
+        : "Tất cả",
+    );
+  }, [selectedSemester?.id]);
 
   // Gắn tài liệu vào internship của kỳ ĐANG CHỌN (không phải internship đầu tiên trả về)
   useEffect(() => {
     let cancelled = false;
+    setIsLoadingInternship(true);
+    setInternships([]);
+    setSelectedInternshipId(null);
     const semesterId = selectedSemester?.id && selectedSemester.id !== "all" ? selectedSemester.id : undefined;
     lecturerInternshipsService
       .getAll(semesterId)
       .then((rows) => {
         if (cancelled) return;
-        setDefaultInternshipId(rows[0]?.id ?? null);
-      })
-      .catch(() => {
-        if (!cancelled) setDefaultInternshipId(null);
+        setInternshipError(null);
+        setInternships(rows);
+        setSelectedInternshipId(rows.length === 1 ? rows[0].id : null);
+      }).catch((err: unknown) => {
+        if (cancelled) return;
+        setInternships([]);
+        setSelectedInternshipId(null);
+        setInternshipError(getApiErrorMessage(err));
+      }).finally(() => {
+        if (!cancelled) setIsLoadingInternship(false);
       });
     return () => {
       cancelled = true;
     };
   }, [selectedSemester?.id]);
 
-  const totalDocs = documents.length;
-  const circulatingCount = documents.filter(
-    (d) => d.status === "Đang lưu hành" || (d as any).status === "Đang áp dụng",
-  ).length;
-  const archivedCount = documents.filter(
-    (d) => d.status === "Ngưng lưu hành" || (d as any).status === "Lưu trữ",
-  ).length;
-  const totalDownloadsThisWeek = documents.reduce(
-    (acc, curr) => acc + (curr.downloads || 0),
-    0,
+  const selectedDocId = selectedDoc?.id;
+  useEffect(() => {
+    if (subView !== "detail" || !selectedDocId) return;
+    let cancelled = false;
+    setIsLoadingVersions(true);
+    documentService
+      .getVersions(selectedDocId)
+      .then((versions) => {
+        if (cancelled) return;
+        setSelectedDoc((current) =>
+          current?.id === selectedDocId
+            ? {
+                ...current,
+                versionHistory: versions.map((version) => ({
+                  version: `v${version.versionNumber}`,
+                  date: new Date(version.uploadedAt).toLocaleDateString("vi-VN"),
+                  author: version.uploadedById || "Chưa cập nhật",
+                  note: version.changeNote || "Chưa có ghi chú phiên bản.",
+                })),
+              }
+            : current,
+        );
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) showToast(getApiErrorMessage(err));
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingVersions(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDocId, subView]);
+
+  const categories = useMemo(
+    () => [...new Set(documents.map((document) => document.category))].sort((a, b) => a.localeCompare(b, "vi")),
+    [documents],
+  );
+  const departments = useMemo(
+    () => [...new Set(documents.map((document) => document.department))].sort((a, b) => a.localeCompare(b, "vi")),
+    [documents],
+  );
+  const fileTypes = useMemo(
+    () => [...new Set(documents.map((document) => document.fileType))].sort(),
+    [documents],
   );
 
   const filteredDocuments = documents.filter((doc) => {
@@ -128,35 +184,38 @@ export const TemplatesView = () => {
 
     const matchesSem =
       semesterFilter === "Tất cả" ||
-      doc.semester === "Tất cả học kỳ" ||
-      doc.semester === semesterFilter;
+      !doc.semesterId ||
+      doc.semesterId === semesterFilter;
 
-    const matchesMajor =
-      majorFilter === "Tất cả" ||
-      doc.major === "Tất cả ngành" ||
-      doc.major === majorFilter;
+    const matchesDepartment =
+      departmentFilter === "Tất cả" ||
+      doc.department === departmentFilter;
 
     const matchesType =
       fileTypeFilter === "Tất cả" || doc.fileType === fileTypeFilter;
 
     let matchesTab = true;
     if (activeTab === "CIRCULATING") {
-      matchesTab = doc.status === "Đang lưu hành" || (doc as any).status === "Đang áp dụng";
+      matchesTab = doc.status === "Đang lưu hành";
     } else if (activeTab === "ARCHIVED") {
-      matchesTab = doc.status === "Ngưng lưu hành" || (doc as any).status === "Lưu trữ";
+      matchesTab = doc.status === "Ngưng lưu hành";
     }
 
     return (
       matchesSearch &&
       matchesCat &&
       matchesSem &&
-      matchesMajor &&
+      matchesDepartment &&
       matchesType &&
       matchesTab
     );
   });
 
-  const handleDownload = async (doc: DocumentItem) => {
+  const handleRefresh = async () => {
+    await loadDocuments();
+  };
+
+  const handleDownload = async (doc: DocumentItem): Promise<boolean> => {
     try {
       const { blob, filename } = await documentService.download(
         doc.id,
@@ -171,8 +230,10 @@ export const TemplatesView = () => {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       showToast(`Đã tải xuống: ${doc.title}`);
+      return true;
     } catch (err) {
       showToast(getApiErrorMessage(err));
+      return false;
     }
   };
 
@@ -196,7 +257,7 @@ export const TemplatesView = () => {
     const finalReason = `${archiveReasonInput}${archiveCustomNote ? ` - ${archiveCustomNote}` : ""}`;
     try {
       const updated = await documentService.update(archivingDoc.id, { isPublished: false, archiveReason: finalReason });
-      const mapped = mapDocumentListItemToUi(updated) as unknown as DocumentItem;
+      const mapped = mapDocumentListItemToUi(updated);
       setDocuments((prev) => prev.map((d) => d.id === mapped.id ? mapped : d));
       setSelectedDoc((prev) => prev?.id === mapped.id ? mapped : prev);
       showToast(`Đã ngưng lưu hành biểu mẫu "${archivingDoc.title}".`);
@@ -225,14 +286,19 @@ export const TemplatesView = () => {
   const handleReactivateCirculation = async (doc: DocumentItem) => {
     try {
       const updated = await documentService.update(doc.id, { isPublished: true });
-      const mapped = mapDocumentListItemToUi(updated) as unknown as DocumentItem;
+      const mapped = mapDocumentListItemToUi(updated);
       setDocuments((prev) => prev.map((d) => d.id === mapped.id ? mapped : d));
       setSelectedDoc((prev) => prev?.id === mapped.id ? mapped : prev);
       showToast(`Đã mở lưu hành lại cho biểu mẫu "${doc.title}".`);
     } catch (err) { showToast(getApiErrorMessage(err)); }
   };
 
-  const handleSaveDocument = async (payload: any) => {
+  const handleSaveDocument = async (payload: {
+    title?: string;
+    description?: string;
+    category?: string;
+    rawFiles?: File[];
+  }) => {
     try {
       if (editingDoc) {
         const updated = await documentService.update(editingDoc.id, {
@@ -243,7 +309,7 @@ export const TemplatesView = () => {
         setDocuments((prev) =>
           prev.map((d) =>
             d.id === editingDoc.id
-              ? ({ ...d, ...(mapDocumentListItemToUi(updated) as any) } as DocumentItem)
+              ? mapDocumentListItemToUi(updated)
               : d,
           ),
         );
@@ -253,15 +319,15 @@ export const TemplatesView = () => {
           showToast("Vui lòng chọn file trước khi tải lên");
           return;
         }
-        if (!defaultInternshipId) {
-          showToast("Không tìm thấy đợt thực tập để gắn tài liệu");
+        if (!selectedInternshipId) {
+          showToast("Vui lòng chọn sinh viên/đợt thực tập để gắn tài liệu");
           return;
         }
         const result = await documentService.uploadSimple({
-          internshipId: defaultInternshipId,
+          internshipId: selectedInternshipId,
           files: payload.rawFiles,
         });
-        const newDocs = result.documents.map((d) => mapDocumentListItemToUi(d) as any);
+        const newDocs = result.documents.map(mapDocumentListItemToUi);
         setDocuments((prev) => [...newDocs, ...prev]);
         showToast(`Đã tải lên ${result.count} tệp${result.count > 1 ? "s" : ""}: ${result.documents.map((d) => d.title).join(", ")}`);
       }
@@ -275,92 +341,87 @@ export const TemplatesView = () => {
 
   if (subView === "student_library") {
     return (
-      <StudentDocumentLibrary
-        documents={documents.filter(
-          (d) => d.status === "Đang lưu hành" || (d as any).status === "Đang áp dụng",
-        )}
-        onSelectDoc={(doc) => {
-          setSelectedDoc(doc);
-          setSubView("detail");
-        }}
-        onDownloadDoc={handleDownload}
-        onSwitchToLecturerView={() => setSubView("list")}
-      />
+      <div className="mx-auto max-w-[1300px] space-y-4 pb-12 font-sans">
+        <StudentDocumentLibrary
+          documents={documents.filter(
+            (d) => d.status === "Đang lưu hành",
+          )}
+          onSelectDoc={(doc) => {
+            setSelectedDoc(doc);
+            setSubView("detail");
+          }}
+          onDownloadDoc={handleDownload}
+          onSwitchToLecturerView={() => setSubView("list")}
+        />
+      </div>
     );
   }
 
   if (subView === "detail" && selectedDoc) {
     return (
-      <DocumentDetailWorkspace
-        document={selectedDoc}
-        onBack={() => setSubView("list")}
-        onDownload={handleDownload}
-        onArchiveToggle={(doc) => {
-          if (doc.status === "Đang lưu hành" || (doc as any).status === "Đang áp dụng") {
-            setArchivingDoc(doc);
-          } else {
-            handleReactivateCirculation(doc);
+      <div className="mx-auto max-w-[1300px] space-y-4 pb-12 font-sans">
+        <DocumentDetailWorkspace
+          document={selectedDoc}
+          isLoadingVersions={isLoadingVersions}
+          onBack={() => setSubView("list")}
+          onDownload={handleDownload}
+          onArchiveToggle={
+            selectedDoc.isOfficial
+              ? undefined
+              : (doc) => {
+                  if (doc.status === "Đang lưu hành") {
+                    setArchivingDoc(doc);
+                  } else {
+                    handleReactivateCirculation(doc);
+                  }
+                }
           }
-        }}
-      />
+        />
+      </div>
     );
   }
 
   return (
-    <div className="space-y-5 max-w-[1500px] mx-auto animate-in fade-in duration-200 pb-16 font-sans">
+    <div className="mx-auto max-w-[1300px] space-y-4 pb-12 font-sans">
       {/* Toast Alert */}
       <Toast message={toastMessage} onClose={() => setToastMessage(null)} />
 
-      {/* PAGE HEADER */}
-      <PageHeader
-        icon={FolderOpen}
-        title="Kho biểu mẫu & Tài liệu thực tập"
-        subtitle="Đăng tải và quản lý biểu mẫu để sinh viên xem, tải xuống theo từng đợt thực tập."
-        actions={[
-          {
-            label: "+ Đăng biểu mẫu mới",
-            icon: CloudUpload,
-            onClick: () => setUploadModalOpen(true),
-            variant: "primary",
-          },
-        ]}
-      />
 
-      {/* KPI GRID */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-4 rounded-lg border border-slate-200/80 shadow-xs">
-          <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Tổng biểu mẫu & tài liệu</p>
-          <p className="text-2xl font-bold text-slate-900 mt-1">{documents.length}</p>
-          <p className="text-[11px] text-slate-400 mt-1">Bao gồm cả tài liệu đang lưu trữ log</p>
-        </div>
-        <div className="bg-white p-4 rounded-lg border border-slate-200/80 shadow-xs">
-          <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Đang lưu hành (Public SV)</p>
-          <p className="text-2xl font-bold text-slate-900 mt-1">{documents.filter((d) => d.status === "Đang lưu hành" || (d as any).status === "Đang áp dụng").length}</p>
-          <p className="text-[11px] text-slate-400 mt-1">Sinh viên đợt thực tập có thể thấy & tải</p>
-        </div>
-        <div className="bg-white p-4 rounded-lg border border-slate-200/80 shadow-xs">
-          <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Ngưng lưu hành & Đã lưu Log</p>
-          <p className="text-2xl font-bold text-slate-900 mt-1">{documents.filter((d) => d.status === "Ngưng lưu hành" || (d as any).status === "Lưu trữ").length}</p>
-          <p className="text-[11px] text-slate-400 mt-1">Đã ẩn khỏi sinh viên, lưu nhật ký</p>
-        </div>
-        <div className="bg-white p-4 rounded-lg border border-slate-200/80 shadow-xs">
-          <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Tổng lượt tải của SV</p>
-          <p className="text-2xl font-bold text-slate-900 mt-1">{documents.reduce((acc, curr) => acc + (curr.downloads || 0), 0).toLocaleString()}</p>
-          <p className="text-[11px] text-slate-400 mt-1">Theo dõi mức độ sử dụng biểu mẫu</p>
-        </div>
-      </div>
+      <LecturerSubPageHeader
+        icon={FolderOpen}
+        title="Kho biểu mẫu & tài liệu thực tập"
+        subtitle="Quản lý tài liệu dành cho sinh viên theo đợt thực tập."
+      >
+          <button
+            type="button"
+            onClick={() => void handleRefresh()}
+            disabled={isLoadingDocs}
+            className="inline-flex min-h-9 items-center justify-center gap-2 rounded-full border border-white/30 bg-white/10 px-4 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-wait disabled:opacity-60"
+          >
+            <RefreshCw className={`h-4 w-4 ${isLoadingDocs ? "animate-spin" : ""}`} aria-hidden="true" />
+            Làm mới
+          </button>
+          <button
+            type="button"
+            onClick={() => setUploadModalOpen(true)}
+            className="inline-flex min-h-9 flex-1 items-center justify-center gap-2 rounded-full bg-white px-5 text-xs font-semibold text-[#025a8e] transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#026aa7] sm:flex-none"
+          >
+            <CloudUpload className="h-4 w-4" aria-hidden="true" />
+            Tải tài liệu cho sinh viên
+          </button>
+      </LecturerSubPageHeader>
 
       {/* TAB SELECTOR & FILTERS */}
-      <div className="bg-white p-4 rounded-lg border border-slate-200/80 shadow-xs space-y-3">
+      <Panel className="space-y-4 rounded-xl border border-slate-200/90 shadow-2xs">
         {/* TOP ROW: TABS & ACTION BUTTONS */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-100">
           {/* Main Circulation Status Tabs */}
           <div className="flex items-center gap-1.5 flex-wrap">
             <button
               onClick={() => setActiveTab("CIRCULATING")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+              className={`min-h-11 rounded-full px-4 text-xs font-semibold transition-colors flex items-center gap-1.5 ${
                 activeTab === "CIRCULATING"
-                  ? "bg-emerald-600 text-white shadow-xs"
+                ? "bg-[#026aa7] text-white shadow-2xs"
                   : "bg-slate-100 text-slate-700 hover:bg-slate-200"
               }`}
             >
@@ -371,15 +432,15 @@ export const TemplatesView = () => {
                   activeTab === "CIRCULATING" ? "bg-white/20 text-white" : "bg-slate-200 text-slate-800"
                 }`}
               >
-                {documents.filter((d) => d.status === "Đang lưu hành" || (d as any).status === "Đang áp dụng").length}
+                {documents.filter((d) => d.status === "Đang lưu hành").length}
               </span>
             </button>
 
             <button
               onClick={() => setActiveTab("ARCHIVED")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+              className={`min-h-11 rounded-full px-4 text-xs font-semibold transition-colors flex items-center gap-1.5 ${
                 activeTab === "ARCHIVED"
-                  ? "bg-amber-600 text-white shadow-xs"
+                ? "bg-amber-600 text-white shadow-2xs"
                   : "bg-slate-100 text-slate-700 hover:bg-slate-200"
               }`}
             >
@@ -390,15 +451,15 @@ export const TemplatesView = () => {
                   activeTab === "ARCHIVED" ? "bg-white/20 text-white" : "bg-slate-200 text-slate-800"
                 }`}
               >
-                {documents.filter((d) => d.status === "Ngưng lưu hành" || (d as any).status === "Lưu trữ").length}
+                {documents.filter((d) => d.status === "Ngưng lưu hành").length}
               </span>
             </button>
 
             <button
               onClick={() => setActiveTab("ALL")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              className={`min-h-11 rounded-full px-4 text-xs font-semibold transition-colors ${
                 activeTab === "ALL"
-                  ? "bg-slate-800 text-white shadow-xs"
+                ? "bg-slate-800 text-white shadow-2xs"
                   : "bg-slate-100 text-slate-700 hover:bg-slate-200"
               }`}
             >
@@ -410,7 +471,7 @@ export const TemplatesView = () => {
             {Boolean(
               selectedCategory !== "Tất cả" ||
               semesterFilter !== "Tất cả" ||
-              majorFilter !== "Tất cả" ||
+              departmentFilter !== "Tất cả" ||
               fileTypeFilter !== "Tất cả" ||
               searchQuery,
             ) && (
@@ -420,32 +481,36 @@ export const TemplatesView = () => {
                   setSelectedCategory("Tất cả");
                   // Reset về "Tất cả" — không gán tên kỳ đang chọn (gây latch bộ lọc).
                   setSemesterFilter("Tất cả");
-                  setMajorFilter("Tất cả");
+                  setDepartmentFilter("Tất cả");
                   setFileTypeFilter("Tất cả");
                 }}
-                className="text-xs text-blue-600 hover:text-blue-800 font-bold"
+                className="min-h-11 rounded-full px-3 text-xs font-semibold text-[#026aa7] hover:bg-[#026aa7]/5 hover:text-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/30"
               >
                 Xóa bộ lọc
               </button>
             )}
 
             {/* Toggle View Mode */}
-            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-md border border-slate-200 shrink-0">
+            <div className="flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 p-1 shrink-0">
               <button
                 onClick={() => setViewMode("table")}
                 className={`p-1.5 rounded-lg transition-colors ${
-                  viewMode === "table" ? "bg-white text-blue-600 shadow-xs" : "text-slate-500 hover:text-slate-800"
+                  viewMode === "table" ? "bg-white text-[#026aa7] shadow-2xs" : "text-slate-500 hover:text-slate-800"
                 }`}
                 title="Chế độ Bảng"
+                aria-label="Chế độ bảng"
+                aria-pressed={viewMode === "table"}
               >
                 <List className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={() => setViewMode("cards")}
                 className={`p-1.5 rounded-lg transition-colors ${
-                  viewMode === "cards" ? "bg-white text-blue-600 shadow-xs" : "text-slate-500 hover:text-slate-800"
+                  viewMode === "cards" ? "bg-white text-[#026aa7] shadow-2xs" : "text-slate-500 hover:text-slate-800"
                 }`}
                 title="Chế độ Thẻ"
+                aria-label="Chế độ thẻ"
+                aria-pressed={viewMode === "cards"}
               >
                 <LayoutGrid className="w-3.5 h-3.5" />
               </button>
@@ -463,7 +528,8 @@ export const TemplatesView = () => {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Tìm tên tài liệu, người đăng, nội dung..."
-              className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-md outline-none focus:border-blue-500 focus:bg-white transition-all text-slate-900 font-medium"
+              aria-label="Tìm tài liệu"
+              className="min-h-11 w-full rounded-full border border-slate-300 bg-white pl-10 pr-4 text-base font-medium text-slate-800 outline-none transition-colors placeholder:font-normal placeholder:text-slate-500 hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20 sm:text-xs"
             />
           </div>
 
@@ -471,15 +537,13 @@ export const TemplatesView = () => {
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
-              className="w-full p-1.5 bg-slate-50 border border-slate-200 rounded-md outline-none font-semibold text-slate-800 text-[11px]"
+              aria-label="Lọc theo danh mục"
+              className="min-h-11 w-full rounded-full border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
             >
               <option value="Tất cả">Tất cả Danh mục</option>
-              <option value="Biểu mẫu">Biểu mẫu</option>
-              <option value="Báo cáo">Báo cáo</option>
-              <option value="Nhật ký">Nhật ký</option>
-              <option value="Kế hoạch">Kế hoạch</option>
-              <option value="Hướng dẫn">Hướng dẫn</option>
-              <option value="Văn bản khoa">Văn bản khoa</option>
+              {categories.map((category) => (
+                <option key={category} value={category}>{category}</option>
+              ))}
             </select>
           </div>
 
@@ -487,25 +551,27 @@ export const TemplatesView = () => {
             <select
               value={semesterFilter}
               onChange={(e) => setSemesterFilter(e.target.value)}
-              className="w-full p-1.5 bg-slate-50 border border-slate-200 rounded-md outline-none font-semibold text-slate-800 text-[11px]"
+              aria-label="Lọc theo đợt thực tập"
+              className="min-h-11 w-full rounded-full border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
             >
               <option value="Tất cả">Tất cả Đợt thực tập</option>
               {semesters.map((s) => (
-                <option key={s.id} value={s.name}>{s.name} ({s.status === "active" ? "Đang diễn ra" : s.status === "upcoming" ? "Sắp tới" : "Đã đóng"})</option>
+                <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
           </div>
 
           <div>
             <select
-              value={majorFilter}
-              onChange={(e) => setMajorFilter(e.target.value)}
-              className="w-full p-1.5 bg-slate-50 border border-slate-200 rounded-md outline-none font-semibold text-slate-800 text-[11px]"
+              value={departmentFilter}
+              onChange={(e) => setDepartmentFilter(e.target.value)}
+              aria-label="Lọc theo đơn vị"
+              className="min-h-11 w-full rounded-full border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
             >
-              <option value="Tất cả">Tất cả Chuyên ngành</option>
-              <option value="Kỹ thuật Phần mềm">Kỹ thuật Phần mềm</option>
-              <option value="Khoa học Dữ liệu">Khoa học Dữ liệu</option>
-              <option value="An toàn Thông tin">An toàn Thông tin</option>
+              <option value="Tất cả">Tất cả đơn vị</option>
+              {departments.map((department) => (
+                <option key={department} value={department}>{department}</option>
+              ))}
             </select>
           </div>
 
@@ -513,21 +579,34 @@ export const TemplatesView = () => {
             <select
               value={fileTypeFilter}
               onChange={(e) => setFileTypeFilter(e.target.value)}
-              className="w-full p-1.5 bg-slate-50 border border-slate-200 rounded-md outline-none font-semibold text-slate-800 text-[11px]"
+              aria-label="Lọc theo định dạng tệp"
+              className="min-h-11 w-full rounded-full border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
             >
               <option value="Tất cả">Tất cả Định dạng</option>
-              <option value="DOCX">Mẫu DOCX (Word)</option>
-              <option value="PDF">Văn bản PDF</option>
-              <option value="XLSX">Bảng tính XLSX</option>
-              <option value="PPTX">Slide PPTX</option>
+              {fileTypes.map((fileType) => (
+                <option key={fileType} value={fileType}>{fileType}</option>
+              ))}
             </select>
           </div>
         </div>
-      </div>
+      </Panel>
 
       {/* DOCUMENT LIST / TABLE */}
-      {viewMode === "table" ? (
-        <div className="bg-white rounded-lg border border-slate-200/80 shadow-xs overflow-hidden">
+      {documentsError ? (
+        <Panel role="alert" className="space-y-3 rounded-xl border border-rose-200 p-6 text-center shadow-2xs">
+          <p className="text-sm font-semibold text-rose-800">
+            Không thể tải danh sách tài liệu: {documentsError}
+          </p>
+          <button
+            type="button"
+            onClick={() => void loadDocuments()}
+            className="min-h-11 rounded-full bg-[#026aa7] px-5 text-xs font-semibold text-white transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2"
+          >
+            Thử tải lại
+          </button>
+        </Panel>
+      ) : viewMode === "table" ? (
+        <Panel padding="none" className="overflow-hidden rounded-xl border border-slate-200/90 shadow-2xs">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
@@ -551,13 +630,13 @@ export const TemplatesView = () => {
                 ) : filteredDocuments.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="py-10 text-center text-slate-400 font-medium">
-                      Không có biểu mẫu nào phù hợp với bộ lọc hiện tại.
+                      <FolderOpen className="mx-auto mb-2 h-8 w-8 text-slate-300" aria-hidden="true" />
+                      Không có tài liệu phù hợp. Hãy đổi bộ lọc hoặc đăng tài liệu mới.
                     </td>
                   </tr>
                 ) : (
                   filteredDocuments.map((doc) => {
-                    const isCirc =
-                      doc.status === "Đang lưu hành" || (doc as any).status === "Đang áp dụng";
+                    const isCirc = doc.status === "Đang lưu hành";
                     return (
                       <tr
                         key={doc.id}
@@ -568,15 +647,16 @@ export const TemplatesView = () => {
                         {/* Title */}
                         <td className="py-3.5 px-4 max-w-[320px]">
                           <div>
-                            <span
+                            <button
+                              type="button"
                               onClick={() => {
                                 setSelectedDoc(doc);
                                 setSubView("detail");
                               }}
-                              className="font-bold text-slate-900 hover:text-blue-600 cursor-pointer block line-clamp-1"
+                              className="block max-w-full truncate text-left font-bold text-slate-900 transition-colors hover:text-[#026aa7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/30"
                             >
                               {doc.title}
-                            </span>
+                            </button>
                             <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5">
                               <span>
                                 {doc.fileType} • {doc.fileSize}
@@ -601,17 +681,17 @@ export const TemplatesView = () => {
 
                         {/* Semester */}
                         <td className="py-3.5 px-3">
-                          <span className="font-bold text-blue-700 text-xs">
+                          <span className="font-bold text-slate-800 text-xs">
                             {doc.semester}
                           </span>
                           <span className="block text-[10px] text-slate-400">
-                            {doc.major}
+                            {doc.department}
                           </span>
                         </td>
 
                         {/* Version */}
                         <td className="py-3.5 px-3">
-                          <span className="px-2 py-0.5 bg-blue-50 text-blue-700 font-bold text-[10px] rounded border border-blue-200">
+                          <span className="px-2 py-0.5 bg-[#026aa7]/5 text-[#025a8e] font-bold text-[10px] rounded border border-[#026aa7]/20">
                             {doc.version}
                           </span>
                         </td>
@@ -619,12 +699,12 @@ export const TemplatesView = () => {
                         {/* Circulation Status */}
                         <td className="py-3.5 px-3">
                           {isCirc ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 font-bold text-[10px] rounded-md border border-emerald-200">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#7bc043]/10 text-[#446d20] font-bold text-[10px] rounded-md border border-[#7bc043]/40">
                               <CheckCircle2 className="w-3 h-3" />
                               Đang lưu hành (Public)
                             </span>
                           ) : doc.status === "Bản nháp" ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-700 font-bold text-[10px] rounded-md border border-blue-200">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#026aa7]/5 text-[#025a8e] font-bold text-[10px] rounded-md border border-[#026aa7]/20">
                               Bản nháp
                             </span>
                           ) : (
@@ -636,7 +716,7 @@ export const TemplatesView = () => {
                         </td>
 
                         {/* Downloads */}
-                        <td className="py-3.5 px-3 text-center font-bold text-blue-600">
+                        <td className="py-3.5 px-3 text-center font-bold text-slate-800">
                           {doc.downloads.toLocaleString()}
                         </td>
 
@@ -648,17 +728,19 @@ export const TemplatesView = () => {
                                 setSelectedDoc(doc);
                                 setSubView("detail");
                               }}
-                              className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-blue-600"
+                              className="min-h-10 min-w-10 rounded-full text-slate-600 transition-colors hover:bg-slate-100 hover:text-[#026aa7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/30"
                               title="Xem chi tiết"
+                              aria-label={`Xem chi tiết: ${doc.title}`}
                             >
                               <Eye className="w-4 h-4" />
                             </button>
 
-                            {!(doc as any).isOfficial && (
+                            {!doc.isOfficial && (
                               <button
                                 onClick={() => handleDeleteClick(doc)}
-                                className="p-1.5 hover:bg-rose-100 rounded-lg text-slate-600 hover:text-rose-700"
+                                className="min-h-10 min-w-10 rounded-full text-slate-600 transition-colors hover:bg-rose-100 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
                                 title="Xóa biểu mẫu"
+                                aria-label={`Xóa biểu mẫu: ${doc.title}`}
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
@@ -666,27 +748,30 @@ export const TemplatesView = () => {
 
                             <button
                               onClick={() => handleDownload(doc)}
-                              className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-emerald-600"
+                              className="min-h-10 min-w-10 rounded-full text-slate-600 transition-colors hover:bg-slate-100 hover:text-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/30"
                               title="Tải xuống"
+                              aria-label={`Tải xuống: ${doc.title}`}
                             >
                               <Download className="w-4 h-4" />
                             </button>
 
                             {/* Archive / Reactivate Button */}
-                            {!(doc as any).isOfficial && (
+                            {!doc.isOfficial && (
                               isCirc ? (
                                 <button
                                   onClick={() => setArchivingDoc(doc)}
-                                  className="p-1.5 hover:bg-amber-100 rounded-lg text-slate-600 hover:text-amber-700"
+                                  className="min-h-10 min-w-10 rounded-full text-slate-600 transition-colors hover:bg-amber-100 hover:text-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
                                   title="Ngưng lưu hành & Chuyển vào Log"
+                                  aria-label={`Ngưng lưu hành: ${doc.title}`}
                                 >
                                   <Archive className="w-4 h-4" />
                                 </button>
                               ) : (
                                 <button
                                   onClick={() => handleReactivateCirculation(doc)}
-                                  className="p-1.5 hover:bg-emerald-100 rounded-lg text-slate-600 hover:text-emerald-700"
+                                  className="min-h-10 min-w-10 rounded-full text-slate-600 transition-colors hover:bg-[#7bc043]/10 hover:text-[#446d20] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7bc043]/40"
                                   title="Mở lưu hành lại cho SV"
+                                  aria-label={`Mở lưu hành lại: ${doc.title}`}
                                 >
                                   <RotateCcw className="w-4 h-4" />
                                 </button>
@@ -702,7 +787,7 @@ export const TemplatesView = () => {
               </tbody>
             </table>
           </div>
-        </div>
+        </Panel>
       ) : (
         /* CARDS GRID VIEW */
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -711,18 +796,23 @@ export const TemplatesView = () => {
               Đang tải danh sách tài liệu...
             </div>
           ) : filteredDocuments.length === 0 ? (
-            <div className="col-span-full py-10 text-center text-slate-400 font-medium text-xs">
-              Không có tài liệu nào khớp bộ lọc.
+            <div className="col-span-full flex flex-col items-center gap-2 rounded-xl border border-slate-200/90 bg-white py-10 text-center shadow-2xs">
+              <FolderOpen className="h-8 w-8 text-slate-300" aria-hidden="true" />
+              <p className="text-sm font-semibold text-slate-700">
+                Không có tài liệu phù hợp.
+              </p>
+              <p className="text-xs text-slate-500">
+                Hãy đổi bộ lọc hoặc đăng tài liệu mới.
+              </p>
             </div>
           ) : null}
           {!isLoadingDocs && filteredDocuments.map((doc) => {
-            const isCirc =
-              doc.status === "Đang lưu hành" || (doc as any).status === "Đang áp dụng";
+            const isCirc = doc.status === "Đang lưu hành";
             return (
               <div
                 key={doc.id}
-                className={`bg-white rounded-lg p-4 border shadow-xs transition-colors flex flex-col justify-between space-y-3 ${
-                  isCirc ? "border-slate-200/80" : "border-amber-200/80 bg-amber-50/20"
+                className={`flex flex-col justify-between space-y-3 rounded-xl border p-4 shadow-2xs transition-colors ${
+                  isCirc ? "border-slate-200/90 bg-white" : "border-amber-200/80 bg-amber-50/20"
                 }`}
               >
                 <div className="space-y-2">
@@ -732,7 +822,7 @@ export const TemplatesView = () => {
                     </span>
 
                     {isCirc ? (
-                      <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded border border-emerald-200 flex items-center gap-1">
+                      <span className="flex items-center gap-1 rounded border border-[#7bc043]/40 bg-[#7bc043]/10 px-2 py-0.5 text-[10px] font-bold text-[#446d20]">
                         <CheckCircle2 className="w-3 h-3" />
                         Đang lưu hành
                       </span>
@@ -744,18 +834,19 @@ export const TemplatesView = () => {
                     )}
                   </div>
 
-                  <h3
+                  <button
+                    type="button"
                     onClick={() => {
                       setSelectedDoc(doc);
                       setSubView("detail");
                     }}
-                    className="font-bold text-slate-900 text-sm hover:text-blue-600 cursor-pointer line-clamp-2"
+                    className="min-h-11 line-clamp-2 text-left text-sm font-bold text-slate-900 transition-colors hover:text-[#026aa7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/30"
                   >
                     {doc.title}
-                  </h3>
+                  </button>
 
                   <p className="text-xs text-slate-500 font-medium line-clamp-2">
-                    {doc.description || "Biểu mẫu chuẩn ban hành theo quy định của Khoa."}
+                    {doc.description || "Chưa có mô tả."}
                   </p>
 
                   {!isCirc && doc.archiveReason && (
@@ -774,7 +865,8 @@ export const TemplatesView = () => {
                       {doc.fileType} • {doc.fileSize} • {doc.semester}
                     </span>
                     <span>{doc.downloads.toLocaleString()} lượt tải</span>
-                  </div>                    <div className="flex items-center gap-1.5 pt-1">
+                  </div>
+                  <div className="flex items-center gap-1.5 pt-1">
                     <button
                       onClick={() => {
                         setSelectedDoc(doc);
@@ -784,7 +876,8 @@ export const TemplatesView = () => {
                     >
                       <Eye className="w-3.5 h-3.5" />
                       <span>Chi tiết</span>
-                    </button>                      {!(doc as any).isOfficial && (
+                    </button>
+                    {!doc.isOfficial && (
                         <button
                           onClick={() => handleDeleteClick(doc)}
                           className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-md border border-rose-200"
@@ -796,13 +889,13 @@ export const TemplatesView = () => {
 
                       <button
                         onClick={() => handleDownload(doc)}
-                        className="flex-1 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-md shadow-xs transition-colors flex items-center justify-center gap-1"
+                        className="flex min-h-11 flex-1 items-center justify-center gap-1 rounded-full bg-[#026aa7] py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2"
                       >
                         <Download className="w-3.5 h-3.5" />
                         <span>Tải về</span>
                       </button>
 
-                      {!(doc as any).isOfficial && (
+                      {!doc.isOfficial && (
                         isCirc ? (
                           <button
                             onClick={() => setArchivingDoc(doc)}
@@ -814,8 +907,9 @@ export const TemplatesView = () => {
                         ) : (
                           <button
                             onClick={() => handleReactivateCirculation(doc)}
-                            className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-md border border-emerald-200"
+                            className="min-h-10 min-w-10 rounded-full border border-[#7bc043]/40 bg-[#7bc043]/10 text-[#446d20] transition-colors hover:bg-[#7bc043]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7bc043]/40"
                             title="Mở lưu hành lại"
+                            aria-label={`Mở lưu hành lại: ${doc.title}`}
                           >
                             <RotateCcw className="w-3.5 h-3.5" />
                           </button>
@@ -832,18 +926,18 @@ export const TemplatesView = () => {
       {/* MODAL UPLOAD TÀI LIỆU */}
       {uploadModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg max-w-xl w-full p-6 shadow-xl border border-slate-200 space-y-4 animate-in zoom-in-95">
+          <div className="bg-white rounded-xl max-w-xl w-full p-6 shadow-xl border border-slate-200 space-y-4 animate-in zoom-in-95">
             <div className="flex items-start justify-between pb-2 border-b border-slate-100">
               <div className="flex items-center gap-2">
-                <div className="w-9 h-9 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
+                <div className="w-9 h-9 rounded-full bg-[#026aa7]/10 text-[#026aa7] flex items-center justify-center">
                   <CloudUpload className="w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-slate-900">
-                    Tải tài liệu lên kho biểu mẫu
+                    Tải tài liệu thực tập lên
                   </h3>
                   <p className="text-xs text-slate-500 font-medium">
-                    Tải file PDF/Word/Excel/Slide đính kèm cho đợt thực tập đang chọn.
+                    Tệp sẽ được đính kèm vào sinh viên và đợt thực tập đã chọn.
                   </p>
                 </div>
               </div>
@@ -854,18 +948,51 @@ export const TemplatesView = () => {
                   setSubView("list");
                 }}
                 className="text-slate-400 hover:text-slate-600"
+                aria-label="Đóng tải tài liệu"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Thông tin đợt thực tập */}
-            <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-xs text-slate-700 space-y-1">
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-700 space-y-1">
               <p className="font-bold">Đợt thực tập:</p>
               <p className="text-slate-600">
-                {defaultInternshipId
-                  ? `Gắn vào đợt thực tập đang chọn`                    : "Chưa có đợt thực tập nào. Vui lòng chọn trước."}
+                {isLoadingInternship
+                  ? "Đang tải đợt thực tập..."
+                  : internshipError
+                    ? `Không thể tải đợt thực tập: ${internshipError}`
+                    : internships.length === 0
+                      ? "Chưa có đợt thực tập nào trong học kỳ đang chọn."
+                      : selectedInternshipId
+                        ? `Tài liệu sẽ được gắn vào: ${
+                            internships.find((internship) => internship.id === selectedInternshipId)?.student?.fullName ||
+                            "Chưa cập nhật"
+                          } (${
+                            internships.find((internship) => internship.id === selectedInternshipId)?.student?.studentCode ||
+                            "—"
+                          }).`
+                        : "Chọn sinh viên nhận tài liệu. Tệp sẽ được gắn vào internship đã chọn."}
               </p>
+              {!isLoadingInternship && internships.length > 0 && (
+                <select
+                  aria-label="Chọn sinh viên và đợt thực tập nhận tài liệu"
+                  value={selectedInternshipId ?? ""}
+                  onChange={(event) =>
+                    setSelectedInternshipId(event.target.value || null)
+                  }
+                  className="mt-2 min-h-11 w-full rounded-full border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+                >
+                  <option value="">Chọn sinh viên / đợt thực tập</option>
+                  {internships.map((internship) => (
+                    <option key={internship.id} value={internship.id}>
+                      {internship.student?.studentCode || "—"} ·{" "}
+                      {internship.student?.fullName || "Chưa cập nhật"} ·{" "}
+                      {internship.company?.companyName || "Chưa cập nhật"}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
 
             <UploadDocumentWorkspace

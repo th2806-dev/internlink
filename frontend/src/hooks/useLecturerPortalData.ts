@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { getApiErrorMessage } from "../lib/apiClient";
+import { apiRequest, getApiErrorMessage } from "../lib/apiClient";
 import { mapLecturerCompanySummaryToEnterprise } from "../lib/adminMappers";
 import {
   mapLecturerStudentDtoToStudent,
@@ -13,6 +13,10 @@ import { lecturerInternshipsService } from "../services/lecturerInternships.serv
 import { submissionApiService } from "../services/submissionApi.service";
 import { weeklyReportService } from "../services/weeklyReport.service";
 import { lecturerDashboardService } from "../services/lecturerDashboard.service";
+import {
+  semesterReportScheduleService,
+  type SemesterReportScheduleDto,
+} from "../services/semesterReportSchedule.service";
 import type { Student } from "../types/student";
 import type { Submission } from "../types/submission";
 import type { Enterprise } from "../types/enterprise";
@@ -23,12 +27,22 @@ import type {
   WeeklyReportDto,
 } from "../types/api";
 
+export interface LecturerProfileData {
+  staffCode: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  department: string;
+}
+
 export function useLecturerPortalData(
   enabled: boolean,
   lecturerName: string,
   onError?: (msg: string) => void,
   semesterId?: string | null,
 ) {
+  const [profile, setProfile] = useState<LecturerProfileData | null>(null);
+  const [schedules, setSchedules] = useState<SemesterReportScheduleDto[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [enterprises, setEnterprises] = useState<Enterprise[]>([]);
@@ -37,7 +51,7 @@ export function useLecturerPortalData(
   const [weeklyTrend, setWeeklyTrend] = useState<LecturerWeeklyTrendDto[]>([]);
   const [isLoading, setIsLoading] = useState(enabled);
   const [error, setError] = useState<string | null>(null);
-  const [weeklyReportPage, setWeeklyReportPage] = useState({ total: 0, skip: 0, take: 20 });
+  const [weeklyReportPage, setWeeklyReportPage] = useState({ total: 0, skip: 0, take: 100 });
   const [weeklyReportQuery, setWeeklyReportQuery] = useState({ status: "", searchTerm: "", skip: 0 });
   // Tổng theo trạng thái tính trên TOÀN BỘ kỳ (server-side), không phụ thuộc trang hiện tại.
   const [weeklyReportTotals, setWeeklyReportTotals] = useState({ total: 0, pending: 0, revision: 0, approved: 0 });
@@ -46,7 +60,7 @@ export function useLecturerPortalData(
     const result = await weeklyReportService.getAllForLecturer({
       semesterId: semesterId ?? undefined,
       skip: query.skip,
-      take: 20,
+      take: 100,
       status: query.status || undefined,
       searchTerm: query.searchTerm || undefined,
     });
@@ -64,12 +78,14 @@ export function useLecturerPortalData(
     const countBy = (status: string) =>
       weeklyReportService
         .getAllForLecturer({ semesterId: semesterId ?? undefined, skip: 0, take: 1, status })
-        .then((res) => res.total);
+        .then((res) => res.total)
+        .catch(() => 0);
     setWeeklyReportTotals({ total: 0, pending: 0, revision: 0, approved: 0 });
     const [allTotal, pending, revision, approved] = await Promise.all([
       weeklyReportService
         .getAllForLecturer({ semesterId: semesterId ?? undefined, skip: 0, take: 1 })
-        .then((res) => res.total),
+        .then((res) => res.total)
+        .catch(() => 0),
       countBy("Submitted"),
       countBy("RevisionRequested"),
       countBy("Approved"),
@@ -82,7 +98,7 @@ export function useLecturerPortalData(
     setIsLoading(true);
     setError(null);
     try {
-      const [internships, assignedStudents, companies, allSubmissions, allWeeklyReports, stats, trend] =
+      const [internships, assignedStudents, companies, allSubmissions, allWeeklyReports, stats, trend, meOverview, schedulesData] =
         await Promise.all([
           lecturerInternshipsService.getAll(semesterId ?? undefined),
           lecturerInternshipsService.getStudents(semesterId ?? undefined),
@@ -91,11 +107,24 @@ export function useLecturerPortalData(
           loadWeeklyReports(),
           lecturerDashboardService.getStats(semesterId ?? undefined),
           lecturerDashboardService.getWeeklyTrend(semesterId ?? undefined),
+          apiRequest<{ lecturer?: { staffCode?: string; fullName?: string; email?: string; phone?: string; department?: string } }>("/api/Lecturer/me").catch(() => null),
+          semesterId && semesterId !== "all"
+            ? semesterReportScheduleService.getSchedules(semesterId).catch(() => [])
+            : Promise.resolve([] as SemesterReportScheduleDto[]),
         ]);
       // KPI tổng theo trạng thái (server-side) — chạy nền sau khi dữ liệu chính xong
-      void loadWeeklyReportTotals().catch((totalsError: unknown) => {
-        onError?.(getApiErrorMessage(totalsError));
-      });
+      void loadWeeklyReportTotals().catch(() => {});
+
+      if (meOverview?.lecturer) {
+        setProfile({
+          staffCode: meOverview.lecturer.staffCode || "",
+          fullName: meOverview.lecturer.fullName || lecturerName,
+          email: meOverview.lecturer.email || "",
+          phone: meOverview.lecturer.phone || "",
+          department: meOverview.lecturer.department || "",
+        });
+      }
+      setSchedules(schedulesData ?? []);
 
       const studentRows = assignedStudents.map((item: LecturerStudentListItemDto) =>
         mapLecturerStudentDtoToStudent(item, lecturerName),
@@ -153,8 +182,14 @@ export function useLecturerPortalData(
         };
       });
 
+      const combinedSubmissions = [...weeklyReportRows, ...submissionRows].sort((a, b) => {
+        const timeA = a.submittedAt ? new Date(a.submittedAt).getTime() : 0;
+        const timeB = b.submittedAt ? new Date(b.submittedAt).getTime() : 0;
+        return timeB - timeA;
+      });
+
       setStudents(studentRows);
-      setSubmissions([...weeklyReportRows, ...submissionRows]);
+      setSubmissions(combinedSubmissions);
       setWeeklyReports(allWeeklyReports);
       setEnterprises(companies.map(mapLecturerCompanySummaryToEnterprise));
       setDashboardStats(stats);
@@ -213,6 +248,8 @@ export function useLecturerPortalData(
   );
 
   return {
+    profile,
+    schedules,
     students,
     submissions,
     enterprises,

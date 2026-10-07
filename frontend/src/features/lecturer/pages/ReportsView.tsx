@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { CalendarClock, ClipboardCheck, SearchX } from "lucide-react";
-import { PageHeader } from "../../../components/common/PageHeader";
 import { Toolbar } from "../../../components/common/Toolbar";
 import { EmptyState } from "../../../components/common/EmptyState";
 import { SkeletonBox, TableSkeleton } from "../../../components/common/SkeletonLoader";
 import { RequestErrorState } from "../../../components/common/RequestErrorState";
 import { SubmissionsHub } from "../components/SubmissionsHub";
 import { WeeklyReportsReviewPanel } from "../components/WeeklyReportsReviewPanel";
+import { LecturerSubPageHeader } from "../components/LecturerSubPageHeader";
 import { useLecturerReportsQuery } from "../../../hooks/useLecturerReportsQuery";
 import { useLecturerSubmissionsQuery } from "../../../hooks/useLecturerSubmissionsQuery";
 import { ApiClientError, getApiErrorMessage } from "../../../lib/apiClient";
@@ -92,6 +92,9 @@ export const ReportsView = ({
     items,
     totals,
     isTotalsPending,
+    isTotalsError,
+    totalsError,
+    refetchTotals,
     isPending,
     isError,
     error,
@@ -106,7 +109,6 @@ export const ReportsView = ({
     goToPage,
   } = reports;
 
-  const reportSummary = totals ?? { total: 0, pending: 0, revision: 0, approved: 0 };
   const hasFilter = Boolean(filter.status || filter.appliedSearchTerm);
 
   const handleRetry = () => {
@@ -123,24 +125,28 @@ export const ReportsView = ({
     error instanceof Error ? error.message : "Không kết nối được tới máy chủ.";
 
   return (
-    <div className="space-y-5 animate-in fade-in duration-200 max-w-[1500px] mx-auto">
-      <PageHeader
+    <div className="mx-auto max-w-[1300px] animate-in fade-in duration-200 space-y-4 pb-12 font-sans">
+      <LecturerSubPageHeader
         icon={ClipboardCheck}
         title={activeTab === "review" ? "Duyệt báo cáo thực tập" : "Cấu hình báo cáo"}
         subtitle={activeTab === "review"
           ? "Kiểm tra tiến độ, phản hồi và xác nhận báo cáo của sinh viên trong nhóm hướng dẫn."
           : "Thiết lập thời gian mở nộp, deadline và trạng thái nhận báo cáo theo tuần."}
-        badge={activeTab === "review" ? (isTotalsPending ? "…" : `${reportSummary.total} báo cáo`) : undefined}
-        badgeColor="bg-blue-50 text-blue-800 border-blue-200"
-      />
+      >
+        {activeTab === "review" && (
+          <span className="rounded-full border border-white/20 bg-white/15 px-3 py-1 text-xs font-semibold text-white" aria-live="polite">
+            {isTotalsPending ? "Đang tải số liệu…" : totals ? `${totals.total} báo cáo` : "—"}
+          </span>
+        )}
+      </LecturerSubPageHeader>
 
-      <div className="flex flex-wrap gap-1 rounded-lg border border-slate-200 bg-slate-100 p-1" role="tablist" aria-label="Báo cáo thực tập">
+      <div className="flex flex-wrap gap-1 rounded-xl border border-slate-200/90 bg-white p-1 shadow-2xs" role="tablist" aria-label="Báo cáo thực tập">
         <button
           type="button"
           role="tab"
           aria-selected={activeTab === "review"}
           onClick={() => setActiveTab("review")}
-          className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-xs font-semibold transition-colors ${activeTab === "review" ? "bg-white text-blue-700 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
+          className={`inline-flex min-h-10 items-center gap-2 rounded-full px-4 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 ${activeTab === "review" ? "bg-[#026aa7] text-white shadow-sm" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"}`}
         >
           <ClipboardCheck className="h-4 w-4" /> Duyệt báo cáo
         </button>
@@ -149,7 +155,7 @@ export const ReportsView = ({
           role="tab"
           aria-selected={activeTab === "schedule"}
           onClick={() => setActiveTab("schedule")}
-          className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-xs font-semibold transition-colors ${activeTab === "schedule" ? "bg-white text-blue-700 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
+          className={`inline-flex min-h-10 items-center gap-2 rounded-full px-4 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 ${activeTab === "schedule" ? "bg-[#026aa7] text-white shadow-sm" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"}`}
         >
           <CalendarClock className="h-4 w-4" /> Cấu hình deadline
         </button>
@@ -161,19 +167,34 @@ export const ReportsView = ({
         <>
       <Toolbar
         left={(
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-medium text-slate-500">
-            <span><strong className="text-slate-800">{isTotalsPending ? "…" : reportSummary.total}</strong> báo cáo</span>
-            <span><strong className="text-amber-700">{isTotalsPending ? "…" : reportSummary.pending}</strong> chờ xử lý</span>
-            <span><strong className="text-rose-700">{isTotalsPending ? "…" : reportSummary.revision}</strong> cần sửa</span>
-            <span><strong className="text-emerald-700">{isTotalsPending ? "…" : reportSummary.approved}</strong> đã duyệt</span>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-medium text-slate-500" aria-label="Tổng số báo cáo trong học kỳ">
+            <span><strong className="text-slate-800">{isTotalsPending ? "…" : totals?.total ?? "—"}</strong> báo cáo</span>
+            <span><strong className="text-sky-700">{isTotalsPending ? "…" : totals?.pending ?? "—"}</strong> chờ xử lý</span>
+            <span><strong className="text-amber-700">{isTotalsPending ? "…" : totals?.revision ?? "—"}</strong> cần sửa</span>
+            <span><strong className="text-[#446d20]">{isTotalsPending ? "…" : totals?.approved ?? "—"}</strong> đã duyệt</span>
           </div>
         )}
       />
+      {isTotalsError && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50/50 px-4 py-3 text-xs text-rose-800" role="alert">
+          <span>
+            Không thể tải tổng số báo cáo:{" "}
+            {totalsError instanceof Error ? totalsError.message : "Không kết nối được tới máy chủ."}
+          </span>
+          <button
+            type="button"
+            onClick={() => void refetchTotals()}
+            className="inline-flex min-h-9 items-center justify-center rounded-full border border-rose-300 bg-white px-4 font-semibold text-rose-700 transition-colors hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2"
+          >
+            Thử tải lại số liệu
+          </button>
+        </div>
+      )}
 
       {/* ── 1. ĐANG TẢI (khởi tạo): skeleton giữ nguyên bố cục, không nhấp nháy ── */}
       {isPending && !isError && (
         <div data-testid="reports-loading" className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2 p-3 bg-white border border-slate-200 rounded-lg">
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200/90 bg-white p-3 shadow-2xs">
             <SkeletonBox className="h-9 flex-1 min-w-60" />
             <SkeletonBox className="h-9 w-28" />
             <SkeletonBox className="h-9 w-24" />
@@ -198,7 +219,7 @@ export const ReportsView = ({
         <>
           <div
             aria-busy={isFetching}
-            className={`flex flex-wrap items-center gap-2 p-3 bg-white border border-slate-200 rounded-lg transition-opacity duration-150 ${isFetching ? "opacity-60" : ""}`}
+            className={`flex flex-wrap items-center gap-2 rounded-xl border border-slate-200/90 bg-white p-3 shadow-2xs transition-opacity duration-150 ${isFetching ? "opacity-60" : ""}`}
           >
             <input
               value={filter.searchTerm}
@@ -208,16 +229,16 @@ export const ReportsView = ({
               }}
               placeholder="Tìm sinh viên hoặc tiêu đề báo cáo"
               aria-label="Tìm sinh viên hoặc tiêu đề báo cáo"
-              className="flex-1 min-w-60 px-3 py-2 text-xs border border-slate-200 rounded-md outline-none focus:border-blue-500"
+              className="min-h-10 min-w-60 flex-1 rounded-full border border-slate-300 px-4 text-sm font-medium text-slate-800 outline-none transition-colors placeholder:font-normal placeholder:text-slate-500 hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20 sm:text-xs"
             />
-            <button type="button" onClick={applySearch} className="il-btn il-btn-primary text-xs">
+            <button type="button" onClick={applySearch} className="inline-flex min-h-10 items-center justify-center rounded-full bg-[#026aa7] px-4 text-xs font-semibold text-white transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2">
               Tìm
             </button>
             <select
               value={filter.status}
               onChange={(e) => setStatus(e.target.value)}
               aria-label="Lọc theo trạng thái"
-              className="px-3 py-2 text-xs border border-slate-200 rounded-md"
+              className="min-h-10 rounded-full border border-slate-300 bg-white px-4 text-xs font-medium text-slate-700 outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
             >
               <option value="">Tất cả trạng thái</option>
               <option value="Submitted">Chờ duyệt</option>
@@ -229,7 +250,7 @@ export const ReportsView = ({
               type="button"
               disabled={!pagination.hasPrev}
               onClick={() => goToPage(pagination.page - 1)}
-              className="il-btn il-btn-secondary text-xs disabled:opacity-50"
+              className="inline-flex min-h-10 items-center justify-center rounded-full border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Trước
             </button>
@@ -242,7 +263,7 @@ export const ReportsView = ({
               type="button"
               disabled={!pagination.hasNext}
               onClick={() => goToPage(pagination.page + 1)}
-              className="il-btn il-btn-secondary text-xs disabled:opacity-50"
+              className="inline-flex min-h-10 items-center justify-center rounded-full border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Sau
             </button>

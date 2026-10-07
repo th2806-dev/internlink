@@ -1,4 +1,5 @@
 import type { DocumentListItemDto } from "../types/api";
+import type { DocumentItem } from "../types/document";
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -33,21 +34,23 @@ export function mapDocumentListItemToStudentTemplate(d: DocumentListItemDto) {
 }
 
 /** UI row shape used by Lecturer TemplatesView document list. */
-export function mapDocumentListItemToUi(d: DocumentListItemDto) {
+export function mapDocumentListItemToUi(d: DocumentListItemDto): DocumentItem {
   const ext = d.fileName.split(".").pop()?.toUpperCase() || "FILE";
   return {
     id: d.id,
     title: d.title,
-    category: d.category || "Biểu mẫu",
+    category: d.category || "Chưa phân loại",
     fileType: ext,
     fileSize: formatFileSize(d.fileSize),
-    version: d.version ? `v${d.version}` : "v1.0",
+    version: d.version ? `v${d.version}` : "—",
     isLatest: true,
     updatedAt: new Date(d.uploadedAt).toLocaleDateString("vi-VN"),
-    uploader: d.uploadedBy?.fullName || (!d.internshipId ? "Quản trị khoa" : "—"),
+    uploader: d.uploadedBy?.fullName || "Chưa cập nhật",
     uploaderRole: !d.internshipId ? "Khoa / Quản trị khoa" : "Giảng viên hướng dẫn",
     downloads: d.downloadCount ?? 0,
     semester: d.semesterName || "Áp dụng chung mọi kỳ",
+    semesterId: d.semesterId ?? undefined,
+    department: d.department || "Toàn trường",
     major: d.department ? `Khoa ${d.department}` : "Toàn trường",
     status: d.isPublished === false ? "Ngưng lưu hành" as const : "Đang lưu hành" as const,
     isPublished: d.isPublished !== false,
@@ -58,14 +61,7 @@ export function mapDocumentListItemToUi(d: DocumentListItemDto) {
     internshipId: d.internshipId,
     isOfficial: !d.internshipId,
     fileName: d.fileName,
-    versionHistory: [
-      {
-        version: d.version ? `v${d.version}` : "v1.0",
-        date: new Date(d.uploadedAt).toLocaleDateString("vi-VN"),
-        author: d.uploadedBy?.fullName || "Quản trị khoa",
-        note: !d.internshipId ? "Ban hành biểu mẫu chính thức" : "Tải lên hệ thống",
-      },
-    ],
+    versionHistory: [],
     archiveLogs: [],
   };
 }

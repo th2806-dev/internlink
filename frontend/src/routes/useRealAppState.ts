@@ -3,7 +3,7 @@ import { useLecturerPortalData } from "../hooks/useLecturerPortalData";
 import { useSemester } from "../contexts/SemesterContext";
 import type { AuthUser } from "../contexts/AuthContext";
 import type { AppState } from "../types/appState";
-import type { ActionItem } from "../types/common";
+import type { ActionItem, Deadline } from "../types/common";
 
 export function useRealAppState(
   role: string | null,
@@ -136,7 +136,11 @@ export function useRealAppState(
   const stats = useMemo(() => {
     const total = assignedStudents.length;
     const interning = assignedStudents.filter(
-      (s) => s.company !== "Chưa có",
+      (s) =>
+        s.company &&
+        s.company !== "Chưa có" &&
+        s.company !== "Chưa phân công doanh nghiệp" &&
+        s.company !== "—",
     ).length;
     const pending = assignedStudents.filter(
       (s) => s.status === "Chờ phản hồi" || s.status === "Đang chỉnh sửa",
@@ -156,7 +160,8 @@ export function useRealAppState(
     const apiStats = lecturerPortal.dashboardStats;
     return {
       total: apiStats?.totalStudents ?? total,
-      interning: apiStats?.assignedCompanyCount ?? interning,
+      interning: apiStats?.interningCount ?? interning,
+      assignedCompanyCount: apiStats?.assignedCompanyCount ?? interning,
       pending: apiStats?.pendingReviewsCount ?? pending,
       overdue: apiStats?.overdueReportsCount ?? overdue,
       completed: apiStats?.completedCount ?? completed,
@@ -183,81 +188,80 @@ export function useRealAppState(
   };
 
   const weeklyTrendData = useMemo(() => {
-    if (lecturerPortal.weeklyTrend.length > 0) {
-      return lecturerPortal.weeklyTrend.map((week) => ({
-        label: week.label || `Tuần ${week.weekNumber}`,
-        value: week.onTimeCount,
-        late: week.lateCount,
-        missing: week.missingCount,
-      }));
-    }
-    const weekMap = new Map<number, { submitted: number; approved: number }>();
-    for (const r of lecturerPortal.weeklyReports) {
-      const wk = r.weekNumber ?? 0;
-      if (!weekMap.has(wk)) weekMap.set(wk, { submitted: 0, approved: 0 });
-      const entry = weekMap.get(wk)!;
-      entry.submitted++;
-      if (r.status === "Approved" || r.status === "Reviewed") entry.approved++;
-    }
-    const weeks = Array.from(weekMap.entries()).sort((a, b) => a[0] - b[0]);
-    if (weeks.length === 0) return [];
-    return weeks.map(([wk, counts]) => ({
-      label: `T${wk}`,
-      value: counts.submitted,
-      target: assignedStudents.length || 0,
+    return lecturerPortal.weeklyTrend.map((week) => ({
+      label: week.label,
+      value: week.onTimeCount,
+      target: week.totalStudents,
+      rate: week.complianceRate,
+      weekNumber: week.weekNumber,
+      late: week.lateCount,
+      missing: week.missingCount,
+      pending: week.pendingCount,
     }));
-  }, [assignedStudents, lecturerPortal.weeklyReports, lecturerPortal.weeklyTrend]);
-
-  // Full 1..totalWeeks series so the chart always shows every internship week
-  // (missing weeks render as 0 submitted instead of disappearing entirely).
-  // NOTE: matched by week INDEX, not label — the API returns labels like
-  // "Tuần 1" which would never match a "T1" key.
-  const fullWeeklyTrendData = useMemo(() => {
-    type TrendPoint = { label: string; value: number; target?: number; late?: number; missing?: number };
-    const points = weeklyTrendData as TrendPoint[];
-    const totalWeeks = selectedSemester?.totalWeeks ?? 6;
-    return Array.from({ length: totalWeeks }, (_, i): TrendPoint => {
-      const w = points[i];
-      return {
-        label: `T${i + 1}`,
-        value: w?.value ?? 0,
-        late: w?.late ?? 0,
-        missing:
-          w?.missing ??
-          Math.max(0, (w?.target ?? assignedStudents.length) - (w?.value ?? 0)),
-      };
-    });
-  }, [weeklyTrendData, selectedSemester?.totalWeeks, assignedStudents.length]);
+  }, [lecturerPortal.weeklyTrend]);
 
   return {
     currentLecturer,
+    lecturerProfile: lecturerPortal.profile,
     assignedStudents,
     assignedSubmissions: lecturerPortal.submissions,
     lecturerEnterprises: lecturerPortal.enterprises,
     dynamicActionItems,
-    weeklyTrendData: fullWeeklyTrendData,
+    weeklyTrendData,
     deadlines: (() => {
-      const reportsWithDueDates = lecturerPortal.weeklyReports.filter(
-        (report) => report.dueDate,
-      );
-      /** Parse defensively: returns null for null/empty/"Invalid Date" strings so a
-        * single malformed dueDate can never crash the whole app again. */
+      const totalStudents = assignedStudents.length;
+      const fmt = (d: Date) => ({ day: String(d.getDate()), month: `Th${d.getMonth() + 1}` });
+      const dayDiff = (d: Date) =>
+        Math.ceil((d.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+
+      /** Parse defensively */
       const safeDate = (raw: string | null | undefined): Date | null => {
         if (!raw) return null;
         const d = new Date(raw);
         return Number.isNaN(d.getTime()) ? null : d;
       };
-      const fmt = (d: Date) => ({ day: String(d.getDate()), month: `Th${d.getMonth() + 1}` });
-      const daysLeft = (d: Date) => {
-        const diff = Math.ceil((d.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
-        return diff > 0 ? `Còn ${diff} ngày` : "Đã hết hạn";
-      };
-      const dayDiff = (d: Date) =>
-        Math.ceil((d.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+
+      // 1. Ưu tiên: Lấy từ cấu hình báo cáo thực tế của học kỳ (SemesterReportSchedules)
+      if (lecturerPortal.schedules && lecturerPortal.schedules.length > 0) {
+        const scheduleDeadlines = lecturerPortal.schedules
+          .filter((s) => !s.isFinalReport && s.dueDate)
+          .sort((a, b) => a.weekNumber - b.weekNumber)
+          .map((s) => {
+            const due = safeDate(s.dueDate);
+            if (!due) return null;
+            const diff = dayDiff(due);
+            const submittedCount = lecturerPortal.weeklyReports.filter(
+              (r) => r.weekNumber === s.weekNumber && r.status !== "Draft",
+            ).length;
+            const unsubmittedCount = Math.max(0, totalStudents - submittedCount);
+            const isOverdue = diff < 0 && unsubmittedCount > 0;
+
+            return {
+              id: `dl-schedule-w${s.weekNumber}`,
+              title: s.title || `Báo cáo tuần ${s.weekNumber}`,
+              ...fmt(due),
+              subtitle: isOverdue
+                ? `${unsubmittedCount}/${totalStudents} sinh viên chưa nộp`
+                : `${submittedCount}/${totalStudents} sinh viên đã nộp`,
+              studentCount: totalStudents,
+              isoDate: due.toISOString(),
+              daysLeft: diff,
+              isOverdue,
+            };
+          })
+          .filter(Boolean) as Deadline[];
+
+        if (scheduleDeadlines.length > 0) {
+          return scheduleDeadlines;
+        }
+      }
+
+      // 2. Fallback: Lấy từ weeklyReports có dueDate
+      const reportsWithDueDates = lecturerPortal.weeklyReports.filter(
+        (report) => report.dueDate,
+      );
 
       if (reportsWithDueDates.length > 0) {
-        // Group by week so the lecturer sees one row per deadline, not one per report.
-        // Skip any report whose dueDate cannot be parsed to a valid Date.
         const byWeek = new Map<number, { due: Date; total: number; overdue: number }>();
         for (const report of reportsWithDueDates) {
           const due = safeDate(report.dueDate);

@@ -3,17 +3,12 @@ import { Toast } from "../../../components/common/Toast";
 import {
   BarChart2,
   BarChart3,
-  Users,
-  CheckCircle2,
   Building2,
-  Award,
-  TrendingUp,
   PieChart,
   Star,
 } from "lucide-react";
-import { PageHeader } from "../../../components/common/PageHeader";
 import { Panel } from "../../../components/common/Panel";
-import { KpiCard, KpiGrid } from "../../../components/common/KpiCard";
+import { LecturerSubPageHeader } from "./LecturerSubPageHeader";
 import { lecturerAnalyticsService } from "../../../services/lecturerAnalytics.service";
 import { lecturerInternshipsService, type LecturerSemesterOptionDto } from "../../../services/lecturerInternships.service";
 import { useSemester, toApiSemesterId } from "../../../contexts/SemesterContext";
@@ -42,6 +37,9 @@ export const LecturerAnalytics = () => {
   const [companyStats, setCompanyStats] = useState<LecturerCompanyStatDto[]>([]);
   const [semesterComparison, setSemesterComparison] = useState<LecturerSemesterComparisonRow[]>([]);
   const [isComparisonLoading, setIsComparisonLoading] = useState(true);
+  const [isStatsLoading, setIsStatsLoading] = useState(true);
+  const [statsError, setStatsError] = useState<string | null>(null);
+  const [comparisonError, setComparisonError] = useState<string | null>(null);
 
   const semesterId = toApiSemesterId(selectedSemester?.id);
   const hasStatsData = statsData !== null;
@@ -57,6 +55,12 @@ export const LecturerAnalytics = () => {
       : companyStats.filter((c) => c.companyName === selectedCompanyFilter);
 
   const fetchData = useCallback(async () => {
+    setIsStatsLoading(true);
+    setStatsError(null);
+    setStatsData(null);
+    setWeeklyTrend([]);
+    setGradeDist(null);
+    setCompanyStats([]);
     try {
       const [stats, trend, grade, company] = await Promise.all([
         lecturerAnalyticsService.getStats(semesterId),
@@ -69,8 +73,11 @@ export const LecturerAnalytics = () => {
       setGradeDist(grade);
       setCompanyStats(company);
     } catch (err) {
-      // Lỗi phải hiện cho người dùng (toast) — không chỉ console.error để bảng trống im lặng.
-      showToast(getApiErrorMessage(err));
+      const message = getApiErrorMessage(err);
+      setStatsError(message);
+      showToast(message);
+    } finally {
+      setIsStatsLoading(false);
     }
   }, [semesterId, showToast]);
 
@@ -81,6 +88,8 @@ export const LecturerAnalytics = () => {
   useEffect(() => {
     let cancelled = false;
     setIsComparisonLoading(true);
+    setComparisonError(null);
+    setSemesterComparison([]);
     lecturerInternshipsService.getAssignedSemesters()
       .then((assignedSemesters) => Promise.all(
         assignedSemesters.map(async (semester) => ({
@@ -93,7 +102,11 @@ export const LecturerAnalytics = () => {
         if (!cancelled) setSemesterComparison(rows);
       })
       .catch((error) => {
-        if (!cancelled) showToast(getApiErrorMessage(error));
+        if (!cancelled) {
+          const message = getApiErrorMessage(error);
+          setComparisonError(message);
+          showToast(message);
+        }
       })
       .finally(() => {
         if (!cancelled) setIsComparisonLoading(false);
@@ -113,7 +126,6 @@ export const LecturerAnalytics = () => {
   const interningStudents = statsData?.interningCount ?? 0;
   const overdueCount = statsData?.overdueReportsCount ?? 0;
   const avgGrade = statsData?.averageGrade ?? 0;
-  const assignedShare = totalStudents > 0 ? Math.round((interningStudents / totalStudents) * 100) : 0;
   const latestWeeklyTrend = weeklyTrend.reduce<LecturerWeeklyTrendDto | null>(
     (latest, item) => !latest || item.weekNumber > latest.weekNumber ? item : latest,
     null,
@@ -125,65 +137,44 @@ export const LecturerAnalytics = () => {
   const avgGradeLabel = hasGrades ? avgGrade.toFixed(1) : "—";
 
   return (
-    <div className="space-y-5 max-w-[1500px] mx-auto animate-in fade-in duration-200 pb-12 font-sans">
+    <div className="mx-auto max-w-[1300px] animate-in fade-in duration-200 space-y-4 pb-12 font-sans">
       {/* Toast Notification */}
       <Toast message={toastMsg} onClose={() => setToastMsg(null)} />
 
-      <PageHeader
+      <LecturerSubPageHeader
         icon={BarChart2}
         title="Thống kê & Phân tích Chuyên sâu"
         subtitle={`Số liệu nhóm hướng dẫn · ${selectedSemester?.name ?? "Tất cả học kỳ"}`}
       />
 
-      <KpiGrid>
-        <KpiCard
-          tone="blue"
-          title="Sinh viên hướng dẫn"
-          value={hasStatsData ? totalStudents : "—"}
-          unit={hasStatsData ? "sinh viên" : undefined}
-          icon={Users}
-          footer={hasStatsData
-            ? (totalStudents > 0 ? "Sinh viên thuộc nhóm hướng dẫn" : "Chưa có sinh viên trong học kỳ")
-            : "Chưa có dữ liệu học kỳ"}
-        />
-        <KpiCard
-          tone="emerald"
-          title="Đang thực tập tại DN"
-          value={hasStatsData ? interningStudents : "—"}
-          unit={hasStatsData ? "sinh viên" : undefined}
-          icon={CheckCircle2}
-          footer={hasStatsData
-            ? (totalStudents > 0 ? `${assignedShare}% Đã có vị trí tại DN` : "Chưa có sinh viên được ghi nhận")
-            : "Chưa có dữ liệu học kỳ"}
-        />
-        <KpiCard
-          tone="sky"
-          title="Tuân thủ Tiến độ Nộp"
-          value={hasStatsData ? complianceRate : "—"}
-          unit={latestWeeklyTrend ? "đúng hạn ở tuần gần nhất" : undefined}
-          icon={TrendingUp}
-          footer={hasStatsData ? `${overdueCount} báo cáo quá hạn` : "Chưa có dữ liệu học kỳ"}
-        />
-        <KpiCard
-          tone="amber"
-          title="Điểm Trung Bình Đợt"
-          value={avgGradeLabel}
-          unit={hasGrades ? "/ 10" : undefined}
-          icon={Award}
-          footer={hasGrades ? `${statsData?.evaluatedCount} sinh viên đã có điểm` : "Chưa có dữ liệu đánh giá"}
-        />
-      </KpiGrid>
+      {statsError && (
+        <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-medium text-rose-700">
+          Không thể tải số liệu học kỳ: {statsError}
+        </p>
+      )}
 
-      <Panel className="space-y-3">
+      <Panel className="rounded-xl border border-slate-200/90 shadow-2xs">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
+          <span className="text-slate-500">Sinh viên hướng dẫn: <strong className="text-slate-800">{hasStatsData ? totalStudents : "—"}</strong></span>
+          <span className="text-slate-500">Đang thực tập tại DN: <strong className="text-slate-800">{hasStatsData ? interningStudents : "—"}</strong></span>
+          <span className="text-slate-500">Tuân thủ tuần gần nhất: <strong className="text-slate-800">{hasStatsData ? complianceRate : "—"}</strong></span>
+          <span className="text-slate-500">Báo cáo quá hạn: <strong className="text-slate-800">{hasStatsData ? overdueCount : "—"}</strong></span>
+          <span className="text-slate-500">Điểm trung bình: <strong className="text-slate-800">{avgGradeLabel}{hasGrades ? " / 10" : ""}</strong></span>
+        </div>
+      </Panel>
+
+      <Panel className="space-y-3 rounded-xl border border-slate-200/90 shadow-2xs">
         <div className="flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 pb-3">
           <div>
             <h2 className="text-sm font-bold text-slate-900">Lịch sử hướng dẫn theo học kỳ</h2>
             <p className="mt-1 text-xs text-slate-500">Kết quả và hoạt động tại các kỳ GV được phân công</p>
           </div>
-          <BarChart3 className="h-4 w-4 text-blue-700" />
+          <BarChart3 className="h-4 w-4 text-[#026aa7]" />
         </div>
         {isComparisonLoading ? (
           <p className="py-4 text-center text-xs text-slate-500">Đang tổng hợp các kỳ đã tham gia…</p>
+        ) : comparisonError ? (
+          <p role="alert" className="py-4 text-center text-xs text-rose-700">Không thể tải dữ liệu so sánh: {comparisonError}</p>
         ) : semesterComparison.length === 0 ? (
           <p className="py-4 text-center text-xs text-slate-500">Chưa có dữ liệu kỳ thực tập để so sánh.</p>
         ) : (
@@ -202,7 +193,7 @@ export const LecturerAnalytics = () => {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {semesterComparison.map(({ semester, stats, activity }) => (
-                  <tr key={semester.id} className={semester.id === semesterId ? "bg-blue-50/60" : "hover:bg-slate-50"}>
+                  <tr key={semester.id} className={semester.id === semesterId ? "bg-[#026aa7]/5" : "hover:bg-slate-50"}>
                     <td className="px-3 py-2.5">
                       <p className="font-semibold text-slate-900">{semester.name}</p>
                       <p className="mt-0.5 text-[10px] text-slate-500">{semester.term} · {semester.academicYear}</p>
@@ -210,7 +201,7 @@ export const LecturerAnalytics = () => {
                     <td className="px-3 py-2.5 text-right font-medium text-slate-700">{stats.totalStudents}</td>
                     <td className="px-3 py-2.5 text-right font-medium text-slate-700">{stats.assignedCompanyCount}</td>
                     <td className="px-3 py-2.5 text-right font-medium text-slate-700">{stats.completedCount}</td>
-                    <td className="px-3 py-2.5 text-right font-bold text-blue-800">
+                    <td className="px-3 py-2.5 text-right font-bold text-[#026aa7]">
                       {stats.evaluatedCount > 0 ? stats.averageGrade.toFixed(2) : "—"}
                     </td>
                     <td className="px-3 py-2.5 text-right font-medium text-slate-700">{activity.reviewedReportsCount}</td>
@@ -229,7 +220,7 @@ export const LecturerAnalytics = () => {
         <select
           value={selectedCompanyFilter}
           onChange={(e) => setSelectedCompanyFilter(e.target.value)}
-          className="w-full sm:w-72 p-2 bg-white border border-slate-200 rounded-md outline-none font-semibold text-slate-800 text-[11px]"
+          className="min-h-10 w-full rounded-full border border-slate-300 bg-white px-4 py-2 text-[11px] font-semibold text-slate-800 outline-none transition-colors focus:border-[#026aa7] focus:ring-2 focus:ring-[#026aa7]/20 sm:w-72"
           aria-label="Lọc thống kê theo doanh nghiệp"
         >
           <option value="Tất cả doanh nghiệp">Tất cả doanh nghiệp</option>
@@ -242,11 +233,11 @@ export const LecturerAnalytics = () => {
       {/* 2. CHARTS & VISUAL ANALYTICS */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Weekly Submission Trend */}
-        <div className="lg:col-span-2 bg-white p-5 rounded-lg border border-slate-200/80 shadow-xs space-y-4">
+        <div className="space-y-4 rounded-xl border border-slate-200/90 bg-white p-5 shadow-2xs lg:col-span-2">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <div>
               <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
-                <BarChart3 className="w-4 h-4 text-blue-600" />
+                <BarChart3 className="w-4 h-4 text-[#026aa7]" />
                 {weeklyTrend.length > 0
                   ? (() => {
                     const firstLabel = weeklyTrend[0]?.label ?? "Tuần 1";
@@ -262,7 +253,7 @@ export const LecturerAnalytics = () => {
               </p>
             </div>
             {hasStatsData && totalStudents > 0 ? (
-              <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 font-bold text-xs rounded-lg border border-emerald-200 shrink-0">
+              <span className="shrink-0 rounded-full border border-[#7bc043]/30 bg-[#7bc043]/10 px-2.5 py-1 text-xs font-bold text-[#446d20]">
                 {complianceRate} Tuân thủ
               </span>
             ) : null}
@@ -270,15 +261,17 @@ export const LecturerAnalytics = () => {
 
           {/* Visual Bar Chart from API */}
           <div className="space-y-3 pt-2">
-            {weeklyTrend.length === 0 ? (
-              <p className="text-xs text-slate-400 text-center py-4">Chưa có dữ liệu báo cáo tuần</p>
+            {isStatsLoading ? (
+              <p role="status" className="py-4 text-center text-xs text-slate-500">Đang tải dữ liệu báo cáo tuần…</p>
+            ) : weeklyTrend.length === 0 ? (
+              <p className="py-4 text-center text-xs text-slate-500">{statsError ? "Không thể hiển thị dữ liệu báo cáo tuần." : "Chưa có dữ liệu báo cáo tuần."}</p>
             ) : (
               weeklyTrend.map((item, idx) => (
                 <div key={idx} className="space-y-1.5">
                   <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-xs font-bold text-slate-800">
                     <span>{item.label}</span>
                     <span className="text-slate-500 text-[11px]">
-                      <strong className="text-emerald-600">{item.onTimeCount}</strong>{" "}
+                      <strong className="text-[#446d20]">{item.onTimeCount}</strong>{" "}
                       đúng hạn •{" "}
                       <strong className="text-amber-600">{item.lateCount}</strong> trễ
                       • <strong className="text-rose-600">{item.missingCount}</strong>{" "}
@@ -288,7 +281,7 @@ export const LecturerAnalytics = () => {
                   <div className="h-4 w-full bg-slate-100 rounded-full overflow-hidden flex shadow-inner">
                     <div
                       style={{ width: `${item.totalStudents > 0 ? (item.onTimeCount / item.totalStudents) * 100 : 0}%` }}
-                      className="bg-emerald-500 h-full transition-all duration-500"
+                      className="h-full bg-[#7bc043] transition-all duration-500"
                       title={`Đúng hạn: ${item.onTimeCount} SV`}
                     />
                     <div
@@ -316,7 +309,7 @@ export const LecturerAnalytics = () => {
               return (
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                   <span className="flex items-center gap-1.5 font-semibold">
-                    <span className="w-3 h-3 rounded-sm bg-emerald-500 inline-block" />
+                    <span className="inline-block h-3 w-3 rounded-sm bg-[#7bc043]" />
                     Nộp đúng hạn ({((totOnTime / totAll) * 100).toFixed(1)}%)
                   </span>
                   <span className="flex items-center gap-1.5 font-semibold">
@@ -333,7 +326,7 @@ export const LecturerAnalytics = () => {
               <span className="text-slate-400">Chưa có dữ liệu phân tích tuần</span>
             )}
             {weeklyTrend.length > 0 ? (
-              <span className="font-bold text-blue-600">
+              <span className="font-bold text-[#026aa7]">
                 {weeklyTrend.length} tuần có dữ liệu
               </span>
             ) : null}
@@ -341,23 +334,25 @@ export const LecturerAnalytics = () => {
         </div>
 
         {/* Grade Distribution Breakdown */}
-        <div className="bg-white p-5 rounded-lg border border-slate-200/80 shadow-xs space-y-4 flex flex-col justify-between">
+        <div className="flex flex-col justify-between space-y-4 rounded-xl border border-slate-200/90 bg-white p-5 shadow-2xs">
           <div>
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
-                <PieChart className="w-4 h-4 text-blue-600" />
+                <PieChart className="w-4 h-4 text-[#026aa7]" />
                 Phân bố Phổ điểm Đánh giá
               </h3>
-              <span className="text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
-                {gradeDist?.totalStudents ?? totalStudents} Sinh viên
+              <span className="rounded-full border border-[#026aa7]/20 bg-[#026aa7]/5 px-3 py-1 text-xs font-bold text-[#025a8e]">
+                {gradeDist?.totalStudents ?? (hasStatsData ? totalStudents : "—")} Sinh viên
               </span>
             </div>
 
             <div className="space-y-3 pt-3 text-xs">
-              {gradeDist ? (
+              {isStatsLoading ? (
+                <p role="status" className="py-4 text-center text-xs text-slate-500">Đang tải phân bố điểm…</p>
+              ) : gradeDist ? (
                 [
-                  { label: "Xuất sắc (9.0 - 10.0)", count: gradeDist.excellentCount, color: "bg-emerald-500", textColor: "text-emerald-700" },
-                  { label: "Giỏi (8.0 - 8.9)", count: gradeDist.goodCount, color: "bg-blue-500", textColor: "text-blue-700" },
+                  { label: "Xuất sắc (9.0 - 10.0)", count: gradeDist.excellentCount, color: "bg-[#7bc043]", textColor: "text-[#446d20]" },
+                  { label: "Giỏi (8.0 - 8.9)", count: gradeDist.goodCount, color: "bg-[#4d74c9]", textColor: "text-[#3e5e9f]" },
                   { label: "Khá (7.0 - 7.9)", count: gradeDist.fairCount, color: "bg-amber-500", textColor: "text-amber-700" },
                   { label: "Trung bình (5.5 - 6.9)", count: gradeDist.averageCount, color: "bg-slate-400", textColor: "text-slate-600" },
                   { label: "Không đạt (< 5.5)", count: gradeDist.failCount, color: "bg-rose-500", textColor: "text-rose-600" },
@@ -386,7 +381,7 @@ export const LecturerAnalytics = () => {
 
           <div className="bg-slate-50 p-3 rounded-md border border-slate-200 text-xs text-slate-600 font-medium flex items-center justify-between">
             <span>Tỷ lệ xếp loại Khá - Giỏi - Xuất sắc:</span>
-            <strong className="text-emerald-700 font-bold">
+            <strong className="font-bold text-[#446d20]">
               {gradeDist && gradeDist.totalStudents > 0
                 ? ((((gradeDist.excellentCount + gradeDist.goodCount + gradeDist.fairCount) / gradeDist.totalStudents) * 100).toFixed(1)) + "%"
                 : "—"}
@@ -396,18 +391,18 @@ export const LecturerAnalytics = () => {
       </div>
 
       {/* COMPANY STATISTICS */}
-      <div className="bg-white p-5 rounded-lg border border-slate-200/80 shadow-xs space-y-4">
+      <div className="space-y-4 rounded-xl border border-slate-200/90 bg-white p-5 shadow-2xs">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
           <div>
             <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
-              <Building2 className="w-5 h-5 text-blue-600" />
+              <Building2 className="w-5 h-5 text-[#026aa7]" />
               Thống kê Doanh nghiệp Hợp tác &amp; Vị trí Thực tập
             </h3>
             <p className="text-xs text-slate-500">
               Danh sách các đơn vị tiếp nhận sinh viên hướng dẫn của giảng viên
             </p>
           </div>
-          <span className="px-3 py-1 bg-blue-50 text-blue-700 font-bold text-xs rounded-lg border border-blue-200">
+          <span className="rounded-full border border-[#026aa7]/20 bg-[#026aa7]/5 px-3 py-1 text-xs font-bold text-[#025a8e]">
             {companyStats.length} Doanh nghiệp · {filteredCompanyStats.length} đang lọc
           </span>
         </div>
@@ -425,8 +420,10 @@ export const LecturerAnalytics = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
-              {filteredCompanyStats.length === 0 ? (
-                <tr><td colSpan={5} className="p-6 text-center text-slate-400 text-xs">Chưa có dữ liệu doanh nghiệp</td></tr>
+              {isStatsLoading ? (
+                <tr><td colSpan={5} className="p-6 text-center text-slate-500 text-xs">Đang tải dữ liệu doanh nghiệp…</td></tr>
+              ) : filteredCompanyStats.length === 0 ? (
+                <tr><td colSpan={5} className="p-6 text-center text-slate-500 text-xs">{statsError ? "Không thể tải dữ liệu doanh nghiệp." : "Chưa có dữ liệu doanh nghiệp."}</td></tr>
               ) : (
                 filteredCompanyStats.map((item, index) => (
                   <tr key={index} className="hover:bg-slate-50/80 transition-colors">
@@ -435,7 +432,7 @@ export const LecturerAnalytics = () => {
                       <span>{item.companyName}</span>
                     </td>
                     <td className="p-3">
-                      <span className="font-bold text-blue-600 px-2 py-0.5 bg-blue-50 rounded-md">
+                      <span className="rounded-md bg-[#026aa7]/5 px-2 py-0.5 font-bold text-[#026aa7]">
                         {item.studentCount} sinh viên
                       </span>
                     </td>
@@ -449,7 +446,7 @@ export const LecturerAnalytics = () => {
                       </div>
                     </td>
                     <td className="p-3 text-right">
-                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${item.partnershipLevel.includes("Xuất") ? "text-emerald-600 bg-emerald-50 border-emerald-200" : "text-blue-600 bg-blue-50 border-blue-200"}`}>
+                      <span className={`rounded-full border px-2.5 py-0.5 text-[10px] font-bold ${item.partnershipLevel.includes("Xuất") ? "border-[#7bc043]/30 bg-[#7bc043]/10 text-[#446d20]" : "border-[#026aa7]/20 bg-[#026aa7]/5 text-[#025a8e]"}`}>
                         {item.partnershipLevel}
                       </span>
                     </td>

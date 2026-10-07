@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { Toast } from "../../../components/common/Toast";
+import { LecturerSubPageHeader } from "./LecturerSubPageHeader";
 import {
   BookOpen,
   Search,
@@ -13,28 +14,34 @@ import {
   BarChart3,
   ArrowUpRight,
 } from "lucide-react";
+import type { DocumentItem } from "../../../types/document";
+
 export const StudentDocumentLibrary = ({
   documents,
   onSelectDoc,
   onDownloadDoc,
   onSwitchToLecturerView,
+}: {
+  documents: DocumentItem[];
+  onSelectDoc: (doc: DocumentItem) => void;
+  onDownloadDoc: (doc: DocumentItem) => Promise<boolean>;
+  onSwitchToLecturerView?: () => void;
 }) => {
   const [selectedCategory, setSelectedCategory] = useState("T\u1EA5t c\u1EA3");
   const [searchQuery, setSearchQuery] = useState("");
-  const [recentDownloads, setRecentDownloads] = useState<any[]>([]);
-  const [toastMessage, setToastMessage] = useState(null);
-  const triggerToast = (msg) => {
+  const [recentDownloads, setRecentDownloads] = useState<DocumentItem[]>([]);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const triggerToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3e3);
   };
-  const categories = [
-    "T\u1EA5t c\u1EA3",
-    "Bi\u1EC3u m\u1EABu",
-    "K\u1EBF ho\u1EA1ch",
-    "Nh\u1EADt k\xFD",
-    "B\xE1o c\xE1o",
-    "H\u01B0\u1EDBng d\u1EABn",
-  ];
+  const categories = useMemo(
+    () => [
+      "T\u1EA5t c\u1EA3",
+      ...new Set(documents.map((doc) => doc.category)),
+    ],
+    [documents],
+  );
   const filteredDocs = useMemo(() => {
     return documents.filter((doc) => {
       const matchesSearch =
@@ -47,8 +54,10 @@ export const StudentDocumentLibrary = ({
       return matchesSearch && matchesCat;
     });
   }, [documents, searchQuery, selectedCategory]);
-  const handleDownload = (doc) => {
-    onDownloadDoc(doc);
+  const handleDownload = async (doc: DocumentItem) => {
+    const downloaded = await onDownloadDoc(doc);
+    if (!downloaded) return;
+
     if (!recentDownloads.some((d) => d.id === doc.id)) {
       setRecentDownloads([doc, ...recentDownloads.slice(0, 3)]);
     }
@@ -57,13 +66,13 @@ export const StudentDocumentLibrary = ({
     );
   };
   // Luôn trả về badge hợp lệ — ZIP/RAR/fileType lạ rơi vào nhánh mặc định thay vì undefined (crash).
-  const getFileTypeBadge = (type) => {
+  const getFileTypeBadge = (type: string) => {
     switch ((type || "").toUpperCase()) {
       case "DOCX":
       case "DOC":
         return {
-          bg: "bg-blue-50 text-blue-700 border-blue-200",
-          icon: <FileText className="w-5 h-5 text-blue-600" />,
+          bg: "bg-[#026aa7]/5 text-[#026aa7] border-[#026aa7]/20",
+          icon: <FileText className="w-5 h-5 text-[#026aa7]" />,
         };
       case "PDF":
         return {
@@ -73,8 +82,8 @@ export const StudentDocumentLibrary = ({
       case "XLSX":
       case "XLS":
         return {
-          bg: "bg-emerald-50 text-emerald-700 border-emerald-200",
-          icon: <FileSpreadsheet className="w-5 h-5 text-emerald-600" />,
+          bg: "bg-slate-50 text-slate-700 border-slate-200",
+          icon: <FileSpreadsheet className="w-5 h-5 text-slate-600" />,
         };
       case "PPTX":
       case "PPT":
@@ -101,36 +110,28 @@ export const StudentDocumentLibrary = ({
       {/* Toast Alert */}
       <Toast message={toastMessage} onClose={() => setToastMessage(null)} />
 
-      {/* HEADER WITH ROLE SWITCHER */}
-      <div className="bg-white p-5 rounded-lg border border-slate-200/80 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <BookOpen className="w-6 h-6 text-blue-600" />
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight">
-              Biểu mẫu thực tập
-            </h1>
-            <span className="px-2.5 py-0.5 bg-emerald-100 text-emerald-800 font-bold text-[10px] rounded-full border border-emerald-200">
-              Giao diện Sinh viên
-            </span>
-          </div>
-          <p className="text-xs text-slate-500 font-medium mt-0.5">
-            Tải các biểu mẫu và tài liệu do giảng viên cung cấp.
-          </p>
-        </div>
-
+      <LecturerSubPageHeader
+        icon={BookOpen}
+        title="Biểu mẫu thực tập"
+        subtitle="Tải các biểu mẫu và tài liệu do giảng viên cung cấp."
+      >
+        <span className="rounded-full border border-white/20 bg-white/15 px-3 py-1 text-[10px] font-bold text-white">
+          Giao diện Sinh viên
+        </span>
         {onSwitchToLecturerView && (
           <button
+            type="button"
             onClick={onSwitchToLecturerView}
-            className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-md transition-colors border border-slate-200 flex items-center gap-1.5"
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-white/30 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
           >
             <span>Chuyển sang Chế độ Giảng viên</span>
-            <ArrowUpRight className="w-3.5 h-3.5 text-slate-500" />
+            <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
         )}
-      </div>
+      </LecturerSubPageHeader>
 
       {/* SEARCH & CATEGORY TABS */}
-      <div className="bg-white p-4 rounded-lg border border-slate-200/80 shadow-xs space-y-3">
+      <div className="space-y-3 rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs">
         {/* Search */}
         <div className="relative">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -139,7 +140,7 @@ export const StudentDocumentLibrary = ({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Tìm tên biểu mẫu hoặc tài liệu..."
-            className="w-full pl-10 pr-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-md outline-none focus:border-blue-500 focus:bg-white transition-all text-slate-900 font-medium"
+            className="min-h-11 w-full rounded-full border border-slate-300 bg-white pl-10 pr-4 text-xs font-medium text-slate-900 outline-none transition-colors focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
           />
         </div>
 
@@ -149,7 +150,7 @@ export const StudentDocumentLibrary = ({
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
-              className={`px-4 py-2 rounded-md text-xs font-bold transition-all whitespace-nowrap ${selectedCategory === cat ? "bg-blue-600 text-white shadow-sm" : "bg-slate-100 hover:bg-slate-200 text-slate-700"}`}
+              className={`min-h-10 rounded-full px-4 text-xs font-semibold transition-colors whitespace-nowrap ${selectedCategory === cat ? "bg-[#026aa7] text-white shadow-2xs" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
             >
                 {cat}
             </button>
@@ -176,7 +177,7 @@ export const StudentDocumentLibrary = ({
               return (
                 <div
                   key={doc.id}
-                  className="bg-white rounded-lg p-4 border border-slate-200/80 shadow-xs transition-colors flex flex-col justify-between space-y-3"
+                  className="flex flex-col justify-between space-y-3 rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs transition-colors"
                 >
                   <div className="space-y-2">
                     <div className="flex items-center justify-between gap-2">
@@ -185,21 +186,22 @@ export const StudentDocumentLibrary = ({
                       >
                         {badgeInfo.icon}
                       </div>
-                      <span className="text-[10px] font-bold px-2 py-0.5 bg-blue-100 text-blue-800 rounded-md border border-blue-200">
+                      <span className="rounded-full border border-[#026aa7]/20 bg-[#026aa7]/5 px-2 py-0.5 text-[10px] font-bold text-[#025a8e]">
                         {doc.version} {doc.isLatest && "\u2022 Latest"}
                       </span>
                     </div>
 
-                    <h3
+                    <button
+                      type="button"
                       onClick={() => onSelectDoc(doc)}
-                      className="font-bold text-slate-900 text-sm hover:text-blue-600 cursor-pointer line-clamp-2 leading-snug"
+                      className="min-h-11 text-left text-sm font-bold leading-snug text-slate-900 line-clamp-2 hover:text-[#026aa7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/30"
                     >
                       {doc.title}
-                    </h3>
+                    </button>
 
                     <p className="text-xs text-slate-500 font-medium line-clamp-2">
                       {doc.description ||
-                        "T\xE0i li\u1EC7u h\u01B0\u1EDBng d\u1EABn ch\xEDnh th\u1EE9c t\u1EEB Gi\u1EA3ng vi\xEAn."}
+                        "Chưa có mô tả."}
                     </p>
                   </div>
 
@@ -222,7 +224,7 @@ export const StudentDocumentLibrary = ({
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => onSelectDoc(doc)}
-                        className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-md transition-colors flex items-center justify-center gap-1"
+                        className="inline-flex min-h-11 flex-1 items-center justify-center gap-1 rounded-full bg-slate-100 px-3 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-200"
                       >
                         <Eye className="w-3.5 h-3.5" />
                         <span>Xem chi tiết</span>
@@ -230,7 +232,7 @@ export const StudentDocumentLibrary = ({
 
                       <button
                         onClick={() => handleDownload(doc)}
-                        className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-md shadow-xs transition-colors flex items-center justify-center gap-1"
+                        className="inline-flex min-h-11 flex-1 items-center justify-center gap-1 rounded-full bg-[#026aa7] px-3 text-xs font-semibold text-white transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2"
                       >
                         <Download className="w-3.5 h-3.5" />
                         <span>Tải xuống</span>
@@ -240,14 +242,25 @@ export const StudentDocumentLibrary = ({
                 </div>
               );
             })}
+            {filteredDocs.length === 0 && (
+              <div className="col-span-full rounded-xl border border-slate-200/90 bg-white py-10 text-center shadow-2xs">
+                <FileText className="mx-auto mb-2 h-8 w-8 text-slate-300" aria-hidden="true" />
+                <p className="text-sm font-semibold text-slate-700">
+                  Không có tài liệu phù hợp.
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Thử đổi từ khóa hoặc danh mục.
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
         {/* RECENT DOWNLOADS SIDEBAR (4 cols) */}
         <div className="lg:col-span-4 space-y-4">
-          <div className="bg-white p-4 rounded-lg border border-slate-200/80 shadow-xs space-y-3">
+          <div className="space-y-3 rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs">
             <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-              <Clock className="w-4 h-4 text-emerald-600" />
+              <Clock className="w-4 h-4 text-[#7bc043]" />
               <span>Đã tải gần đây (Recent Downloads)</span>
             </h3>
 
@@ -261,10 +274,10 @@ export const StudentDocumentLibrary = ({
                   <div
                     key={item.id}
                     onClick={() => onSelectDoc(item)}
-                    className="p-3 bg-slate-50 hover:bg-blue-50/60 rounded-md border border-slate-100 transition-colors cursor-pointer space-y-1"
+                    className="cursor-pointer space-y-1 rounded-lg border border-slate-100 bg-slate-50 p-3 transition-colors hover:bg-[#026aa7]/5"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded">
+                      <span className="rounded-full border border-[#7bc043]/30 bg-[#7bc043]/10 px-1.5 py-0.5 text-[10px] font-bold text-[#446d20]">
                         Đã tải
                       </span>
                       <span className="text-[10px] text-slate-400">

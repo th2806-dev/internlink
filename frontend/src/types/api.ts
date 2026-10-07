@@ -752,6 +752,18 @@ export interface DocumentDetailDto extends DocumentListItemDto {
   updatedAt?: string | null;
 }
 
+export interface DocumentVersionDto {
+  id: string;
+  documentId: string;
+  versionNumber: number;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  changeNote?: string | null;
+  uploadedAt: string;
+  uploadedById?: string | null;
+}
+
 export interface TemplateStatsDto {
   totalTemplates: number;
   publishedCount: number;
@@ -1023,4 +1035,3 @@ export interface AdminAttendanceReportDto {
   topAbsentees: StudentAbsentSummaryDto[];
   sessions: AttendanceSessionDto[];
 }
-

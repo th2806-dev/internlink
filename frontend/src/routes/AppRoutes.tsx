@@ -384,6 +384,7 @@ export function AppRoutes() {
                   path="dashboard"
                   element={
                     <LecturerDashboardView
+                      profile={appState.lecturerProfile}
                       actionItems={appState.dynamicActionItems}
                       deadlines={appState.deadlines}
                       submissions={appState.assignedSubmissions}
@@ -404,6 +405,8 @@ export function AppRoutes() {
                   element={
                     <LecturerStudentsView
                       students={appState.assignedStudents}
+                      isLoading={appState.isLecturerLoading}
+                      error={appState.lecturerError}
                       onRefresh={appState.refresh}
                     />
                   }
@@ -417,6 +420,8 @@ export function AppRoutes() {
                   element={
                     <LecturerEnterprisesView
                       enterprises={appState.lecturerEnterprises}
+                      isLoading={appState.isLecturerLoading}
+                      error={appState.lecturerError}
                       onRefresh={appState.refresh}
                       readOnly
                     />
@@ -426,7 +431,10 @@ export function AppRoutes() {
                   path="enterprises/:companyId"
                   element={<LecturerEnterprisesDetailView />}
                 />
-                <Route path="templates" element={<LecturerTemplatesView />} />
+                <Route
+                  path="templates"
+                  element={<LecturerTemplatesView />}
+                />
                 <Route
                   path="evaluations"
                   element={<LecturerInternshipEvaluationView onShowToast={showToast} initialTab="grading" />}

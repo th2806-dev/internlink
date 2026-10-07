@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { adminSemestersService, semesterPortalService, type BackendSemesterDto } from "../services/adminSemesters.service";
 import { adminDepartmentsService, type DepartmentDto } from "../services/adminDepartments.service";
+import { lecturerInternshipsService } from "../services/lecturerInternships.service";
 import { ApiClientError, getStoredToken } from "../lib/apiClient";
 import { useAuth } from "./AuthContext";
 
@@ -72,7 +73,7 @@ const mapBackendToFrontend = (dto: BackendSemesterDto): Semester => {
     onTimeSubmissionRate: dto.onTimeSubmissionRate,
     status: statusMap[dto.status] || "upcoming",
     progressPercent: dto.progressPercent,
-    totalWeeks: dto.totalWeeks || 6,
+    totalWeeks: dto.totalWeeks,
     internshipStartWeek: dto.internshipStartWeek || 1,
     targetStudents: dto.targetStudents || 0,
     currentPhase: dto.currentPhase,
@@ -137,6 +138,38 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         );
         setSemesters(backendSemesters.map(mapBackendToFrontend));
         return;
+      }
+
+      if (role === "lecturer" && backendRole === "Lecturer") {
+        try {
+          const assigned = await lecturerInternshipsService.getAssignedSemesters().catch(() => []);
+          if (assigned.length > 0) {
+            const mapped = assigned.map((dto) => ({
+              id: dto.id,
+              name: dto.name,
+              term: dto.term,
+              academicYear: dto.academicYear,
+              startDate: dto.startDate ? new Date(dto.startDate).toLocaleDateString("vi-VN") : "—",
+              endDate: dto.endDate ? new Date(dto.endDate).toLocaleDateString("vi-VN") : "—",
+              lecturersCount: 0,
+              studentsCount: 0,
+              placedStudents: 0,
+              companiesCount: 0,
+              status: "active" as const,
+              progressPercent: 0,
+              totalWeeks: 6,
+              internshipStartWeek: 1,
+              targetStudents: 0,
+              currentPhase: "",
+              description: "",
+            }));
+            setSemesters(mapped);
+            setSelectedSemesterId((prev) => (prev && mapped.some((m) => m.id === prev) ? prev : mapped[0].id));
+            return;
+          }
+        } catch (e) {
+          console.warn("Failed to load assigned semesters for lecturer:", e);
+        }
       }
 
       const currentSemester = await semesterPortalService.getCurrent().catch(() => null);

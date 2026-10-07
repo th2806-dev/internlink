@@ -12,11 +12,13 @@ export const EnterprisesDetailView = () => {
       .then((dto) => mapCompanyDetailDtoToEnterpriseDetail(dto));
 
   return (
-    <CompanyDetailView
-      fetchDetail={fetchDetail}
-      backLabel="Quay lại danh sách"
-      backPath="/lecturer/enterprises"
-      semesterId={selectedSemesterId}
-    />
+    <div className="mx-auto max-w-[1300px] space-y-4 pb-12 font-sans">
+      <CompanyDetailView
+        fetchDetail={fetchDetail}
+        backLabel="Quay lại danh sách"
+        backPath="/lecturer/enterprises"
+        semesterId={selectedSemesterId}
+      />
+    </div>
   );
 };

@@ -197,9 +197,7 @@ export function mapCompanyDetailDtoToEnterpriseDetail(detail: CompanyDetailDto):
       studentCode: i.studentCode,
       studentName: i.studentName,
       position: i.position ?? "—",
-      status: i.status === "NotStarted" && i.submissionCount > 0
-        ? "InProgress"
-        : i.status,
+      status: i.status,
       startDate: i.startDate ?? undefined,
       endDate: i.endDate ?? undefined,
       submissionCount: i.submissionCount,

@@ -5,7 +5,6 @@ import {
   ArrowLeft,
   Download,
   Copy,
-  History,
   FileText,
   ChevronLeft,
   ChevronRight,
@@ -18,12 +17,14 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import type { DocumentItem } from "../../../types/document";
+import { LecturerSubPageHeader } from "./LecturerSubPageHeader";
 
 // pdfjs-dist (~1 MB) is loaded on demand, only when a PDF preview is opened.
 const PdfViewer = lazy(() => import("./PdfViewer"));
 
 interface DocumentDetailWorkspaceProps {
   document: DocumentItem;
+  isLoadingVersions?: boolean;
   onBack: () => void;
   onDownload: (doc: DocumentItem) => void;
   onArchiveToggle?: (doc: DocumentItem) => void;
@@ -31,6 +32,7 @@ interface DocumentDetailWorkspaceProps {
 
 export const DocumentDetailWorkspace = ({
   document,
+  isLoadingVersions = false,
   onBack,
   onDownload,
   onArchiveToggle,
@@ -81,98 +83,84 @@ export const DocumentDetailWorkspace = ({
     triggerToast("Đã sao chép liên kết tài liệu vào bộ nhớ tạm!");
   };
 
-  const isCirculating =
-    document.status === "Đang lưu hành" || (document as any).status === "Đang áp dụng";
+  const isCirculating = document.status === "Đang lưu hành";
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200 pb-16 font-sans">
       {/* Toast Alert */}
       <Toast message={toastMessage} onClose={() => setToastMessage(null)} />
 
-      {/* HEADER */}
-      <div className="bg-white p-5 rounded-lg border border-slate-200/80 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
+      <LecturerSubPageHeader
+        icon={FileText}
+        title={document.title}
+        subtitle={`Đăng bởi ${document.uploader} (${document.uploaderRole}) · Cập nhật ngày ${document.updatedAt} · Đợt thực tập: ${document.semester}`}
+      >
+        <button
+          type="button"
+          onClick={onBack}
+          title="Quay lại danh sách"
+          className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-white/30 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+          Quay lại
+        </button>
+        <span className="rounded-full border border-white/30 bg-white/10 px-2.5 py-1 text-[10px] font-bold uppercase text-white">
+          {document.category}
+        </span>
+        <span className="rounded-full border border-white/20 bg-white/15 px-2.5 py-1 text-[10px] font-bold text-white">
+          Phiên bản {document.version}
+        </span>
+        {isCirculating ? (
+          <span className="flex items-center gap-1 rounded-full border border-[#7bc043]/50 bg-[#7bc043]/20 px-2.5 py-1 text-[10px] font-bold text-white">
+            <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
+            Đang lưu hành (Public SV tải về)
+          </span>
+        ) : document.status === "Bản nháp" ? (
+          <span className="flex items-center gap-1 rounded-full border border-amber-200 bg-amber-100 px-2.5 py-1 text-[10px] font-bold text-amber-900">
+            <FileText className="h-3 w-3" aria-hidden="true" />
+            Bản nháp (Chưa công khai)
+          </span>
+        ) : (
+          <span className="flex items-center gap-1 rounded-full border border-white/30 bg-white/15 px-2.5 py-1 text-[10px] font-bold text-white">
+            <Archive className="h-3 w-3" aria-hidden="true" />
+            Ngưng lưu hành (Đã ẩn & Lưu vào log)
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={handleCopyLink}
+          className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-white/30 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+        >
+          <Copy className="h-4 w-4" aria-hidden="true" />
+          <span>Sao chép liên kết</span>
+        </button>
+        {onArchiveToggle && (
           <button
-            onClick={onBack}
-            className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md transition-colors border border-slate-200"
-            title="Quay lại danh sách"
+            type="button"
+            onClick={() => onArchiveToggle(document)}
+            className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${
+              isCirculating
+                ? "border-amber-200 bg-amber-100 text-amber-900 hover:bg-amber-200"
+                : "border-[#7bc043]/50 bg-[#7bc043]/20 text-white hover:bg-[#7bc043]/30"
+            }`}
           >
-            <ArrowLeft className="w-5 h-5" />
+            <Archive className="h-4 w-4" aria-hidden="true" />
+            <span>
+              {isCirculating
+                ? "Ngưng lưu hành & Chuyển vào Log"
+                : "Mở lưu hành lại cho SV"}
+            </span>
           </button>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[10px] font-bold px-2 py-0.5 bg-blue-100 text-blue-800 rounded-md uppercase">
-                {document.category}
-              </span>
-              <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-100 text-slate-700 rounded-md">
-                Phiên bản {document.version}
-              </span>
-              {/* Circulation Status Badge */}
-              {isCirculating ? (
-                <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3" />
-                  Đang lưu hành (Public SV tải về)
-                </span>
-              ) : document.status === "Bản nháp" ? (
-                <span className="text-[10px] font-bold px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-md flex items-center gap-1">
-                  <FileText className="w-3 h-3" />
-                  Bản nháp (Chưa công khai)
-                </span>
-              ) : (
-                <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-100 text-slate-600 border border-slate-300 rounded-md flex items-center gap-1">
-                  <Archive className="w-3 h-3 text-slate-500" />
-                  Ngưng lưu hành (Đã ẩn & Lưu vào log)
-                </span>
-              )}
-            </div>
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight mt-1">
-              {document.title}
-            </h1>
-            <p className="text-xs text-slate-500 font-medium mt-0.5">
-              Đăng bởi <strong className="text-slate-800">{document.uploader}</strong> (
-              {document.uploaderRole}) • Cập nhật ngày {document.updatedAt} • Đợt thực tập:{" "}
-              <strong className="text-blue-700">{document.semester}</strong>
-            </p>
-          </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex items-center gap-2 w-full md:w-auto justify-end flex-wrap">
-          <button
-            onClick={handleCopyLink}
-            className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-md transition-colors border border-slate-200 flex items-center gap-1.5"
-          >
-            <Copy className="w-4 h-4" />
-            <span>Sao chép liên kết</span>
-          </button>
-
-          {onArchiveToggle && (
-            <button
-              onClick={() => onArchiveToggle(document)}
-              className={`px-3 py-2 font-bold text-xs rounded-md transition-colors border flex items-center gap-1.5 ${
-                isCirculating
-                  ? "bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-300"
-                  : "bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300"
-              }`}
-            >
-              <Archive className="w-4 h-4" />
-              <span>
-                {isCirculating
-                  ? "Ngưng lưu hành & Chuyển vào Log"
-                  : "Mở lưu hành lại cho SV"}
-              </span>
-            </button>
-          )}
-
-          <button
-            onClick={() => onDownload(document)}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-md shadow-md shadow-blue-500/20 transition-all flex items-center gap-1.5"
-          >
-            <Download className="w-4 h-4" />
-            <span>Tải xuống ({document.fileSize})</span>
-          </button>
-        </div>
-      </div>
+        )}
+        <button
+          type="button"
+          onClick={() => onDownload(document)}
+          className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-white px-4 text-xs font-semibold text-[#025a8e] transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#026aa7]"
+        >
+          <Download className="h-4 w-4" aria-hidden="true" />
+          <span>Tải xuống ({document.fileSize})</span>
+        </button>
+      </LecturerSubPageHeader>
 
       {/* CIRCULATION STATUS BANNER */}
       {!isCirculating && (
@@ -185,8 +173,7 @@ export const DocumentDetailWorkspace = ({
             <p className="text-amber-800 font-medium">
               Lý do ngưng lưu hành:{" "}
               <strong>
-                {document.archiveReason ||
-                  "Hết thời hạn áp dụng theo đợt thực tập / Đã chuyển sang biểu mẫu mới."}
+                {document.archiveReason || "Chưa cập nhật"}
               </strong>
             </p>
             {document.archivedAt && (
@@ -200,15 +187,15 @@ export const DocumentDetailWorkspace = ({
       )}
 
       {isCirculating && (
-        <div className="p-3 bg-emerald-50 border border-emerald-200/80 rounded-lg flex items-center justify-between text-xs text-emerald-900">
+        <div className="flex items-center justify-between rounded-xl border border-[#7bc043]/30 bg-[#7bc043]/10 p-3 text-xs text-[#446d20]">
           <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            <CheckCircle2 className="w-4 h-4 text-[#7bc043]" />
             <span>
               Tài liệu đang được <strong>lưu hành công khai</strong> cho sinh viên thuộc đợt thực
               tập <strong>{document.semester}</strong> ({document.major}).
             </span>
           </div>
-          <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100/60 px-2 py-0.5 rounded border border-emerald-200">
+          <span className="rounded-full border border-[#7bc043]/30 bg-[#7bc043]/10 px-2 py-0.5 text-[11px] font-bold text-[#446d20]">
             Public Active
           </span>
         </div>
@@ -318,7 +305,7 @@ export const DocumentDetailWorkspace = ({
                 </p>
                 <button
                   onClick={() => onDownload(document)}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-md shadow-md shadow-blue-500/20 transition-all mx-auto"
+                  className="mx-auto inline-flex min-h-11 items-center gap-1.5 rounded-full bg-[#026aa7] px-4 text-xs font-semibold text-white transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2"
                 >
                   <Download className="w-3.5 h-3.5" />
                   <span>Tải xuống ({document.fileSize})</span>
@@ -336,7 +323,7 @@ export const DocumentDetailWorkspace = ({
               onClick={() => setActiveSidebarTab("info")}
               className={`flex-1 py-1.5 rounded-md transition-all flex items-center justify-center gap-1.5 ${
                 activeSidebarTab === "info"
-                  ? "bg-white text-blue-700 shadow-xs"
+                  ? "bg-white text-[#026aa7] shadow-2xs"
                   : "text-slate-600 hover:text-slate-900"
               }`}
             >
@@ -348,9 +335,9 @@ export const DocumentDetailWorkspace = ({
           {activeSidebarTab === "info" ? (
             <div className="space-y-4">
               {/* Document Information Card */}
-              <div className="bg-white p-5 rounded-lg border border-slate-200/80 shadow-xs space-y-4">
+              <div className="space-y-4 rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs sm:p-5">
                 <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-slate-100">
-                  <FileText className="w-4 h-4 text-blue-600" />
+                  <FileText className="w-4 h-4 text-[#026aa7]" />
                   <span>Chi tiết văn bản</span>
                 </h3>
 
@@ -360,7 +347,7 @@ export const DocumentDetailWorkspace = ({
                     <span
                       className={`px-2 py-0.5 font-bold text-[10px] rounded-md border ${
                         isCirculating
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          ? "bg-[#7bc043]/10 text-[#446d20] border-[#7bc043]/40"
                           : "bg-amber-50 text-amber-700 border-amber-200"
                       }`}
                     >
@@ -370,7 +357,7 @@ export const DocumentDetailWorkspace = ({
 
                   <div className="flex items-center justify-between">
                     <span className="text-slate-500 font-medium">Đợt thực tập áp dụng:</span>
-                    <strong className="text-blue-700 font-bold">{document.semester}</strong>
+                    <strong className="font-bold text-[#026aa7]">{document.semester}</strong>
                   </div>
 
                   <div className="flex items-center justify-between">
@@ -380,21 +367,21 @@ export const DocumentDetailWorkspace = ({
 
                   <div className="flex items-center justify-between">
                     <span className="text-slate-500 font-medium">Định dạng file:</span>
-                    <span className="px-2 py-0.5 bg-blue-50 text-blue-700 font-bold text-[10px] rounded border border-blue-200">
+                    <span className="rounded-full border border-[#026aa7]/20 bg-[#026aa7]/5 px-2 py-0.5 text-[10px] font-bold text-[#025a8e]">
                       {document.fileType}
                     </span>
                   </div>
 
                   <div className="flex items-center justify-between">
                     <span className="text-slate-500 font-medium">Tổng lượt tải của SV:</span>
-                    <strong className="text-blue-600 font-bold">
+                    <strong className="font-bold text-[#026aa7]">
                       {document.downloads.toLocaleString()} lượt
                     </strong>
                   </div>
 
                   <div className="flex items-center justify-between">
                     <span className="text-slate-500 font-medium">Phiên bản hiện tại:</span>
-                    <strong className="text-emerald-600 font-bold">
+                    <strong className="font-bold text-[#446d20]">
                       {document.version} {document.isLatest ? "(Mới nhất)" : ""}
                     </strong>
                   </div>
@@ -418,43 +405,50 @@ export const DocumentDetailWorkspace = ({
               </div>
 
               {/* Version History */}
-              <div className="bg-white p-5 rounded-lg border border-slate-200/80 shadow-xs space-y-3">
+              <div className="space-y-3 rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs sm:p-5">
                 <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-                  <FileCheck className="w-4 h-4 text-blue-600" />
+                  <FileCheck className="w-4 h-4 text-[#026aa7]" />
                   <span>Lịch sử các phiên bản tệp</span>
                 </h3>
 
                 <div className="space-y-2.5 max-h-52 overflow-y-auto">
-                  {document.versionHistory?.map((vh, idx) => (
+                  {isLoadingVersions ? (
+                    <p role="status" className="p-4 text-center text-xs text-slate-500">
+                      Đang tải lịch sử phiên bản...
+                    </p>
+                  ) : document.versionHistory?.length ? document.versionHistory.map((vh, idx) => (
                     <div
                       key={idx}
                       className="p-3 bg-slate-50 rounded-md border border-slate-100 space-y-1"
                     >
                       <div className="flex items-center justify-between text-xs">
-                        <span className="font-bold text-blue-700">{vh.version}</span>
+                        <span className="font-bold text-[#026aa7]">{vh.version}</span>
                         <span className="text-[10px] text-slate-400">{vh.date}</span>
                       </div>
                       <p className="text-xs text-slate-700 font-medium">{vh.note}</p>
                       <p className="text-[10px] text-slate-400">Bởi: {vh.author}</p>
                     </div>
-                  ))}
+                  )) : (
+                    <p className="p-4 text-center text-xs text-slate-500">
+                      Hệ thống chưa có lịch sử phiên bản cho tài liệu này.
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
           ) : (
             /* ARCHIVE LOGS & AUDIT TRAIL TAB */
-            <div className="bg-white p-5 rounded-lg border border-slate-200/80 shadow-xs space-y-4">
+            <div className="space-y-4 rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs sm:p-5">
               <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                 <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                  <ShieldCheck className="w-4 h-4 text-[#7bc043]" />
                   <span>Nhật ký lưu hành &amp; Log kiểm toán</span>
                 </h3>
                 <span className="text-[10px] text-slate-400 font-medium">Audit Trail</span>
               </div>
 
               <p className="text-xs text-slate-500 font-medium">
-                Ghi nhận chi tiết toàn bộ các mốc phát hành, chuyển trạng thái lưu hành và lý do
-                ngưng áp dụng văn bản.
+                Lý do và thời điểm ngưng lưu hành được hiển thị trong thông tin tài liệu khi backend có cung cấp.
               </p>
 
               <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
@@ -466,7 +460,7 @@ export const DocumentDetailWorkspace = ({
                         log.action === "ARCHIVED"
                           ? "bg-amber-50/80 border-amber-200"
                           : log.action === "CIRCULATING"
-                          ? "bg-emerald-50/80 border-emerald-200"
+                          ? "bg-[#7bc043]/10 border-[#7bc043]/30"
                           : "bg-slate-50 border-slate-200"
                       }`}
                     >
@@ -476,7 +470,7 @@ export const DocumentDetailWorkspace = ({
                             log.action === "ARCHIVED"
                               ? "bg-amber-100 text-amber-800"
                               : log.action === "CIRCULATING"
-                              ? "bg-emerald-100 text-emerald-800"
+                              ? "bg-[#7bc043]/15 text-[#446d20]"
                               : "bg-slate-200 text-slate-800"
                           }`}
                         >
@@ -512,7 +506,7 @@ export const DocumentDetailWorkspace = ({
                   ))
                 ) : (
                   <div className="p-6 text-center text-xs text-slate-400">
-                    Chưa có nhật ký thay đổi trạng thái nào cho tài liệu này.
+                    API hiện chưa trả nhật ký thay đổi trạng thái cho tài liệu này.
                   </div>
                 )}
               </div>

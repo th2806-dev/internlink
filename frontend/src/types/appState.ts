@@ -21,6 +21,7 @@ export interface Deadline {
 export interface Stats {
   total: number;
   interning: number;
+  assignedCompanyCount: number;
   pending: number;
   overdue: number;
   completed: number;
@@ -28,8 +29,17 @@ export interface Stats {
   statusDistribution?: Record<string, number>;
 }
 
+export interface LecturerProfileData {
+  staffCode: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  department: string;
+}
+
 export interface AppState {
   currentLecturer: string;
+  lecturerProfile?: LecturerProfileData | null;
   assignedStudents: any[];
   assignedSubmissions: Submission[];
   dynamicActionItems: ActionItem[];
@@ -45,9 +55,11 @@ export interface AppState {
   weeklyTrendData: {
     label: string;
     value: number;
-    target?: number;
-    late?: number;
-    missing?: number;
+    target: number;
+    rate: number;
+    late: number;
+    missing: number;
+    pending: number;
   }[];
   lecturerEnterprises?: any[];
   handleUpdateSubmissionStatus: (submissionId: string, status: string) => void;

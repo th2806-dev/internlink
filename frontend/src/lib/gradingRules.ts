@@ -210,6 +210,8 @@ export interface GradeInput {
   weeks?: WeekRecord[];
   /** Báo cáo cuối kỳ đã nộp chưa */
   finalReportSubmittedAt?: string | Date | null;
+  /** Trạng thái nộp cuối kỳ khi chỉ có cờ trạng thái, không có thời điểm nộp. */
+  finalReportSubmitted?: boolean;
   finalReportDeadline?: string | Date | null;
   /** Mức rubric chất lượng do GV chọn: 1 / 2 / 3.5 / 4 / 5 (null = chưa chấm) */
   qualityLevel?: number | null;
@@ -284,7 +286,8 @@ export function computeGrade(input: GradeInput): GradeResult {
   const missingCount = missingWeeks.length;
   const lateCount = lateWeeks.length;
 
-  const finalReportSubmitted = parseGradingDate(input.finalReportSubmittedAt) != null;
+  const finalReportSubmitted = input.finalReportSubmitted ??
+    parseGradingDate(input.finalReportSubmittedAt) != null;
   const finalReportDeadline = parseGradingDate(input.finalReportDeadline);
   const finalReportLate = Boolean(
     finalReportSubmitted &&

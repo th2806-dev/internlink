@@ -34,9 +34,12 @@ export interface DocumentItem {
   uploaderRole: string;
   downloads: number;
   semester: string;
+  semesterId?: string;
+  department: string;
   major: string;
   status: DocumentStatus;
   isPublished: boolean;
+  isOfficial?: boolean;
   isRequired?: boolean;
   description: string;
   archiveReason?: string;
