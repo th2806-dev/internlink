@@ -16,7 +16,6 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Panel } from "../../../components/common/Panel";
 import { useSemester } from "../../../contexts/SemesterContext";
 import { useStudentPortal } from "../../../contexts/StudentPortalContext";
 import { getApiErrorMessage } from "../../../lib/apiClient";
@@ -25,6 +24,7 @@ import { semesterReportScheduleService, type SemesterReportScheduleDto } from ".
 import { submissionApiService } from "../../../services/submissionApi.service";
 import { weeklyReportService } from "../../../services/weeklyReport.service";
 import type { EvaluationDetailDto, SubmissionAssetDto, SubmissionDto, WeeklyReportDto } from "../../../types/api";
+import { StudentSubPageHeader } from "../components/StudentSubPageHeader";
 
 type EvidencePhotoProps = {
   submissionId: string;
@@ -111,6 +111,7 @@ export const EvaluationView = ({ onShowToast }: { onShowToast: (msg: string) => 
   const [schedules, setSchedules] = useState<SemesterReportScheduleDto[]>([]);
   const [loadErrors, setLoadErrors] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [previewPhoto, setPreviewPhoto] = useState<{ url: string; fileName: string } | null>(null);
 
   const loadEvaluation = useCallback(async () => {
@@ -166,6 +167,16 @@ export const EvaluationView = ({ onShowToast }: { onShowToast: (msg: string) => 
   useEffect(() => {
     void loadEvaluation();
   }, [loadEvaluation]);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await loadEvaluation();
+      onShowToast("Đã làm mới kết quả đánh giá thành công");
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const maxWeeks = selectedSemester?.totalWeeks;
   const trackedWeeks = useMemo(() => {
@@ -242,21 +253,29 @@ export const EvaluationView = ({ onShowToast }: { onShowToast: (msg: string) => 
   };
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5 pb-6">
-      <header className="flex flex-col gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Thực tập · Kết quả</p>
-          <h1 className="mt-1 text-xl font-bold text-slate-900">Kết quả đánh giá</h1>
-          <p className="mt-1 text-sm text-slate-600">Điểm số, tiến độ, minh chứng và nhận xét dành cho bạn.</p>
-        </div>
-        <div className="flex items-center gap-2 text-sm text-slate-600">
-          <Building2 className="h-4 w-4 shrink-0 text-slate-500" />
-          <span>{profile.company || "Chưa có doanh nghiệp"}{profile.position && profile.position !== "—" ? ` · ${profile.position}` : ""}</span>
-        </div>
-      </header>
+    <div className="mx-auto max-w-[1300px] space-y-4 animate-in fade-in duration-200 font-sans pb-12">
+      {/* ═══════════════════════════════════════════════════════════════════
+          1. TOP CARD BANNER (Chuẩn layout banner xanh #026aa7 + thông tin thực tế)
+         ═══════════════════════════════════════════════════════════════════ */}
+      <div className="space-y-3">
+        <StudentSubPageHeader
+          icon={Award}
+          title="Kết quả đánh giá thực tập"
+          subtitle="Theo dõi nhận xét và kết quả đánh giá từ đơn vị hướng dẫn."
+          semesterName={selectedSemester?.name}
+          onRefresh={() => void handleRefresh()}
+          isRefreshing={isRefreshing}
+        />
 
+
+      </div>
+
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          CẢNH BÁO LỖI TẢI DỮ LIỆU (nếu có)
+         ═══════════════════════════════════════════════════════════════════ */}
       {loadErrors.length > 0 && (
-        <div role="alert" className="flex gap-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        <div role="alert" className="flex gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-2xs">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <div>
             <p className="font-semibold">Một số thông tin chưa tải được</p>
@@ -272,19 +291,26 @@ export const EvaluationView = ({ onShowToast }: { onShowToast: (msg: string) => 
         </div>
       )}
 
+      {/* ═══════════════════════════════════════════════════════════════════
+          3. NỘI DUNG CHÍNH
+         ═══════════════════════════════════════════════════════════════════ */}
       {isLoading ? (
-        <Panel className="py-14 text-center text-sm text-slate-500">Đang tải kết quả thực tập…</Panel>
+        <div className="rounded-xl border border-slate-200/90 bg-white p-14 text-center text-sm text-slate-500 shadow-2xs">
+          Đang tải kết quả thực tập…
+        </div>
       ) : !internshipId ? (
-        <Panel className="py-12 text-center">
+        <div className="rounded-xl border border-slate-200/90 bg-white py-12 text-center shadow-2xs">
           <ClipboardCheck className="mx-auto h-8 w-8 text-slate-400" />
           <p className="mt-3 text-sm font-semibold text-slate-800">Chưa có kỳ thực tập để hiển thị</p>
           <p className="mt-1 text-xs text-slate-500">Thông tin kết quả sẽ xuất hiện khi hồ sơ thực tập được tạo.</p>
-        </Panel>
+        </div>
       ) : (
         <>
+          {/* ─── HÀNG 1: Điểm tổng kết + Chi tiết đánh giá GV ─── */}
           <section className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,0.85fr)_minmax(0,1.6fr)]">
-            <Panel className="border-l-4 border-l-blue-600">
-              <div className="flex h-full flex-col justify-between gap-5">
+            {/* Card Điểm tổng kết */}
+            <div className="rounded-xl border border-slate-200/90 bg-white shadow-2xs border-l-4 border-l-blue-600">
+              <div className="p-4 flex h-full flex-col justify-between gap-5">
                 <div>
                   <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
                     <Award className="h-4 w-4 text-blue-700" />
@@ -307,214 +333,236 @@ export const EvaluationView = ({ onShowToast }: { onShowToast: (msg: string) => 
                   {evaluation && <span className="text-xs text-slate-500">Cập nhật {formatDate(evaluation.updatedAt ?? evaluation.evaluatedAt)}</span>}
                 </div>
               </div>
-            </Panel>
+            </div>
 
-            <Panel>
-              <div className="flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 pb-3">
-                <div>
-                  <h2 className="text-sm font-bold text-slate-900">Chi tiết đánh giá của giảng viên</h2>
-                  <p className="mt-1 text-xs text-slate-500">Điểm theo tiêu chí được lưu trên hệ thống.</p>
+            {/* Card Chi tiết đánh giá GV */}
+            <div className="rounded-xl border border-slate-200/90 bg-white shadow-2xs">
+              <div className="p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 pb-3">
+                  <div>
+                    <h2 className="text-sm font-bold text-slate-900">Chi tiết đánh giá của giảng viên</h2>
+                    <p className="mt-1 text-xs text-slate-500">Điểm theo tiêu chí được lưu trên hệ thống.</p>
+                  </div>
+                  {evaluation?.evaluatedBy?.fullName && (
+                    <span className="inline-flex items-center gap-1.5 text-xs text-slate-600">
+                      <UserRound className="h-3.5 w-3.5" />{evaluation.evaluatedBy.fullName}
+                    </span>
+                  )}
                 </div>
-                {evaluation?.evaluatedBy?.fullName && (
-                  <span className="inline-flex items-center gap-1.5 text-xs text-slate-600">
-                    <UserRound className="h-3.5 w-3.5" />{evaluation.evaluatedBy.fullName}
-                  </span>
+                {criteria.length > 0 ? (
+                  <dl className="mt-1 divide-y divide-slate-100">
+                    {criteria.map((criterion, index) => (
+                      <div key={`${criterion.name}-${index}`} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1 py-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+                        <dt className="text-sm font-medium text-slate-800">{criterion.name}</dt>
+                        <dd className="row-span-2 text-right text-sm font-bold tabular-nums text-slate-900">
+                          {criterion.score}/{criterion.maxScore}
+                        </dd>
+                        {criterion.comment && <dd className="text-xs leading-5 text-slate-500">{criterion.comment}</dd>}
+                      </div>
+                    ))}
+                  </dl>
+                ) : (
+                  <p className="pt-4 text-sm text-slate-500">Chưa có điểm chi tiết từ giảng viên.</p>
+                )}
+                {evaluation?.oralExamScore != null && (
+                  <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 text-sm">
+                    <span className="text-slate-700">Thi vấn đáp</span>
+                    <strong className="tabular-nums text-slate-900">{evaluation.oralExamScore}/10</strong>
+                  </div>
+                )}
+                {evaluation && (
+                  <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 border-t border-slate-100 pt-3 text-xs text-slate-600">
+                    <span>Chất lượng báo cáo: <strong className="text-slate-900">{evaluation.qualityLevel != null ? `${evaluation.qualityLevel}/5` : "Chưa chấm"}</strong></span>
+                    <span>Sản phẩm sáng tạo: <strong className="text-slate-900">{evaluation.hasCreativeProduct ? "Có" : "Không ghi nhận"}</strong></span>
+                    <span>Bảo vệ: <strong className="text-slate-900">{evaluation.defenseStatus === "Completed" ? "Đã hoàn thành" : evaluation.defenseStatus === "Scheduled" ? `Đã lên lịch${evaluation.defenseDate ? ` · ${formatDate(evaluation.defenseDate)}` : ""}` : "Chưa lên lịch"}</strong></span>
+                  </div>
                 )}
               </div>
-              {criteria.length > 0 ? (
-                <dl className="mt-1 divide-y divide-slate-100">
-                  {criteria.map((criterion, index) => (
-                    <div key={`${criterion.name}-${index}`} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1 py-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-                      <dt className="text-sm font-medium text-slate-800">{criterion.name}</dt>
-                      <dd className="row-span-2 text-right text-sm font-bold tabular-nums text-slate-900">
-                        {criterion.score}/{criterion.maxScore}
-                      </dd>
-                      {criterion.comment && <dd className="text-xs leading-5 text-slate-500">{criterion.comment}</dd>}
-                    </div>
-                  ))}
-                </dl>
-              ) : (
-                <p className="pt-4 text-sm text-slate-500">Chưa có điểm chi tiết từ giảng viên.</p>
-              )}
-              {evaluation?.oralExamScore != null && (
-                <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 text-sm">
-                  <span className="text-slate-700">Thi vấn đáp</span>
-                  <strong className="tabular-nums text-slate-900">{evaluation.oralExamScore}/10</strong>
-                </div>
-              )}
-              {evaluation && (
-                <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 border-t border-slate-100 pt-3 text-xs text-slate-600">
-                  <span>Chất lượng báo cáo: <strong className="text-slate-900">{evaluation.qualityLevel != null ? `${evaluation.qualityLevel}/5` : "Chưa chấm"}</strong></span>
-                  <span>Sản phẩm sáng tạo: <strong className="text-slate-900">{evaluation.hasCreativeProduct ? "Có" : "Không ghi nhận"}</strong></span>
-                  <span>Bảo vệ: <strong className="text-slate-900">{evaluation.defenseStatus === "Completed" ? "Đã hoàn thành" : evaluation.defenseStatus === "Scheduled" ? `Đã lên lịch${evaluation.defenseDate ? ` · ${formatDate(evaluation.defenseDate)}` : ""}` : "Chưa lên lịch"}</strong></span>
-                </div>
-              )}
-            </Panel>
+            </div>
           </section>
 
+          {/* ─── HÀNG 2: Đánh giá doanh nghiệp + Tiến độ báo cáo tuần ─── */}
           <section className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
-            <Panel>
-              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-3">
-                <div>
-                  <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                    <Building2 className="h-4 w-4 text-blue-700" />Đánh giá từ doanh nghiệp
-                  </h2>
-                  <p className="mt-1 text-xs text-slate-500">Điểm doanh nghiệp được hiển thị riêng, không cộng vào điểm tổng kết.</p>
+            {/* Card Đánh giá doanh nghiệp */}
+            <div className="rounded-xl border border-slate-200/90 bg-white shadow-2xs">
+              <div className="p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-3">
+                  <div>
+                    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                      <Building2 className="h-4 w-4 text-blue-700" />Đánh giá từ doanh nghiệp
+                    </h2>
+                    <p className="mt-1 text-xs text-slate-500">Điểm doanh nghiệp được hiển thị riêng, không cộng vào điểm tổng kết.</p>
+                  </div>
+                  <strong className="font-display text-2xl tabular-nums text-slate-900">
+                    {employerScoreSubmission?.employerScore != null ? `${employerScoreSubmission.employerScore}/10` : "—"}
+                  </strong>
                 </div>
-                <strong className="font-display text-2xl tabular-nums text-slate-900">
-                  {employerScoreSubmission?.employerScore != null ? `${employerScoreSubmission.employerScore}/10` : "—"}
-                </strong>
-              </div>
-              {loadErrors.includes("Không tải được điểm doanh nghiệp và minh chứng.") ? (
-                <p className="pt-4 text-sm text-amber-800">Không thể xác nhận điểm và minh chứng doanh nghiệp do dữ liệu chưa tải được.</p>
-              ) : evidenceSubmissions.length === 0 ? (
-                <p className="pt-4 text-sm text-slate-500">Chưa có phiếu đánh giá hoặc minh chứng doanh nghiệp được nộp.</p>
-              ) : (
-                <div className="space-y-5 pt-4">
-                  {evidenceSubmissions.map((submission) => {
-                    const imageAssets = (submission.assets ?? []).filter((asset) =>
-                      asset.mimeType?.toLowerCase().startsWith("image/") ||
-                      /\.(jpe?g|png|gif|webp|bmp|avif)$/i.test(asset.fileName ?? ""),
-                    );
-                    return (
-                      <div key={submission.id} className="border-b border-slate-100 pb-4 last:border-0 last:pb-0">
-                        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                          <p className="text-sm font-semibold text-slate-800">{submission.title || "Phiếu đánh giá doanh nghiệp"}</p>
-                          <span className="text-xs text-slate-500">{statusLabel(submission.status)} · {formatDate(submission.submittedAt)}</span>
-                        </div>
-                        {submission.employerScore != null && (
-                          <p className="mt-1 text-xs text-slate-600">Điểm doanh nghiệp: <strong className="text-slate-900">{submission.employerScore}/10</strong> <span className="text-slate-500">(tham khảo)</span></p>
-                        )}
-                        {submission.description && <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600">{submission.description}</p>}
-                        {imageAssets.length > 0 ? (
-                          <div className="mt-3">
-                            <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-slate-700">
-                              <ImageIcon className="h-3.5 w-3.5" />Ảnh minh chứng ({imageAssets.length})
-                            </p>
-                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                              {imageAssets.map((asset) => (
-                                <EvidencePhoto
-                                  key={asset.id}
-                                  submissionId={submission.id}
-                                  asset={asset}
-                                  onPreview={setPreviewPhoto}
-                                />
-                              ))}
-                            </div>
+                {loadErrors.includes("Không tải được điểm doanh nghiệp và minh chứng.") ? (
+                  <p className="pt-4 text-sm text-amber-800">Không thể xác nhận điểm và minh chứng doanh nghiệp do dữ liệu chưa tải được.</p>
+                ) : evidenceSubmissions.length === 0 ? (
+                  <p className="pt-4 text-sm text-slate-500">Chưa có phiếu đánh giá hoặc minh chứng doanh nghiệp được nộp.</p>
+                ) : (
+                  <div className="space-y-5 pt-4">
+                    {evidenceSubmissions.map((submission) => {
+                      const imageAssets = (submission.assets ?? []).filter((asset) =>
+                        asset.mimeType?.toLowerCase().startsWith("image/") ||
+                        /\.(jpe?g|png|gif|webp|bmp|avif)$/i.test(asset.fileName ?? ""),
+                      );
+                      return (
+                        <div key={submission.id} className="border-b border-slate-100 pb-4 last:border-0 last:pb-0">
+                          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                            <p className="text-sm font-semibold text-slate-800">{submission.title || "Phiếu đánh giá doanh nghiệp"}</p>
+                            <span className="text-xs text-slate-500">{statusLabel(submission.status)} · {formatDate(submission.submittedAt)}</span>
                           </div>
-                        ) : (
-                          <p className="mt-2 inline-flex items-center gap-1.5 text-xs text-slate-500">
-                            <ImageIcon className="h-3.5 w-3.5" />Phiếu này không có tệp ảnh đính kèm.
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </Panel>
-
-            <Panel>
-              <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
-                <div>
-                  <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                    <ClipboardCheck className="h-4 w-4 text-blue-700" />Tiến độ báo cáo tuần
-                  </h2>
-                  <p className="mt-1 text-xs text-slate-500">Tình trạng nộp và điểm chất lượng được ghi nhận.</p>
-                </div>
-                {trackedWeeks.length > 0 && (
-                  <span className="shrink-0 text-xs font-semibold text-slate-700">{submittedWeekCount}/{trackedWeeks.length} đã nộp</span>
+                          {submission.employerScore != null && (
+                            <p className="mt-1 text-xs text-slate-600">Điểm doanh nghiệp: <strong className="text-slate-900">{submission.employerScore}/10</strong> <span className="text-slate-500">(tham khảo)</span></p>
+                          )}
+                          {submission.description && <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600">{submission.description}</p>}
+                          {imageAssets.length > 0 ? (
+                            <div className="mt-3">
+                              <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                                <ImageIcon className="h-3.5 w-3.5" />Ảnh minh chứng ({imageAssets.length})
+                              </p>
+                              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                {imageAssets.map((asset) => (
+                                  <EvidencePhoto
+                                    key={asset.id}
+                                    submissionId={submission.id}
+                                    asset={asset}
+                                    onPreview={setPreviewPhoto}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="mt-2 inline-flex items-center gap-1.5 text-xs text-slate-500">
+                              <ImageIcon className="h-3.5 w-3.5" />Phiếu này không có tệp ảnh đính kèm.
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
-              {trackedWeeks.length === 0 ? (
-                <p className="pt-4 text-sm text-slate-500">
-                  {loadErrors.includes("Không tải được lịch báo cáo tuần.") || loadErrors.includes("Không tải được dữ liệu báo cáo tuần.")
-                    ? "Không đủ dữ liệu để hiển thị tiến độ báo cáo."
-                    : "Chưa có lịch hoặc báo cáo tuần cho kỳ thực tập này."}
-                </p>
-              ) : (
-                <div className="mt-2 divide-y divide-slate-100">
-                  {trackedWeeks.map((week) => {
-                    const report = reportByWeek.get(week);
-                    const schedule = scheduleByWeek.get(week);
-                    const dueDate = schedule?.dueDate ?? report?.dueDate;
-                    const isLate = Boolean(report?.submittedAt && dueDate && new Date(report.submittedAt) > new Date(dueDate));
-                    const score = evaluation?.weeklyQualityScores?.[week] ?? report?.qualityScore;
-                    return (
-                      <div key={week} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 py-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-slate-800">Tuần {week} · {report?.title || "Báo cáo tuần"}</p>
-                          <p className="mt-1 text-xs text-slate-500">
-                            {report?.submittedAt ? `Nộp ${formatDate(report.submittedAt)}` : "Chưa nộp"}
-                            {dueDate ? ` · Hạn ${formatDate(dueDate)}` : ""}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                            report?.submittedAt ? (isLate ? "bg-amber-50 text-amber-800" : "bg-emerald-50 text-emerald-800") : "bg-slate-100 text-slate-600"
-                          }`}>
-                            {report?.submittedAt ? (isLate ? "Đã nộp trễ" : statusLabel(report.status)) : "Chưa nộp"}
-                          </span>
-                          <p className="mt-1 text-xs tabular-nums text-slate-600">Chất lượng: {score != null ? `${score}/5` : "—"}</p>
-                        </div>
-                      </div>
-                    );
-                  })}
+            </div>
+
+            {/* Card Tiến độ báo cáo tuần */}
+            <div className="rounded-xl border border-slate-200/90 bg-white shadow-2xs">
+              <div className="p-4">
+                <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
+                  <div>
+                    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                      <ClipboardCheck className="h-4 w-4 text-blue-700" />Tiến độ báo cáo tuần
+                    </h2>
+                    <p className="mt-1 text-xs text-slate-500">Tình trạng nộp và điểm chất lượng được ghi nhận.</p>
+                  </div>
+                  {trackedWeeks.length > 0 && (
+                    <span className="shrink-0 text-xs font-semibold text-slate-700">{submittedWeekCount}/{trackedWeeks.length} đã nộp</span>
+                  )}
                 </div>
-              )}
-              {lateWeekCount > 0 && <p className="mt-3 border-t border-slate-100 pt-3 text-xs text-amber-800">Báo cáo nộp trễ: {lateWeekCount} tuần.</p>}
-            </Panel>
+                {trackedWeeks.length === 0 ? (
+                  <p className="pt-4 text-sm text-slate-500">
+                    {loadErrors.includes("Không tải được lịch báo cáo tuần.") || loadErrors.includes("Không tải được dữ liệu báo cáo tuần.")
+                      ? "Không đủ dữ liệu để hiển thị tiến độ báo cáo."
+                      : "Chưa có lịch hoặc báo cáo tuần cho kỳ thực tập này."}
+                  </p>
+                ) : (
+                  <div className="mt-2 divide-y divide-slate-100">
+                    {trackedWeeks.map((week) => {
+                      const report = reportByWeek.get(week);
+                      const schedule = scheduleByWeek.get(week);
+                      const dueDate = schedule?.dueDate ?? report?.dueDate;
+                      const isLate = Boolean(report?.submittedAt && dueDate && new Date(report.submittedAt) > new Date(dueDate));
+                      const score = evaluation?.weeklyQualityScores?.[week] ?? report?.qualityScore;
+                      return (
+                        <div key={week} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 py-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium text-slate-800">Tuần {week} · {report?.title || "Báo cáo tuần"}</p>
+                            <p className="mt-1 text-xs text-slate-500">
+                              {report?.submittedAt ? `Nộp ${formatDate(report.submittedAt)}` : "Chưa nộp"}
+                              {dueDate ? ` · Hạn ${formatDate(dueDate)}` : ""}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                              report?.submittedAt ? (isLate ? "bg-amber-50 text-amber-800" : "bg-emerald-50 text-emerald-800") : "bg-slate-100 text-slate-600"
+                            }`}>
+                              {report?.submittedAt ? (isLate ? "Đã nộp trễ" : statusLabel(report.status)) : "Chưa nộp"}
+                            </span>
+                            <p className="mt-1 text-xs tabular-nums text-slate-600">Chất lượng: {score != null ? `${score}/5` : "—"}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {lateWeekCount > 0 && <p className="mt-3 border-t border-slate-100 pt-3 text-xs text-amber-800">Báo cáo nộp trễ: {lateWeekCount} tuần.</p>}
+              </div>
+            </div>
           </section>
 
+          {/* ─── HÀNG 3: Báo cáo cuối kỳ + Sản phẩm thực tập ─── */}
           <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Panel>
-              <h2 className="flex items-center gap-2 border-b border-slate-100 pb-3 text-sm font-bold text-slate-900">
-                <FileCheck2 className="h-4 w-4 text-blue-700" />Báo cáo cuối kỳ
-              </h2>
-              {finalReport ? (
-                <div className="pt-3">
-                  <p className="text-sm font-semibold text-slate-800">{finalReport.title || finalReport.fileName || "Báo cáo thực tập"}</p>
-                  <p className="mt-1 text-xs text-slate-500">Nộp {formatDate(finalReport.submittedAt)} · {statusLabel(finalReport.status)}</p>
-                </div>
-              ) : (
-                <p className="pt-3 text-sm text-slate-500">Chưa có báo cáo cuối kỳ được ghi nhận.</p>
-              )}
-            </Panel>
-            <Panel>
-              <h2 className="flex items-center gap-2 border-b border-slate-100 pb-3 text-sm font-bold text-slate-900">
-                <Package className="h-4 w-4 text-blue-700" />Sản phẩm thực tập
-              </h2>
-              {product ? (
-                <div className="pt-3">
-                  <p className="text-sm font-semibold text-slate-800">{product.title || product.fileName || "Sản phẩm thực tập"}</p>
-                  <p className="mt-1 text-xs text-slate-500">Nộp {formatDate(product.submittedAt)} · {statusLabel(product.status)}</p>
-                </div>
-              ) : (
-                <p className="pt-3 text-sm text-slate-500">Chưa có sản phẩm thực tập được ghi nhận.</p>
-              )}
-            </Panel>
+            <div className="rounded-xl border border-slate-200/90 bg-white shadow-2xs">
+              <div className="p-4">
+                <h2 className="flex items-center gap-2 border-b border-slate-100 pb-3 text-sm font-bold text-slate-900">
+                  <FileCheck2 className="h-4 w-4 text-blue-700" />Báo cáo cuối kỳ
+                </h2>
+                {finalReport ? (
+                  <div className="pt-3">
+                    <p className="text-sm font-semibold text-slate-800">{finalReport.title || finalReport.fileName || "Báo cáo thực tập"}</p>
+                    <p className="mt-1 text-xs text-slate-500">Nộp {formatDate(finalReport.submittedAt)} · {statusLabel(finalReport.status)}</p>
+                  </div>
+                ) : (
+                  <p className="pt-3 text-sm text-slate-500">Chưa có báo cáo cuối kỳ được ghi nhận.</p>
+                )}
+              </div>
+            </div>
+            <div className="rounded-xl border border-slate-200/90 bg-white shadow-2xs">
+              <div className="p-4">
+                <h2 className="flex items-center gap-2 border-b border-slate-100 pb-3 text-sm font-bold text-slate-900">
+                  <Package className="h-4 w-4 text-blue-700" />Sản phẩm thực tập
+                </h2>
+                {product ? (
+                  <div className="pt-3">
+                    <p className="text-sm font-semibold text-slate-800">{product.title || product.fileName || "Sản phẩm thực tập"}</p>
+                    <p className="mt-1 text-xs text-slate-500">Nộp {formatDate(product.submittedAt)} · {statusLabel(product.status)}</p>
+                  </div>
+                ) : (
+                  <p className="pt-3 text-sm text-slate-500">Chưa có sản phẩm thực tập được ghi nhận.</p>
+                )}
+              </div>
+            </div>
           </section>
 
+          {/* ─── HÀNG 4: Nhận xét GV + Điểm mạnh / Cần cải thiện ─── */}
           {evaluation && (
             <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <Panel>
-                <h2 className="flex items-center gap-2 border-b border-slate-100 pb-3 text-sm font-bold text-slate-900">
-                  <MessageSquare className="h-4 w-4 text-blue-700" />Nhận xét của giảng viên
-                </h2>
-                <p className="whitespace-pre-wrap pt-3 text-sm leading-6 text-slate-700">{evaluation.comments || "Chưa có nhận xét."}</p>
-              </Panel>
-              <Panel className="space-y-4">
-                <div>
-                  <h2 className="text-sm font-bold text-emerald-800">Điểm mạnh</h2>
-                  <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{evaluation.strengths || "Chưa có nội dung được cập nhật."}</p>
+              <div className="rounded-xl border border-slate-200/90 bg-white shadow-2xs">
+                <div className="p-4">
+                  <h2 className="flex items-center gap-2 border-b border-slate-100 pb-3 text-sm font-bold text-slate-900">
+                    <MessageSquare className="h-4 w-4 text-blue-700" />Nhận xét của giảng viên
+                  </h2>
+                  <p className="whitespace-pre-wrap pt-3 text-sm leading-6 text-slate-700">{evaluation.comments || "Chưa có nhận xét."}</p>
                 </div>
-                <div className="border-t border-slate-100 pt-3">
-                  <h2 className="text-sm font-bold text-amber-800">Điểm cần cải thiện</h2>
-                  <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{evaluation.areasForImprovement || "Chưa có nội dung được cập nhật."}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200/90 bg-white shadow-2xs">
+                <div className="p-4 space-y-4">
+                  <div>
+                    <h2 className="text-sm font-bold text-emerald-800">Điểm mạnh</h2>
+                    <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{evaluation.strengths || "Chưa có nội dung được cập nhật."}</p>
+                  </div>
+                  <div className="border-t border-slate-100 pt-3">
+                    <h2 className="text-sm font-bold text-amber-800">Điểm cần cải thiện</h2>
+                    <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{evaluation.areasForImprovement || "Chưa có nội dung được cập nhật."}</p>
+                  </div>
                 </div>
-              </Panel>
+              </div>
             </section>
           )}
+
+          {/* Footer thông tin đánh giá */}
           {evaluation && (
             <p className="flex items-center gap-1.5 text-xs text-slate-500">
               <CalendarDays className="h-3.5 w-3.5" />Ngày đánh giá: {formatDate(evaluation.evaluatedAt)}
@@ -525,6 +573,9 @@ export const EvaluationView = ({ onShowToast }: { onShowToast: (msg: string) => 
         </>
       )}
 
+      {/* ═══════════════════════════════════════════════════════════════════
+          MODAL XEM ẢNH MINH CHỨNG
+         ═══════════════════════════════════════════════════════════════════ */}
       {previewPhoto && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4"

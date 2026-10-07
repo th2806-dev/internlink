@@ -26,149 +26,161 @@ export const Header = ({
 }: HeaderProps) => {
   const { profile } = useStudentPortal();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+
   const getTabLabel = (tab: string) => {
     switch (tab) {
       case "student-dashboard":
-        return "T\u1ED5ng quan";
+        return "Tổng quan";
       case "student-internship":
-        return "K\u1EF3 th\u1EF1c t\u1EADp c\u1EE7a t\xF4i";
+        return "Kỳ thực tập của tôi";
       case "student-weekly-reports":
-        return "B\xE1o c\xE1o tu\u1EA7n";
+        return "Báo cáo tuần";
       case "student-submissions":
-        return "S\u1EA3n ph\u1EA9m th\u1EF1c t\u1EADp";
+        return "Sản phẩm thực tập";
       case "student-feedback":
-        return "Ph\u1EA3n h\u1ED3i & Ch\u1EC9nh s\u1EEDa";
+        return "Phản hồi & Chỉnh sửa";
       case "student-templates":
-        return "Bi\u1EC3u m\u1EABu & T\xE0i li\u1EC7u";
+        return "Biểu mẫu & Tài liệu";
       case "student-evaluation":
-        return "K\u1EBFt qu\u1EA3 \u0111\xE1nh gi\xE1";
+        return "Kết quả đánh giá";
       case "student-attendance":
-        return "L\u1ECBch g\u1EB7p & \u0110i\u1EC3m danh";
+        return "Lịch gặp & Điểm danh";
       case "student-notifications":
-        return "Th\xF4ng b\xE1o";
+        return "Thông báo";
       case "student-account":
-        return "T\xE0i kho\u1EA3n";
+        return "Tài khoản";
       default:
-        return "T\u1ED5ng quan";
+        return "Tổng quan";
     }
   };
-  
+
   return (
-    <header className="sticky top-0 z-30 flex flex-col border-b border-slate-200 bg-white px-3 sm:px-4 lg:px-6">
-      <div className="flex h-16 min-w-0 items-center justify-between gap-3">
-        <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+    <header className="sticky top-0 z-30 flex h-14 sm:h-15 items-center justify-between border-b border-slate-200/90 bg-white px-3.5 sm:px-5 lg:px-6">
+      {/* Left: Mobile hamburger menu & Breadcrumbs */}
+      <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
+        <button
+          type="button"
+          aria-label={isMenuOpen ? "Đóng menu điều hướng" : "Mở menu điều hướng"}
+          aria-expanded={isMenuOpen}
+          aria-controls="student-navigation"
+          className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 lg:hidden transition-colors"
+          onClick={onMenuOpen}
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+
+        <nav aria-label="Điều hướng" className="flex min-w-0 items-center gap-1.5 text-xs text-slate-500">
           <button
             type="button"
-            aria-label={isMenuOpen ? "Đóng menu điều hướng" : "Mở menu điều hướng"}
-            aria-expanded={isMenuOpen}
-            aria-controls="student-navigation"
-            className="student-menu-button lg:hidden"
-            onClick={onMenuOpen}
+            onClick={() => onNavigate("student-dashboard")}
+            className="hidden whitespace-nowrap hover:text-[#026aa7] transition-colors font-medium sm:inline"
           >
-            <Menu className="w-5 h-5" />
+            Cổng Sinh viên
           </button>
-          <nav aria-label="Điều hướng" className="flex min-w-0 items-center gap-2 text-xs font-medium text-slate-500 sm:text-sm">
-            <button
-              type="button"
-              onClick={() => onNavigate("student-dashboard")}
-              className="hidden whitespace-nowrap hover:text-blue-600 sm:inline"
+          <span className="hidden text-slate-300 sm:inline">›</span>
+          <span className="truncate font-bold text-slate-900 text-xs sm:text-[13px] tracking-tight">
+            {getTabLabel(activeTab)}
+          </span>
+        </nav>
+      </div>
+
+      {/* Right: Semester/Enterprise Badge + Notification + User Profile */}
+      <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">
+        <StudentSemesterBadge profile={profile} />
+
+        <NotificationDropdown role="student" onNavigate={onNavigate} />
+
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setShowProfileMenu(!showProfileMenu)}
+            className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 transition-transform hover:scale-105"
+            aria-label="Mở menu tài khoản"
+            aria-expanded={showProfileMenu}
+            aria-controls="student-profile-menu"
+          >
+            <InitialsAvatar name={profile.name} seed={profile.mssv} size={32} />
+          </button>
+
+          {showProfileMenu && (
+            <div
+              id="student-profile-menu"
+              className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-lg border border-slate-200/90 p-3 z-50 animate-in fade-in zoom-in-95 duration-100"
             >
-              Cổng Sinh viên
-            </button>
-            <span className="hidden sm:inline">›</span>
-            <span className="truncate font-semibold text-slate-900">
-              {getTabLabel(activeTab)}
-            </span>
-          </nav>
-        </div>
+              <div className="pb-2.5 border-b border-slate-100">
+                <p className="text-xs font-bold text-slate-900 truncate">
+                  {profile.name}
+                </p>
+                <p className="text-[11px] text-[#026aa7] font-semibold mt-0.5 truncate">
+                  MSSV: {profile.mssv || "—"} • Lớp {profile.class || "—"}
+                </p>
+                <p className="text-[10px] text-slate-500 mt-1 truncate">
+                  GVHD: {profile.lecturerName || "Chưa phân công"}
+                </p>
+              </div>
 
-        <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">
-          <NotificationDropdown role="student" onNavigate={onNavigate} />
+              <div className="pt-1.5 text-xs space-y-0.5">
+                <button
+                  onClick={() => {
+                    setShowProfileMenu(false);
+                    onNavigate("student-account");
+                  }}
+                  className="w-full text-left px-2.5 py-2 text-slate-700 hover:bg-blue-50/50 hover:text-[#026aa7] rounded-lg flex items-center justify-between font-medium transition-colors"
+                >
+                  <span>Hồ sơ cá nhân</span>
+                  <User className="w-3.5 h-3.5 text-slate-400" />
+                </button>
 
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setShowProfileMenu(!showProfileMenu)}
-              className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
-              aria-label="Mở menu tài khoản"
-              aria-expanded={showProfileMenu}
-              aria-controls="student-profile-menu"
-            >
-              <InitialsAvatar name={profile.name} seed={profile.mssv} size={32} />
-            </button>
-
-            {showProfileMenu && (
-              <div id="student-profile-menu" className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-md border border-slate-200 p-3 z-50">
-                <div className="pb-3 border-b border-slate-100">
-                  <p className="text-xs font-bold text-slate-800">
-                    {profile.name}
-                  </p>
-                  <p className="text-[11px] text-blue-600 font-semibold">
-                    MSSV: {profile.mssv} • Lớp {profile.class}
-                  </p>
-                  <p className="text-[10px] text-slate-500 mt-1">
-                    GVHD: {profile.lecturerName}
-                  </p>
-                </div>
-
-                <div className="py-1 text-xs space-y-0.5">
+                {onLogout && (
                   <button
                     onClick={() => {
                       setShowProfileMenu(false);
-                      onNavigate("student-account");
+                      onLogout();
                     }}
-                    className="w-full text-left px-3 py-2 text-slate-700 hover:bg-slate-100 hover:text-blue-600 rounded-lg flex items-center justify-between font-medium transition-colors"
+                    className="w-full text-left px-2.5 py-2 text-rose-600 hover:bg-rose-50 rounded-lg flex items-center justify-between font-semibold transition-colors border-t border-slate-100 pt-2 mt-1"
                   >
-                    <span>Hồ sơ cá nhân</span>
-                    <User className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Đăng xuất hệ thống</span>
+                    <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
                   </button>
-
-                  {onLogout && (
-                    <button
-                      onClick={() => {
-                        setShowProfileMenu(false);
-                        onLogout();
-                      }}
-                      className="w-full text-left px-3 py-2 text-rose-600 hover:bg-rose-50 rounded-lg flex items-center justify-between font-bold transition-colors border-t border-slate-100 pt-2.5 mt-1"
-                    >
-                      <span>Đăng xuất hệ thống</span>
-                      <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
-                    </button>
-                  )}
-                </div>
+                )}
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
-      </div>
-      <div className="hidden justify-end border-t border-slate-100 py-2 xl:flex">
-        <StudentSemesterBadge profile={profile} />
       </div>
     </header>
   );
 };
 
-function StudentSemesterBadge({ profile }: { profile: { company: string; position: string; statusBadge: string } }) {
+function StudentSemesterBadge({
+  profile,
+}: {
+  profile: { company: string; position: string; statusBadge: string };
+}) {
   const { semesters } = useSemester();
   const activeSemester = semesters.find((semester) => semester.status === "active");
   const semesterLabel = activeSemester
     ? activeSemester.name || `${activeSemester.term} (${activeSemester.academicYear})`
-    : "Chưa có kỳ hoạt động";
+    : "Kỳ thực tập hiện tại";
 
   return (
-    <div className="flex min-w-0 max-w-full items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-800 xl:max-w-[720px]">
-      <CalendarDays className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-      <span className="max-w-[180px] truncate">
+    <div className="hidden lg:flex min-w-0 max-w-[620px] items-center gap-2 rounded-full border border-slate-200/90 bg-slate-50/80 px-3 py-1.5 text-xs font-medium text-slate-700 shadow-2xs">
+      <CalendarDays className="w-3.5 h-3.5 text-[#026aa7] shrink-0" />
+      <span className="max-w-[160px] truncate text-slate-600 font-medium">
         {semesterLabel}
       </span>
       <span className="text-slate-300">•</span>
-      <Building2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-      <span className="max-w-[200px] truncate">
-        {profile.company} • {profile.position}
+      <Building2 className="w-3.5 h-3.5 text-[#026aa7] shrink-0" />
+      <span className="max-w-[180px] truncate font-semibold text-slate-800">
+        {profile.company && profile.company !== "—" ? profile.company : "Chưa phân bổ"}
       </span>
-      <span className={`w-2 h-2 rounded-full shrink-0 ml-1 ${activeSemester ? "bg-emerald-500" : "bg-slate-400"}`} />
-      <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-md font-bold">
-        {profile.statusBadge}
+      <span className="flex items-center gap-1 font-bold text-emerald-800 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-full text-[10px] shrink-0">
+        <span
+          className={`w-1.5 h-1.5 rounded-full ${
+            activeSemester ? "bg-emerald-600 animate-pulse" : "bg-slate-400"
+          }`}
+        />
+        {profile.statusBadge || "Đang thực tập"}
       </span>
     </div>
   );

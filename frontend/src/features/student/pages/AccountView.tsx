@@ -1,39 +1,39 @@
-import { useState, FormEvent, useEffect } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import {
-  User,
-  Mail,
-  Lock,
-  Save,
+  AlertCircle,
+  Briefcase,
   Building2,
-  GraduationCap,
-  ShieldCheck,
-  Edit3,
-  Key,
-  LogOut,
   CheckCircle2,
-  X,
+  Edit3,
+  ExternalLink,
   Eye,
   EyeOff,
-  AlertCircle,
+  FileText,
+  GraduationCap,
+  Key,
+  Layers,
   Loader2,
-  Briefcase,
+  Lock,
+  LogOut,
+  Mail,
   MapPin,
   Monitor,
+  Save,
+  ShieldCheck,
   Tags,
-  FileText,
-  ExternalLink,
-  Layers,
+  User,
+  X,
 } from "lucide-react";
-import { PageHeader } from "../../../components/common/PageHeader";
-import { Panel } from "../../../components/common/Panel";
 import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
 import { PasswordStrengthMeter } from "../../../components/common/PasswordStrengthMeter";
+import { useSemester } from "../../../contexts/SemesterContext";
+import { useStudentPortal } from "../../../contexts/StudentPortalContext";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { authService } from "../../../services/auth.service";
 import { studentPortalService } from "../../../services/studentPortal.service";
-import { useStudentPortal } from "../../../contexts/StudentPortalContext";
-import type { StudentProfile } from "../../../types/common";
 import type { StudentPortalProfileDto } from "../../../types/api";
+import type { StudentProfile } from "../../../types/common";
+import { StudentSubPageHeader } from "../components/StudentSubPageHeader";
 
 type PersonalInfo = {
   fullName: string;
@@ -54,17 +54,6 @@ type InternshipPrefs = {
   preferredIndustry: string;
   skills: string;
   resumeUrl: string;
-};
-
-const EMPTY_PREFS: InternshipPrefs = {
-  department: "",
-  desiredPosition: "",
-  alternativePosition: "",
-  desiredLocation: "",
-  workPreference: "",
-  preferredIndustry: "",
-  skills: "",
-  resumeUrl: "",
 };
 
 function buildPersonalInfo(
@@ -101,20 +90,31 @@ export const AccountView = ({
   onShowToast,
   onLogout,
 }: {
-  onShowToast: (msg: string) => void;
+  onShowToast?: (msg: string) => void;
   onNavigate?: (tab: string) => void;
   onLogout?: () => void;
 }) => {
   const { profile, portalData, refresh } = useStudentPortal();
+  const { selectedSemester } = useSemester();
+
   const [personalInfo, setPersonalInfo] = useState<PersonalInfo>(() =>
     buildPersonalInfo(profile, portalData),
   );
   const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
   const [tempPersonalInfo, setTempPersonalInfo] = useState<PersonalInfo>(() =>
     buildPersonalInfo(profile, portalData),
   );
-  const [prefs, setPrefs] = useState<InternshipPrefs>(() => buildPrefs(portalData));
-  const [tempPrefs, setTempPrefs] = useState<InternshipPrefs>(() => buildPrefs(portalData));
+  const [prefs, setPrefs] = useState<InternshipPrefs>(() =>
+    buildPrefs(portalData),
+  );
+  const [tempPrefs, setTempPrefs] = useState<InternshipPrefs>(() =>
+    buildPrefs(portalData),
+  );
+
+  // Đổi mật khẩu states
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -136,8 +136,21 @@ export const AccountView = ({
     }
   }, [portalData, profile, isEditingProfile]);
 
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await refresh();
+      onShowToast?.("Đã làm mới thông tin tài khoản.");
+    } catch (err) {
+      onShowToast?.(getApiErrorMessage(err));
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   const handleSavePersonalInfo = async (e: FormEvent) => {
     e.preventDefault();
+    setIsSavingProfile(true);
     try {
       await studentPortalService.updateMe({
         fullName: tempPersonalInfo.fullName.trim(),
@@ -154,16 +167,21 @@ export const AccountView = ({
       });
       await refresh();
       setIsEditingProfile(false);
-      onShowToast("Đã cập nhật thông tin tài khoản.");
+      onShowToast?.("Đã cập nhật thông tin tài khoản thành công!");
     } catch (err) {
-      onShowToast(getApiErrorMessage(err));
+      onShowToast?.(getApiErrorMessage(err));
+    } finally {
+      setIsSavingProfile(false);
     }
   };
+
   const handleCancelPersonalInfo = () => {
     setTempPersonalInfo({ ...personalInfo });
+    setTempPrefs({ ...prefs });
     setIsEditingProfile(false);
-    onShowToast("\u0110\xE3 h\u1EE7y ch\u1EC9nh s\u1EEDa th\xF4ng tin");
+    onShowToast?.("Đã hủy chỉnh sửa thông tin.");
   };
+
   const handleChangePasswordSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setPasswordError(null);
@@ -174,7 +192,7 @@ export const AccountView = ({
       return;
     }
     if (newPassword !== confirmPassword) {
-      setPasswordError("Xác nhận mật khẩu mới không khớp.");
+      setPasswordError("Xác nhận mật khẩu mới không trùng khớp.");
       return;
     }
 
@@ -192,138 +210,143 @@ export const AccountView = ({
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-      onShowToast("Đã thay đổi mật khẩu thành công!");
+      onShowToast?.("Đã thay đổi mật khẩu thành công!");
     } catch (err) {
       setPasswordError(getApiErrorMessage(err));
     } finally {
       setIsPasswordLoading(false);
     }
   };
-  return (
-    <div className="space-y-5 animate-in fade-in duration-200 max-w-7xl mx-auto">
-      <PageHeader
-        icon={User}
-        title="Thông tin Tài khoản"
-        subtitle="Quản lý hồ sơ cá nhân, thông tin sinh viên và bảo mật mật khẩu tài khoản."
-        badge={`MSSV: ${personalInfo.studentId}`}
-        badgeColor="bg-blue-100 text-blue-800 border-blue-200"
-        actions={[
-          {
-            label: "Chỉnh sửa hồ sơ",
-            icon: Edit3,
-            onClick: () => {
-              setIsEditingProfile(true);
-              setTempPersonalInfo({ ...personalInfo });
-            },
-            variant: "secondary",
-          },
-        ]}
-      >
-        <span className="px-2 py-0.5 font-semibold text-[10px] rounded-md border bg-emerald-100 text-emerald-800 border-emerald-200 flex items-center gap-1">
-          <CheckCircle2 className="w-3 h-3" /> {profile.statusBadge}
-        </span>
-        <button
-          type="button"
-          onClick={() => {
-            if (onLogout) onLogout();
-            else onShowToast("Đã đăng xuất tài khoản!");
-          }}
-          className="il-btn-press px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold text-xs rounded-md border border-rose-200 transition-all flex items-center gap-1.5"
-        >
-          <LogOut className="w-3.5 h-3.5" />
-          <span>Đăng xuất</span>
-        </button>
-      </PageHeader>
 
+
+
+  return (
+    <div className="mx-auto max-w-[1300px] space-y-4 animate-in fade-in duration-200 font-sans pb-12">
+      {/* ═══════════════════════════════════════════════════════════════════
+          1. TOP CARD BANNER (Chuẩn layout banner xanh #026aa7 + thông tin thực tế)
+         ═══════════════════════════════════════════════════════════════════ */}
+      <div className="space-y-3">
+        <StudentSubPageHeader
+          icon={User}
+          title="Thông tin tài khoản & hồ sơ"
+          subtitle="Cập nhật thông tin cá nhân và tùy chọn thực tập."
+          semesterName={selectedSemester?.name}
+          onRefresh={() => void handleRefresh()}
+          isRefreshing={isRefreshing}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              if (onLogout) onLogout();
+              else onShowToast?.("Đã đăng xuất tài khoản!");
+            }}
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-rose-200/70 bg-rose-500 px-3 text-xs font-semibold text-white transition-colors hover:bg-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+          >
+            <LogOut className="h-4 w-4" aria-hidden="true" />
+            <span>Đăng xuất</span>
+          </button>
+        </StudentSubPageHeader>
+
+
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          2. MAIN CONTENT: 2 CỘT (HỒ SƠ CÁ NHÂN & BẢO MẬT/ĐỔI MẬT KHẨU)
+         ═══════════════════════════════════════════════════════════════════ */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        {/* CỘT TRÁI (2 CỘT): HỒ SƠ CHI TIẾT */}
         <div className="lg:col-span-2 space-y-5">
-          <Panel className="space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+          {/* Card thông tin hồ sơ & liên hệ */}
+          <div className="rounded-xl border border-slate-200/90 bg-white p-5 sm:p-6 shadow-2xs space-y-5">
+            {/* Top avatar summary */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
               <div className="flex items-center gap-4">
                 <InitialsAvatar
                   name={personalInfo.fullName}
                   seed={personalInfo.studentId}
-                  size={56}
-                  className="text-lg"
+                  size={58}
+                  className="text-lg ring-4 ring-blue-50"
                 />
                 <div>
-                  <h2 className="text-base font-bold text-slate-900">
-                    {personalInfo.fullName}
-                  </h2>
-                  <p className="text-xs text-slate-500 font-medium">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-base sm:text-lg font-bold text-slate-900">
+                      {personalInfo.fullName}
+                    </h2>
+                    <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
+                      <CheckCircle2 className="h-3 w-3" />
+                      {profile.statusBadge}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 font-medium mt-0.5">
                     {personalInfo.major} · Lớp {personalInfo.className}
                   </p>
-                  <p className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
-                    <Mail className="w-3 h-3" /> {personalInfo.email}
+                  <p className="text-[11px] text-slate-400 flex items-center gap-1 mt-1">
+                    <Mail className="w-3.5 h-3.5 text-slate-400" /> {personalInfo.email}
                   </p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsEditingProfile(true);
-                  setTempPersonalInfo({ ...personalInfo });
-                }}
-                className="il-btn il-btn-secondary text-xs self-start sm:self-center"
-              >
-                <Edit3 className="w-3.5 h-3.5" /> Chỉnh sửa
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              <div className="flex items-center gap-2.5 p-3 bg-slate-50 border border-slate-200 rounded-md">
-                <Building2 className="w-4 h-4 text-blue-600 shrink-0" />
-                <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase">
-                    Doanh nghiệp
-                  </p>
-                  <p className="font-bold text-slate-800">
-                    {profile.company}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2.5 p-3 bg-slate-50 border border-slate-200 rounded-md">
-                <GraduationCap className="w-4 h-4 text-emerald-600 shrink-0" />
-                <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase">
-                    Giảng viên HD
-                  </p>
-                  <p className="font-bold text-slate-800">
-                    {profile.lecturerName}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </Panel>
-
-          <Panel className="space-y-5">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <User className="w-5 h-5 text-blue-600" /> Hồ sơ cá nhân
-              </h2>
 
               {!isEditingProfile ? (
                 <button
+                  type="button"
                   onClick={() => {
                     setIsEditingProfile(true);
                     setTempPersonalInfo({ ...personalInfo });
+                    setTempPrefs({ ...prefs });
                   }}
-                  className="px-3 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold text-xs rounded-md transition-colors flex items-center gap-1"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 hover:text-blue-700 self-start sm:self-center cursor-pointer"
                 >
-                  <Edit3 className="w-3.5 h-3.5" /> Chỉnh sửa
+                  <Edit3 className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Chỉnh sửa hồ sơ</span>
                 </button>
               ) : (
-                <span className="px-2.5 py-0.5 bg-amber-50 text-amber-700 font-bold text-[11px] rounded-lg border border-amber-200">
-                  Đang chỉnh sửa
+                <span className="inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700 self-start sm:self-center">
+                  <Edit3 className="w-3.5 h-3.5" /> Đang ở chế độ chỉnh sửa
                 </span>
               )}
             </div>
 
-            <form onSubmit={handleSavePersonalInfo} className="space-y-4">
-              {/* EDITABLE CONTACT FIELDS */}
+            {/* 2 Card thông tin thực tập hiện tại */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div className="flex items-center gap-3 p-3.5 bg-slate-50 border border-slate-200/90 rounded-xl">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-100/70 text-blue-700">
+                  <Building2 className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    Doanh nghiệp thực tập
+                  </p>
+                  <p className="font-bold text-slate-800 truncate mt-0.5">
+                    {profile.company && profile.company !== "—"
+                      ? profile.company
+                      : "Chưa phân công"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 p-3.5 bg-slate-50 border border-slate-200/90 rounded-xl">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-100/70 text-emerald-700">
+                  <GraduationCap className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    Giảng viên hướng dẫn
+                  </p>
+                  <p className="font-bold text-slate-800 truncate mt-0.5">
+                    {profile.lecturerName && profile.lecturerName !== "—"
+                      ? profile.lecturerName
+                      : "Chưa phân công"}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Form chi tiết thông tin */}
+            <form onSubmit={handleSavePersonalInfo} className="space-y-5 pt-2">
+              {/* PHẦN 1: THÔNG TIN LIÊN HỆ */}
               <div className="space-y-3">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-blue-600 flex items-center gap-1.5">
-                  <Edit3 className="w-3.5 h-3.5" /> Thông tin liên hệ
+                <h3 className="text-xs font-bold uppercase tracking-wider text-blue-700 flex items-center gap-1.5">
+                  <User className="w-3.5 h-3.5" /> Thông tin liên hệ
                 </h3>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
@@ -346,7 +369,11 @@ export const AccountView = ({
                       }
                       disabled={!isEditingProfile}
                       required
-                      className={`w-full px-3.5 py-2 rounded-md border font-bold outline-none transition-all ${isEditingProfile ? "bg-white border-blue-400 focus:border-blue-600 text-slate-900 shadow-xs" : "bg-slate-50 border-slate-200/80 text-slate-900"}`}
+                      className={`w-full px-3.5 py-2 rounded-lg border font-semibold outline-none transition-all ${
+                        isEditingProfile
+                          ? "bg-white border-blue-400 focus:border-blue-600 text-slate-900 shadow-xs"
+                          : "bg-slate-50 border-slate-200/80 text-slate-800"
+                      }`}
                     />
                   </div>
 
@@ -369,7 +396,11 @@ export const AccountView = ({
                       }
                       disabled={!isEditingProfile}
                       required
-                      className={`w-full px-3.5 py-2 rounded-md border font-bold outline-none transition-all ${isEditingProfile ? "bg-white border-blue-400 focus:border-blue-600 text-slate-900 shadow-xs" : "bg-slate-50 border-slate-200/80 text-slate-900"}`}
+                      className={`w-full px-3.5 py-2 rounded-lg border font-semibold outline-none transition-all ${
+                        isEditingProfile
+                          ? "bg-white border-blue-400 focus:border-blue-600 text-slate-900 shadow-xs"
+                          : "bg-slate-50 border-slate-200/80 text-slate-800"
+                      }`}
                     />
                   </div>
 
@@ -391,8 +422,12 @@ export const AccountView = ({
                         })
                       }
                       disabled={!isEditingProfile}
-                      required
-                      className={`w-full px-3.5 py-2 rounded-md border font-bold outline-none transition-all ${isEditingProfile ? "bg-white border-blue-400 focus:border-blue-600 text-slate-900 shadow-xs" : "bg-slate-50 border-slate-200/80 text-slate-900"}`}
+                      placeholder="VD: 0912345678"
+                      className={`w-full px-3.5 py-2 rounded-lg border font-semibold outline-none transition-all ${
+                        isEditingProfile
+                          ? "bg-white border-blue-400 focus:border-blue-600 text-slate-900 shadow-xs"
+                          : "bg-slate-50 border-slate-200/80 text-slate-800"
+                      }`}
                     />
                   </div>
 
@@ -404,21 +439,20 @@ export const AccountView = ({
                       type="text"
                       value={personalInfo.address}
                       disabled
-                      className="w-full px-3.5 py-2 rounded-md border font-medium outline-none bg-slate-50 border-slate-200/80 text-slate-500"
+                      className="w-full px-3.5 py-2 rounded-lg border font-medium outline-none bg-slate-50 border-slate-200/80 text-slate-400 cursor-not-allowed"
                     />
                   </div>
                 </div>
               </div>
 
-              {/* READ-ONLY ACADEMIC FIELDS */}
+              {/* PHẦN 2: THÔNG TIN HỌC TẬP (CỐ ĐỊNH TỪ HỆ THỐNG) */}
               <div className="pt-3 border-t border-slate-100 space-y-3">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                  <Lock className="w-3.5 h-3.5 text-slate-400" /> Thông tin sinh
-                  viên (Cố định)
+                  <Lock className="w-3.5 h-3.5 text-slate-400" /> Thông tin sinh viên (Cố định từ Nhà trường)
                 </h3>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
-                  <div className="bg-slate-50 p-3 rounded-md border border-slate-200/80">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-200/80">
                     <p className="text-[10px] font-bold text-slate-400 uppercase">
                       MSSV
                     </p>
@@ -427,45 +461,57 @@ export const AccountView = ({
                     </p>
                   </div>
 
-                  <div className="bg-slate-50 p-3 rounded-md border border-slate-200/80">
+                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-200/80">
                     <p className="text-[10px] font-bold text-slate-400 uppercase">
-                      Lớp
+                      Lớp sinh hoạt
                     </p>
                     <p className="font-bold text-slate-900 mt-0.5">
                       {personalInfo.className}
                     </p>
                   </div>
 
-                  <div className="bg-slate-50 p-3 rounded-md border border-slate-200/80">
+                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-200/80">
                     <p className="text-[10px] font-bold text-slate-400 uppercase">
-                      Ngành học
+                      Ngành đào tạo
                     </p>
-                    <p className="font-bold text-slate-900 mt-0.5">
+                    <p className="font-bold text-slate-900 mt-0.5 truncate">
                       {personalInfo.major}
                     </p>
                   </div>
-
                 </div>
               </div>
 
-              {/* INTERNSHIP PREFERENCES */}
+              {/* PHẦN 3: NGUYỆN VỌNG THỰC TẬP & KỸ NĂNG */}
               <div className="pt-3 border-t border-slate-100 space-y-3">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-violet-600 flex items-center gap-1.5">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-violet-700 flex items-center gap-1.5">
                   <Briefcase className="w-3.5 h-3.5" /> Nguyện vọng thực tập & Kỹ năng
                 </h3>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                   <div>
                     <label className="block font-bold text-slate-700 mb-1 flex items-center gap-1">
-                      <Layers className="w-3 h-3 text-slate-400" /> Khoa
+                      <Layers className="w-3 h-3 text-slate-400" /> Khoa / Viện
                     </label>
                     <input
                       type="text"
-                      value={isEditingProfile ? tempPrefs.department : prefs.department}
-                      onChange={(e) => setTempPrefs({ ...tempPrefs, department: e.target.value })}
+                      value={
+                        isEditingProfile
+                          ? tempPrefs.department
+                          : prefs.department
+                      }
+                      onChange={(e) =>
+                        setTempPrefs({
+                          ...tempPrefs,
+                          department: e.target.value,
+                        })
+                      }
                       disabled={!isEditingProfile}
                       placeholder="VD: Công nghệ thông tin"
-                      className={`w-full px-3.5 py-2 rounded-md border font-medium outline-none transition-all ${isEditingProfile ? "bg-white border-violet-400 focus:border-violet-600 text-slate-900 shadow-xs" : "bg-slate-50 border-slate-200/80 text-slate-700"}`}
+                      className={`w-full px-3.5 py-2 rounded-lg border font-medium outline-none transition-all ${
+                        isEditingProfile
+                          ? "bg-white border-violet-400 focus:border-violet-600 text-slate-900 shadow-xs"
+                          : "bg-slate-50 border-slate-200/80 text-slate-700"
+                      }`}
                     />
                   </div>
 
@@ -475,11 +521,24 @@ export const AccountView = ({
                     </label>
                     <input
                       type="text"
-                      value={isEditingProfile ? tempPrefs.desiredPosition : prefs.desiredPosition}
-                      onChange={(e) => setTempPrefs({ ...tempPrefs, desiredPosition: e.target.value })}
+                      value={
+                        isEditingProfile
+                          ? tempPrefs.desiredPosition
+                          : prefs.desiredPosition
+                      }
+                      onChange={(e) =>
+                        setTempPrefs({
+                          ...tempPrefs,
+                          desiredPosition: e.target.value,
+                        })
+                      }
                       disabled={!isEditingProfile}
-                      placeholder="VD: Backend Developer, Data Analyst"
-                      className={`w-full px-3.5 py-2 rounded-md border font-medium outline-none transition-all ${isEditingProfile ? "bg-white border-violet-400 focus:border-violet-600 text-slate-900 shadow-xs" : "bg-slate-50 border-slate-200/80 text-slate-700"}`}
+                      placeholder="VD: Backend Developer, React Frontend"
+                      className={`w-full px-3.5 py-2 rounded-lg border font-medium outline-none transition-all ${
+                        isEditingProfile
+                          ? "bg-white border-violet-400 focus:border-violet-600 text-slate-900 shadow-xs"
+                          : "bg-slate-50 border-slate-200/80 text-slate-700"
+                      }`}
                     />
                   </div>
 
@@ -489,11 +548,24 @@ export const AccountView = ({
                     </label>
                     <input
                       type="text"
-                      value={isEditingProfile ? tempPrefs.alternativePosition : prefs.alternativePosition}
-                      onChange={(e) => setTempPrefs({ ...tempPrefs, alternativePosition: e.target.value })}
+                      value={
+                        isEditingProfile
+                          ? tempPrefs.alternativePosition
+                          : prefs.alternativePosition
+                      }
+                      onChange={(e) =>
+                        setTempPrefs({
+                          ...tempPrefs,
+                          alternativePosition: e.target.value,
+                        })
+                      }
                       disabled={!isEditingProfile}
-                      placeholder="VD: QA/Tester, DevOps"
-                      className={`w-full px-3.5 py-2 rounded-md border font-medium outline-none transition-all ${isEditingProfile ? "bg-white border-violet-400 focus:border-violet-600 text-slate-900 shadow-xs" : "bg-slate-50 border-slate-200/80 text-slate-700"}`}
+                      placeholder="VD: QA / Tester, Business Analyst"
+                      className={`w-full px-3.5 py-2 rounded-lg border font-medium outline-none transition-all ${
+                        isEditingProfile
+                          ? "bg-white border-violet-400 focus:border-violet-600 text-slate-900 shadow-xs"
+                          : "bg-slate-50 border-slate-200/80 text-slate-700"
+                      }`}
                     />
                   </div>
 
@@ -504,10 +576,16 @@ export const AccountView = ({
                     <input
                       type="text"
                       value={isEditingProfile ? tempPrefs.skills : prefs.skills}
-                      onChange={(e) => setTempPrefs({ ...tempPrefs, skills: e.target.value })}
+                      onChange={(e) =>
+                        setTempPrefs({ ...tempPrefs, skills: e.target.value })
+                      }
                       disabled={!isEditingProfile}
-                      placeholder="VD: C#, .NET, SQL Server, React"
-                      className={`w-full px-3.5 py-2 rounded-md border font-medium outline-none transition-all ${isEditingProfile ? "bg-white border-violet-400 focus:border-violet-600 text-slate-900 shadow-xs" : "bg-slate-50 border-slate-200/80 text-slate-700"}`}
+                      placeholder="VD: C#, .NET, SQL Server, React, Docker"
+                      className={`w-full px-3.5 py-2 rounded-lg border font-medium outline-none transition-all ${
+                        isEditingProfile
+                          ? "bg-white border-violet-400 focus:border-violet-600 text-slate-900 shadow-xs"
+                          : "bg-slate-50 border-slate-200/80 text-slate-700"
+                      }`}
                     />
                   </div>
 
@@ -517,11 +595,24 @@ export const AccountView = ({
                     </label>
                     <input
                       type="text"
-                      value={isEditingProfile ? tempPrefs.desiredLocation : prefs.desiredLocation}
-                      onChange={(e) => setTempPrefs({ ...tempPrefs, desiredLocation: e.target.value })}
+                      value={
+                        isEditingProfile
+                          ? tempPrefs.desiredLocation
+                          : prefs.desiredLocation
+                      }
+                      onChange={(e) =>
+                        setTempPrefs({
+                          ...tempPrefs,
+                          desiredLocation: e.target.value,
+                        })
+                      }
                       disabled={!isEditingProfile}
                       placeholder="VD: Hà Nội, TP.HCM, Đà Nẵng"
-                      className={`w-full px-3.5 py-2 rounded-md border font-medium outline-none transition-all ${isEditingProfile ? "bg-white border-violet-400 focus:border-violet-600 text-slate-900 shadow-xs" : "bg-slate-50 border-slate-200/80 text-slate-700"}`}
+                      className={`w-full px-3.5 py-2 rounded-lg border font-medium outline-none transition-all ${
+                        isEditingProfile
+                          ? "bg-white border-violet-400 focus:border-violet-600 text-slate-900 shadow-xs"
+                          : "bg-slate-50 border-slate-200/80 text-slate-700"
+                      }`}
                     />
                   </div>
 
@@ -532,20 +623,25 @@ export const AccountView = ({
                     {isEditingProfile ? (
                       <select
                         value={tempPrefs.workPreference}
-                        onChange={(e) => setTempPrefs({ ...tempPrefs, workPreference: e.target.value })}
-                        className="w-full px-3.5 py-2 rounded-md border font-medium outline-none transition-all bg-white border-violet-400 focus:border-violet-600 text-slate-900 shadow-xs"
+                        onChange={(e) =>
+                          setTempPrefs({
+                            ...tempPrefs,
+                            workPreference: e.target.value,
+                          })
+                        }
+                        className="w-full px-3.5 py-2 rounded-lg border font-medium outline-none transition-all bg-white border-violet-400 focus:border-violet-600 text-slate-900 shadow-xs"
                       >
-                        <option value="">— Chọn —</option>
-                        <option value="Onsite">Onsite</option>
-                        <option value="Remote">Remote</option>
-                        <option value="Hybrid">Hybrid</option>
+                        <option value="">— Chọn hình thức —</option>
+                        <option value="Onsite">Onsite (Tại văn phòng)</option>
+                        <option value="Remote">Remote (Từ xa)</option>
+                        <option value="Hybrid">Hybrid (Linh hoạt kết hợp)</option>
                       </select>
                     ) : (
                       <input
                         type="text"
                         value={prefs.workPreference || "Chưa chọn"}
                         disabled
-                        className="w-full px-3.5 py-2 rounded-md border font-medium outline-none bg-slate-50 border-slate-200/80 text-slate-700"
+                        className="w-full px-3.5 py-2 rounded-lg border font-medium outline-none bg-slate-50 border-slate-200/80 text-slate-700"
                       />
                     )}
                   </div>
@@ -556,11 +652,24 @@ export const AccountView = ({
                     </label>
                     <input
                       type="text"
-                      value={isEditingProfile ? tempPrefs.preferredIndustry : prefs.preferredIndustry}
-                      onChange={(e) => setTempPrefs({ ...tempPrefs, preferredIndustry: e.target.value })}
+                      value={
+                        isEditingProfile
+                          ? tempPrefs.preferredIndustry
+                          : prefs.preferredIndustry
+                      }
+                      onChange={(e) =>
+                        setTempPrefs({
+                          ...tempPrefs,
+                          preferredIndustry: e.target.value,
+                        })
+                      }
                       disabled={!isEditingProfile}
-                      placeholder="VD: Fintech, E-Commerce, AI"
-                      className={`w-full px-3.5 py-2 rounded-md border font-medium outline-none transition-all ${isEditingProfile ? "bg-white border-violet-400 focus:border-violet-600 text-slate-900 shadow-xs" : "bg-slate-50 border-slate-200/80 text-slate-700"}`}
+                      placeholder="VD: Fintech, E-Commerce, Logistics, EdTech"
+                      className={`w-full px-3.5 py-2 rounded-lg border font-medium outline-none transition-all ${
+                        isEditingProfile
+                          ? "bg-white border-violet-400 focus:border-violet-600 text-slate-900 shadow-xs"
+                          : "bg-slate-50 border-slate-200/80 text-slate-700"
+                      }`}
                     />
                   </div>
 
@@ -568,22 +677,35 @@ export const AccountView = ({
                     <label className="block font-bold text-slate-700 mb-1 flex items-center gap-1">
                       <FileText className="w-3 h-3 text-orange-500" /> Link CV / Portfolio
                     </label>
-                    <div className="flex gap-1.5">
+                    <div className="flex gap-2">
                       <input
                         type="url"
-                        value={isEditingProfile ? tempPrefs.resumeUrl : prefs.resumeUrl}
-                        onChange={(e) => setTempPrefs({ ...tempPrefs, resumeUrl: e.target.value })}
+                        value={
+                          isEditingProfile
+                            ? tempPrefs.resumeUrl
+                            : prefs.resumeUrl
+                        }
+                        onChange={(e) =>
+                          setTempPrefs({
+                            ...tempPrefs,
+                            resumeUrl: e.target.value,
+                          })
+                        }
                         disabled={!isEditingProfile}
                         placeholder="https://drive.google.com/..."
-                        className={`flex-1 px-3.5 py-2 rounded-md border font-medium outline-none transition-all ${isEditingProfile ? "bg-white border-violet-400 focus:border-violet-600 text-slate-900 shadow-xs" : "bg-slate-50 border-slate-200/80 text-slate-700"}`}
+                        className={`flex-1 px-3.5 py-2 rounded-lg border font-medium outline-none transition-all ${
+                          isEditingProfile
+                            ? "bg-white border-violet-400 focus:border-violet-600 text-slate-900 shadow-xs"
+                            : "bg-slate-50 border-slate-200/80 text-slate-700"
+                        }`}
                       />
-                      {(prefs.resumeUrl || tempPrefs.resumeUrl) && !isEditingProfile && (
+                      {(prefs.resumeUrl || tempPrefs.resumeUrl) && (
                         <a
-                          href={prefs.resumeUrl}
+                          href={isEditingProfile ? tempPrefs.resumeUrl : prefs.resumeUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="px-2 py-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-md border border-blue-200 transition-colors flex items-center"
-                          title="Mở CV"
+                          className="px-3 py-2 bg-blue-50 hover:bg-blue-100 text-[#026aa7] rounded-lg border border-blue-200 transition-colors flex items-center"
+                          title="Mở liên kết CV"
                         >
                           <ExternalLink className="w-3.5 h-3.5" />
                         </a>
@@ -592,16 +714,19 @@ export const AccountView = ({
                   </div>
                 </div>
 
-                {/* Skill badges preview (read-only mode) */}
+                {/* Badges preview kỹ năng khi ở chế độ xem */}
                 {!isEditingProfile && prefs.skills && (
-                  <div className="flex flex-wrap gap-1.5 pt-1">
+                  <div className="flex flex-wrap items-center gap-1.5 pt-2">
+                    <span className="text-[11px] font-semibold text-slate-400 mr-1">
+                      Kỹ năng đã lưu:
+                    </span>
                     {prefs.skills.split(/[,;]/).map((skill, i) => {
                       const s = skill.trim();
                       if (!s) return null;
                       return (
                         <span
                           key={i}
-                          className="px-2 py-0.5 bg-violet-50 text-violet-700 border border-violet-200 rounded-full text-[10px] font-bold"
+                          className="px-2.5 py-0.5 bg-violet-50 text-violet-700 border border-violet-200 rounded-full text-[10px] font-bold"
                         >
                           {s}
                         </span>
@@ -611,57 +736,74 @@ export const AccountView = ({
                 )}
               </div>
 
-              {/* SAVE / CANCEL BUTTONS */}
+              {/* ACTION BUTTONS: HỦY / LƯU */}
               {isEditingProfile && (
-                <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-slate-100">
                   <button
                     type="button"
                     onClick={handleCancelPersonalInfo}
-                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-md transition-colors flex items-center gap-1.5"
+                    disabled={isSavingProfile}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 cursor-pointer disabled:opacity-50"
                   >
-                    <X className="w-3.5 h-3.5" /> Hủy
+                    <X className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Hủy chỉnh sửa</span>
                   </button>
 
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-md shadow-xs transition-colors flex items-center gap-1.5"
+                    disabled={isSavingProfile}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-[#026aa7] px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-[#025a8e] cursor-pointer disabled:opacity-60"
                   >
-                    <Save className="w-3.5 h-3.5" /> Lưu thay đổi
+                    {isSavingProfile ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Đang lưu...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-3.5 h-3.5" />
+                        <span>Lưu thay đổi</span>
+                      </>
+                    )}
                   </button>
                 </div>
               )}
             </form>
-          </Panel>
+          </div>
         </div>
 
+        {/* CỘT PHẢI (1 CỘT): BẢO MẬT & ĐỔI MẬT KHẨU + PHIÊN LÀM VIỆC */}
         <div className="lg:col-span-1 space-y-5">
-          <Panel className="space-y-4" id="change-password">
-            <h3 className="text-sm font-bold text-slate-900 border-b border-slate-100 pb-3 flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-emerald-600" /> Bảo mật
-            </h3>
+          {/* Card Đổi mật khẩu */}
+          <div className="rounded-xl border border-slate-200/90 bg-white p-5 shadow-2xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                <span>Bảo mật & Mật khẩu</span>
+              </h3>
+            </div>
 
             {passwordSaved && (
-              <div className="p-3 rounded-md border border-emerald-200 bg-emerald-50 text-emerald-800 text-xs font-semibold flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 shrink-0" />
-                Mật khẩu đã được cập nhật.
+              <div className="p-3 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                <span>Mật khẩu tài khoản đã được cập nhật thành công!</span>
               </div>
             )}
 
-            <form onSubmit={handleChangePasswordSubmit} className="space-y-3 text-xs border-t border-slate-100 pt-4">
-              <p className="font-bold text-slate-800 flex items-center gap-1.5">
-                <Key className="w-3.5 h-3.5 text-blue-600" /> Đổi mật khẩu
-              </p>
+            {passwordError && (
+              <div className="p-3 rounded-lg border border-rose-200 bg-rose-50 text-rose-800 text-xs font-medium flex items-start gap-2 animate-in fade-in">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
+                <span>{passwordError}</span>
+              </div>
+            )}
 
-              {passwordError && (
-                <div className="p-2.5 rounded-md border border-rose-200 bg-rose-50 text-rose-800 font-semibold flex items-start gap-2">
-                  <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                  <span>{passwordError}</span>
-                </div>
-              )}
-
+            <form
+              onSubmit={handleChangePasswordSubmit}
+              className="space-y-3.5 text-xs"
+            >
               <div>
                 <label className="block font-bold text-slate-700 mb-1">
-                    Mật khẩu hiện tại *
+                  Mật khẩu hiện tại *
                 </label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
@@ -671,7 +813,8 @@ export const AccountView = ({
                     onChange={(e) => setCurrentPassword(e.target.value)}
                     autoComplete="current-password"
                     placeholder="Nhập mật khẩu hiện tại"
-                    className="w-full pl-9 pr-9 py-2 bg-slate-50 border border-slate-200 rounded-md font-medium outline-none focus:bg-white focus:border-blue-500"
+                    required
+                    className="w-full pl-9 pr-9 py-2 bg-slate-50/70 border border-slate-200 rounded-lg font-medium outline-none focus:bg-white focus:border-[#026aa7]"
                   />
                   <button
                     type="button"
@@ -701,7 +844,7 @@ export const AccountView = ({
                     required
                     minLength={8}
                     placeholder="Tối thiểu 8 ký tự"
-                    className="w-full pl-9 pr-9 py-2 bg-slate-50 border border-slate-200 rounded-md font-medium outline-none focus:bg-white focus:border-blue-500"
+                    className="w-full pl-9 pr-9 py-2 bg-slate-50/70 border border-slate-200 rounded-lg font-medium outline-none focus:bg-white focus:border-[#026aa7]"
                   />
                   <button
                     type="button"
@@ -731,7 +874,7 @@ export const AccountView = ({
                     required
                     minLength={8}
                     placeholder="Nhập lại mật khẩu mới"
-                    className="w-full pl-9 pr-9 py-2 bg-slate-50 border border-slate-200 rounded-md font-medium outline-none focus:bg-white focus:border-blue-500"
+                    className="w-full pl-9 pr-9 py-2 bg-slate-50/70 border border-slate-200 rounded-lg font-medium outline-none focus:bg-white focus:border-[#026aa7]"
                   />
                   <button
                     type="button"
@@ -747,6 +890,7 @@ export const AccountView = ({
                 </div>
               </div>
 
+              {/* Đồng hồ đo độ mạnh mật khẩu */}
               <PasswordStrengthMeter
                 password={newPassword}
                 confirmPassword={confirmPassword}
@@ -754,44 +898,52 @@ export const AccountView = ({
 
               <button
                 type="submit"
-                disabled={isPasswordLoading || newPassword.length < 8 || newPassword !== confirmPassword}
-                className="il-btn il-btn-primary w-full justify-center py-2 disabled:opacity-60"
+                disabled={
+                  isPasswordLoading ||
+                  newPassword.length < 8 ||
+                  newPassword !== confirmPassword
+                }
+                className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#026aa7] px-4 py-2.5 text-xs font-bold text-white shadow-xs transition-colors hover:bg-[#025a8e] disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
               >
                 {isPasswordLoading ? (
                   <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Đang lưu...
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Đang cập nhật...</span>
                   </>
                 ) : (
-                  "Cập nhật mật khẩu"
+                  <>
+                    <Key className="w-3.5 h-3.5" />
+                    <span>Cập nhật mật khẩu</span>
+                  </>
                 )}
               </button>
             </form>
-          </Panel>
+          </div>
 
-          <Panel className="space-y-3">
-            <h3 className="text-sm font-bold text-slate-900 border-b border-slate-100 pb-2 flex items-center gap-2">
-              <LogOut className="w-4 h-4 text-rose-600" /> Đăng xuất hệ thống
+          {/* Card Phiên đăng nhập & Đăng xuất */}
+          <div className="rounded-xl border border-slate-200/90 bg-white p-5 shadow-2xs space-y-3">
+            <h3 className="text-sm font-bold text-slate-900 border-b border-slate-100 pb-2.5 flex items-center gap-2">
+              <LogOut className="w-4 h-4 text-rose-600" />
+              <span>Phiên làm việc</span>
             </h3>
-            <p className="text-xs text-slate-500 font-medium">
-              Đăng xuất phiên làm việc khỏi trình duyệt này. Tất cả dữ liệu báo
-              cáo vẫn được lưu an toàn.
+            <p className="text-xs text-slate-500 font-medium leading-relaxed">
+              Đăng xuất phiên làm việc hiện tại khỏi trình duyệt. Toàn bộ thông
+              tin báo cáo và dữ liệu hồ sơ vẫn được lưu trữ bảo mật trên hệ thống.
             </p>
             <button
+              type="button"
               onClick={() => {
                 if (onLogout) onLogout();
-                else
-                  onShowToast(
-                    "\u0110\xE3 \u0111\u0103ng xu\u1EA5t t\xE0i kho\u1EA3n!",
-                  );
+                else onShowToast?.("Đã đăng xuất tài khoản!");
               }}
-              className="w-full py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-md border border-rose-200 transition-colors flex items-center justify-center gap-1.5"
+              className="w-full py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-lg border border-rose-200 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
             >
-              <LogOut className="w-3.5 h-3.5" /> Đăng xuất ngay
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Đăng xuất khỏi hệ thống</span>
             </button>
-          </Panel>
+          </div>
         </div>
       </div>
-
     </div>
   );
 };
