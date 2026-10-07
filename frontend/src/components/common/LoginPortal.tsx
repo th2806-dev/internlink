@@ -85,7 +85,7 @@ export function LoginPortal({ onLoginSuccess }: LoginPortalProps) {
     e.preventDefault();
     setErrorMessage(null);
     if (!username.trim()) {
-      setErrorMessage("Vui lòng nhập Tên đăng nhập / MSGV / MSSV.");
+      setErrorMessage("Vui lòng nhập tên đăng nhập.");
       return;
     }
     if (!password) {
@@ -146,7 +146,7 @@ export function LoginPortal({ onLoginSuccess }: LoginPortalProps) {
           <div
             className="absolute inset-0 w-full h-full bg-cover bg-no-repeat transition-all duration-500"
             style={{
-              backgroundImage: `linear-gradient(to top, rgba(4, 13, 42, 0.75) 0%, rgba(4, 13, 42, 0.2) 45%, rgba(4, 13, 42, 0.05) 100%), url('https://thongtindaotao.hcmct.edu.vn/static/media/br_login.c3b60201.jpg')`,
+              backgroundImage: `linear-gradient(to top, rgba(4, 13, 42, 0.82) 0%, rgba(4, 13, 42, 0.3) 45%, rgba(4, 13, 42, 0.05) 100%), url('/logo/br_login.c3b60201.jpg')`,
             }}
           />
 
@@ -169,9 +169,8 @@ export function LoginPortal({ onLoginSuccess }: LoginPortalProps) {
               <span className="text-[#8eb8ff] lg:whitespace-nowrap">Bứt phá sự nghiệp.</span>
             </h2>
 
-            <p className="text-sm text-white/75 font-medium leading-relaxed max-w-sm">
-              Nền tảng kết nối sinh viên và doanh nghiệp, tối ưu hóa quy trình
-              quản lý thực tập với công nghệ hiện đại.
+            <p className="text-sm text-white/75 font-medium leading-relaxed max-w-lg">
+              Kết nối sinh viên với cơ hội thực tập phù hợp.
             </p>
           </div>
 
@@ -197,13 +196,13 @@ export function LoginPortal({ onLoginSuccess }: LoginPortalProps) {
                 <h2 className="text-2xl lg:text-3xl font-bold text-[#0b1c30] tracking-tight font-display">
                   Đăng nhập
                 </h2>
-                <p className="text-xs text-slate-500 font-medium">
+                <p className="text-sm text-slate-500 font-medium">
                   Vui lòng nhập thông tin tài khoản của bạn.
                 </p>
               </div>
 
               {errorMessage && (
-                <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold rounded-md flex items-start gap-2 animate-in fade-in duration-200">
+                <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-800 text-sm font-semibold rounded-md flex items-start gap-2 animate-in fade-in duration-200">
                   <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                   <div className="flex-1">
                     <span>{errorMessage}</span>
@@ -220,59 +219,71 @@ export function LoginPortal({ onLoginSuccess }: LoginPortalProps) {
 
               <form
                 onSubmit={handleSubmit}
-                className="flex flex-col gap-4 text-left"
+                className="flex flex-col gap-5 text-left"
               >
                 {/* Username Input */}
-                <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-[#0058be] transition-colors">
-                    <User className="w-4 h-4" />
+                <div className="group">
+                  <label htmlFor="login-username" className="mb-1.5 block text-sm font-semibold text-slate-700">
+                    Tên đăng nhập
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-[#0058be] transition-colors">
+                      <User className="w-4 h-4" aria-hidden="true" />
+                    </div>
+                    <input
+                      ref={usernameInputRef}
+                      id="login-username"
+                      type="text"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      placeholder="Nhập tên đăng nhập"
+                      autoComplete="username"
+                      required
+                      className="min-h-12 w-full rounded-md border border-slate-300 bg-[#f8f9ff] py-3 pl-11 pr-4 text-base font-medium text-[#0b1c30] transition-all duration-200 placeholder:text-slate-500 focus:border-[#0058be] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0058be]/30 focus:ring-offset-1"
+                    />
                   </div>
-                  <input
-                    ref={usernameInputRef}
-                    type="text"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Tên đăng nhập / MSGV / MSSV"
-                    autoComplete="username"
-                    required
-                    className="w-full pl-11 pr-4 py-3 bg-[#f8f9ff] text-[#0b1c30] text-xs font-medium rounded-md transition-all duration-300 focus:bg-white focus:shadow-[0_4px_24px_-8px_rgba(0,88,190,0.2)] outline-none border border-transparent focus:border-[#0058be]/30 placeholder:text-slate-400"
-                  />
-                  <div className="absolute bottom-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-transparent to-transparent group-focus-within:from-[#0058be] group-focus-within:via-[#0058be]/80 group-focus-within:to-transparent transition-all duration-500 rounded-b-md" />
                 </div>
 
                 {/* Password Input */}
-                <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-[#0058be] transition-colors">
-                    <Lock className="w-4 h-4" />
+                <div className="group">
+                  <label htmlFor="login-password" className="mb-1.5 block text-sm font-semibold text-slate-700">
+                    Mật khẩu
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-[#0058be] transition-colors">
+                      <Lock className="w-4 h-4" aria-hidden="true" />
+                    </div>
+                    <input
+                      id="login-password"
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      placeholder="Nhập mật khẩu"
+                      autoComplete="current-password"
+                      required
+                      className="min-h-12 w-full rounded-md border border-slate-300 bg-[#f8f9ff] py-3 pl-11 pr-12 text-base font-medium text-[#0b1c30] transition-all duration-200 placeholder:text-slate-500 focus:border-[#0058be] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0058be]/30 focus:ring-offset-1"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute inset-y-0 right-0 flex min-h-11 min-w-11 items-center justify-center rounded-r-md text-slate-500 transition-colors hover:text-slate-800 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0058be]"
+                      aria-label={showPassword ? "Ẩn mật khẩu" : "Hiển thị mật khẩu"}
+                      aria-pressed={showPassword}
+                      title={showPassword ? "Ẩn mật khẩu" : "Hiển thị mật khẩu"}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="w-4 h-4" aria-hidden="true" />
+                      ) : (
+                        <Eye className="w-4 h-4" aria-hidden="true" />
+                      )}
+                    </button>
                   </div>
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Mật khẩu"
-                    autoComplete="current-password"
-                    required
-                    className="w-full pl-11 pr-11 py-3 bg-[#f8f9ff] text-[#0b1c30] text-xs font-medium rounded-md transition-all duration-300 focus:bg-white focus:shadow-[0_4px_24px_-8px_rgba(0,88,190,0.2)] outline-none border border-transparent focus:border-[#0058be]/30 placeholder:text-slate-400"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
-                    title={showPassword ? "Ẩn mật khẩu" : "Hiển thị mật khẩu"}
-                  >
-                    {showPassword ? (
-                      <EyeOff className="w-4 h-4" />
-                    ) : (
-                      <Eye className="w-4 h-4" />
-                    )}
-                  </button>
-                  <div className="absolute bottom-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-transparent to-transparent group-focus-within:from-[#0058be] group-focus-within:via-[#0058be]/80 group-focus-within:to-transparent transition-all duration-500 rounded-b-md" />
                 </div>
 
                 {capsLockOn && (
-                  <div className="text-[11px] text-amber-700 font-semibold flex items-center gap-1.5 -mt-1">
+                  <div className="text-sm text-amber-700 font-semibold flex items-center gap-1.5 -mt-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
                     <span>Chế độ Caps Lock đang bật</span>
                   </div>
@@ -287,14 +298,14 @@ export function LoginPortal({ onLoginSuccess }: LoginPortalProps) {
                       onChange={(e) => setRememberMe(e.target.checked)}
                       className="w-4 h-4 rounded border-slate-300 text-[#0058be] focus:ring-[#0058be] cursor-pointer"
                     />
-                    <span className="text-xs text-slate-600 font-medium group-hover:text-slate-900 transition-colors">
-                      Ghi nhớ đăng nhập
+                    <span className="text-sm text-slate-600 font-medium group-hover:text-slate-900 transition-colors">
+                      Ghi nhớ tên đăng nhập
                     </span>
                   </label>
                   <button
                     type="button"
                     onClick={() => navigate("/forgot-password")}
-                    className="text-xs font-semibold text-[#0058be] hover:text-[#004395] transition-colors cursor-pointer"
+                    className="text-sm font-semibold text-[#0058be] hover:text-[#004395] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0058be] focus-visible:ring-offset-2 rounded-sm"
                   >
                     Quên mật khẩu?
                   </button>
@@ -304,7 +315,7 @@ export function LoginPortal({ onLoginSuccess }: LoginPortalProps) {
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="relative w-full py-3.5 bg-[#0058be] text-white font-semibold text-xs rounded-md shadow-[0_4px_16px_rgba(0,88,190,0.25)] hover:shadow-[0_8px_24px_rgba(0,88,190,0.4)] transition-all duration-300 overflow-hidden group cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed mt-1"
+                  className="relative min-h-12 w-full py-3.5 bg-[#0058be] text-white font-semibold text-sm rounded-md shadow-[0_4px_16px_rgba(0,88,190,0.25)] hover:shadow-[0_8px_24px_rgba(0,88,190,0.4)] transition-all duration-300 overflow-hidden group cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed mt-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0058be] focus-visible:ring-offset-2"
                 >
                   <span className="relative z-10 flex items-center justify-center gap-2">
                     {isLoading ? (
@@ -326,32 +337,8 @@ export function LoginPortal({ onLoginSuccess }: LoginPortalProps) {
           </div>
 
           {/* Minimal Footer Inside Floating Box */}
-          <div className="w-full pt-4 flex flex-row justify-between items-center gap-2 text-slate-400 font-medium text-[10px] border-t border-slate-100">
-            <p className="whitespace-nowrap">© 2026 InternLink</p>
-            <div className="flex gap-3 whitespace-nowrap">
-              <a
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  alert(
-                    "Liên hệ hỗ trợ: support@internlink.edu.vn - Hotline: 024.3754.7506",
-                  );
-                }}
-                className="hover:text-[#0058be] transition-colors"
-              >
-                Hỗ trợ
-              </a>
-              <a
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  alert("Quy chế thực tập Khoa CNTT - Học kỳ I 2026-2027.");
-                }}
-                className="hover:text-[#0058be] transition-colors"
-              >
-                Quy chế
-              </a>
-            </div>
+          <div className="w-full border-t border-slate-100 pt-4 text-center text-[10px] font-medium text-slate-400">
+            <p>© 2026 InternLink · Developed by th.2806.dev</p>
           </div>
         </div>
       </div>
