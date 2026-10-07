@@ -79,7 +79,7 @@ function formatViDate(iso?: string | null) {
 }
 
 function formatStipend(stipend?: number | null) {
-  if (!stipend || stipend <= 0) return "Thỏa thuận";
+  if (stipend == null) return "Chưa cập nhật";
   return `${Number(stipend).toLocaleString("vi-VN")} đ/tháng`;
 }
 
@@ -328,15 +328,15 @@ export const CompanyDetailView = ({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20 text-sm font-medium text-slate-500">
-        Đang tải thông tin doanh nghiệp…
+      <div className="flex min-h-32 items-center justify-center rounded-xl border border-slate-200/90 bg-white py-12 text-sm font-medium text-slate-500 shadow-2xs">
+        <span role="status">Đang tải thông tin doanh nghiệp…</span>
       </div>
     );
   }
 
   if (error || !detail) {
     return (
-      <div className="space-y-4 max-w-[1000px] mx-auto animate-in fade-in duration-200 pb-10">
+      <div className="mx-auto max-w-[1300px] animate-in fade-in duration-200 space-y-4 pb-10">
         <PageHeader
           icon={Building2}
           title="Doanh nghiệp"
@@ -355,12 +355,12 @@ export const CompanyDetailView = ({
             ...actions,
           ]}
         />
-        <Panel className="border-red-200 bg-red-50/40">
-          <div className="flex items-start gap-3 text-red-700">
-            <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+        <Panel role="alert" className="rounded-xl border border-rose-200 bg-rose-50/40 shadow-2xs">
+          <div className="flex items-start gap-3 text-rose-700">
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
             <div className="text-sm">
-              <p className="font-bold">Không có dữ liệu</p>
-              <p className="text-xs mt-1 text-red-600">
+              <p className="font-bold">Không thể tải thông tin doanh nghiệp</p>
+              <p className="mt-1 text-xs text-rose-600">
                 {error ?? "Không tìm thấy doanh nghiệp này."}
               </p>
             </div>
@@ -380,13 +380,13 @@ export const CompanyDetailView = ({
   ).length;
 
   return (
-    <div className="space-y-5 max-w-[1100px] mx-auto pb-10">
+    <div className="mx-auto max-w-[1300px] animate-in fade-in duration-200 space-y-4 pb-10">
       <PageHeader
         icon={Building2}
         title={detail.name}
         subtitle={
           subtitle ??
-          `Mã DN: ${detail.id.slice(0, 8).toUpperCase()} · ${totalStudents} sinh viên`
+          `${totalStudents} sinh viên trong học kỳ đang chọn`
         }
         actions={[
           {
@@ -410,10 +410,10 @@ export const CompanyDetailView = ({
       />
 
       {/* THÔNG TIN CƠ BẢN */}
-      <Panel className="space-y-4">
+      <Panel className="space-y-4 rounded-xl border border-slate-200/90 shadow-2xs">
         <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-3">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-md bg-blue-50 text-blue-700 font-bold flex items-center justify-center border border-blue-100">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full border border-[#026aa7]/20 bg-[#026aa7]/5 font-bold text-[#025a8e]">
               {detail.name.slice(0, 2).toUpperCase()}
             </div>
             <div>
@@ -421,45 +421,41 @@ export const CompanyDetailView = ({
               <p className="text-xs text-slate-500">Thông tin doanh nghiệp theo học kỳ đang chọn</p>
             </div>
           </div>
-          <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 font-bold text-[10px] rounded-md border border-emerald-200 inline-flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-current" />
-            Đang hợp tác
-          </span>
         </div>
 
         <div className="grid gap-3 md:grid-cols-2 text-xs">
-          <div className="border border-slate-200 rounded-md p-3">
+          <div className="rounded-xl border border-slate-200/90 p-3 shadow-2xs">
             <span className="text-slate-500">Lĩnh vực hoạt động</span>
             <strong className="mt-1 block text-slate-900">{detail.industry ?? "—"}</strong>
           </div>
-          <div className="border border-slate-200 rounded-md p-3">
+          <div className="rounded-xl border border-slate-200/90 p-3 shadow-2xs">
             <span className="text-slate-500 flex items-center gap-1">
               <Building2 className="w-3.5 h-3.5" />Địa chỉ
             </span>
             <strong className="mt-1 block text-slate-900">{detail.address ?? "—"}</strong>
           </div>
-          <div className="border border-slate-200 rounded-md p-3">
+          <div className="rounded-xl border border-slate-200/90 p-3 shadow-2xs">
             <span className="text-slate-500 flex items-center gap-1">
               <Users className="w-3.5 h-3.5" />Sinh viên được phân công
             </span>
             <strong className="mt-1 block text-slate-900">{totalStudents} sinh viên</strong>
           </div>
-          <div className="border border-slate-200 rounded-md p-3">
+          <div className="rounded-xl border border-slate-200/90 p-3 shadow-2xs">
             <span className="text-slate-500 flex items-center gap-1">
-              <FileText className="w-3.5 h-3.5" />Tổng bài nộp / nhật ký
+              <FileText className="w-3.5 h-3.5" />Bài nộp / báo cáo tuần
             </span>
             <strong className="mt-1 block text-slate-900">
               {detail.totalSubmissions} bài · {detail.totalWeeklyReports} nhật ký
             </strong>
           </div>
-          <div className="border border-slate-200 rounded-md p-3">
+          <div className="rounded-xl border border-slate-200/90 p-3 shadow-2xs">
             <span className="text-slate-500 flex items-center gap-1">
               <Mail className="w-3.5 h-3.5" />Người liên hệ
             </span>
             <strong className="mt-1 block text-slate-900">{detail.contactPerson ?? "—"}</strong>
             <p className="text-[10px] text-slate-500 mt-0.5">{detail.contactEmail ?? "—"}</p>
           </div>
-          <div className="border border-slate-200 rounded-md p-3">
+          <div className="rounded-xl border border-slate-200/90 p-3 shadow-2xs">
             <span className="text-slate-500 flex items-center gap-1">
               <Phone className="w-3.5 h-3.5" />Số điện thoại
             </span>
@@ -469,11 +465,11 @@ export const CompanyDetailView = ({
       </Panel>
 
       {/* VỊ TRÍ TUYỂN DỤNG */}
-      <Panel className="space-y-4">
+      <Panel className="space-y-4 rounded-xl border border-slate-200/90 shadow-2xs">
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div>
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <Briefcase className="w-4 h-4 text-blue-600" />
+              <Briefcase className="w-4 h-4 text-[#026aa7]" />
               Vị trí tuyển dụng thực tập
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
@@ -484,7 +480,7 @@ export const CompanyDetailView = ({
             <button
               type="button"
               onClick={openCreatePosition}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-md text-xs font-semibold hover:bg-blue-700 transition cursor-pointer"
+              className="inline-flex min-h-10 items-center gap-1.5 rounded-full bg-[#026aa7] px-4 text-xs font-semibold text-white transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2"
             >
               <Plus className="w-3.5 h-3.5" />
               Thêm vị trí
@@ -493,8 +489,8 @@ export const CompanyDetailView = ({
         </div>
 
         {positions.length === 0 ? (
-          <div className="text-center py-8 border border-dashed border-slate-200 rounded-md bg-slate-50/50">
-            <Briefcase className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+          <div className="space-y-2 rounded-xl border border-dashed border-slate-200 bg-slate-50/50 py-10 text-center">
+            <Briefcase className="mx-auto mb-2 h-8 w-8 text-slate-300" />
             <p className="text-xs font-medium text-slate-600">Chưa có vị trí tuyển dụng nào</p>
             {isAdmin && (
               <p className="text-[11px] text-slate-400 mt-1">
@@ -511,7 +507,7 @@ export const CompanyDetailView = ({
                   key={p.id}
                   className={`p-3.5 rounded-lg border transition-all ${
                     p.isOpen
-                      ? "border-slate-200 bg-white hover:border-blue-200 hover:shadow-xs"
+                    ? "border-slate-200/90 bg-white hover:border-[#026aa7]/30 hover:shadow-2xs"
                       : "border-slate-200/60 bg-slate-50/70 opacity-75"
                   }`}
                 >
@@ -531,7 +527,7 @@ export const CompanyDetailView = ({
                       <span
                         className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${
                           p.isOpen
-                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            ? "bg-[#7bc043]/10 text-[#446d20] border-[#7bc043]/40"
                             : "bg-slate-100 text-slate-500 border-slate-200"
                         }`}
                       >
@@ -543,7 +539,7 @@ export const CompanyDetailView = ({
                   {/* Badges for Major and Skills */}
                   <div className="flex flex-wrap gap-1.5 mb-2.5">
                     {p.requiredMajor && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 text-[10px] font-medium border border-indigo-100">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-[#026aa7]/20 bg-[#026aa7]/5 px-2 py-0.5 text-[10px] font-medium text-[#025a8e]">
                         <GraduationCap className="w-3 h-3" />
                         {p.requiredMajor}
                       </span>
@@ -574,7 +570,7 @@ export const CompanyDetailView = ({
                       <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
                         <div
                           className={`h-full rounded-full ${
-                            filledRatio >= 100 ? "bg-emerald-500" : "bg-blue-500"
+                            filledRatio >= 100 ? "bg-[#7bc043]" : "bg-[#026aa7]"
                           }`}
                           style={{ width: `${filledRatio}%` }}
                         />
@@ -621,21 +617,22 @@ export const CompanyDetailView = ({
       </Panel>
 
       {/* DANH SÁCH SINH VIÊN THỰC TẬP */}
-      <Panel className="space-y-4">
+      <Panel className="space-y-4 rounded-xl border border-slate-200/90 shadow-2xs">
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div>
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <Users className="w-4 h-4 text-blue-600" />
+              <Users className="w-4 h-4 text-[#026aa7]" />
               Danh sách sinh viên thực tập
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              {detail.internships.length} sinh viên · Nhắn tin / theo dõi từng sinh viên
+              {detail.internships.length} sinh viên theo dữ liệu học kỳ
             </p>
           </div>
         </div>
 
         {detail.internships.length === 0 ? (
-          <div className="text-center py-6 text-slate-500 text-xs">
+          <div className="space-y-2 py-10 text-center text-xs text-slate-500">
+            <Users className="mx-auto h-8 w-8 text-slate-300" aria-hidden="true" />
             Chưa có sinh viên nào được phân công cho doanh nghiệp này.
           </div>
         ) : (
@@ -648,25 +645,26 @@ export const CompanyDetailView = ({
                 internship.status === "RequiresRevision";
               const statusLabel = STATUS_LABEL[internship.status] ?? internship.status;
               return (
-                <div
+                <button
+                  type="button"
                   key={internship.id}
-                  className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-md border border-slate-200 bg-slate-50 hover:bg-white cursor-pointer"
+                  className="flex w-full flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200/90 bg-slate-50 p-3 text-left transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2"
                   onClick={() => navigate(studentPath(internship.id))}
                 >
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <div className="w-9 h-9 rounded-full bg-blue-50 text-blue-700 font-bold text-xs flex items-center justify-center border border-blue-100 shrink-0">
+                  <span className="flex items-center gap-3 min-w-0 flex-1">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#026aa7]/20 bg-[#026aa7]/5 text-xs font-bold text-[#025a8e]">
                       {initials(internship.studentName)}
-                    </div>
-                    <div className="min-w-0">
+                    </span>
+                    <span className="min-w-0">
                       <span className="font-bold text-slate-900 text-xs block truncate">
                         {internship.studentName}
                       </span>
                       <span className="text-[10px] text-slate-500">
                         MSSV: {internship.studentCode ?? "—"} · {internship.position}
                       </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 text-xs shrink-0">
+                    </span>
+                  </span>
+                  <span className="flex items-center gap-3 text-xs shrink-0">
                     <span className="text-slate-400 font-mono text-[10px]">
                       {internship.startDate ? formatViDate(internship.startDate) : "—"} →{" "}
                       {internship.endDate ? formatViDate(internship.endDate) : "—"}
@@ -674,7 +672,7 @@ export const CompanyDetailView = ({
                     <span
                       className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
                         isCompleted
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          ? "bg-[#7bc043]/10 text-[#446d20] border-[#7bc043]/40"
                           : isPending
                           ? "bg-amber-50 text-amber-700 border-amber-200"
                           : "bg-slate-100 text-slate-600 border-slate-200"
@@ -685,69 +683,51 @@ export const CompanyDetailView = ({
                     <span className="text-slate-400 text-[10px] font-mono">
                       {internship.submissionCount} bài
                     </span>
-                    <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
-                  </div>
-                </div>
+                    <ArrowRight className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+                  </span>
+                </button>
               );
             })}
           </div>
         )}
       </Panel>
 
-      {/* THỐNG KÊ BÀI NỘP / NHẬT KÝ */}
-      <Panel className="space-y-4">
+      {/* TỔNG HỢP HOẠT ĐỘNG */}
+      <Panel className="space-y-4 rounded-xl border border-slate-200/90 shadow-2xs">
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div>
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <FileText className="w-4 h-4 text-blue-600" />
-              Nhật ký nhận sinh viên & bài nộp
+              <FileText className="w-4 h-4 text-[#026aa7]" />
+              Tổng hợp hoạt động
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              Tổng quan hoạt động tại doanh nghiệp trong học kỳ này
+              Số liệu theo danh sách thực tập, bài nộp và báo cáo tuần của học kỳ đang chọn.
             </p>
           </div>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-4 text-xs">
-          <div className="border border-slate-200 rounded-md p-3 bg-blue-50">
-            <span className="text-slate-500">Sinh viên thực tập</span>
-            <strong className="mt-1 block text-blue-700 text-lg font-bold font-mono">
-              {totalStudents}
-            </strong>
-            <span className="text-[10px] text-slate-500">sinh viên đang được hướng dẫn</span>
+        <dl className="grid gap-x-8 gap-y-3 text-xs sm:grid-cols-2">
+          <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-2">
+            <dt className="text-slate-500">Sinh viên được phân công</dt>
+            <dd className="font-semibold tabular-nums text-slate-900">{totalStudents}</dd>
           </div>
-          <div className="border border-slate-200 rounded-md p-3 bg-emerald-50">
-            <span className="text-slate-500">Hoàn thành / đã chấm</span>
-            <strong className="mt-1 block text-emerald-700 text-lg font-bold font-mono">
-              {completedStudents}
-            </strong>
-            <span className="text-[10px] text-slate-500">sinh viên hoàn thành thực tập</span>
+          <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-2">
+            <dt className="text-slate-500">Hoàn thành / đã chấm</dt>
+            <dd className="font-semibold tabular-nums text-[#446d20]">{completedStudents}</dd>
           </div>
-          <div className="border border-slate-200 rounded-md p-3 bg-amber-50">
-            <span className="text-slate-500">Chờ duyệt / phản hồi</span>
-            <strong className="mt-1 block text-amber-700 text-lg font-bold font-mono">
-              {pendingFeedbacks}
-            </strong>
-            <span className="text-[10px] text-slate-500">bài nộp / nhật ký cần xử lý</span>
+          <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-2">
+            <dt className="text-slate-500">Bài nộp và báo cáo tuần chờ phản hồi</dt>
+            <dd className="font-semibold tabular-nums text-amber-700">{pendingFeedbacks}</dd>
           </div>
-          <div className="border border-slate-200 rounded-md p-3">
-            <span className="text-slate-500">Tổng bài nộp</span>
-            <strong className="mt-1 block text-slate-900 text-lg font-bold font-mono">
-              {detail.totalSubmissions}
-            </strong>
-            <span className="text-[10px] text-slate-500">bài nộp sản phẩm / báo cáo</span>
+          <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-2">
+            <dt className="text-slate-500">Tổng bài nộp</dt>
+            <dd className="font-semibold tabular-nums text-slate-900">{detail.totalSubmissions}</dd>
           </div>
-        </div>
-
-        <div className="border border-slate-200 rounded-md p-4 text-xs text-slate-600">
-          <p className="font-medium text-slate-700 mb-1">Nhật ký nhận sinh viên:</p>
-          <p className="text-slate-500 leading-relaxed">
-            Doanh nghiệp đã tiếp nhận {totalStudents} sinh viên thực tập trong học kỳ này.
-            Tất cả sinh viên đã ký hợp đồng thực tập và được hướng dẫn bởi giảng viên đứng nhóm.
-            Hiển thị chi tiết từng sinh viên, trạng thái thực tập và bài nộp tại trang danh sách
-            sinh viên.
-          </p>
-        </div>
+          <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-2">
+            <dt className="text-slate-500">Báo cáo tuần</dt>
+            <dd className="font-semibold tabular-nums text-slate-900">{detail.totalWeeklyReports}</dd>
+          </div>
+        </dl>
       </Panel>
 
       {/* MODAL THÊM / SỬA VỊ TRÍ */}

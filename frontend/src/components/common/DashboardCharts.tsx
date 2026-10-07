@@ -6,6 +6,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  ComposedChart,
   Legend,
   Line,
   LineChart,
@@ -18,11 +19,11 @@ import {
 } from "recharts";
 
 const TONE_FILL: Record<string, string> = {
-  blue: "#1d4ed8",
-  emerald: "#059669",
-  amber: "#d97706",
-  rose: "#e11d48",
-  sky: "#0284c7",
+  blue: "#4d74c9",
+  emerald: "#7bc043",
+  amber: "#f59e0b",
+  rose: "#f59e0b",
+  sky: "#38bdf8",
   slate: "#64748b",
 };
 
@@ -68,14 +69,14 @@ export function DashboardSemesterComparisonChart({
         <div className="h-[240px]">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={data} margin={{ top: 8, right: 10, left: -20, bottom: 0 }}>
-              <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
+              <CartesianGrid stroke="#dbeafe" vertical={false} />
               <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 10 }} />
               <YAxis axisLine={false} tickLine={false} allowDecimals={false} tick={{ fill: "#64748b", fontSize: 11 }} />
               <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12 }} />
               <Legend iconType="circle" wrapperStyle={{ fontSize: 11 }} />
-              <Line type="monotone" dataKey="students" name="Sinh viên" stroke="#1d4ed8" strokeWidth={3} dot={{ r: 3 }} />
-              <Line type="monotone" dataKey="placed" name="Đã có doanh nghiệp" stroke="#059669" strokeWidth={2} dot={{ r: 3 }} />
-              <Line type="monotone" dataKey="companies" name="Doanh nghiệp" stroke="#d97706" strokeWidth={2} dot={{ r: 3 }} />
+              <Line type="monotone" dataKey="students" name="Sinh viên" stroke="#4d74c9" strokeWidth={3} dot={{ r: 3 }} />
+              <Line type="monotone" dataKey="placed" name="Đã có doanh nghiệp" stroke="#7bc043" strokeWidth={2} dot={{ r: 3 }} />
+              <Line type="monotone" dataKey="companies" name="Doanh nghiệp" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3 }} />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -118,8 +119,7 @@ export function DashboardTrendChart({
               margin={{ top: 8, right: 12, left: 12, bottom: 0 }}
             >
               <CartesianGrid
-                stroke="#e2e8f0"
-                strokeDasharray="3 3"
+                stroke="#dbeafe"
                 horizontal={false}
               />
               <XAxis
@@ -148,14 +148,14 @@ export function DashboardTrendChart({
               <Bar
                 dataKey="value"
                 name={valueLabel}
-                fill="#1d4ed8"
+                fill="#4d74c9"
                 radius={[0, 4, 4, 0]}
                 barSize={18}
               />
             </BarChart>
           ) : variant === "bar" ? (
-            <BarChart data={data} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
-              <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
+            <ComposedChart data={data} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+              <CartesianGrid stroke="#dbeafe" vertical={false} />
               <XAxis
                 dataKey="label"
                 axisLine={false}
@@ -175,31 +175,39 @@ export function DashboardTrendChart({
                 }}
               />
               <Legend iconType="circle" wrapperStyle={{ fontSize: 11 }} />
-              <Bar dataKey="value" name={valueLabel} fill="#059669" radius={[4, 4, 0, 0]} stackId={stacked ? "reports" : undefined} />
-              {stacked && <Bar dataKey="late" name="Trễ / cần sửa" fill="#d97706" stackId="reports" />}
-              {stacked && <Bar dataKey="missing" name="Chưa nộp" fill="#cbd5e1" stackId="reports" radius={[4, 4, 0, 0]} />}
-              {!stacked && data.some((d) => d.target != null) && (
-                <Bar
+              <Bar dataKey="value" name={valueLabel} fill="#4d74c9" radius={[2, 2, 0, 0]} stackId={stacked ? "reports" : undefined} />
+              {stacked && <Bar dataKey="late" name="Trễ / cần sửa" fill="#fbbf24" stackId="reports" />}
+              {stacked && <Bar dataKey="missing" name="Chưa nộp" fill="#94a3b8" stackId="reports" radius={[2, 2, 0, 0]} />}
+              {!stacked && data.some((d) => d.late != null) && (
+                <Bar dataKey="late" name="Nộp trễ" fill="#fbbf24" radius={[2, 2, 0, 0]} />
+              )}
+              {!stacked && data.some((d) => d.missing != null) && (
+                <Bar dataKey="missing" name="Chưa nộp" fill="#94a3b8" radius={[2, 2, 0, 0]} />
+              )}
+              {data.some((d) => d.target != null) && (
+                <Line
                   dataKey="target"
                   name={targetLabel}
-                  fill="#94a3b8"
-                  radius={[4, 4, 0, 0]}
+                  type="monotone"
+                  stroke="#7bc043"
+                  strokeWidth={2}
+                  dot={{ r: 3.5, fill: "#ffffff", stroke: "#7bc043", strokeWidth: 2 }}
                 />
               )}
-            </BarChart>
+            </ComposedChart>
           ) : (
             <AreaChart data={data} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
               <defs>
                 <linearGradient id="dashTrendFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#1d4ed8" stopOpacity={0.22} />
-                  <stop offset="95%" stopColor="#1d4ed8" stopOpacity={0} />
+                  <stop offset="5%" stopColor="#4d74c9" stopOpacity={0.22} />
+                  <stop offset="95%" stopColor="#4d74c9" stopOpacity={0} />
                 </linearGradient>
                 <linearGradient id="dashTargetFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#059669" stopOpacity={0.18} />
-                  <stop offset="95%" stopColor="#059669" stopOpacity={0} />
+                  <stop offset="5%" stopColor="#7bc043" stopOpacity={0.18} />
+                  <stop offset="95%" stopColor="#7bc043" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
+              <CartesianGrid stroke="#dbeafe" vertical={false} />
               <XAxis
                 dataKey="label"
                 axisLine={false}
@@ -223,7 +231,7 @@ export function DashboardTrendChart({
                 type="monotone"
                 dataKey="value"
                 name={valueLabel}
-                stroke="#1d4ed8"
+                stroke="#4d74c9"
                 strokeWidth={2}
                 fill="url(#dashTrendFill)"
               />
@@ -232,7 +240,7 @@ export function DashboardTrendChart({
                   type="monotone"
                   dataKey="target"
                   name={targetLabel}
-                  stroke="#059669"
+                  stroke="#7bc043"
                   strokeWidth={2}
                   fill="url(#dashTargetFill)"
                 />
@@ -274,14 +282,19 @@ export function DashboardDonutChart({
               cx="50%"
               cy="50%"
               innerRadius={52}
-              outerRadius={78}
+              outerRadius={80}
               paddingAngle={3}
+              startAngle={90}
+              endAngle={-270}
+              label={({ name }) => name}
+              labelLine={{ stroke: "#7bc043", strokeWidth: 1 }}
             >
               {data.map((entry) => (
                 <Cell
                   key={entry.name}
                   fill={TONE_FILL[entry.tone ?? "slate"]}
-                  stroke="transparent"
+                  stroke="#ffffff"
+                  strokeWidth={1}
                 />
               ))}
             </Pie>
@@ -321,7 +334,7 @@ export function DashboardDonutChart({
 export function buildInternshipStatusTrend(
   stats: InternshipStatsDto,
 ): TrendPoint[] {
-  return [
+  const statusPoints = [
     { label: "Chưa bắt đầu", value: stats.notStarted },
     { label: "Đang TT", value: stats.inProgress },
     { label: "Chậm tiến độ", value: stats.behindSchedule },
@@ -330,6 +343,10 @@ export function buildInternshipStatusTrend(
     { label: "Hoàn thành", value: stats.completed },
     { label: "Đã chấm", value: stats.graded },
   ].filter((p) => p.value > 0);
+
+  return statusPoints.length > 0 || stats.total <= 0
+    ? statusPoints
+    : [{ label: "Tổng thực tập", value: stats.total }];
 }
 
 export function buildAssignmentStatusSlices(
@@ -337,7 +354,7 @@ export function buildAssignmentStatusSlices(
   unassigned: number,
 ): ChartSlice[] {
   return [
-    { name: "Đã phân công GV", value: assigned, tone: "emerald" },
+    { name: "Đã phân công GV", value: assigned, tone: "blue" },
     { name: "Chưa phân công", value: unassigned, tone: "amber" },
   ].filter((s) => s.value > 0);
 }
@@ -354,11 +371,11 @@ export function buildLecturerStatusSlices(stats: {
   if (distribution && Object.keys(distribution).length > 0) {
     const labels: Record<string, { name: string; tone: ChartSlice["tone"] }> = {
       NotStarted: { name: "Chưa bắt đầu", tone: "slate" },
-      InProgress: { name: "Đúng tiến độ", tone: "emerald" },
-      BehindSchedule: { name: "Quá hạn", tone: "rose" },
-      AwaitingFeedback: { name: "Chờ phản hồi", tone: "amber" },
+      InProgress: { name: "Đúng tiến độ", tone: "blue" },
+      BehindSchedule: { name: "Quá hạn", tone: "amber" },
+      AwaitingFeedback: { name: "Chờ phản hồi", tone: "sky" },
       RequiresRevision: { name: "Cần chỉnh sửa", tone: "amber" },
-      Completed: { name: "Hoàn thành", tone: "sky" },
+      Completed: { name: "Hoàn thành", tone: "emerald" },
       Graded: { name: "Đã chấm", tone: "blue" },
     };
     return Object.entries(distribution)
@@ -374,9 +391,9 @@ export function buildLecturerStatusSlices(stats: {
     stats.total - stats.pending - stats.overdue - stats.completed,
   );
   return [
-    { name: "Đúng tiến độ", value: onTrack, tone: "emerald" },
-    { name: "Chờ duyệt", value: stats.pending, tone: "amber" },
-    { name: "Quá hạn / rủi ro", value: stats.overdue, tone: "rose" },
-    { name: "Hoàn thành", value: stats.completed, tone: "sky" },
+    { name: "Đúng tiến độ", value: onTrack, tone: "blue" },
+    { name: "Chờ duyệt", value: stats.pending, tone: "sky" },
+    { name: "Quá hạn / rủi ro", value: stats.overdue, tone: "amber" },
+    { name: "Hoàn thành", value: stats.completed, tone: "emerald" },
   ].filter((s) => s.value > 0);
 }

@@ -35,11 +35,11 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
       className={`flex flex-col items-center justify-center p-8 sm:p-12 text-center rounded-xl border border-dashed border-slate-200 bg-slate-50/60 ${className}`}
     >
       <div className="w-14 h-14 rounded-2xl bg-white border border-slate-200/80 shadow-xs flex items-center justify-center text-slate-400 mb-4 transition-transform hover:scale-105">
-        <Icon className="w-7 h-7 text-blue-600" />
+        <Icon className="w-7 h-7 text-[#026aa7]" />
       </div>
 
       {badge && (
-        <span className="mb-2 px-2.5 py-0.5 text-[11px] font-semibold bg-blue-50 text-blue-700 rounded-full border border-blue-100">
+        <span className="mb-2 px-2.5 py-0.5 text-[11px] font-semibold bg-[#026aa7]/5 text-[#026aa7] rounded-full border border-[#026aa7]/20">
           {badge}
         </span>
       )}
@@ -67,7 +67,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
                   ? "bg-slate-100 hover:bg-slate-200 text-slate-800"
                   : action.variant === "outline"
                     ? "border border-slate-300 bg-white hover:bg-slate-50 text-slate-700"
-                    : "bg-blue-600 hover:bg-blue-700 text-white shadow-blue-600/20"
+                    : "bg-[#026aa7] hover:bg-[#025a8e] active:bg-[#005082] text-white shadow-[#026aa7]/20"
               }`}
             >
               {action.icon && <action.icon className="w-3.5 h-3.5" />}
