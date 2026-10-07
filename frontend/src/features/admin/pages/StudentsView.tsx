@@ -31,7 +31,6 @@ import { EditStudentModal } from "../components/modals/EditStudentModal";
 import type { EditStudentFormPayload } from "../components/modals/EditStudentModal";
 import { ImportStudentsModal } from "../components/modals/ImportStudentsModal";
 import type { AdminStudentRow } from "../../../hooks/useAdminStudentsQuery";
-import { PageHeader } from "../../../components/common/PageHeader";
 import { ConfirmDialog } from "../../../components/common/ConfirmDialog";
 import { Panel } from "../../../components/common/Panel";
 import { Toolbar } from "../../../components/common/Toolbar";
@@ -247,9 +246,7 @@ export const StudentsView = ({
 
   // KPI đếm trên TOÀN BỘ kỳ từ server (không phụ thuộc trang/bộ lọc hiện tại).
   const totalStudents = counts.total;
-  const activeStudents = counts.active;
   const pendingAccounts = counts.pending;
-  const interningStudents = counts.hasCompany;
   // Filter/sort/phân trang là server-side → danh sách hiển thị là dữ liệu trang hiện tại.
   const lecturerOptions = useMemo(
     () =>
@@ -277,6 +274,11 @@ export const StudentsView = ({
     });
   }, [filter.class, lecturerFilter, statusFilter, students]);
 
+  const hasActiveFilters =
+    Boolean(searchInput.trim()) ||
+    filter.class !== "all" ||
+    statusFilter !== "all" ||
+    lecturerFilter !== "all";
   const paginatedStudents = filteredStudents;
   const totalPages = pagination.totalPages;
   const currentPage = pagination.page;
@@ -421,47 +423,58 @@ export const StudentsView = ({
   };
 
   return (
-    <div className="space-y-5 max-w-[1500px] mx-auto">
-      <PageHeader
-        icon={GraduationCap}
-        title="Quản lý Sinh viên"
-        subtitle="Danh sách sinh viên đồng bộ từ API — GV, DN, tài khoản"
-        actions={[
-          {
-            label: "Xuất danh sách thực tập",
-            icon: Download,
-            onClick: () => void handleExportInternshipList(),
-            variant: "secondary",
-          },
-          ...(canMutateOps
-            ? [
-                {
-                  label: "Import Excel",
-                  icon: FileUp,
-                  onClick: () => setIsImportModalOpen(true),
-                  variant: "secondary" as const,
-                },
-                {
-                  label: "Thêm sinh viên",
-                  icon: UserPlus,
-                  onClick: () => setIsCreateModalOpen(true),
-                  variant: "primary" as const,
-                },
-              ]
-            : []),
-        ]}
-      >
-        {canMutateOps && (
-          <button
-            type="button"
-            onClick={() => setIsGenerateAccountsModalOpen(true)}
-            className="il-btn-press px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-md shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
-          >
-            <KeyRound className="w-4 h-4" />
-            <span>Cấp tài khoản nhanh ({pendingAccounts})</span>
-          </button>
-        )}
-      </PageHeader>
+    <div className="mx-auto max-w-[1300px] space-y-4 pb-12">
+      <section className="overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-2xs">
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-[#026aa7] px-4 py-3 text-white">
+          <div className="flex min-w-0 items-center gap-2">
+            <GraduationCap className="h-5 w-5 shrink-0 text-white/90" aria-hidden="true" />
+            <div className="min-w-0">
+              <h1 className="text-base font-bold tracking-wide">Quản lý sinh viên</h1>
+              <p className="mt-0.5 text-xs text-white/80">
+                Danh sách sinh viên, giảng viên hướng dẫn, doanh nghiệp và tài khoản
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void handleExportInternshipList()}
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-white/30 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            >
+              <Download className="h-4 w-4" aria-hidden="true" />
+              Xuất danh sách thực tập
+            </button>
+            {canMutateOps && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setIsImportModalOpen(true)}
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-white/30 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                >
+                  <FileUp className="h-4 w-4" aria-hidden="true" />
+                  Import Excel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsGenerateAccountsModalOpen(true)}
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-white/30 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                >
+                  <KeyRound className="h-4 w-4" aria-hidden="true" />
+                  Cấp tài khoản nhanh{!isCountsPending && ` (${pendingAccounts})`}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsCreateModalOpen(true)}
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-md bg-white px-3 text-xs font-bold text-[#026aa7] transition-colors hover:bg-sky-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                >
+                  <UserPlus className="h-4 w-4" aria-hidden="true" />
+                  Thêm sinh viên
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </section>
 
       {selectedSemester.status === "completed" && (
         <div className="px-4 py-3 bg-slate-100 border border-slate-300 rounded-lg text-xs text-slate-800 flex items-center gap-2.5">
@@ -475,16 +488,16 @@ export const StudentsView = ({
       <Toolbar
         left={
           <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 font-medium">
-            <span className="px-2.5 py-0.5 bg-blue-50 text-blue-800 border border-blue-200 rounded font-bold text-[11px]">
+            <span className="rounded-full border border-[#026aa7]/20 bg-[#026aa7]/5 px-2.5 py-1 text-[11px] font-bold text-[#025a8e]">
               {selectedSemester.name}
             </span>
-            <span>·</span>
-            <span className="font-bold text-slate-800">{totalStudents}</span> SV ·{" "}
-            <span className="font-bold text-emerald-700">{activeStudents}</span> đã cấp TK ·{" "}
-            <span className="font-bold text-amber-700">{pendingAccounts}</span> chưa TK ·{" "}
-            <span className="font-bold text-sky-700">{interningStudents}</span> đã có DN
+            <span>
+              {isCountsPending
+                ? "Đang tải số liệu…"
+                : `${totalStudents.toLocaleString("vi-VN")} sinh viên trong kỳ`}
+            </span>
             {isLoadingApi && (
-              <span className="ml-2 text-blue-600 font-semibold">
+              <span className="ml-2 text-[#026aa7] font-semibold">
                 · Đang tải API…
               </span>
             )}
@@ -493,12 +506,12 @@ export const StudentsView = ({
       />
 
       {/* STUDENTS MAIN TABLE */}
-      <Panel className="space-y-4">
+      <Panel className="space-y-4 rounded-xl border border-slate-200/90 shadow-2xs">
         {/* Table Header & Search Filters */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-3">
           <div>
             <h2 className="text-base font-bold text-slate-900 tracking-tight">
-              Danh sách Sinh viên ({filteredStudents.length})
+              Danh sách sinh viên
             </h2>
             <p className="text-xs text-slate-500 font-medium">
               Bảng thông tin chi tiết và quản lý tài khoản sinh viên
@@ -521,7 +534,7 @@ export const StudentsView = ({
                 }}
                 placeholder="Tìm tên, MSSV, Email, Doanh nghiệp..."
                 aria-label="Tìm sinh viên"
-                className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-medium outline-none focus:bg-white focus:border-blue-500"
+                className="w-full rounded-md border border-slate-200 bg-slate-50 py-2 pl-8 pr-3 font-medium outline-none transition-colors focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
               />
             </div>
 
@@ -529,7 +542,7 @@ export const StudentsView = ({
               value={filter.class}
               onChange={(e) => setClassFilter(e.target.value)}
               aria-label="Lọc theo lớp"
-              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-500 cursor-pointer"
+              className="cursor-pointer rounded-md border border-slate-200 bg-slate-50 px-3 py-2 font-bold text-slate-800 outline-none transition-colors focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
             >
               <option value="all">Tất cả Lớp</option>
               {classOptions.map((cls) => (
@@ -543,7 +556,7 @@ export const StudentsView = ({
               value={lecturerFilter}
               onChange={(e) => setLecturerFilter(e.target.value)}
               aria-label="Lọc theo giảng viên hướng dẫn"
-              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-500 cursor-pointer"
+              className="cursor-pointer rounded-md border border-slate-200 bg-slate-50 px-3 py-2 font-bold text-slate-800 outline-none transition-colors focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
             >
               <option value="all">Tất cả giảng viên</option>
               {lecturerOptions.map((lecturer) => (
@@ -557,7 +570,7 @@ export const StudentsView = ({
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
               aria-label="Lọc theo trạng thái tài khoản"
-              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-500 cursor-pointer"
+              className="cursor-pointer rounded-md border border-slate-200 bg-slate-50 px-3 py-2 font-bold text-slate-800 outline-none transition-colors focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
             >
               <option value="all">Tất cả trạng thái</option>
               <option value="active">Đã cấp tài khoản</option>
@@ -569,7 +582,7 @@ export const StudentsView = ({
               value={filter.sortBy}
               onChange={(e) => setSortBy(e.target.value)}
               aria-label="Sắp xếp"
-              className="px-3 py-2 bg-blue-50/80 border border-blue-200 rounded-md font-bold text-blue-900 outline-none focus:bg-white focus:border-blue-500 cursor-pointer"
+              className="cursor-pointer rounded-md border border-[#026aa7]/20 bg-[#026aa7]/5 px-3 py-2 font-bold text-[#025a8e] outline-none transition-colors focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
             >
               <option value="ten">Sắp xếp: Tên A-Z</option>
               <option value="mssv">Sắp xếp: MSSV</option>
@@ -589,7 +602,7 @@ export const StudentsView = ({
         </div>
 
         {/* Data Table */}
-        <div className="overflow-x-auto border border-slate-200/80 rounded-md">
+        <div className="overflow-x-auto border border-slate-200/80 rounded-xl">
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
@@ -599,7 +612,7 @@ export const StudentsView = ({
                       type="checkbox"
                       checked={isAllPageSelected}
                       onChange={handleToggleSelectAllPage}
-                      className="rounded text-blue-600 cursor-pointer"
+                      className="rounded text-[#026aa7] cursor-pointer"
                     />
                   </th>
                 )}
@@ -613,7 +626,25 @@ export const StudentsView = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {isLoadingApi ? (
+              {isError ? (
+                <tr>
+                  <td colSpan={canMutateOps ? 8 : 7} className="p-6">
+                    <div role="alert" className="mx-auto flex max-w-xl flex-col items-center gap-3 text-center">
+                      <p className="text-sm font-semibold text-rose-700">
+                        Không thể tải danh sách sinh viên
+                      </p>
+                      <p className="text-xs text-slate-600">{getApiErrorMessage(error)}</p>
+                      <button
+                        type="button"
+                        onClick={() => void refetch()}
+                        className="min-h-9 rounded-md bg-[#026aa7] px-3 text-xs font-bold text-white transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/30"
+                      >
+                        Thử tải lại
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ) : isLoadingApi ? (
                 Array.from({ length: 6 }).map((_, idx) => (
                   <tr key={idx} className="animate-pulse">
                     {canMutateOps && (
@@ -640,15 +671,29 @@ export const StudentsView = ({
                 <tr>
                   <td colSpan={canMutateOps ? 8 : 7} className="p-4">
                     <EmptyState
-                      title="Không tìm thấy sinh viên phù hợp"
-                      description="Hãy thử đổi bộ lọc lớp, trạng thái tài khoản hoặc từ khóa tìm kiếm."
-                      action={{
-                        label: "Xóa bộ lọc tìm kiếm",
-                        onClick: () => {
-                          setSearchInput("");
-                          clearFilters();
-                        },
-                      }}
+                      title={
+                        !hasActiveFilters
+                          ? "Chưa có sinh viên để hiển thị"
+                          : "Không tìm thấy sinh viên phù hợp"
+                      }
+                      description={
+                        !hasActiveFilters
+                          ? "API không trả về sinh viên nào cho kỳ và đơn vị đang chọn."
+                          : "Thử thay đổi từ khóa hoặc bộ lọc để tìm sinh viên."
+                      }
+                      action={
+                        hasActiveFilters
+                          ? {
+                              label: "Xóa bộ lọc tìm kiếm",
+                              onClick: () => {
+                                setSearchInput("");
+                                clearFilters();
+                                setStatusFilter("all");
+                                setLecturerFilter("all");
+                              },
+                            }
+                          : undefined
+                      }
                     />
                   </td>
                 </tr>
@@ -658,7 +703,7 @@ export const StudentsView = ({
                   return (
                     <tr
                       key={st.id}
-                      className={`hover:bg-slate-50/80 transition-colors ${isSelected ? "bg-blue-50/50" : ""}`}
+                      className={`hover:bg-slate-50/80 transition-colors ${isSelected ? "bg-[#026aa7]/5" : ""}`}
                     >
                       {canMutateOps && (
                         <td className="py-3 px-3 text-center">
@@ -666,7 +711,7 @@ export const StudentsView = ({
                             type="checkbox"
                             checked={isSelected}
                             onChange={() => handleToggleSelect(st.id)}
-                            className="rounded text-blue-600 cursor-pointer"
+                            className="rounded text-[#026aa7] cursor-pointer"
                           />
                         </td>
                       )}
@@ -699,7 +744,7 @@ export const StudentsView = ({
                         <p className="font-mono font-bold text-slate-800">
                           {st.mssv}
                         </p>
-                        <p className="text-[10px] text-blue-600 font-bold">
+                        <p className="text-[10px] text-[#026aa7] font-bold">
                           {st.classCode}
                         </p>
                       </td>
@@ -756,7 +801,7 @@ export const StudentsView = ({
 
                           <button
                             onClick={() => setSelectedStudent(st as AdminStudentRow)}
-                            className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-blue-600 rounded-lg transition-colors cursor-pointer"
+                            className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-[#026aa7] rounded-lg transition-colors cursor-pointer"
                             title="Xem chi tiết"
                           >
                             <Eye className="w-4 h-4" />
@@ -829,7 +874,7 @@ export const StudentsView = ({
               <select
                 value={pagination.pageSize}
                 onChange={(e) => setPageSize(Number(e.target.value))}
-                className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg font-bold text-slate-800 outline-none focus:border-blue-500 cursor-pointer"
+                className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg font-bold text-slate-800 outline-none focus:border-[#026aa7] cursor-pointer"
                 aria-label="Số sinh viên mỗi trang"
               >
                 {STUDENTS_PAGE_SIZE_OPTIONS.map((size) => (
@@ -949,7 +994,7 @@ export const StudentsView = ({
                 <h4 className="font-bold text-slate-900 text-sm">
                   {selectedStudent.fullName}
                 </h4>
-                <p className="text-xs font-mono font-bold text-blue-600">
+                <p className="text-xs font-mono font-bold text-[#026aa7]">
                   {selectedStudent.mssv}
                 </p>
                 <p className="text-xs text-slate-500 font-medium">
@@ -975,7 +1020,7 @@ export const StudentsView = ({
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400">Email:</span>
-                  <span className="font-bold text-blue-600">
+                  <span className="font-bold text-[#026aa7]">
                     {selectedStudent.email}
                   </span>
                 </div>
@@ -1041,7 +1086,7 @@ export const StudentsView = ({
                   {selectedStudent.desiredPosition && (
                     <div className="flex justify-between">
                       <span className="text-slate-400">Vị trí mong muốn:</span>
-                      <span className="font-bold text-blue-700">{selectedStudent.desiredPosition}</span>
+                      <span className="font-bold text-[#025a8e]">{selectedStudent.desiredPosition}</span>
                     </div>
                   )}
                   {selectedStudent.alternativePosition && (
@@ -1075,7 +1120,7 @@ export const StudentsView = ({
                         href={selectedStudent.resumeUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 underline"
+                        className="font-bold text-[#026aa7] hover:text-[#025a8e] flex items-center gap-1 underline"
                       >
                         Xem CV <ExternalLink className="w-3 h-3" />
                       </a>
@@ -1118,7 +1163,7 @@ export const StudentsView = ({
                   setEditingStudent(selectedStudent as AdminStudentRow);
                   setSelectedStudent(null);
                 }}
-                className="w-full py-2 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 font-bold text-xs rounded-md transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                className="w-full py-2 bg-[#026aa7]/5 hover:bg-[#026aa7]/10 text-[#025a8e] border border-[#026aa7]/20 font-bold text-xs rounded-md transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <Pencil className="w-3.5 h-3.5" /> Sửa hồ sơ
               </button>

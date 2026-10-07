@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useState } from "react";
 import type { ToastType } from "../../../contexts/ToastContext";
 import { useNavigate } from "react-router-dom";
 import {
@@ -19,16 +19,14 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-import { PageHeader } from "../../../components/common/PageHeader";
 import { ConfirmDialog } from "../../../components/common/ConfirmDialog";
 import { Panel } from "../../../components/common/Panel";
 import { Toolbar } from "../../../components/common/Toolbar";
 import { CompanyAvatar } from "../../../components/common/CompanyAvatar";
 import type { Enterprise } from "../../../types/enterprise";
 import { getApiErrorMessage } from "../../../lib/apiClient";
-import { mapCompanyDtoToEnterprise } from "../../../lib/adminMappers";
 import { adminCompaniesService } from "../../../services/adminCompanies.service";
-import { useSemester, toApiSemesterId, toApiDepartmentId } from "../../../contexts/SemesterContext";
+import { useSemester, toApiSemesterId } from "../../../contexts/SemesterContext";
 import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
 import { ImportCompaniesModal } from "../components/modals/ImportCompaniesModal";
 import { EmptyState } from "../../../components/common/EmptyState";
@@ -56,12 +54,10 @@ export const CompaniesView = ({
 }) => {
   const navigate = useNavigate();
   const { selectedSemester, selectedDepartmentId } = useSemester();
-  const { canMutateOps, isSuperAdmin } = useAdminCapabilities();
+  const { canMutateOps } = useAdminCapabilities();
   const {
     items: paginatedCompanies,
-    allItems: companies,
     filteredItems: filtered,
-    totalCount,
     totalPages,
     page: visiblePage,
     pageSize,
@@ -213,63 +209,104 @@ export const CompaniesView = ({
     }
   };
 
+  const hasActiveFilters = Boolean(search.trim()) || statusFilter !== "all";
+
   return (
-    <div className="space-y-5 max-w-[1500px] mx-auto">
-      <PageHeader
-        icon={Building2}
-        title="Doanh nghiệp"
-        subtitle="Danh mục đối tác thực tập — đồng bộ API"
-        actions={[
-          {
-            label: "Xuất Excel",
-            icon: Download,
-            onClick: () => void handleExport(),
-            variant: "secondary",
-          },
-          ...(canMutateOps
-            ? [
-                {
-                  label: "Import Excel",
-                  icon: FileUp,
-                  onClick: () => setIsImportModalOpen(true),
-                  variant: "secondary" as const,
-                },
-                {
-                  label: "Thêm doanh nghiệp",
-                  icon: Plus,
-                  onClick: openCreate,
-                  variant: "primary" as const,
-                },
-              ]
-            : []),
-        ]}
-      />
+    <div className="mx-auto max-w-[1300px] space-y-4 pb-12">
+      <section className="overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-2xs">
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-[#026aa7] px-4 py-3 text-white">
+          <div className="flex min-w-0 items-center gap-2">
+            <Building2 className="h-5 w-5 shrink-0 text-white/90" aria-hidden="true" />
+            <div className="min-w-0">
+              <h1 className="text-base font-bold tracking-wide">Quản lý doanh nghiệp</h1>
+              <p className="mt-0.5 text-xs text-white/80">
+                Danh mục đối tác thực tập và thông tin liên kết theo học kỳ
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void handleExport()}
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-white/30 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            >
+              <Download className="h-4 w-4" aria-hidden="true" />
+              Xuất Excel
+            </button>
+            {canMutateOps && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setIsImportModalOpen(true)}
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-white/30 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                >
+                  <FileUp className="h-4 w-4" aria-hidden="true" />
+                  Import Excel
+                </button>
+                <button
+                  type="button"
+                  onClick={openCreate}
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-md bg-white px-3 text-xs font-bold text-[#026aa7] transition-colors hover:bg-sky-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                >
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  Thêm doanh nghiệp
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </section>
 
       <Toolbar
         left={
-          <p className="text-xs text-slate-500 font-medium">
-            <span className="font-bold text-slate-800">{companies.length}</span>{" "}
-            doanh nghiệp ·{" "}
-            <span className="font-bold text-slate-800">{filtered.length}</span>{" "}
-            đang lọc
-            {isLoadingApi && (
-              <span className="ml-2 text-blue-600 font-semibold">
-                · Đang tải API…
+          <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500">
+            {selectedSemester?.name && selectedSemester.id !== "all" && (
+              <span className="rounded-full border border-[#026aa7]/20 bg-[#026aa7]/5 px-2.5 py-1 text-[11px] font-bold text-[#025a8e]">
+                {selectedSemester.name}
               </span>
             )}
-          </p>
+            <span>
+              {isLoadingApi
+                ? "Đang tải danh sách…"
+                : `${filtered.length.toLocaleString("vi-VN")} doanh nghiệp đang hiển thị`}
+            </span>
+            {isFetching && !isLoadingApi && (
+              <span className="font-semibold text-[#026aa7]" role="status">
+                Đang cập nhật…
+              </span>
+            )}
+          </div>
         }
       />
 
-      <Panel className="space-y-4">
+      <Panel className="space-y-4 rounded-xl border border-slate-200/90 shadow-2xs">
+        {isError && paginatedCompanies.length > 0 && (
+          <div
+            role="alert"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-xs text-rose-800"
+          >
+            <span>
+              {error instanceof Error ? error.message : "Không thể cập nhật danh sách doanh nghiệp."}
+              {" "}Dữ liệu đang hiển thị có thể chưa mới nhất.
+            </span>
+            <button
+              type="button"
+              onClick={() => void refetch()}
+              disabled={isFetching}
+              className="min-h-8 rounded-md border border-rose-300 bg-white px-3 font-bold text-rose-800 transition-colors hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/30 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isFetching ? "Đang tải…" : "Thử tải lại"}
+            </button>
+          </div>
+        )}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-3">
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-base font-bold text-slate-900 tracking-tight">
-                Danh sách Doanh nghiệp
+                Danh sách doanh nghiệp
               </h2>
               {selectedSemester?.id && selectedSemester.id !== "all" && (
-                <span className="px-2 py-0.5 bg-blue-50 text-blue-700 font-bold text-[10px] rounded-md border border-blue-200/60">
+                <span className="rounded-full border border-[#026aa7]/20 bg-[#026aa7]/5 px-2.5 py-1 text-[11px] font-bold text-[#025a8e]">
                   Học kỳ: {selectedSemester.name}
                 </span>
               )}
@@ -287,13 +324,15 @@ export const CompaniesView = ({
                 value={search}
                 onChange={(e) => updateSearch(e.target.value)}
                 placeholder="Tìm tên, mã, lĩnh vực…"
-                className="pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-md bg-slate-50 focus:bg-white focus:border-blue-500 outline-none w-56"
+                aria-label="Tìm doanh nghiệp theo tên, mã hoặc lĩnh vực"
+                className="w-56 rounded-md border border-slate-200 bg-slate-50 py-2 pl-8 pr-3 text-xs outline-none transition-colors focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
               />
             </div>
             <select
               value={statusFilter}
               onChange={(e) => updateStatusFilter(e.target.value)}
-              className="px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-slate-50 font-medium outline-none cursor-pointer"
+              aria-label="Lọc doanh nghiệp theo trạng thái"
+              className="cursor-pointer rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium outline-none transition-colors focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
             >
               <option value="all">Tất cả trạng thái</option>
               {statuses.map((s) => (
@@ -324,8 +363,30 @@ export const CompaniesView = ({
           </div>
         ) : filtered.length === 0 ? (
           <EmptyState
-            title="Không tìm thấy doanh nghiệp"
-            description="Thử đổi bộ lọc hoặc thêm mới doanh nghiệp."
+            icon={Building2}
+            title={
+              hasActiveFilters
+                ? "Không tìm thấy doanh nghiệp phù hợp"
+                : "Chưa có doanh nghiệp để hiển thị"
+            }
+            description={
+              hasActiveFilters
+                ? "Thử thay đổi từ khóa hoặc trạng thái để tìm doanh nghiệp."
+                : "API không trả về doanh nghiệp nào cho phạm vi đang chọn."
+            }
+            action={
+              hasActiveFilters
+                ? {
+                    label: "Xóa bộ lọc",
+                    onClick: () => {
+                      updateSearch("");
+                      updateStatusFilter("all");
+                    },
+                  }
+                : canMutateOps
+                  ? { label: "Thêm doanh nghiệp", onClick: openCreate }
+                  : undefined
+            }
           />
         ) : (
           <div
@@ -335,7 +396,7 @@ export const CompaniesView = ({
           >
             <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-slate-100 text-[10px] uppercase tracking-wider text-slate-400 font-bold">
+              <tr className="border-b border-slate-200 bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 font-bold">
                 <th className="py-2.5 pr-3">Doanh nghiệp</th>
                 <th className="py-2.5 pr-3">Lĩnh vực</th>
                 <th className="py-2.5 pr-3">Liên hệ</th>
@@ -349,7 +410,7 @@ export const CompaniesView = ({
               {paginatedCompanies.map((c) => (
                 <tr
                   key={c.id}
-                  className="hover:bg-slate-50/80 cursor-pointer"
+                  className="cursor-pointer transition-colors hover:bg-slate-50/80"
                   onClick={() => navigate(`/admin/companies/${c.id}`)}
                 >
                   <td className="py-3 pr-3">
@@ -374,7 +435,7 @@ export const CompaniesView = ({
                     <span
                       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium ${
                         (c.openPositionCount ?? 0) > 0
-                          ? "bg-blue-50 text-blue-700 border border-blue-200"
+                          ? "bg-[#026aa7]/5 text-[#025a8e] border border-[#026aa7]/20"
                           : "bg-slate-50 text-slate-500 border border-slate-200"
                       }`}
                     >
@@ -409,8 +470,9 @@ export const CompaniesView = ({
                           e.stopPropagation();
                           navigate(`/admin/companies/${c.id}`);
                         }}
-                        className="p-1.5 rounded-md text-slate-500 hover:bg-blue-50 hover:text-blue-700 cursor-pointer"
+                        className="p-1.5 rounded-md text-slate-500 hover:bg-[#026aa7]/5 hover:text-[#025a8e] cursor-pointer"
                         title="Xem chi tiết"
+                        aria-label={`Xem chi tiết ${c.name}`}
                       >
                         <Eye className="w-3.5 h-3.5" />
                       </button>
@@ -446,8 +508,9 @@ export const CompaniesView = ({
                               e.stopPropagation();
                               openEdit(c);
                             }}
-                            className="p-1.5 rounded-md text-slate-500 hover:bg-blue-50 hover:text-blue-700 cursor-pointer"
+                            className="p-1.5 rounded-md text-slate-500 hover:bg-[#026aa7]/5 hover:text-[#025a8e] cursor-pointer"
                             title="Sửa"
+                            aria-label={`Sửa ${c.name}`}
                           >
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
@@ -459,6 +522,7 @@ export const CompaniesView = ({
                             }}
                             className="p-1.5 rounded-md text-slate-500 hover:bg-rose-50 hover:text-rose-700 cursor-pointer"
                             title="Xóa khỏi hệ thống"
+                            aria-label={`Xóa ${c.name}`}
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -468,27 +532,6 @@ export const CompaniesView = ({
                   </td>
                 </tr>
               ))}
-              {filtered.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={7}
-                    className="p-4"
-                  >
-                    <EmptyState
-                      icon={Building2}
-                      title="Không tìm thấy doanh nghiệp phù hợp"
-                      description="Hãy thử đổi trạng thái hoặc từ khóa tìm kiếm."
-                      action={{
-                        label: "Xóa bộ lọc tìm kiếm",
-                        onClick: () => {
-                          updateSearch("");
-                          updateStatusFilter("all");
-                        },
-                      }}
-                    />
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
@@ -506,7 +549,7 @@ export const CompaniesView = ({
                 setPageSize(Number(event.target.value));
                 setCurrentPage(1);
               }}
-              className="px-2 py-1 border border-slate-200 rounded-md bg-white font-medium text-slate-700 outline-none"
+              className="cursor-pointer rounded-md border border-slate-200 bg-white px-2 py-1 font-medium text-slate-700 outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
               aria-label="Số doanh nghiệp mỗi trang"
             >
               <option value={10}>10 / trang</option>
@@ -519,7 +562,7 @@ export const CompaniesView = ({
               type="button"
               onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
               disabled={visiblePage === 1}
-              className="p-1.5 border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none"
+              className="min-h-9 min-w-9 rounded-md border border-slate-200 p-1.5 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/30 disabled:pointer-events-none disabled:opacity-40"
               aria-label="Trang trước"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -531,7 +574,7 @@ export const CompaniesView = ({
               type="button"
               onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
               disabled={visiblePage === totalPages}
-              className="p-1.5 border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none"
+              className="min-h-9 min-w-9 rounded-md border border-slate-200 p-1.5 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/30 disabled:pointer-events-none disabled:opacity-40"
               aria-label="Trang sau"
             >
               <ChevronRight className="w-4 h-4" />
@@ -542,7 +585,7 @@ export const CompaniesView = ({
 
       {isFormOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg border border-slate-200 shadow-md w-full max-w-lg overflow-hidden">
+          <div className="w-full max-w-lg overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-2xs">
             <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100">
               <h3 className="text-sm font-bold text-slate-900">
                 {editing ? "Sửa doanh nghiệp" : "Thêm doanh nghiệp"}
@@ -550,9 +593,10 @@ export const CompaniesView = ({
               <button
                 type="button"
                 onClick={() => setIsFormOpen(false)}
-                className="text-slate-400 hover:text-slate-700 cursor-pointer"
+                className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/30"
+                aria-label="Đóng biểu mẫu doanh nghiệp"
               >
-                <X className="w-4 h-4" />
+                <X className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
             <div className="p-5 space-y-3 max-h-[70vh] overflow-y-auto">
@@ -567,7 +611,7 @@ export const CompaniesView = ({
                   onChange={(e) =>
                     setForm((f) => ({ ...f, companyCode: e.target.value }))
                   }
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-md bg-slate-50 focus:bg-white focus:border-blue-500 outline-none font-mono"
+                  className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs outline-none transition-colors focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
                 />
               </div>
               {(
@@ -611,7 +655,7 @@ export const CompaniesView = ({
                               : e.target.value,
                         }))
                       }
-                      className={`w-full px-3 py-2 text-xs border border-slate-200 rounded-md bg-slate-50 focus:bg-white focus:border-blue-500 outline-none ${
+                      className={`w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs outline-none transition-colors focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20 ${
                         ["location", "contactEmail", "contactPhone", "website"].includes(
                           key,
                         )
@@ -631,7 +675,7 @@ export const CompaniesView = ({
                   onChange={(e) =>
                     setForm((f) => ({ ...f, status: e.target.value }))
                   }
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-md bg-slate-50 outline-none cursor-pointer"
+                  className="w-full cursor-pointer rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs outline-none transition-colors focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
                 >
                   <option>Đang hợp tác</option>
                   <option>Đối tác ưu tiên</option>
@@ -644,7 +688,7 @@ export const CompaniesView = ({
               <button
                 type="button"
                 onClick={() => setIsFormOpen(false)}
-                className="px-3 py-1.5 text-xs font-semibold rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 cursor-pointer"
+                className="min-h-9 rounded-md border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/30"
               >
                 Hủy
               </button>
@@ -652,7 +696,7 @@ export const CompaniesView = ({
                 type="button"
                 onClick={() => void handleSave()}
                 disabled={isSaving}
-                className="px-3 py-1.5 text-xs font-bold rounded-md bg-[#1d4ed8] text-white hover:bg-blue-700 disabled:opacity-60 cursor-pointer"
+                className="min-h-9 rounded-md bg-[#026aa7] px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-[#025a8e] active:bg-[#005082] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/30 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isSaving ? "Đang lưu…" : "Lưu"}
               </button>

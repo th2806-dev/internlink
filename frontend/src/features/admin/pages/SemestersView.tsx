@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   CalendarDays,
   Sparkles,
@@ -15,6 +15,7 @@ import {
   PlayCircle,
   ChevronLeft,
   ChevronRight,
+  AlertCircle,
 } from "lucide-react";
 import { useSemester } from "../../../contexts/SemesterContext";
 import type { Semester } from "../../../contexts/SemesterContext";
@@ -25,7 +26,6 @@ import { EvidenceDeadlinePanel } from "../components/EvidenceDeadlinePanel";
 import { AssignLecturerModal } from "../components/modals/AssignLecturerModal";
 import { ImportStudentsModal } from "../components/modals/ImportStudentsModal";
 import { ImportLecturersModal } from "../components/modals/ImportLecturersModal";
-import { PageHeader } from "../../../components/common/PageHeader";
 import { Panel } from "../../../components/common/Panel";
 import { adminStudentsService } from "../../../services/adminStudents.service";
 import { adminLecturersService } from "../../../services/adminLecturers.service";
@@ -39,14 +39,14 @@ const EMPTY_SEMESTER = {
   academicYear: "",
   startDate: "—",
   endDate: "—",
-  lecturersCount: 0,
-  studentsCount: 0,
-  placedStudents: 0,
-  companiesCount: 0,
+  lecturersCount: null,
+  studentsCount: null,
+  placedStudents: null,
+  companiesCount: null,
   status: "upcoming" as const,
-  progressPercent: 0,
-  currentPhase: "Vui lòng tạo kỳ thực tập mới",
-  description: "Nhấn nút \u201Ctạo kỳ thực tập mới\u201D để bắt đầu.",
+  progressPercent: null,
+  currentPhase: "Chưa có dữ liệu kỳ thực tập",
+  description: "Tạo kỳ thực tập mới để bắt đầu quản lý.",
 };
 
 function getInternshipPeriod(semester: Semester): { dates: string; weeks: string } {
@@ -119,50 +119,12 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
   // Kỳ thực tập thường ít → 5/10/20 dòng/trang.
   const [pageSize, setPageSize] = useState(5);
 
-  const [formData, setFormData] = useState({
-    name: "",
-    term: "Học kỳ I",
-    academicYear: "2026 - 2027",
-    startDate: "",
-    endDate: "",
-    description: "",
-  });
-
   const currentActiveSem =
     semestersList.find((s) => s.id === selectedSemesterId && s.status !== "completed") ||
     semestersList.find((s) => s.status === "active") ||
     semestersList.find((s) => s.status === "upcoming") ||
     semestersList[0] ||
     EMPTY_SEMESTER;
-
-  const handleCreateNewFromForm = (e, isDraft = false) => {
-    e.preventDefault();
-    if (!formData.name) {
-      onShowToast("Vui lòng nhập tên kỳ thực tập!");
-      return;
-    }
-    createSemester({
-      name: formData.name,
-      term: formData.term,
-      academicYear: formData.academicYear,
-      startDate: formData.startDate || "01/09/2026",
-      endDate: formData.endDate || "15/12/2026",
-      status: isDraft ? "draft" : "upcoming",
-      description: formData.description || `Đợt thực tập ${formData.term} ${formData.academicYear}`,
-      totalWeeks: 6,
-    });
-    onShowToast(
-      `Đã ${isDraft ? "lưu nháp" : "tạo thành công"} kỳ thực tập: "${formData.name}"`,
-    );
-    setFormData({
-      name: "",
-      term: "Học kỳ I",
-      academicYear: "2026 - 2027",
-      startDate: "",
-      endDate: "",
-      description: "",
-    });
-  };
 
   const handleDuplicateSemester = (sem) => {
     duplicateSemester(sem, onShowToast);
@@ -175,8 +137,10 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
     void startSemester(semId, onShowToast);
   };
   const activeSem = currentActiveSem;
-  const activeInternshipPeriod = getInternshipPeriod(currentActiveSem as Semester);
   const hasRealSemester = !!currentActiveSem.id;
+  const activeInternshipPeriod = hasRealSemester
+    ? getInternshipPeriod(currentActiveSem as Semester)
+    : { dates: "Chưa cập nhật", weeks: "" };
   const filteredSemesters = semestersList.filter((s) => {
     const matchesFilter =
       tableFilterStatus === "all" || s.status === tableFilterStatus;
@@ -192,39 +156,53 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
     currentPage * pageSize,
   );
   return (
-    <div className="space-y-5 max-w-[1500px] mx-auto">
+    <div className="mx-auto max-w-[1300px] space-y-4 pb-12">
+      <section className="overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-2xs">
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-[#026aa7] px-4 py-3 text-white">
+          <div className="flex min-w-0 items-center gap-2">
+            <CalendarDays className="h-5 w-5 shrink-0 text-white/90" aria-hidden="true" />
+            <div className="min-w-0">
+              <h1 className="text-base font-bold tracking-wide">Quản lý kỳ thực tập</h1>
+              <p className="mt-0.5 text-xs text-white/80">
+                Quản lý thời gian, trạng thái và quy mô các kỳ thực tập
+              </p>
+            </div>
+          </div>
+          {canMutateSemesters && (
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setImportType("lecturers")}
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-white/30 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+              >
+                <FileUp className="h-4 w-4" aria-hidden="true" />
+                Nhập giảng viên
+              </button>
+              <button
+                type="button"
+                onClick={() => setImportType("students")}
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-white/30 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+              >
+                <Users className="h-4 w-4" aria-hidden="true" />
+                Nhập sinh viên
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingSemester(null);
+                  setShowCreateModal(true);
+                }}
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-md bg-white px-3 text-xs font-bold text-[#026aa7] transition-colors hover:bg-sky-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+              >
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                Tạo kỳ thực tập mới
+              </button>
+            </div>
+          )}
+        </div>
+      </section>
+
       {isSuperAdmin && <SchoolAcademicTermsPanel onShowToast={onShowToast} />}
-      <PageHeader
-        icon={CalendarDays}
-        title="Quản lý kỳ thực tập"
-        actions={
-          canMutateSemesters
-            ? [
-                {
-                  label: "Nhập giảng viên",
-                  icon: FileUp,
-                  onClick: () => setImportType("lecturers"),
-                  variant: "secondary",
-                },
-                {
-                  label: "Nhập sinh viên",
-                  icon: Users,
-                  onClick: () => setImportType("students"),
-                  variant: "secondary",
-                },
-                {
-                  label: "Tạo kỳ thực tập mới",
-                  icon: Plus,
-                  onClick: () => {
-                    setEditingSemester(null);
-                    setShowCreateModal(true);
-                  },
-                  variant: "primary",
-                },
-              ]
-            : []
-        }
-      />
 
       {canMutateSemesters && hasRealSemester && (
         <EvidenceDeadlinePanel semesterId={activeSem.id} semesterName={activeSem.name} />
@@ -234,12 +212,12 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         <div className="lg:col-span-12 space-y-5">
           {/* ACTIVE INTERNSHIP FEATURED SUMMARY */}
-          <Panel className="space-y-5 relative overflow-hidden border-blue-200/90">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-bl-full pointer-events-none" />
+          <Panel className="relative space-y-5 overflow-hidden rounded-xl border border-slate-200/90 shadow-2xs">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-[#026aa7]/5 rounded-bl-full pointer-events-none" />
 
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
               <div className="flex items-center gap-3">
-                <div className="p-3 bg-blue-600 text-white rounded-lg shadow-md shadow-blue-600/20 shrink-0">
+                <div className="p-3 bg-[#026aa7] text-white rounded-lg shadow-md shadow-[#026aa7]/20 shrink-0">
                   <CalendarDays className="w-6 h-6" />
                 </div>
                 <div>
@@ -247,9 +225,11 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
                     <h2 className="text-lg font-bold text-slate-900 tracking-tight">
                       {currentActiveSem.name}
                     </h2>
-                    <span className={`px-3 py-0.5 text-xs font-bold rounded-full flex items-center gap-1.5 ${activeSem.status === "active" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : activeSem.status === "completed" ? "bg-slate-100 text-slate-600 border border-slate-200" : "bg-blue-50 text-blue-700 border border-blue-200"}`}>
-                      <span className={`w-2 h-2 rounded-full ${activeSem.status === "active" ? "bg-emerald-500" : activeSem.status === "completed" ? "bg-slate-400" : "bg-blue-500"}`} />
-                      {activeSem.status === "active" ? "Đang diễn ra" : activeSem.status === "completed" ? "Đã hoàn thành" : "Sắp tới"}
+                    <span className={`flex items-center gap-1.5 rounded-full border px-3 py-0.5 text-xs font-bold ${!hasRealSemester || activeSem.status === "completed" ? "border-slate-200 bg-slate-100 text-slate-600" : activeSem.status === "active" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-[#026aa7]/20 bg-[#026aa7]/5 text-[#026aa7]"}`}>
+                      {hasRealSemester && (
+                        <span className={`h-2 w-2 rounded-full ${activeSem.status === "active" ? "bg-emerald-500" : activeSem.status === "completed" ? "bg-slate-400" : "bg-[#026aa7]"}`} />
+                      )}
+                      {!hasRealSemester ? "Chưa cập nhật" : activeSem.status === "active" ? "Đang diễn ra" : activeSem.status === "completed" ? "Đã hoàn thành" : "Sắp tới"}
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 font-medium mt-1">
@@ -315,8 +295,18 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
               </div>
             </div>
 
+            {!hasRealSemester ? (
+              <div className="flex flex-col items-center gap-2 py-6 text-center">
+                <AlertCircle className="h-8 w-8 text-slate-300" aria-hidden="true" />
+                <p className="text-sm font-semibold text-slate-700">Chưa có kỳ thực tập</p>
+                <p className="max-w-md text-xs text-slate-500">
+                  Tạo kỳ thực tập mới để cấu hình thời gian và bắt đầu quản lý.
+                </p>
+              </div>
+            ) : (
+              <>
             {/* Key Grid Details */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
               <div className="p-3 bg-slate-50 rounded-md border border-slate-200/70">
                 <p className="text-[10px] font-bold uppercase text-slate-400">
                   Học kỳ & Niên khóa
@@ -331,7 +321,7 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
                   Thời gian diễn ra
                 </p>
                 <p className="font-bold text-slate-800 text-xs mt-1 flex items-center gap-1">
-                  <Clock className="w-3 h-3 text-blue-600" />{" "}
+                  <Clock className="w-3 h-3 text-[#026aa7]" />{" "}
                   {activeInternshipPeriod.dates}
                 </p>
                 <p className="mt-1 text-[10px] font-medium text-slate-500">{activeInternshipPeriod.weeks}</p>
@@ -342,17 +332,17 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
                   Quy mô tham gia
                 </p>
                 <p className="font-bold text-slate-800 text-xs mt-1">
-                  {currentActiveSem.studentsCount} SV /{" "}
-                  {currentActiveSem.lecturersCount} GV
+                  {currentActiveSem.studentsCount ?? "—"} SV /{" "}
+                  {currentActiveSem.lecturersCount ?? "—"} GV
                 </p>
               </div>
 
-              <div className="p-3 bg-blue-50/80 rounded-md border border-blue-100">
-                <p className="text-[10px] font-bold uppercase text-blue-700">
+              <div className="p-3 bg-[#026aa7]/4 rounded-md border border-[#026aa7]/14">
+                <p className="text-[10px] font-bold uppercase text-[#026aa7]">
                   Doanh nghiệp tiếp nhận
                 </p>
-                <p className="font-bold text-blue-950 text-xs mt-1">
-                  {currentActiveSem.companiesCount} Doanh nghiệp
+                <p className="font-bold text-[#005082] text-xs mt-1">
+                  {currentActiveSem.companiesCount ?? "—"} Doanh nghiệp
                 </p>
               </div>
             </div>
@@ -361,40 +351,42 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
             <div className="space-y-2 pt-1">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-bold text-slate-800 flex items-center gap-1.5">
-                  <Sparkles className="w-4 h-4 text-blue-600" /> Tiến độ đợt
+                  <Sparkles className="w-4 h-4 text-[#026aa7]" /> Tiến độ đợt
                   thực tập
                 </span>
-                <span className="font-bold text-blue-700">
-                  {currentActiveSem.progressPercent}% hoàn thành
+                <span className="font-bold text-[#026aa7]">
+                  {currentActiveSem.progressPercent ?? "—"}% hoàn thành
                 </span>
               </div>
 
               <div className="w-full bg-slate-100 rounded-full h-3 p-0.5 border border-slate-200 overflow-hidden">
                 <div
-                  className="bg-[#1d4ed8] h-full rounded-full transition-all duration-500 relative"
-                  style={{ width: `${currentActiveSem.progressPercent}%` }}
+                  className="bg-[#026aa7] h-full rounded-full transition-all duration-500 relative"
+                  style={{ width: `${Math.min(100, Math.max(0, currentActiveSem.progressPercent ?? 0))}%` }}
                 />
               </div>
 
-              <div className="p-2.5 bg-blue-50/60 rounded-md border border-blue-100 flex items-center justify-between text-xs">
+              <div className="p-2.5 bg-[#026aa7]/3 rounded-md border border-[#026aa7]/14 flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />
+                  <CheckCircle2 className="w-4 h-4 text-[#026aa7] shrink-0" />
                   <span className="font-bold text-slate-800">
                     Giai đoạn hiện tại:{" "}
-                    <span className="text-blue-700">
-                      {currentActiveSem.currentPhase}
+                    <span className="text-[#026aa7]">
+                      {currentActiveSem.currentPhase || "Chưa cập nhật"}
                     </span>
                   </span>
                 </div>
                 <span className="text-[11px] text-slate-500 font-medium hidden sm:inline">
-                  {activeSem.status === "completed" ? "Hoàn thành" : activeSem.status === "active" ? `Tiến độ ${activeSem.progressPercent}%` : "Chưa bắt đầu"}
+                  {activeSem.status === "completed" ? "Hoàn thành" : activeSem.status === "active" ? `Tiến độ ${activeSem.progressPercent ?? "—"}%` : "Chưa bắt đầu"}
                 </span>
               </div>
             </div>
+              </>
+            )}
           </Panel>
 
           {/* INTERNSHIP LIST TABLE (Clean Data Grid) */}
-          <Panel className="space-y-4">
+          <Panel className="space-y-4 rounded-xl border border-slate-200/90 shadow-2xs">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
               <div>
                 <h2 className="text-base font-bold text-slate-900 tracking-tight">
@@ -411,33 +403,42 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
                   <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
                   <input
                     type="text"
+                    aria-label="Tìm kỳ thực tập"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Tìm tên kỳ, khóa..."
-                    className="pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-xs font-medium outline-none focus:border-blue-500 w-44"
+                    className="pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-xs font-medium outline-none focus:border-[#026aa7] w-44"
                   />
                 </div>
 
-                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-md border border-slate-200 text-xs font-bold">
+                <div role="group" aria-label="Lọc kỳ theo trạng thái" className="flex items-center gap-1 bg-slate-100 p-1 rounded-md border border-slate-200 text-xs font-bold">
                   <button
-                    onClick={() => setTableFilterStatus("all")}
-                    className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${tableFilterStatus === "all" ? "bg-white text-blue-900 shadow-2xs font-bold" : "text-slate-600 hover:text-slate-900"}`}
+                      type="button"
+                      aria-pressed={tableFilterStatus === "all"}
+                      onClick={() => setTableFilterStatus("all")}
+                    className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${tableFilterStatus === "all" ? "bg-white text-[#005082] shadow-2xs font-bold" : "text-slate-600 hover:text-slate-900"}`}
                   >
                     Tất cả
                   </button>
                   <button
+                    type="button"
+                    aria-pressed={tableFilterStatus === "active"}
                     onClick={() => setTableFilterStatus("active")}
                     className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${tableFilterStatus === "active" ? "bg-white text-emerald-800 shadow-2xs font-bold" : "text-slate-600 hover:text-slate-900"}`}
                   >
                     Hoạt động
                   </button>
                   <button
+                    type="button"
+                    aria-pressed={tableFilterStatus === "upcoming"}
                     onClick={() => setTableFilterStatus("upcoming")}
-                    className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${tableFilterStatus === "upcoming" ? "bg-white text-blue-800 shadow-2xs font-bold" : "text-slate-600 hover:text-slate-900"}`}
+                    className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${tableFilterStatus === "upcoming" ? "bg-white text-[#025a8e] shadow-2xs font-bold" : "text-slate-600 hover:text-slate-900"}`}
                   >
                     Sắp tới
                   </button>
                   <button
+                    type="button"
+                    aria-pressed={tableFilterStatus === "completed"}
                     onClick={() => setTableFilterStatus("completed")}
                     className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${tableFilterStatus === "completed" ? "bg-white text-slate-800 shadow-2xs font-bold" : "text-slate-600 hover:text-slate-900"}`}
                   >
@@ -464,14 +465,32 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {paginatedSemesters.map((sem) => (
+                  {paginatedSemesters.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="px-4 py-12 text-center">
+                        <div className="mx-auto flex max-w-sm flex-col items-center gap-2">
+                          <CalendarDays className="h-8 w-8 text-slate-300" aria-hidden="true" />
+                          <p className="text-sm font-semibold text-slate-700">
+                            {semestersList.length === 0
+                              ? "Chưa có kỳ thực tập"
+                              : "Không tìm thấy kỳ thực tập phù hợp"}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            {semestersList.length === 0
+                              ? "Tạo kỳ thực tập mới hoặc tải dữ liệu từ danh sách được cấp."
+                              : "Thử thay đổi từ khóa tìm kiếm hoặc bộ lọc trạng thái."}
+                          </p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : paginatedSemesters.map((sem) => (
                     <tr
                       key={sem.id}
                       className="hover:bg-slate-50/80 transition-colors group"
                     >
                       <td className="py-3 px-3 font-bold text-slate-900">
                         <div>
-                          <p className="text-xs group-hover:text-blue-600 transition-colors">
+                          <p className="text-xs group-hover:text-[#026aa7] transition-colors">
                             {sem.name}
                           </p>
                           <p className="text-[10px] text-slate-400 font-medium line-clamp-1">
@@ -489,11 +508,11 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
                         <p className="mt-0.5 text-[10px] text-slate-400">{getInternshipPeriod(sem).weeks}</p>
                       </td>
 
-                      <td className="py-3 px-3 text-center font-bold text-blue-900">
+                      <td className="py-3 px-3 text-center font-bold text-[#005082]">
                         {sem.lecturersCount} GV
                       </td>
 
-                      <td className="py-3 px-3 text-center font-bold text-blue-900">
+                      <td className="py-3 px-3 text-center font-bold text-[#005082]">
                         {sem.studentsCount} SV
                       </td>
 
@@ -507,7 +526,7 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
 
                       <td className="py-3 px-3 text-center">
                         <span
-                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${sem.status === "active" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : sem.status === "upcoming" ? "bg-blue-50 text-blue-700 border-blue-200" : sem.status === "draft" ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-slate-100 text-slate-600 border-slate-200"}`}
+                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${sem.status === "active" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : sem.status === "upcoming" ? "bg-[#026aa7]/5 text-[#026aa7] border-[#026aa7]/20" : sem.status === "draft" ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-slate-100 text-slate-600 border-slate-200"}`}
                         >
                           {sem.status === "active"
                             ? "Ho\u1EA1t \u0111\u1ED9ng"
@@ -522,13 +541,15 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
                       <td className="py-3 px-3 text-right">
                         <div className="flex items-center justify-end gap-1">
                           <button
+                            type="button"
+                            aria-label={`Xem chi tiết ${sem.name}`}
                             onClick={() => {
                               selectSemester(sem.id);
                               onShowToast(
                                 `Đã chọn xem chi tiết: ${sem.name}`,
                               );
                             }}
-                            className="p-1.5 hover:bg-blue-50 text-slate-600 hover:text-blue-700 rounded-lg transition-colors cursor-pointer"
+                            className="p-1.5 hover:bg-[#025a8e]/5 text-slate-600 hover:text-[#026aa7] rounded-lg transition-colors cursor-pointer"
                             title="Xem chi tiết"
                           >
                             <Eye className="w-3.5 h-3.5" />
@@ -537,6 +558,8 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
                           {canMutateSemesters && (
                             <>
                               <button
+                                type="button"
+                                aria-label={`Chỉnh sửa ${sem.name}`}
                                 onClick={() => {
                                   setEditingSemester({
                                     id: sem.id,
@@ -558,6 +581,8 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
                                 <Edit3 className="w-3.5 h-3.5" />
                               </button>
                               <button
+                                type="button"
+                                aria-label={`Sao chép ${sem.name}`}
                                 onClick={() => handleDuplicateSemester(sem)}
                                 className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-slate-900 rounded-lg transition-colors cursor-pointer"
                                 title="Sao chép"
@@ -567,6 +592,8 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
 
                               {(sem.status === "upcoming" || sem.status === "draft") && (
                                 <button
+                                  type="button"
+                                  aria-label={`Bắt đầu ${sem.name}`}
                                   onClick={() => handleStartSemester(sem.id)}
                                   className="p-1.5 hover:bg-emerald-50 text-slate-600 hover:text-emerald-600 rounded-lg transition-colors cursor-pointer"
                                   title="Bắt đầu kỳ"
@@ -577,6 +604,8 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
 
                               {sem.status !== "completed" && (
                                 <button
+                                  type="button"
+                                  aria-label={`Đóng ${sem.name}`}
                                   onClick={() =>
                                     handleCloseSemester(sem.id, sem.name)
                                   }

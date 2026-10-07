@@ -1,17 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   AlertTriangle,
   ArchiveRestore,
   Clock3,
   DatabaseBackup,
   Download,
-  HardDrive,
   LoaderCircle,
   RefreshCw,
   ShieldCheck,
   Trash2,
 } from "lucide-react";
-import { PageHeader } from "../../../components/common/PageHeader";
 import { Panel } from "../../../components/common/Panel";
 import { ConfirmDialog } from "../../../components/common/ConfirmDialog";
 import { getApiErrorMessage } from "../../../lib/apiClient";
@@ -68,11 +66,6 @@ export function BackupsView({
   useEffect(() => {
     void refresh();
   }, [refresh]);
-
-  const totalBytes = useMemo(
-    () => backups.reduce((total, backup) => total + backup.sizeBytes, 0),
-    [backups],
-  );
 
   const createBackup = async () => {
     setIsCreating(true);
@@ -142,7 +135,7 @@ export function BackupsView({
           disabled={isBusy || isCreating}
           aria-label={`Tải xuống ${backup.fileName}`}
           title="Tải xuống"
-          className="rounded-md p-2 text-slate-600 hover:bg-slate-100 hover:text-blue-700 disabled:opacity-50"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-600 transition-colors hover:bg-[#026aa7]/5 hover:text-[#026aa7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] disabled:opacity-50"
         >
           {isBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
         </button>
@@ -155,7 +148,7 @@ export function BackupsView({
           disabled={isBusy || isCreating}
           aria-label={`Khôi phục từ ${backup.fileName}`}
           title="Khôi phục database"
-          className="rounded-md p-2 text-amber-700 hover:bg-amber-50 disabled:opacity-50"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-md text-amber-700 transition-colors hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] disabled:opacity-50"
         >
           <ArchiveRestore className="h-4 w-4" />
         </button>
@@ -165,7 +158,7 @@ export function BackupsView({
           disabled={isBusy || isCreating}
           aria-label={`Xóa ${backup.fileName}`}
           title="Xóa bản sao lưu"
-          className="rounded-md p-2 text-slate-600 hover:bg-rose-50 hover:text-rose-700 disabled:opacity-50"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-600 transition-colors hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 disabled:opacity-50"
         >
           <Trash2 className="h-4 w-4" />
         </button>
@@ -174,45 +167,42 @@ export function BackupsView({
   };
 
   return (
-    <div className="space-y-4">
-      <PageHeader
-        icon={DatabaseBackup}
-        title="Sao lưu & Khôi phục"
-        subtitle="Quản lý các tệp sao lưu database toàn hệ thống."
-        actions={[
-          {
-            label: isCreating ? "Đang sao lưu…" : "Tạo bản sao lưu",
-            icon: isCreating ? LoaderCircle : DatabaseBackup,
-            onClick: () => void createBackup(),
-            variant: "primary",
-            loading: isCreating,
-            disabled: isCreating || isLoading,
-          },
-        ]}
-      />
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Panel padding="sm" className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-md border border-blue-100 bg-blue-50 text-blue-700">
-            <HardDrive className="h-5 w-5" />
-          </span>
-          <div>
-            <p className="text-xs font-medium text-slate-500">Tệp sao lưu</p>
-            <p className="text-lg font-bold text-slate-900">{isLoading ? "—" : backups.length}</p>
+    <div className="mx-auto max-w-[1300px] space-y-4 pb-12">
+      <section className="overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-2xs">
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-[#026aa7] px-4 py-3 text-white">
+          <div className="flex min-w-0 items-center gap-2">
+            <DatabaseBackup className="h-5 w-5 shrink-0 text-white/90" aria-hidden="true" />
+            <div className="min-w-0">
+              <h1 className="text-base font-bold tracking-wide">Sao lưu &amp; Khôi phục</h1>
+              <p className="mt-0.5 text-xs text-white/80">
+                Quản lý các tệp sao lưu database toàn hệ thống
+              </p>
+            </div>
           </div>
-        </Panel>
-        <Panel padding="sm" className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-md border border-slate-200 bg-slate-50 text-slate-700">
-            <DatabaseBackup className="h-5 w-5" />
-          </span>
-          <div>
-            <p className="text-xs font-medium text-slate-500">Tổng dung lượng lưu</p>
-            <p className="text-lg font-bold text-slate-900">{isLoading ? "—" : formatBytes(totalBytes)}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void refresh()}
+              disabled={isLoading}
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-white/30 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} aria-hidden="true" />
+              Làm mới
+            </button>
+            <button
+              type="button"
+              onClick={() => void createBackup()}
+              disabled={isCreating || isLoading}
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-md bg-white px-3 text-xs font-bold text-[#026aa7] transition-colors hover:bg-sky-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isCreating ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" /> : <DatabaseBackup className="h-4 w-4" aria-hidden="true" />}
+              {isCreating ? "Đang sao lưu…" : "Tạo bản sao lưu"}
+            </button>
           </div>
-        </Panel>
-      </div>
+        </div>
+      </section>
 
-      <Panel padding="none" className="overflow-hidden">
+      <Panel padding="none" className="overflow-hidden rounded-xl border-slate-200/90 shadow-2xs">
         <div className="flex flex-col gap-2 border-b border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <h2 className="font-semibold text-slate-900">Danh sách bản sao lưu</h2>
@@ -224,7 +214,7 @@ export function BackupsView({
             type="button"
             onClick={() => void refresh()}
             disabled={isLoading}
-            className="inline-flex items-center gap-1.5 self-start rounded-md px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50 sm:self-auto"
+            className="inline-flex min-h-9 items-center gap-1.5 self-start rounded-md border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] disabled:cursor-not-allowed disabled:opacity-50 sm:self-auto"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
             Tải lại
@@ -234,7 +224,7 @@ export function BackupsView({
         {loadError && (
           <div role="alert" className="flex flex-col gap-2 border-b border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 sm:flex-row sm:items-center sm:justify-between">
             <span>{loadError}</span>
-            <button type="button" onClick={() => void refresh()} className="self-start font-semibold underline sm:self-auto">
+            <button type="button" onClick={() => void refresh()} disabled={isLoading} className="inline-flex min-h-9 items-center justify-center rounded-md border border-rose-300 bg-white px-3 font-semibold transition-colors hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 disabled:cursor-not-allowed disabled:opacity-50 sm:self-auto">
               Thử lại
             </button>
           </div>
@@ -301,7 +291,7 @@ export function BackupsView({
         </div>
       </Panel>
 
-      <Panel padding="sm" className="flex items-start gap-3 border-amber-200 bg-amber-50/70">
+      <Panel padding="sm" className="flex items-start gap-3 rounded-xl border-slate-200/90 shadow-2xs">
         <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
         <div className="text-xs leading-relaxed text-amber-900">
           <p className="font-semibold">Lưu ý khi khôi phục</p>

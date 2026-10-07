@@ -1,5 +1,4 @@
 import { useState, useEffect, FormEvent } from "react";
-import { PageHeader } from "../../../components/common/PageHeader";
 import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { formatDateTimeVi } from "../../../lib/formatDateTimeVi";
@@ -30,7 +29,6 @@ import {
   Users,
   Building,
   GraduationCap,
-  Calendar,
 } from "lucide-react";
 
 interface AdminProfileData {
@@ -50,9 +48,9 @@ interface AdminProfileData {
 const DEFAULT_ADMIN_PROFILE: AdminProfileData = {
   fullName: "",
   adminCode: "",
-  roleTitle: "Quản trị khoa",
+  roleTitle: "",
   department: "",
-  faculty: "Khoa Công nghệ Thông tin",
+  faculty: "",
   email: "",
   phone: "",
   office: "",
@@ -73,7 +71,11 @@ export const AccountView = ({
   const { user } = useAuth();
   const { isSuperAdmin, roleDisplayLabel } = useAdminCapabilities();
   const { selectedSemesterId, selectedDepartmentId } = useSemester();
-  const { stats: navStats } = useAdminNavStats(true, selectedSemesterId, selectedDepartmentId);
+  const {
+    stats: navStats,
+    isLoading: isNavStatsLoading,
+  } = useAdminNavStats(true, selectedSemesterId, selectedDepartmentId);
+  const hasLoadedNavStats = !isNavStatsLoading && !isSuperAdmin;
 
   const [activeTab, setActiveTab] = useState<"profile" | "security" | "preferences" | "activity">("profile");
 
@@ -137,7 +139,7 @@ export const AccountView = ({
     });
     setProfile(nextProfile);
     if (!isEditing) setTempProfile(nextProfile);
-  }, [user, isEditing]);
+  }, [user, isEditing, isSuperAdmin]);
 
   useEffect(() => {
     try {
@@ -273,34 +275,37 @@ export const AccountView = ({
       case 2:
         return { label: "Trung bình", score: 2, color: "bg-amber-500", text: "text-amber-600" };
       case 3:
-        return { label: "Khá mạnh", score: 3, color: "bg-blue-500", text: "text-blue-600" };
+        return { label: "Khá mạnh", score: 3, color: "bg-[#026aa7]", text: "text-[#026aa7]" };
       case 4:
       default:
-        return { label: "Rất mạnh", score: 4, color: "bg-emerald-500", text: "text-emerald-600" };
+        return { label: "Rất mạnh", score: 4, color: "bg-[#7bc043]", text: "text-[#548a28]" };
     }
   };
 
   const passStrength = getPasswordStrength(newPassword);
 
   return (
-    <div className="space-y-6 max-w-[1400px] mx-auto min-w-0 font-sans pb-12 animate-in fade-in">
-      {/* 1. PAGE HEADER */}
-      <PageHeader
-        icon={User}
-        title={
-          isSuperAdmin
-            ? "Quản lý Tài khoản & Hồ sơ Quản trị hệ thống"
-            : "Quản lý Tài khoản & Hồ sơ Quản trị khoa"
-        }
-        subtitle={
-          isSuperAdmin
-            ? "Quản lý thông tin quản trị hệ thống, cập nhật bảo mật tài khoản và theo dõi lịch sử hoạt động toàn hệ thống."
-            : "Quản lý thông tin quản trị khoa, cập nhật bảo mật tài khoản và theo dõi lịch sử hoạt động của khoa."
-        }
-      />
+    <div className="mx-auto max-w-[1300px] min-w-0 space-y-4 pb-12 font-sans">
+      <section className="overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-2xs">
+        <div className="flex items-center gap-2 bg-[#026aa7] px-4 py-3 text-white">
+          <User className="h-5 w-5 shrink-0 text-white/90" aria-hidden="true" />
+          <div className="min-w-0">
+            <h1 className="text-base font-bold tracking-wide">
+              {isSuperAdmin
+                ? "Quản lý Tài khoản & Hồ sơ Quản trị hệ thống"
+                : "Quản lý Tài khoản & Hồ sơ Quản trị khoa"}
+            </h1>
+            <p className="mt-0.5 text-xs text-white/80">
+              {isSuperAdmin
+                ? "Quản lý thông tin quản trị hệ thống, cập nhật bảo mật tài khoản và theo dõi lịch sử hoạt động toàn hệ thống."
+                : "Quản lý thông tin quản trị khoa, cập nhật bảo mật tài khoản và theo dõi lịch sử hoạt động của khoa."}
+            </p>
+          </div>
+        </div>
+      </section>
 
       {/* 2. ADMIN PROFILE HERO CARD */}
-      <div className="bg-white rounded-lg border border-slate-200/80 shadow-xs p-6 relative overflow-hidden">
+      <div className="relative overflow-hidden rounded-xl border border-slate-200/90 bg-white p-5 shadow-2xs md:p-6">
         <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
           {/* Avatar Container */}
           <div className="relative group shrink-0">
@@ -308,7 +313,7 @@ export const AccountView = ({
               name={profile.fullName || roleDisplayLabel}
               seed={profile.email || profile.fullName}
               size={112}
-              className="text-2xl sm:text-3xl ring-4 ring-blue-50"
+              className="text-2xl sm:text-3xl ring-4 ring-[#026aa7]"
             />
             <button
               type="button"
@@ -316,7 +321,7 @@ export const AccountView = ({
                 setNewAvatarInput(profile.avatarUrl || "");
                 setShowAvatarModal(true);
               }}
-              className="absolute bottom-0 right-0 p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-xs border-2 border-white transition-colors"
+              className="absolute bottom-0 right-0 p-2 bg-[#026aa7] hover:bg-[#025a8e] text-white rounded-full shadow-xs border-2 border-white transition-colors"
               title="Đổi ảnh đại diện"
             >
               <Camera className="w-4 h-4" />
@@ -329,18 +334,18 @@ export const AccountView = ({
               <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
                 {profile.fullName}
               </h1>
-              <span className="px-2.5 py-0.5 bg-blue-50 text-blue-800 text-xs font-bold rounded-md border border-blue-200 font-mono">
+              <span className="px-2.5 py-0.5 bg-[#026aa7]/5 text-[#025a8e] text-xs font-bold rounded-md border border-[#026aa7]/20 font-mono">
                 {profile.adminCode}
               </span>
-              <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-800 text-xs font-bold rounded-md border border-emerald-200 flex items-center gap-1">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+              <span className="flex items-center gap-1 rounded-md border border-[#7bc043]/40 bg-[#7bc043]/10 px-2.5 py-0.5 text-xs font-bold text-slate-800">
+                <ShieldCheck className="h-3.5 w-3.5 text-[#548a28]" aria-hidden="true" />
                 {profile.roleTitle}
               </span>
             </div>
 
             <div className="flex flex-wrap items-center justify-center md:justify-start gap-y-1 gap-x-4 text-xs text-slate-600 font-medium">
               <span className="flex items-center gap-1 text-slate-800 font-bold">
-                <Building2 className="w-3.5 h-3.5 text-blue-600" />
+                <Building2 className="w-3.5 h-3.5 text-[#026aa7]" />
                 {profile.faculty}
               </span>
               <span className="text-slate-300 hidden sm:inline">•</span>
@@ -352,11 +357,11 @@ export const AccountView = ({
 
             <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 text-xs text-slate-600 pt-1 font-medium">
               <span className="flex items-center gap-1.5">
-                <Mail className="w-3.5 h-3.5 text-blue-600" />
+                <Mail className="w-3.5 h-3.5 text-[#026aa7]" />
                 {profile.email}
               </span>
               <span className="flex items-center gap-1.5">
-                <Phone className="w-3.5 h-3.5 text-emerald-600" />
+                <Phone className="w-3.5 h-3.5 text-[#548a28]" />
                 {profile.phone}
               </span>
               <span className="flex items-center gap-1.5">
@@ -369,14 +374,14 @@ export const AccountView = ({
       </div>
 
       {/* 3. TABS NAVIGATION */}
-      <div className="flex items-center gap-2 border-b border-slate-200 overflow-x-auto no-scrollbar">
+      <div className="flex items-center gap-1 overflow-x-auto rounded-xl border border-slate-200/90 bg-white p-1.5 shadow-2xs no-scrollbar">
         <button
           type="button"
           onClick={() => setActiveTab("profile")}
-          className={`px-4 py-2.5 font-bold text-xs flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${
+          className={`inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-md px-3 py-2.5 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] ${
             activeTab === "profile"
-              ? "border-blue-600 text-blue-700 bg-blue-50/50 rounded-t-md"
-              : "border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+              ? "bg-[#026aa7]/5 text-[#026aa7]"
+              : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
           }`}
         >
           <User className="w-4 h-4" />
@@ -386,10 +391,10 @@ export const AccountView = ({
         <button
           type="button"
           onClick={() => setActiveTab("security")}
-          className={`px-4 py-2.5 font-bold text-xs flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${
+          className={`inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-md px-3 py-2.5 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] ${
             activeTab === "security"
-              ? "border-blue-600 text-blue-700 bg-blue-50/50 rounded-t-md"
-              : "border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+              ? "bg-[#026aa7]/5 text-[#026aa7]"
+              : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
           }`}
         >
           <Lock className="w-4 h-4" />
@@ -399,10 +404,10 @@ export const AccountView = ({
         <button
           type="button"
           onClick={() => setActiveTab("preferences")}
-          className={`px-4 py-2.5 font-bold text-xs flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${
+          className={`inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-md px-3 py-2.5 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] ${
             activeTab === "preferences"
-              ? "border-blue-600 text-blue-700 bg-blue-50/50 rounded-t-md"
-              : "border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+              ? "bg-[#026aa7]/5 text-[#026aa7]"
+              : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
           }`}
         >
           <Bell className="w-4 h-4" />
@@ -412,10 +417,10 @@ export const AccountView = ({
         <button
           type="button"
           onClick={() => setActiveTab("activity")}
-          className={`px-4 py-2.5 font-bold text-xs flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${
+          className={`inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-md px-3 py-2.5 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] ${
             activeTab === "activity"
-              ? "border-blue-600 text-blue-700 bg-blue-50/50 rounded-t-md"
-              : "border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+              ? "bg-[#026aa7]/5 text-[#026aa7]"
+              : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
           }`}
         >
           <History className="w-4 h-4" />
@@ -424,16 +429,16 @@ export const AccountView = ({
       </div>
 
       {/* 4. TAB CONTENTS & SIDEBAR */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
         {/* MAIN COLUMN (8 COLS) */}
         <div className="lg:col-span-8 space-y-6">
           {/* TAB 1: PROFILE TAB */}
           {activeTab === "profile" && (
-            <div className="bg-white rounded-lg border border-slate-200/80 shadow-xs p-5 md:p-6 space-y-5">
+            <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 md:p-6 space-y-5">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <div>
                   <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                    <User className="w-4 h-4 text-blue-600" />
+                    <User className="w-4 h-4 text-[#026aa7]" />
                     Chi tiết Hồ sơ {roleDisplayLabel}
                   </h2>
                   <p className="text-xs text-slate-500 font-medium">
@@ -448,7 +453,7 @@ export const AccountView = ({
                       setTempProfile(profile);
                       setIsEditing(true);
                     }}
-                    className="px-3.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-md border border-blue-200 transition-colors"
+                    className="px-3.5 py-1.5 bg-[#026aa7]/5 hover:bg-[#025a8e]/9 text-[#026aa7] font-bold text-xs rounded-md border border-[#026aa7]/20 transition-colors"
                   >
                     Chỉnh sửa hồ sơ
                   </button>
@@ -480,7 +485,7 @@ export const AccountView = ({
                         onChange={(e) =>
                           setTempProfile({ ...tempProfile, fullName: e.target.value })
                         }
-                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-900 outline-none focus:bg-white focus:border-blue-500"
+                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-900 outline-none focus:bg-white focus:border-[#026aa7]"
                       />
                     </div>
 
@@ -506,7 +511,7 @@ export const AccountView = ({
                         onChange={(e) =>
                           setTempProfile({ ...tempProfile, roleTitle: e.target.value })
                         }
-                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-md font-medium text-slate-900 outline-none focus:bg-white focus:border-blue-500"
+                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-md font-medium text-slate-900 outline-none focus:bg-white focus:border-[#026aa7]"
                       />
                     </div>
 
@@ -520,7 +525,7 @@ export const AccountView = ({
                         onChange={(e) =>
                           setTempProfile({ ...tempProfile, faculty: e.target.value })
                         }
-                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-md font-medium text-slate-900 outline-none focus:bg-white focus:border-blue-500"
+                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-md font-medium text-slate-900 outline-none focus:bg-white focus:border-[#026aa7]"
                       />
                     </div>
 
@@ -535,7 +540,7 @@ export const AccountView = ({
                         onChange={(e) =>
                           setTempProfile({ ...tempProfile, email: e.target.value })
                         }
-                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-md font-medium text-slate-900 outline-none focus:bg-white focus:border-blue-500"
+                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-md font-medium text-slate-900 outline-none focus:bg-white focus:border-[#026aa7]"
                       />
                     </div>
 
@@ -549,7 +554,7 @@ export const AccountView = ({
                         onChange={(e) =>
                           setTempProfile({ ...tempProfile, phone: e.target.value })
                         }
-                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-md font-medium text-slate-900 outline-none focus:bg-white focus:border-blue-500"
+                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-md font-medium text-slate-900 outline-none focus:bg-white focus:border-[#026aa7]"
                       />
                     </div>
 
@@ -563,7 +568,7 @@ export const AccountView = ({
                         onChange={(e) =>
                           setTempProfile({ ...tempProfile, department: e.target.value })
                         }
-                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-md font-medium text-slate-900 outline-none focus:bg-white focus:border-blue-500"
+                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-md font-medium text-slate-900 outline-none focus:bg-white focus:border-[#026aa7]"
                       />
                     </div>
 
@@ -577,7 +582,7 @@ export const AccountView = ({
                         onChange={(e) =>
                           setTempProfile({ ...tempProfile, office: e.target.value })
                         }
-                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-md font-medium text-slate-900 outline-none focus:bg-white focus:border-blue-500"
+                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-md font-medium text-slate-900 outline-none focus:bg-white focus:border-[#026aa7]"
                       />
                     </div>
 
@@ -591,7 +596,7 @@ export const AccountView = ({
                         onChange={(e) =>
                           setTempProfile({ ...tempProfile, bio: e.target.value })
                         }
-                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-md font-medium text-slate-900 outline-none focus:bg-white focus:border-blue-500 resize-y leading-relaxed"
+                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-md font-medium text-slate-900 outline-none focus:bg-white focus:border-[#026aa7] resize-y leading-relaxed"
                       />
                     </div>
                   </div>
@@ -606,7 +611,7 @@ export const AccountView = ({
                     </button>
                     <button
                       type="submit"
-                      className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-md shadow-xs flex items-center gap-1.5"
+                      className="px-5 py-2 bg-[#026aa7] hover:bg-[#025a8e] text-white font-bold rounded-md shadow-xs flex items-center gap-1.5"
                     >
                       <Save className="w-3.5 h-3.5" />
                       <span>Lưu thông tin hồ sơ</span>
@@ -627,7 +632,7 @@ export const AccountView = ({
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
                         Mã {roleDisplayLabel}
                       </span>
-                      <p className="font-mono font-bold text-blue-700">{profile.adminCode}</p>
+                      <p className="font-mono font-bold text-[#026aa7]">{profile.adminCode}</p>
                     </div>
 
                     <div className="p-3 bg-slate-50 rounded-md border border-slate-100">
@@ -674,8 +679,8 @@ export const AccountView = ({
                   </div>
 
                   {profile.bio && (
-                    <div className="p-3.5 bg-blue-50/50 rounded-md border border-blue-100">
-                      <span className="text-[10px] font-bold text-blue-900 uppercase tracking-wider block mb-1">
+                    <div className="p-3.5 bg-[#026aa7]/3 rounded-md border border-[#026aa7]/14">
+                      <span className="text-[10px] font-bold text-[#005082] uppercase tracking-wider block mb-1">
                         Ghi chú phạm vi phụ trách:
                       </span>
                       <p className="text-slate-700 font-medium leading-relaxed">
@@ -692,9 +697,9 @@ export const AccountView = ({
           {activeTab === "security" && (
             <div className="space-y-6">
               {/* Change Password Card */}
-              <div className="bg-white rounded-lg border border-slate-200/80 shadow-xs p-5 md:p-6 space-y-4">
+              <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 md:p-6 space-y-4">
                 <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
-                  <div className="p-2 bg-blue-50 text-blue-600 rounded-md">
+                  <div className="p-2 bg-[#026aa7]/5 text-[#026aa7] rounded-md">
                     <KeyRound className="w-5 h-5" />
                   </div>
                   <div>
@@ -719,7 +724,7 @@ export const AccountView = ({
                         value={currentPassword}
                         onChange={(e) => setCurrentPassword(e.target.value)}
                         placeholder="Nhập mật khẩu hiện đang sử dụng..."
-                        className="w-full p-2.5 pr-10 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-blue-500 font-medium"
+                        className="w-full p-2.5 pr-10 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-[#026aa7] font-medium"
                       />
                       <button
                         type="button"
@@ -742,7 +747,7 @@ export const AccountView = ({
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
                         placeholder="Tối thiểu 8 ký tự..."
-                        className="w-full p-2.5 pr-10 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-blue-500 font-medium"
+                        className="w-full p-2.5 pr-10 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-[#026aa7] font-medium"
                       />
                       <button
                         type="button"
@@ -792,7 +797,7 @@ export const AccountView = ({
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         placeholder="Nhập lại mật khẩu mới..."
-                        className="w-full p-2.5 pr-10 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-blue-500 font-medium"
+                        className="w-full p-2.5 pr-10 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-[#026aa7] font-medium"
                       />
                       <button
                         type="button"
@@ -808,7 +813,7 @@ export const AccountView = ({
                     <button
                       type="submit"
                       disabled={isChangingPass}
-                      className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-md shadow-xs flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                      className="px-5 py-2.5 bg-[#026aa7] hover:bg-[#025a8e] text-white font-bold rounded-md shadow-xs flex items-center gap-1.5 transition-colors disabled:opacity-50"
                     >
                       <Lock className="w-3.5 h-3.5" />
                       <span>{isChangingPass ? "Đang cập nhật..." : "Cập nhật mật khẩu mới"}</span>
@@ -818,10 +823,10 @@ export const AccountView = ({
               </div>
 
               {/* Active Sessions Card */}
-              <div className="bg-white rounded-lg border border-slate-200/80 shadow-xs p-5 md:p-6 space-y-4">
+              <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 md:p-6 space-y-4">
                 <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                   <div className="flex items-center gap-2.5">
-                    <div className="p-2 bg-emerald-50 text-emerald-600 rounded-md">
+                    <div className="rounded-md bg-[#7bc043]/10 p-2 text-[#548a28]">
                       <Laptop className="w-5 h-5" />
                     </div>
                     <div>
@@ -853,7 +858,7 @@ export const AccountView = ({
                           <Laptop className="w-4 h-4 text-slate-600" />
                           <span className="font-bold text-slate-900">{sess.device}</span>
                           {sess.isCurrent && (
-                            <span className="px-2 py-0.5 bg-blue-600 text-white text-[10px] font-bold rounded">
+                            <span className="px-2 py-0.5 bg-[#026aa7] text-white text-[10px] font-bold rounded">
                               Phiên hiện tại
                             </span>
                           )}
@@ -875,7 +880,7 @@ export const AccountView = ({
 
           {/* TAB 3: PREFERENCES TAB */}
           {activeTab === "preferences" && (
-            <div className="bg-white rounded-lg border border-slate-200/80 shadow-xs p-5 md:p-6 space-y-5">
+            <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 md:p-6 space-y-5">
               <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
                 <div className="p-2 bg-amber-50 text-amber-600 rounded-md">
                   <Bell className="w-5 h-5" />
@@ -908,7 +913,7 @@ export const AccountView = ({
                       setPrefEmailNotif(emailNotif);
                       savePreferences({ emailNotif, accountRequests: prefAccountRequests, reportDeadlines: prefReportDeadlines, weeklyDigest: prefWeeklyDigest });
                     }}
-                    className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer"
+                    className="w-4 h-4 text-[#026aa7] rounded border-slate-300 focus:ring-[#026aa7] cursor-pointer"
                   />
                 </label>
 
@@ -929,7 +934,7 @@ export const AccountView = ({
                       setPrefAccountRequests(accountRequests);
                       savePreferences({ emailNotif: prefEmailNotif, accountRequests, reportDeadlines: prefReportDeadlines, weeklyDigest: prefWeeklyDigest });
                     }}
-                    className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer"
+                    className="w-4 h-4 text-[#026aa7] rounded border-slate-300 focus:ring-[#026aa7] cursor-pointer"
                   />
                 </label>
 
@@ -950,7 +955,7 @@ export const AccountView = ({
                       setPrefReportDeadlines(reportDeadlines);
                       savePreferences({ emailNotif: prefEmailNotif, accountRequests: prefAccountRequests, reportDeadlines, weeklyDigest: prefWeeklyDigest });
                     }}
-                    className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer"
+                    className="w-4 h-4 text-[#026aa7] rounded border-slate-300 focus:ring-[#026aa7] cursor-pointer"
                   />
                 </label>
 
@@ -971,7 +976,7 @@ export const AccountView = ({
                       setPrefWeeklyDigest(weeklyDigest);
                       savePreferences({ emailNotif: prefEmailNotif, accountRequests: prefAccountRequests, reportDeadlines: prefReportDeadlines, weeklyDigest });
                     }}
-                    className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer"
+                    className="w-4 h-4 text-[#026aa7] rounded border-slate-300 focus:ring-[#026aa7] cursor-pointer"
                   />
                 </label>
               </div>
@@ -980,7 +985,7 @@ export const AccountView = ({
 
           {/* TAB 4: ACTIVITY LOGS TAB */}
           {activeTab === "activity" && (
-            <div className="bg-white rounded-lg border border-slate-200/80 shadow-xs p-5 md:p-6 space-y-4">
+            <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 md:p-6 space-y-4">
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                 <div className="flex items-center gap-2.5">
                   <div className="p-2 bg-purple-50 text-purple-600 rounded-md">
@@ -1012,7 +1017,7 @@ export const AccountView = ({
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
                         <span
-                          className="px-2 py-0.5 rounded text-[10px] font-bold border bg-blue-50 text-blue-700 border-blue-100"
+                          className="px-2 py-0.5 rounded text-[10px] font-bold border bg-[#026aa7]/5 text-[#026aa7] border-[#026aa7]/14"
                         >
                           {log.module}
                         </span>
@@ -1035,28 +1040,20 @@ export const AccountView = ({
         {/* SIDEBAR COLUMN (4 COLS) */}
         <div className="lg:col-span-4 space-y-6">
           {/* SCOPE OF MANAGEMENT CARD */}
-          <div className="bg-white rounded-lg border border-slate-200/80 shadow-xs p-5 space-y-4 text-xs">
+          <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 space-y-4 text-xs">
             <h3 className="font-bold text-slate-900 flex items-center gap-2 pb-2 border-b border-slate-100">
-              <Layers className="w-4 h-4 text-blue-600" />
+              <Layers className="w-4 h-4 text-[#026aa7]" />
               Tổng quan Phạm vi Quản lý
             </h3>
 
             <div className="space-y-2.5">
-              <div className="p-3 bg-blue-50/60 rounded-md border border-blue-100 flex items-center justify-between">
+              <div className="flex items-center justify-between rounded-md border border-[#7bc043]/30 bg-[#7bc043]/10 p-3">
                 <div className="flex items-center gap-2.5">
-                  <Calendar className="w-4 h-4 text-blue-600" />
-                  <span className="font-medium text-slate-700">Đợt thực tập hiện hành</span>
-                </div>
-                <span className="font-bold text-blue-900">1 đợt chính</span>
-              </div>
-
-              <div className="p-3 bg-emerald-50/60 rounded-md border border-emerald-100 flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <GraduationCap className="w-4 h-4 text-emerald-600" />
+                  <GraduationCap className="w-4 h-4 text-[#548a28]" />
                   <span className="font-medium text-slate-700">Tổng sinh viên quản lý</span>
                 </div>
-                <span className="font-bold text-emerald-900">
-                  {navStats?.studentCount?.toLocaleString("vi-VN") || "0"} SV
+                <span className="font-bold text-slate-900">
+                  {hasLoadedNavStats ? `${navStats.studentCount.toLocaleString("vi-VN")} SV` : "—"}
                 </span>
               </div>
 
@@ -1066,7 +1063,7 @@ export const AccountView = ({
                   <span className="font-medium text-slate-700">Giảng viên hướng dẫn</span>
                 </div>
                 <span className="font-bold text-purple-900">
-                  {navStats?.lecturerCount || 0} Giảng viên
+                  {hasLoadedNavStats ? `${navStats.lecturerCount} Giảng viên` : "—"}
                 </span>
               </div>
 
@@ -1076,62 +1073,62 @@ export const AccountView = ({
                   <span className="font-medium text-slate-700">Doanh nghiệp liên kết</span>
                 </div>
                 <span className="font-bold text-amber-900">
-                  {navStats?.companyCount || 0} Đối tác
+                  {hasLoadedNavStats ? `${navStats.companyCount} Đối tác` : "—"}
                 </span>
               </div>
             </div>
           </div>
 
           {/* ADMIN PRIVILEGES CARD */}
-          <div className="bg-white rounded-lg border border-slate-200/80 shadow-xs p-5 space-y-3 text-xs">
+          <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 space-y-3 text-xs">
             <h3 className="font-bold text-slate-900 flex items-center gap-2 pb-2 border-b border-slate-100">
-              <ShieldCheck className="w-4 h-4 text-emerald-600" />
+              <ShieldCheck className="w-4 h-4 text-[#548a28]" />
               Quyền hạn {roleDisplayLabel} (Privileges)
             </h3>
 
             {isSuperAdmin ? (
               <ul className="space-y-2 text-slate-600 font-medium">
                 <li className="flex items-start gap-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                  <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#548a28]" />
                   <span>Quản trị toàn bộ hệ thống &amp; cấu hình danh mục các Khoa</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                  <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#548a28]" />
                   <span>Quản lý &amp; phân quyền tài khoản Quản trị khoa</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                  <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#548a28]" />
                   <span>Xem tổng quan dữ liệu và tiến độ thực tập toàn trường (Chế độ chỉ xem)</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                  <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#548a28]" />
                   <span>Cấu hình tham số hệ thống &amp; tiếp nhận yêu cầu cấp tài khoản</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                  <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#548a28]" />
                   <span>Xuất dữ liệu thống kê tổng hợp toàn trường</span>
                 </li>
               </ul>
             ) : (
               <ul className="space-y-2 text-slate-600 font-medium">
                 <li className="flex items-start gap-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                  <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#548a28]" />
                   <span>Toàn quyền tạo, cấu hình &amp; chốt đợt thực tập của Khoa</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                  <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#548a28]" />
                   <span>Phân công Giảng viên phụ trách nhóm sinh viên trong Khoa</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                  <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#548a28]" />
                   <span>Quản lý danh sách sinh viên, giảng viên và doanh nghiệp liên kết</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                  <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#548a28]" />
                   <span>Cấp và quản lý tài khoản sinh viên / giảng viên trong Khoa</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                  <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#548a28]" />
                   <span>Xuất bảng điểm tổng kết và lưu trữ hồ sơ Khoa</span>
                 </li>
               </ul>
@@ -1155,7 +1152,7 @@ export const AccountView = ({
               value={newAvatarInput}
               onChange={(e) => setNewAvatarInput(e.target.value)}
               placeholder="https://example.com/avatar.jpg"
-              className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-md font-medium outline-none focus:bg-white focus:border-blue-500"
+              className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-md font-medium outline-none focus:bg-white focus:border-[#026aa7]"
             />
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
               <button
@@ -1168,7 +1165,7 @@ export const AccountView = ({
               <button
                 type="button"
                 onClick={handleSaveAvatar}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-md shadow-xs"
+                className="px-4 py-2 bg-[#026aa7] hover:bg-[#025a8e] text-white font-bold rounded-md shadow-xs"
               >
                 Lưu ảnh đại diện
               </button>

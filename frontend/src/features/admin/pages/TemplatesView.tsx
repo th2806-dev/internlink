@@ -21,12 +21,12 @@ import { documentService } from "../../../services/document.service";
 import { adminSemestersService, type BackendSemesterDto } from "../../../services/adminSemesters.service";
 import { adminDepartmentsService, type DepartmentDto } from "../../../services/adminDepartments.service";
 import { useAuth } from "../../../contexts/AuthContext";
-import type { DocumentListItemDto, TemplateStatsDto } from "../../../types/api";
+import type { DocumentListItemDto } from "../../../types/api";
 import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
 import { EmptyState } from "../../../components/common/EmptyState";
-import { PageHeader } from "../../../components/common/PageHeader";
 import { Panel } from "../../../components/common/Panel";
 import { Toolbar } from "../../../components/common/Toolbar";
+import { RequestErrorState } from "../../../components/common/RequestErrorState";
 
 import type { ToastType } from "../../../contexts/ToastContext";
 
@@ -45,13 +45,14 @@ const CATEGORIES = [
 ];
 
 export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => {
-  const { canMutateOps, isSuperAdmin } = useAdminCapabilities();
+  const { canMutateOps } = useAdminCapabilities();
   const { user } = useAuth();
   const [templates, setTemplates] = useState<DocumentListItemDto[]>([]);
   const [semesters, setSemesters] = useState<BackendSemesterDto[]>([]);
   const [departments, setDepartments] = useState<DepartmentDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState("");
 
   // Filters
   const [searchTerm, setSearchTerm] = useState("");
@@ -96,6 +97,8 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
   const loadData = async () => {
     try {
       setRefreshing(true);
+      if (templates.length === 0) setLoading(true);
+      setLoadError("");
       const [tpls, sems, depts] = await Promise.all([
         documentService.getTemplates(),
         adminSemestersService.getAll().catch(() => []),
@@ -105,7 +108,9 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
       setSemesters(sems);
       setDepartments(depts.filter((department) => department.isActive));
     } catch (err: any) {
-      onShowToast?.(err?.message || "Không thể tải danh sách biểu mẫu", "danger");
+      const message = err?.message || "Không thể tải danh sách biểu mẫu.";
+      setLoadError(message);
+      onShowToast?.(message, "danger");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -275,11 +280,8 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
   const handleDownload = async (tpl: DocumentListItemDto) => {
     try {
       await documentService.download(tpl.id, tpl.fileName);
-      // Update local download count
-      setTemplates((prev) =>
-        prev.map((t) => (t.id === tpl.id ? { ...t, downloadCount: t.downloadCount + 1 } : t))
-      );
-    } catch (err: any) {
+      await loadData();
+    } catch {
       onShowToast?.("Tải xuống biểu mẫu thất bại", "danger");
     }
   };
@@ -287,10 +289,10 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
   const getFileIcon = (fileName: string) => {
     const ext = fileName.split(".").pop()?.toLowerCase();
     if (ext === "xlsx" || ext === "xls") {
-      return <FileSpreadsheet className="w-8 h-8 text-emerald-600 flex-shrink-0" />;
+      return <FileSpreadsheet className="w-8 h-8 text-[#026aa7] flex-shrink-0" />;
     }
     if (ext === "docx" || ext === "doc") {
-      return <FileType className="w-8 h-8 text-blue-600 flex-shrink-0" />;
+      return <FileType className="w-8 h-8 text-[#026aa7] flex-shrink-0" />;
     }
     if (ext === "pdf") {
       return <FileText className="w-8 h-8 text-rose-600 flex-shrink-0" />;
@@ -300,7 +302,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
 
   const getCategoryLabel = (category?: string | null) => {
     const found = CATEGORIES.find((c) => c.value === category);
-    return found ? found.label : category || "Chung";
+    return found ? found.label : category || "Chưa phân loại";
   };
 
   const normalizeFilterValue = (value?: string | null) =>
@@ -358,30 +360,62 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
   }, [templates, searchTerm, selectedSemester, selectedDept, selectedCategory, selectedStatus]);
 
   return (
-    <div className="space-y-5 max-w-[1500px] mx-auto">
-      <PageHeader
-        icon={FileText}
-        title="Thư viện biểu mẫu"
-        subtitle="Quản lý biểu mẫu sử dụng trong các kỳ thực tập."
-        actions={[
-          { label: "Làm mới", icon: RefreshCw, onClick: () => void loadData(), variant: "secondary" as const, loading: refreshing, disabled: refreshing },
-          ...(canMutateOps ? [{ label: "Nạp mẫu mặc định", icon: Sparkles, onClick: handleSeedDefaults, variant: "secondary" as const, disabled: isSubmitting }] : []),
-          ...(canMutateOps ? [{ label: "Thêm biểu mẫu", icon: Plus, onClick: () => setShowCreateModal(true), variant: "primary" as const }] : []),
-        ]}
-      />
+    <div className="mx-auto max-w-[1300px] space-y-4 pb-12">
+      <section className="overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-2xs">
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-[#026aa7] px-4 py-3 text-white">
+          <div className="flex min-w-0 items-center gap-2">
+            <FileText className="h-5 w-5 shrink-0 text-white/90" aria-hidden="true" />
+            <div className="min-w-0">
+              <h1 className="text-base font-bold tracking-wide">Thư viện biểu mẫu</h1>
+              <p className="mt-0.5 text-xs text-white/80">
+                Quản lý biểu mẫu sử dụng trong các kỳ thực tập
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void loadData()}
+              disabled={refreshing}
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-white/30 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} aria-hidden="true" />
+              Làm mới
+            </button>
+            {canMutateOps && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleSeedDefaults}
+                  disabled={isSubmitting}
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-white/30 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Sparkles className="h-4 w-4" aria-hidden="true" />
+                  Nạp mẫu mặc định
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(true)}
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-md bg-white px-3 text-xs font-bold text-[#026aa7] transition-colors hover:bg-sky-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                >
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  Thêm biểu mẫu
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </section>
 
       <Toolbar
         left={(
           <p className="text-xs font-medium text-slate-500">
-            <span className="font-bold text-slate-800">{filteredTemplates.length}</span> / {templates.length} biểu mẫu
-            <span className="mx-2 text-slate-300">·</span>
-            <span className="font-bold text-emerald-700">{templates.filter((template) => template.isPublished).length}</span> đang lưu hành
-            {refreshing && <span className="ml-2 font-semibold text-blue-600">· Đang tải…</span>}
+            {refreshing ? "Đang cập nhật danh sách biểu mẫu…" : "Danh sách biểu mẫu"}
           </p>
         )}
       />
 
-      <Panel className="space-y-4">
+      <Panel className="space-y-4 rounded-xl border-slate-200/90 shadow-2xs">
         <div className="flex flex-col gap-3 border-b border-slate-100 pb-3">
           <div>
             <h2 className="text-base font-bold tracking-tight text-slate-900">Danh sách biểu mẫu</h2>
@@ -392,19 +426,20 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
               <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
+                aria-label="Tìm biểu mẫu"
                 placeholder="Tìm tên, mô tả hoặc tên tệp…"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full rounded-md border border-slate-200 bg-slate-50 py-2 pl-8 pr-3 text-xs outline-none focus:border-blue-500 focus:bg-white"
+                className="w-full rounded-md border border-slate-200 bg-slate-50 py-2 pl-8 pr-3 text-xs outline-none focus-visible:border-[#026aa7] focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
               />
               {searchTerm && (
                 <button
                   type="button"
                   onClick={() => setSearchTerm("")}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  className="absolute right-2.5 top-1/2 inline-flex min-h-8 min-w-8 -translate-y-1/2 items-center justify-center rounded text-slate-500 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
                   aria-label="Xóa tìm kiếm"
                 >
-                  <X className="h-3.5 w-3.5" />
+                  <X className="h-3.5 w-3.5" aria-hidden="true" />
                 </button>
               )}
             </div>
@@ -412,7 +447,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
               value={selectedDept}
               onChange={(e) => setSelectedDept(e.target.value)}
               aria-label="Lọc theo khoa"
-              className="min-w-44 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700 outline-none focus:border-blue-500 focus:bg-white"
+              className="min-h-9 min-w-44 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700 outline-none focus-visible:border-[#026aa7] focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
             >
               {departmentOptions.map((department) => (
                 <option key={department.value} value={department.value}>{department.label}</option>
@@ -422,7 +457,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
               value={selectedSemester}
               onChange={(e) => setSelectedSemester(e.target.value)}
               aria-label="Lọc theo học kỳ"
-              className="min-w-44 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700 outline-none focus:border-blue-500 focus:bg-white"
+              className="min-h-9 min-w-44 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700 outline-none focus-visible:border-[#026aa7] focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
             >
               <option value="">Tất cả học kỳ</option>
               {semesters.map((semester) => (
@@ -433,7 +468,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
               aria-label="Lọc theo danh mục"
-              className="min-w-44 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700 outline-none focus:border-blue-500 focus:bg-white"
+              className="min-h-9 min-w-44 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700 outline-none focus-visible:border-[#026aa7] focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
             >
               {CATEGORIES.map((category) => (
                 <option key={category.value} value={category.value}>{category.label}</option>
@@ -443,7 +478,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value as typeof selectedStatus)}
               aria-label="Lọc theo trạng thái ban hành"
-              className="min-w-36 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700 outline-none focus:border-blue-500 focus:bg-white"
+              className="min-h-9 min-w-36 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700 outline-none focus-visible:border-[#026aa7] focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
             >
               <option value="all">Mọi trạng thái</option>
               <option value="published">Đang lưu hành</option>
@@ -452,22 +487,42 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
           </div>
         </div>
 
+        {loadError && templates.length === 0 ? (
+          <RequestErrorState
+            title="Không thể tải thư viện biểu mẫu"
+            message={loadError}
+            onRetry={() => void loadData()}
+            retrying={refreshing}
+          />
+        ) : (
+          <>
+        {loadError && (
+          <RequestErrorState
+            title="Không thể cập nhật thư viện biểu mẫu"
+            message={loadError}
+            onRetry={() => void loadData()}
+            retrying={refreshing}
+            className="p-4 sm:p-5"
+          />
+        )}
         {loading ? (
           <div className="flex items-center justify-center gap-2 py-12 text-sm text-slate-500">
-            <RefreshCw className="h-4 w-4 animate-spin text-blue-600" />
+            <RefreshCw className="h-4 w-4 animate-spin text-[#026aa7]" aria-hidden="true" />
             <span>Đang tải biểu mẫu…</span>
           </div>
         ) : filteredTemplates.length === 0 ? (
           <div>
             <EmptyState
               icon={FileText}
-              title="Không tìm thấy biểu mẫu phù hợp"
-              description="Chưa có biểu mẫu phù hợp với tiêu chí lọc hoặc chưa có biểu mẫu nào được tạo."
-              action={canMutateOps ? {
+              title={templates.length === 0 ? "Chưa có biểu mẫu" : "Không tìm thấy biểu mẫu phù hợp"}
+              description={templates.length === 0
+                ? "Thư viện chưa có biểu mẫu nào."
+                : "Không có biểu mẫu phù hợp với tiêu chí tìm kiếm và bộ lọc hiện tại."}
+              action={templates.length === 0 && canMutateOps ? {
                 label: "Thêm biểu mẫu mới",
                 onClick: () => setShowCreateModal(true),
               } : undefined}
-              secondaryAction={{
+              secondaryAction={templates.length > 0 ? {
                 label: "Xóa bộ lọc tìm kiếm",
                 onClick: () => {
                   setSearchTerm("");
@@ -476,7 +531,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
                   setSelectedCategory("");
                   setSelectedStatus("all");
                 },
-              }}
+              } : undefined}
             />
           </div>
         ) : (
@@ -502,9 +557,13 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
                         {getFileIcon(tpl.fileName)}
                         <div className="space-y-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-semibold text-slate-800 hover:text-blue-600 transition cursor-pointer" onClick={() => handleDownload(tpl)}>
+                            <button
+                              type="button"
+                              className="text-left font-semibold text-slate-800 transition hover:text-[#026aa7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
+                              onClick={() => handleDownload(tpl)}
+                            >
                               {tpl.title}
-                            </span>
+                            </button>
                             {tpl.isRequired && (
                               <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-50 text-rose-600 border border-rose-100">
                                 Bắt buộc nộp
@@ -532,7 +591,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
                               Khoa: {tpl.department}
                             </span>
                           ) : (
-                            <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 font-medium">
+                            <span className="px-2 py-0.5 rounded-md bg-[#026aa7]/5 text-[#026aa7] font-medium">
                               Toàn trường
                             </span>
                           )}
@@ -556,7 +615,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
 
                     {/* Version */}
                     <td className="px-3 py-3 text-center">
-                      <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-600 border border-indigo-100">
+                      <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#026aa7]/5 text-[#026aa7] border border-[#026aa7]/14">
                         v{tpl.version || "1.0"}
                       </span>
                     </td>
@@ -564,13 +623,13 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
                     {/* Published Status */}
                     <td className="px-3 py-3 text-center">
                       {tpl.isPublished ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-100">
-                          <Check className="w-3 h-3 text-emerald-600" />
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-[#f2f8eb] text-[#4f7d1b] border border-[#dcebc9]">
+                          <Check className="w-3 h-3 text-[#4f7d1b]" aria-hidden="true" />
                           <span>Lưu hành</span>
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-100" title={tpl.archiveReason || "Đã tạm ẩn / lưu trữ"}>
-                          <Archive className="w-3 h-3 text-amber-600" />
+                          <Archive className="w-3 h-3 text-amber-600" aria-hidden="true" />
                           <span>Lưu trữ</span>
                         </span>
                       )}
@@ -588,22 +647,27 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
                     <td className="px-3 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <button
+                          type="button"
                           onClick={() => handleDownload(tpl)}
-                          className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition"
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-[#025a8e]/5 hover:text-[#026aa7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
                           title="Tải biểu mẫu về máy"
+                          aria-label={`Tải biểu mẫu ${tpl.title} về máy`}
                         >
-                          <Download className="w-4 h-4" />
+                          <Download className="w-4 h-4" aria-hidden="true" />
                         </button>
                         {canMutateOps && (
                           <>
                             <button
+                              type="button"
                               onClick={() => openEditModal(tpl)}
-                              className="p-1.5 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-amber-50 transition"
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-amber-50 hover:text-amber-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
                               title="Chỉnh sửa thông tin / cập nhật tệp"
+                              aria-label={`Chỉnh sửa biểu mẫu ${tpl.title}`}
                             >
-                              <Edit2 className="w-4 h-4" />
+                              <Edit2 className="w-4 h-4" aria-hidden="true" />
                             </button>
                             <button
+                              type="button"
                               onClick={() => handleTogglePublish(tpl)}
                               className={`p-1.5 rounded-lg transition ${
                                 tpl.isPublished
@@ -611,15 +675,18 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
                                   : "text-slate-500 hover:text-emerald-600 hover:bg-emerald-50"
                               }`}
                               title={tpl.isPublished ? "Thu hồi / Lưu trữ biểu mẫu" : "Ban hành lại biểu mẫu"}
+                              aria-label={`${tpl.isPublished ? "Lưu trữ" : "Ban hành lại"} biểu mẫu ${tpl.title}`}
                             >
-                              {tpl.isPublished ? <Archive className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+                              {tpl.isPublished ? <Archive className="w-4 h-4" aria-hidden="true" /> : <CheckCircle2 className="w-4 h-4" aria-hidden="true" />}
                             </button>
                             <button
+                              type="button"
                               onClick={() => setDeletingTemplate(tpl)}
-                              className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition"
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-rose-50 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600"
                               title="Xóa biểu mẫu"
+                              aria-label={`Xóa biểu mẫu ${tpl.title}`}
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 className="w-4 h-4" aria-hidden="true" />
                             </button>
                           </>
                         )}
@@ -631,6 +698,8 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
             </table>
           </div>
         )}
+          </>
+        )}
       </Panel>
 
       {/* Modal: Create Template */}
@@ -639,7 +708,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
           <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
               <div className="flex items-center gap-2">
-                <span className="p-2 rounded-xl bg-blue-50 text-blue-600">
+                <span className="p-2 rounded-xl bg-[#026aa7]/5 text-[#026aa7]">
                   <Upload className="w-5 h-5" />
                 </span>
                 <h2 className="text-lg font-bold text-slate-800">Thêm biểu mẫu chính thức mới</h2>
@@ -658,7 +727,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
                 <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
                   Tệp biểu mẫu (.docx, .xlsx, .pdf) <span className="text-rose-500">*</span>
                 </label>
-                <div className="border-2 border-dashed border-slate-200 hover:border-blue-400 rounded-xl p-4 text-center cursor-pointer transition bg-slate-50/50 relative">
+                <div className="border-2 border-dashed border-slate-200 hover:border-[#026aa7]/48 rounded-xl p-4 text-center cursor-pointer transition bg-slate-50/50 relative">
                   <input
                     type="file"
                     required
@@ -689,7 +758,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
                     <div className="space-y-1">
                       <Upload className="w-7 h-7 text-slate-400 mx-auto" />
                       <div className="text-xs text-slate-600">
-                        Kéo thả tệp vào đây hoặc <span className="text-blue-600 font-semibold">chọn từ máy tính</span>
+                        Kéo thả tệp vào đây hoặc <span className="text-[#026aa7] font-semibold">chọn từ máy tính</span>
                       </div>
                       <div className="text-[11px] text-slate-400">Hỗ trợ Microsoft Word, Excel, PDF</div>
                     </div>
@@ -708,7 +777,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
                   placeholder="Ví dụ: Báo cáo tổng kết công tác thực tập tốt nghiệp"
                   value={createForm.title}
                   onChange={(e) => setCreateForm({ ...createForm, title: e.target.value })}
-                  className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#026aa7]/20 focus:border-[#026aa7]"
                 />
               </div>
 
@@ -721,7 +790,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
                   <select
                     value={createForm.department}
                     onChange={(e) => setCreateForm({ ...createForm, department: e.target.value })}
-                    className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#026aa7]/20 focus:border-[#026aa7]"
                   >
                     {departmentOptions.filter((d) => d.value).map((d) => (
                       <option key={d.value} value={d.value}>
@@ -738,7 +807,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
                   <select
                     value={createForm.semesterId}
                     onChange={(e) => setCreateForm({ ...createForm, semesterId: e.target.value })}
-                    className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#026aa7]/20 focus:border-[#026aa7]"
                   >
                     <option value="">Áp dụng chung mọi kỳ</option>
                     {semesters.map((s) => (
@@ -759,7 +828,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
                   <select
                     value={createForm.category}
                     onChange={(e) => setCreateForm({ ...createForm, category: e.target.value })}
-                    className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#026aa7]/20 focus:border-[#026aa7]"
                   >
                     {CATEGORIES.filter((c) => c.value !== "").map((c) => (
                       <option key={c.value} value={c.value}>
@@ -778,7 +847,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
                     placeholder="1.0"
                     value={createForm.version}
                     onChange={(e) => setCreateForm({ ...createForm, version: e.target.value })}
-                    className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#026aa7]/20 focus:border-[#026aa7]"
                   />
                 </div>
               </div>
@@ -793,7 +862,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
                   placeholder="Ghi chú đối tượng cần sử dụng hoặc thời hạn nộp biểu mẫu..."
                   value={createForm.description}
                   onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
-                  className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-none"
+                  className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#026aa7]/20 focus:border-[#026aa7] resize-none"
                 />
               </div>
 
@@ -804,7 +873,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
                     type="checkbox"
                     checked={createForm.isRequired}
                     onChange={(e) => setCreateForm({ ...createForm, isRequired: e.target.checked })}
-                    className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300"
+                    className="w-4 h-4 rounded text-[#026aa7] focus:ring-[#026aa7] border-slate-300"
                   />
                   <span className="text-xs font-medium text-slate-700">Bắt buộc sinh viên phải nộp</span>
                 </label>
@@ -832,7 +901,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-5 py-2 text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-sm transition disabled:opacity-50"
+                  className="px-5 py-2 text-sm font-semibold bg-[#026aa7] hover:bg-[#025a8e] text-white rounded-xl shadow-sm transition disabled:opacity-50"
                 >
                   {isSubmitting ? "Đang lưu..." : "Thêm & Ban hành"}
                 </button>
@@ -872,7 +941,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
                   required
                   value={editForm.title}
                   onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
-                  className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#026aa7]/20 focus:border-[#026aa7]"
                 />
               </div>
 
@@ -909,7 +978,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
                   <select
                     value={editForm.department}
                     onChange={(e) => setEditForm({ ...editForm, department: e.target.value })}
-                    className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#026aa7]/20 focus:border-[#026aa7]"
                   >
                     {departmentOptions.filter((d) => d.value).map((d) => (
                       <option key={d.value} value={d.value}>
@@ -926,7 +995,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
                   <select
                     value={editForm.semesterId}
                     onChange={(e) => setEditForm({ ...editForm, semesterId: e.target.value })}
-                    className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#026aa7]/20 focus:border-[#026aa7]"
                   >
                     <option value="">Áp dụng chung mọi kỳ</option>
                     {semesters.map((s) => (
@@ -947,7 +1016,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
                   <select
                     value={editForm.category}
                     onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
-                    className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#026aa7]/20 focus:border-[#026aa7]"
                   >
                     {CATEGORIES.filter((c) => c.value !== "").map((c) => (
                       <option key={c.value} value={c.value}>
@@ -965,7 +1034,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
                     type="text"
                     value={editForm.version}
                     onChange={(e) => setEditForm({ ...editForm, version: e.target.value })}
-                    className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#026aa7]/20 focus:border-[#026aa7]"
                   />
                 </div>
               </div>
@@ -979,7 +1048,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
                   rows={2}
                   value={editForm.description}
                   onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                  className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-none"
+                  className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#026aa7]/20 focus:border-[#026aa7] resize-none"
                 />
               </div>
 
@@ -991,7 +1060,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
                       type="checkbox"
                       checked={editForm.isRequired}
                       onChange={(e) => setEditForm({ ...editForm, isRequired: e.target.checked })}
-                      className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300"
+                      className="w-4 h-4 rounded text-[#026aa7] focus:ring-[#026aa7] border-slate-300"
                     />
                     <span className="text-xs font-medium text-slate-700">Bắt buộc nộp</span>
                   </label>
@@ -1035,7 +1104,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-5 py-2 text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-sm transition disabled:opacity-50"
+                  className="px-5 py-2 text-sm font-semibold bg-[#026aa7] hover:bg-[#025a8e] text-white rounded-xl shadow-sm transition disabled:opacity-50"
                 >
                   {isSubmitting ? "Đang lưu..." : "Cập nhật thay đổi"}
                 </button>

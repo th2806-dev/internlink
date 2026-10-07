@@ -2,13 +2,8 @@ import { useState, useMemo } from "react";
 import {
   Bell,
   Send,
-  Calendar,
-  Clock,
   FileText,
   Paperclip,
-  Users,
-  CheckCircle2,
-  AlertTriangle,
   Eye,
   Search,
   Trash2,
@@ -16,15 +11,14 @@ import {
   RefreshCw,
   Download,
   X,
-  FileCheck,
-  GraduationCap,
-  Building2,
-  Sparkles,
   RotateCcw,
 } from "lucide-react";
-import { PageHeader } from "../../../components/common/PageHeader";
-import { KpiCard, KpiGrid } from "../../../components/common/KpiCard";
+import { Panel } from "../../../components/common/Panel";
+import { Toolbar } from "../../../components/common/Toolbar";
 import { ConfirmDialog } from "../../../components/common/ConfirmDialog";
+import { EmptyState } from "../../../components/common/EmptyState";
+import { RequestErrorState } from "../../../components/common/RequestErrorState";
+import { TableSkeleton } from "../../../components/common/SkeletonLoader";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { exportNotificationsHistoryCsv } from "../../../lib/adminNotificationsExport";
 import { useAdminNavStats } from "../../../hooks/useAdminNavStats";
@@ -37,46 +31,6 @@ import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
 
 type NotificationItem = AdminNotificationItem;
 
-
-const QUICK_TEMPLATES = [
-  {
-    label: "Nhắc hạn nộp báo cáo tuần",
-    type: "Học tập",
-    priority: "urgent" as const,
-    audience: "student" as const,
-    title: "Khẩn: Nhắc nhở thời hạn nộp Báo cáo Thực tập tuần này",
-    content:
-      "Yêu cầu tất cả sinh viên hoàn tất việc viết nhật ký công việc và nộp báo cáo tuần lên hệ thống InternLink trước 23:59 Chủ Nhật. Các trường hợp nộp trễ sẽ bị trừ điểm chuyên cần theo quy định.",
-  },
-  {
-    label: "Lịch họp Hội đồng khoa",
-    type: "Lịch trình",
-    priority: "high" as const,
-    audience: "lecturer" as const,
-    title: "Thông báo Lịch họp Hội đồng Đánh giá Thực tập",
-    content:
-      "Kính mời Quý Thầy/Cô Giảng viên hướng dẫn tham dự buổi họp tổng kết đánh giá tiến độ thực tập tại Phòng họp B1 vào lúc 09:00 Thứ Sáu tuần này. Đề nghị Quý Thầy/Cô mang theo bảng tổng hợp điểm đánh giá sơ bộ.",
-  },
-  {
-    label: "Mở đợt đăng ký doanh nghiệp",
-    type: "Học tập",
-    priority: "medium" as const,
-    audience: "student" as const,
-    title: "Thông báo Mở cổng đăng ký nguyện vọng Doanh nghiệp thực tập",
-    content:
-      "Hệ thống đã chính thức mở cổng tiếp nhận đăng ký nguyện vọng thực tập tại các Doanh nghiệp đối tác của Nhà trường. Sinh viên truy cập mục Doanh nghiệp để lựa chọn vị trí và nộp CV ứng tuyển.",
-  },
-  {
-    label: "Bảo trì nâng cấp hệ thống",
-    type: "Hệ thống",
-    priority: "medium" as const,
-    audience: "all" as const,
-    title: "Thông báo Lịch bảo trì định kỳ Cổng InternLink",
-    content:
-      "Hệ thống sẽ tạm thời bảo trì để nâng cấp tính năng và bảo mật từ 23:00 đến 02:00 sáng. Trong thời gian này các dịch vụ có thể gián đoạn. Kính mong Quý Thầy/Cô và các bạn sinh viên thông cảm.",
-  },
-];
-
 import type { ToastType } from "../../../contexts/ToastContext";
 export const NotificationsView = ({
   onShowToast,
@@ -86,10 +40,11 @@ export const NotificationsView = ({
 }) => {
   const { selectedSemesterId, selectedDepartmentId } = useSemester();
   const { stats: navStats } = useAdminNavStats(true, selectedSemesterId, selectedDepartmentId);
-  const { canMutateOps, isSuperAdmin } = useAdminCapabilities();
+  const { canMutateOps } = useAdminCapabilities();
   const {
     notifications,
     loading: isLoading,
+    error,
     refetch: loadCampaigns,
     broadcast,
     deleteCampaign,
@@ -101,7 +56,6 @@ export const NotificationsView = ({
   const [type, setType] = useState("Học tập");
   const [priority, setPriority] = useState<"low" | "medium" | "high" | "urgent">("medium");
   const [audience, setAudience] = useState<"all" | "student" | "lecturer">("all");
-  const [attachment, setAttachment] = useState<{ name: string; size: string } | null>(null);
 
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState("");
@@ -131,42 +85,12 @@ export const NotificationsView = ({
     return 0;
   }, [audience, navStats]);
 
-  const audienceLabel = useMemo(() => {
-    switch (audience) {
-      case "all":
-        return "Toàn bộ hệ thống";
-      case "lecturer":
-        return "Giảng viên";
-      case "student":
-        return "Sinh viên";
-    }
-  }, [audience]);
-
-  // Quick template filler
-  const handleApplyTemplate = (tmpl: (typeof QUICK_TEMPLATES)[0]) => {
-    setTitle(tmpl.title);
-    setContent(tmpl.content);
-    setType(tmpl.type);
-    setPriority(tmpl.priority);
-    setAudience(tmpl.audience);
-    onShowToast(`Đã áp dụng mẫu: "${tmpl.label}"`);
-  };
-
   const handleResetForm = () => {
     setTitle("");
     setContent("");
     setType("Học tập");
     setPriority("medium");
     setAudience("all");
-    setAttachment(null);
-  };
-
-  const handleAddAttachment = () => {
-    setAttachment({
-      name: "Thong_Bao_InternLink_Kem_Theo.pdf",
-      size: "1.5 MB",
-    });
-    onShowToast("Đã đính kèm tệp văn bản thành công.");
   };
 
   const handleBroadcast = async (e: React.FormEvent) => {
@@ -263,12 +187,6 @@ export const NotificationsView = ({
     return filteredNotifications.slice(start, start + pageSize);
   }, [filteredNotifications, currentPage, pageSize]);
 
-  // KPI Metrics
-  const totalCount = notifications.length;
-  const allSystemCount = notifications.filter((n) => n.audienceType === "all").length;
-  const studentCount = notifications.filter((n) => n.audienceType === "student").length;
-  const lecturerCount = notifications.filter((n) => n.audienceType === "lecturer").length;
-
   const getPriorityBadge = (p: string) => {
     switch (p) {
       case "urgent":
@@ -279,7 +197,7 @@ export const NotificationsView = ({
         return "bg-slate-100 text-slate-700 border-slate-200";
       case "medium":
       default:
-        return "bg-blue-100 text-blue-800 border-blue-200";
+        return "bg-[#026aa7]/9 text-[#025a8e] border-[#026aa7]/20";
     }
   };
 
@@ -300,84 +218,64 @@ export const NotificationsView = ({
   const getAudienceBadge = (aud: string) => {
     switch (aud) {
       case "student":
-        return "bg-emerald-50 text-emerald-800 border-emerald-200";
+        return "bg-[#f2f8eb] text-[#3f6416] border-[#dcebc9]";
       case "lecturer":
         return "bg-sky-50 text-sky-800 border-sky-200";
       case "all":
       default:
-        return "bg-blue-50 text-blue-800 border-blue-200";
+        return "bg-[#026aa7]/5 text-[#025a8e] border-[#026aa7]/20";
     }
   };
 
   return (
-    <div className="space-y-6 max-w-[1400px] mx-auto min-w-0 font-sans pb-12 animate-in fade-in">
-      {/* 1. PAGE HEADER */}
-      <PageHeader
-        icon={Bell}
-        title="Quản lý Thông báo (Notification Center)"
-        subtitle="Soạn thảo, phát hành và quản lý lịch sử thông báo gửi tới Sinh viên, Giảng viên và Toàn hệ thống."
-        actions={[
-          {
-            label: "Xuất file CSV",
-            icon: Download,
-            onClick: handleExportCsv,
-            variant: "secondary",
-          },
-        ]}
-      >
-        <button
-          type="button"
-          onClick={() => void loadCampaigns()}
-          disabled={isLoading}
-          className="p-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-md transition-colors disabled:opacity-50"
-          title="Tải lại dữ liệu"
-        >
-          <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin text-blue-600" : ""}`} />
-        </button>
-      </PageHeader>
+    <div className="mx-auto min-w-0 max-w-[1300px] space-y-4 pb-12 font-sans">
+      <section className="overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-2xs">
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-[#026aa7] px-4 py-3 text-white">
+          <div className="flex min-w-0 items-center gap-2">
+            <Bell className="h-5 w-5 shrink-0 text-white/90" aria-hidden="true" />
+            <div className="min-w-0">
+              <h1 className="text-base font-bold tracking-wide">Quản lý thông báo</h1>
+              <p className="mt-0.5 text-xs text-white/80">
+                Soạn, phát hành và tra cứu thông báo gửi tới sinh viên, giảng viên và toàn hệ thống
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void loadCampaigns()}
+              disabled={isLoading}
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-white/30 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} aria-hidden="true" />
+              Làm mới
+            </button>
+            <button
+              type="button"
+              onClick={handleExportCsv}
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-md bg-white px-3 text-xs font-bold text-[#026aa7] transition-colors hover:bg-sky-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            >
+              <Download className="h-4 w-4" aria-hidden="true" />
+              Xuất file CSV
+            </button>
+          </div>
+        </div>
+      </section>
 
-      {/* 2. KPI METRICS (Clean & Meaningful) */}
-      <KpiGrid>
-        <KpiCard
-          tone="blue"
-          title="Tổng thông báo"
-          value={totalCount}
-          unit="thông báo"
-          icon={Bell}
-          footer="Đã phát hành trong hệ thống"
-        />
-        <KpiCard
-          tone="sky"
-          title="Toàn hệ thống"
-          value={allSystemCount}
-          unit="tin chung"
-          icon={Users}
-          footer="Gửi tới cả GV & SV"
-        />
-        <KpiCard
-          tone="emerald"
-          title="Gửi Sinh viên"
-          value={studentCount}
-          unit="thông báo"
-          icon={GraduationCap}
-          footer="Nhắc nộp báo cáo & thực tập"
-        />
-        <KpiCard
-          tone="amber"
-          title="Gửi Giảng viên"
-          value={lecturerCount}
-          unit="thông báo"
-          icon={Building2}
-          footer="Lịch họp & phân công hướng dẫn"
-        />
-      </KpiGrid>
+      <Toolbar
+        left={
+          <p className="text-xs font-medium text-slate-600">
+            {isLoading ? "Đang cập nhật lịch sử thông báo…" : "Soạn và quản lý lịch sử thông báo"}
+          </p>
+        }
+      />
 
       {/* 3. COMPOSE SECTION */}
       {canMutateOps && (
-        <div className="bg-white rounded-lg border border-slate-200/80 shadow-xs p-5 md:p-6 space-y-5">
+        <Panel className="space-y-5 rounded-xl border-slate-200/90 shadow-2xs">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+            <div className="p-2 bg-[#026aa7]/5 text-[#026aa7] rounded-lg">
               <Send className="w-5 h-5" />
             </div>
             <div>
@@ -392,29 +290,9 @@ export const NotificationsView = ({
 
           <div className="flex items-center gap-2">
             <span className="text-xs text-slate-500 font-medium">Số người nhận dự kiến:</span>
-            <span className="px-2.5 py-1 bg-blue-50 text-blue-800 border border-blue-200 text-xs font-bold rounded-md">
+            <span className="px-2.5 py-1 bg-[#026aa7]/5 text-[#025a8e] border border-[#026aa7]/20 text-xs font-bold rounded-md">
               {calculatedRecipientCount.toLocaleString("vi-VN")} người
             </span>
-          </div>
-        </div>
-
-        {/* Quick Templates Bar */}
-        <div className="space-y-1.5">
-          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
-            <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-            Mẫu thông báo nhanh:
-          </span>
-          <div className="flex flex-wrap items-center gap-2">
-            {QUICK_TEMPLATES.map((tmpl, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => handleApplyTemplate(tmpl)}
-                className="px-3 py-1.5 bg-slate-50 hover:bg-blue-50 text-slate-700 hover:text-blue-700 font-medium text-xs rounded-md border border-slate-200/80 transition-colors"
-              >
-                {tmpl.label}
-              </button>
-            ))}
           </div>
         </div>
 
@@ -430,7 +308,7 @@ export const NotificationsView = ({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Ví dụ: Khẩn: Yêu cầu sinh viên hoàn tất nộp Báo cáo Thực tập Tuần 6..."
-              className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-blue-500 font-medium text-slate-900"
+              className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-[#026aa7] font-medium text-slate-900"
             />
           </div>
 
@@ -443,7 +321,7 @@ export const NotificationsView = ({
               <select
                 value={audience}
                 onChange={(e) => setAudience(e.target.value as "all" | "student" | "lecturer")}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-blue-500 font-bold text-slate-800"
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-[#026aa7] font-bold text-slate-800"
               >
                 <option value="all">Toàn bộ hệ thống (GV &amp; SV)</option>
                 <option value="student">Chỉ Sinh viên</option>
@@ -459,7 +337,7 @@ export const NotificationsView = ({
               <select
                 value={type}
                 onChange={(e) => setType(e.target.value)}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-blue-500 font-medium text-slate-800"
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-[#026aa7] font-medium text-slate-800"
               >
                 <option value="Học tập">Học tập &amp; Tiến độ</option>
                 <option value="Lịch trình">Lịch trình &amp; Hội đồng</option>
@@ -477,7 +355,7 @@ export const NotificationsView = ({
               <select
                 value={priority}
                 onChange={(e) => setPriority(e.target.value as "low" | "medium" | "high" | "urgent")}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-blue-500 font-medium text-slate-800"
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-[#026aa7] font-medium text-slate-800"
               >
                 <option value="low">Thấp (Thông tin)</option>
                 <option value="medium">Bình thường</option>
@@ -497,37 +375,12 @@ export const NotificationsView = ({
               value={content}
               onChange={(e) => setContent(e.target.value)}
               placeholder="Nhập nội dung đầy đủ của thông báo..."
-              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-blue-500 font-medium text-slate-900 leading-relaxed resize-y"
+              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-[#026aa7] font-medium text-slate-900 leading-relaxed resize-y"
             />
           </div>
 
           {/* Attachment & Action buttons */}
           <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleAddAttachment}
-                className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-md border border-slate-200 flex items-center gap-1.5 transition-colors"
-              >
-                <Paperclip className="w-3.5 h-3.5 text-slate-500" />
-                <span>Đính kèm tệp</span>
-              </button>
-
-              {attachment && (
-                <div className="px-2.5 py-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-md flex items-center gap-1.5 font-medium">
-                  <FileCheck className="w-3.5 h-3.5 text-emerald-600" />
-                  <span className="truncate max-w-[200px]">{attachment.name}</span>
-                  <button
-                    type="button"
-                    onClick={() => setAttachment(null)}
-                    className="text-emerald-600 hover:text-emerald-900"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              )}
-            </div>
-
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -543,7 +396,7 @@ export const NotificationsView = ({
                 disabled={isSubmitting}
                 className={`px-5 py-2 text-white font-bold rounded-md shadow-xs flex items-center gap-1.5 transition-colors disabled:opacity-50 ${priority === "urgent"
                     ? "bg-rose-600 hover:bg-rose-700"
-                    : "bg-blue-600 hover:bg-blue-700"
+                    : "bg-[#026aa7] hover:bg-[#025a8e]"
                   }`}
               >
                 <Send className="w-3.5 h-3.5" />
@@ -554,15 +407,15 @@ export const NotificationsView = ({
             </div>
           </div>
         </form>
-      </div>
+      </Panel>
       )}
 
       {/* 4. NOTIFICATIONS HISTORY LIST */}
-      <div className="bg-white rounded-lg border border-slate-200/80 shadow-xs p-5 md:p-6 space-y-4">
+      <Panel className="space-y-4 rounded-xl border-slate-200/90 shadow-2xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
           <div>
             <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <FileText className="w-5 h-5 text-blue-600" />
+              <FileText className="w-5 h-5 text-[#026aa7]" />
               Lịch sử Thông báo Đã Phát Hành ({filteredNotifications.length})
             </h3>
             <p className="text-xs text-slate-500 font-medium">
@@ -584,7 +437,7 @@ export const NotificationsView = ({
                 setCurrentPage(1);
               }}
               placeholder="Tìm theo tiêu đề, nội dung, mã..."
-              className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-blue-500 font-medium"
+              className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-[#026aa7] font-medium"
             />
           </div>
 
@@ -595,9 +448,8 @@ export const NotificationsView = ({
               setAudienceFilter(e.target.value);
               setCurrentPage(1);
             }}
-            className="p-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-blue-500 font-medium text-slate-800"
+            className="p-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-[#026aa7] font-medium text-slate-800"
           >
-            <option value="all">Tất cả Đối tượng nhận</option>
             <option value="all">Toàn bộ hệ thống</option>
             <option value="student">Sinh viên</option>
             <option value="lecturer">Giảng viên</option>
@@ -610,7 +462,7 @@ export const NotificationsView = ({
               setTypeFilter(e.target.value);
               setCurrentPage(1);
             }}
-            className="p-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-blue-500 font-medium text-slate-800"
+            className="p-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-[#026aa7] font-medium text-slate-800"
           >
             <option value="all">Tất cả Loại thông báo</option>
             <option value="Học tập">Học tập &amp; Tiến độ</option>
@@ -622,7 +474,34 @@ export const NotificationsView = ({
         </div>
 
         {/* Table */}
-        <div className="overflow-x-auto border border-slate-200 rounded-md">
+        {error && notifications.length === 0 ? (
+          <RequestErrorState
+            title="Không thể tải lịch sử thông báo"
+            message={error.message}
+            onRetry={() => void loadCampaigns()}
+            retrying={isLoading}
+          />
+        ) : isLoading && notifications.length === 0 ? (
+          <TableSkeleton rows={5} columns={7} />
+        ) : filteredNotifications.length === 0 ? (
+          <EmptyState
+            icon={Bell}
+            title={notifications.length === 0 ? "Chưa có thông báo nào" : "Không tìm thấy thông báo phù hợp"}
+            description={notifications.length === 0
+              ? "Thông báo đã phát hành sẽ xuất hiện tại đây."
+              : "Thử thay đổi từ khóa tìm kiếm hoặc bộ lọc để xem kết quả khác."}
+            secondaryAction={notifications.length > 0 ? {
+              label: "Xóa bộ lọc tìm kiếm",
+              onClick: () => {
+                setSearchQuery("");
+                setAudienceFilter("all");
+                setTypeFilter("all");
+                setCurrentPage(1);
+              },
+            } : undefined}
+          />
+        ) : (
+        <div className="overflow-x-auto rounded-md border border-slate-200/80">
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
@@ -636,14 +515,7 @@ export const NotificationsView = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {paginatedNotifications.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="py-8 text-center text-slate-400 font-medium">
-                    Không tìm thấy thông báo nào phù hợp với bộ lọc.
-                  </td>
-                </tr>
-              ) : (
-                paginatedNotifications.map((notif) => (
+              {paginatedNotifications.map((notif) => (
                   <tr key={notif.id} className="hover:bg-slate-50/80 transition-colors">
                     <td className="py-3 px-3.5">
                       <div className="space-y-0.5">
@@ -653,7 +525,7 @@ export const NotificationsView = ({
                           </span>
                           {notif.attachmentName && (
                             <span title={`Đính kèm: ${notif.attachmentName}`}>
-                              <Paperclip className="w-3 h-3 text-blue-500 shrink-0" />
+                              <Paperclip className="w-3 h-3 text-[#026aa7] shrink-0" />
                             </span>
                           )}
                         </div>
@@ -698,7 +570,7 @@ export const NotificationsView = ({
                         <button
                           type="button"
                           onClick={() => setSelectedNotif(notif)}
-                          className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                          className="p-1.5 text-slate-500 hover:text-[#026aa7] hover:bg-[#025a8e]/5 rounded-md transition-colors"
                           title="Xem chi tiết"
                         >
                           <Eye className="w-4 h-4" />
@@ -708,7 +580,7 @@ export const NotificationsView = ({
                             <button
                               type="button"
                               onClick={() => handleDuplicate(notif)}
-                              className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                              className="p-1.5 text-slate-500 hover:text-[#026aa7] hover:bg-[#025a8e]/5 rounded-md transition-colors"
                               title="Sao chép nội dung để gửi lại"
                             >
                               <Copy className="w-4 h-4" />
@@ -726,58 +598,60 @@ export const NotificationsView = ({
                       </div>
                     </td>
                   </tr>
-                ))
-              )}
+              ))}
             </tbody>
           </table>
         </div>
+        )}
 
         {/* Pagination */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs pt-2 border-t border-slate-100">
-          <div className="flex items-center gap-3 text-slate-500 font-medium">
-            <span>
-              Hiển thị {paginatedNotifications.length} / {filteredNotifications.length} thông báo
-            </span>
-            <div className="flex items-center gap-1">
-              <span>Số dòng:</span>
-              <select
-                value={pageSize}
-                onChange={(e) => {
-                  setPageSize(Number(e.target.value));
-                  setCurrentPage(1);
-                }}
-                className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-800 outline-none"
+        {filteredNotifications.length > 0 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs pt-2 border-t border-slate-100">
+            <div className="flex items-center gap-3 text-slate-500 font-medium">
+              <span>
+                Hiển thị {paginatedNotifications.length} / {filteredNotifications.length} thông báo
+              </span>
+              <div className="flex items-center gap-1">
+                <span>Số dòng:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-800 outline-none"
+                >
+                  <option value={5}>5 dòng</option>
+                  <option value={10}>10 dòng</option>
+                  <option value={20}>20 dòng</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 font-bold">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md disabled:opacity-40 transition-colors"
               >
-                <option value={5}>5 dòng</option>
-                <option value={10}>10 dòng</option>
-                <option value={20}>20 dòng</option>
-              </select>
+                Trước
+              </button>
+              <span className="px-3 py-1.5 bg-slate-50 rounded-md border border-slate-200 text-slate-800">
+                Trang {currentPage} / {totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md disabled:opacity-40 transition-colors"
+              >
+                Sau
+              </button>
             </div>
           </div>
-
-          <div className="flex items-center gap-1.5 font-bold">
-            <button
-              type="button"
-              onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-              disabled={currentPage === 1}
-              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md disabled:opacity-40 transition-colors"
-            >
-              Trước
-            </button>
-            <span className="px-3 py-1.5 bg-slate-50 rounded-md border border-slate-200 text-slate-800">
-              Trang {currentPage} / {totalPages}
-            </span>
-            <button
-              type="button"
-              onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-              disabled={currentPage === totalPages}
-              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md disabled:opacity-40 transition-colors"
-            >
-              Sau
-            </button>
-          </div>
-        </div>
-      </div>
+        )}
+      </Panel>
 
       {/* DETAIL MODAL */}
       {selectedNotif && (
@@ -785,7 +659,7 @@ export const NotificationsView = ({
           <div className="bg-white rounded-lg max-w-xl w-full border border-slate-200 shadow-xl overflow-hidden space-y-4 p-6 animate-in zoom-in-95 duration-200 text-xs">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 bg-blue-50 text-blue-800 font-mono font-bold rounded-md border border-blue-200">
+                <span className="px-2 py-0.5 bg-[#026aa7]/5 text-[#025a8e] font-mono font-bold rounded-md border border-[#026aa7]/20">
                   {selectedNotif.id}
                 </span>
                 <span
@@ -830,7 +704,7 @@ export const NotificationsView = ({
                 </div>
                 <div>
                   <span className="text-slate-400 font-bold block">Số lượng nhận:</span>
-                  <span className="font-bold text-blue-700">
+                  <span className="font-bold text-[#026aa7]">
                     {selectedNotif.recipientCount.toLocaleString("vi-VN")} người
                   </span>
                 </div>
@@ -858,15 +732,6 @@ export const NotificationsView = ({
                       )}
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onShowToast(`Đang tải tệp đính kèm: ${selectedNotif.attachmentName}...`)
-                    }
-                    className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-md"
-                  >
-                    Tải về
-                  </button>
                 </div>
               )}
             </div>

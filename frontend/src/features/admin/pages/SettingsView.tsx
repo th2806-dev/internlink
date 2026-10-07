@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Sliders,
   Building2,
@@ -12,10 +12,8 @@ import {
   RotateCcw,
   Send,
   CheckCircle2,
-  Clock,
   ShieldAlert,
 } from "lucide-react";
-import { PageHeader } from "../../../components/common/PageHeader";
 import { ConfirmDialog } from "../../../components/common/ConfirmDialog";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { adminEmailService } from "../../../services/adminEmail.service";
@@ -26,19 +24,17 @@ import {
 
 type FacultySettings = AdminFacultySettings;
 
-const DEFAULT_FACULTY_SETTINGS: FacultySettings = {
-  departmentName: "Khoa Công nghệ Thông tin",
-  supportEmail: "internlink.cntt@gmail.com",
-  phone: "0906891704",
+const EMPTY_FACULTY_SETTINGS: FacultySettings = {
+  departmentName: "",
+  supportEmail: "",
+  phone: "",
   address: "",
-  maxStudentsPerLecturer: 30,
-  defaultReportDeadlineDay: "Chủ Nhật (23:59)",
-  maxFileSizeMb: 25,
-  allowLateSubmission: true,
-  autoLockSemesterEnd: true,
+  maxStudentsPerLecturer: 0,
+  defaultReportDeadlineDay: "",
+  maxFileSizeMb: 0,
+  allowLateSubmission: false,
+  autoLockSemesterEnd: false,
 };
-
-const STORAGE_KEY = "internlink_faculty_settings";
 
 import type { ToastType } from "../../../contexts/ToastContext";
 export const SettingsView = ({
@@ -47,39 +43,33 @@ export const SettingsView = ({
   onShowToast: (msg: string, type?: ToastType) => void;
   onNavigateTab?: (tab: string) => void;
 }) => {
-  const [settings, setSettings] = useState<FacultySettings>(DEFAULT_FACULTY_SETTINGS);
+  const [settings, setSettings] = useState<FacultySettings>(EMPTY_FACULTY_SETTINGS);
 
   const [isSaving, setIsSaving] = useState(false);
   const [isTestingEmail, setIsTestingEmail] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
   const [settingsLoadError, setSettingsLoadError] = useState(false);
-  const [savedSettings, setSavedSettings] = useState<FacultySettings>(settings);
+  const [savedSettings, setSavedSettings] = useState<FacultySettings>(EMPTY_FACULTY_SETTINGS);
   const hasUnsavedChanges = JSON.stringify(settings) !== JSON.stringify(savedSettings);
 
+  const loadSettings = useCallback(async () => {
+    setIsLoadingSettings(true);
+    setSettingsLoadError(false);
+    try {
+      const data = await adminSettingsService.getSettings();
+      setSettings(data);
+      setSavedSettings(data);
+    } catch {
+      setSettingsLoadError(true);
+    } finally {
+      setIsLoadingSettings(false);
+    }
+  }, []);
+
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const data = await adminSettingsService.getSettings();
-        if (!cancelled && data) {
-          setSettings(data);
-          setSavedSettings(data);
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-        }
-      } catch {
-        if (!cancelled) {
-          setSettingsLoadError(true);
-          onShowToast("Không thể tải cài đặt từ hệ thống; đang dùng bản nháp cục bộ.");
-        }
-      } finally {
-        if (!cancelled) setIsLoadingSettings(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [onShowToast]);
+    void loadSettings();
+  }, [loadSettings]);
 
   const handleSave = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -112,12 +102,9 @@ export const SettingsView = ({
       const updated = await adminSettingsService.updateSettings(payload);
       setSettings(updated);
       setSavedSettings(updated);
-      setSettingsLoadError(false);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
       onShowToast("Đã lưu các thiết lập cài đặt thành công!");
     } catch (err) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-      onShowToast(`Không thể lưu lên hệ thống; đã giữ bản nháp cục bộ. ${getApiErrorMessage(err)}`);
+      onShowToast(`Không thể lưu cài đặt lên hệ thống. ${getApiErrorMessage(err)}`, "danger");
     } finally {
       setIsSaving(false);
     }
@@ -130,15 +117,9 @@ export const SettingsView = ({
         const res = await adminSettingsService.resetSettings();
         setSettings(res);
         setSavedSettings(res);
-        setSettingsLoadError(false);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(res));
       onShowToast("Đã khôi phục tất cả cài đặt về giá trị mặc định của Khoa.");
     } catch (err) {
-      setSettings(DEFAULT_FACULTY_SETTINGS);
-      setSavedSettings(DEFAULT_FACULTY_SETTINGS);
-      setSettingsLoadError(true);
-      localStorage.removeItem(STORAGE_KEY);
-      onShowToast(`Đã khôi phục mặc định: ${getApiErrorMessage(err)}`);
+      onShowToast(`Không thể khôi phục cài đặt mặc định. ${getApiErrorMessage(err)}`, "danger");
     } finally {
       setIsSaving(false);
       setShowResetConfirm(false);
@@ -168,116 +149,56 @@ export const SettingsView = ({
   };
 
   return (
-    <div className="space-y-6 max-w-[1200px] mx-auto min-w-0 font-sans pb-12 animate-in fade-in">
-      {/* 1. PAGE HEADER */}
-      <PageHeader
-        icon={Sliders}
-        title="Cài đặt hệ thống"
-        subtitle="Quản lý thông tin liên hệ và các tham số dùng chung cho nghiệp vụ thực tập."
-        actions={[
-          {
-            label: "Khôi phục mặc định",
-            icon: RotateCcw,
-            onClick: () => setShowResetConfirm(true),
-            variant: "secondary",
-          },
-        ]}
-      >
-        <button
-          type="button"
-          onClick={() => handleSave()}
-          disabled={isSaving}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-md shadow-xs flex items-center gap-1.5 transition-colors disabled:opacity-50"
-        >
-          <Save className="w-3.5 h-3.5" />
-          <span>{isSaving ? "Đang lưu..." : "Lưu thay đổi"}</span>
-        </button>
-      </PageHeader>
+    <div className="mx-auto max-w-[1300px] min-w-0 space-y-4 pb-12 font-sans">
+      <section className="overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-2xs">
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-[#026aa7] px-4 py-3 text-white">
+          <div className="flex min-w-0 items-center gap-2">
+            <Sliders className="h-5 w-5 shrink-0 text-white/90" aria-hidden="true" />
+            <div className="min-w-0">
+              <h1 className="text-base font-bold tracking-wide">Cài đặt hệ thống</h1>
+              <p className="mt-0.5 text-xs text-white/80">
+                Quản lý thông tin liên hệ và các tham số dùng chung cho nghiệp vụ thực tập
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {settingsLoadError && (
-        <div className="flex items-start gap-2.5 border border-amber-200 bg-amber-50 px-4 py-3 rounded-md text-xs text-amber-900">
-          <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5 text-amber-700" />
-          <div>
-            <p className="font-bold">Đang dùng bản nháp cục bộ</p>
-            <p className="mt-0.5 text-amber-800">
-              Cài đặt chưa đồng bộ với máy chủ. Kiểm tra kết nối rồi lưu lại để cập nhật hệ thống.
-            </p>
+        <div role="alert" className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-900">
+          <div className="flex items-start gap-2.5">
+            <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-rose-700" />
+            <div>
+              <p className="font-bold">Không thể tải cài đặt từ máy chủ</p>
+              <p className="mt-0.5 text-rose-800">
+                Dữ liệu cấu hình chưa được tải. Thử tải lại để xem và chỉnh sửa giá trị hiện tại.
+              </p>
+            </div>
           </div>
+          <button
+            type="button"
+            onClick={() => void loadSettings()}
+            disabled={isLoadingSettings}
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-rose-300 bg-white px-3 font-semibold text-rose-800 transition-colors hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <RotateCcw className={`h-3.5 w-3.5 ${isLoadingSettings ? "animate-spin" : ""}`} aria-hidden="true" />
+            Thử tải lại
+          </button>
         </div>
       )}
 
       {isLoadingSettings && (
-        <div className="border border-slate-200 bg-white px-4 py-3 rounded-md text-xs text-slate-500">
+        <div className="rounded-xl border border-slate-200/90 bg-white px-4 py-3 text-xs text-slate-500 shadow-2xs">
           Đang tải cài đặt hiện tại…
         </div>
       )}
 
-      {/* 2. SUMMARY STRIP */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
-        <div className="bg-white p-4 rounded-lg border border-slate-200/80 shadow-xs flex items-center gap-3">
-          <div className="p-2.5 bg-blue-50 text-blue-600 rounded-md shrink-0">
-            <Building2 className="w-4 h-4" />
-          </div>
-          <div className="min-w-0">
-            <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">
-              Đơn vị quản lý
-            </span>
-            <p className="font-bold text-slate-900 truncate" title={settings.departmentName}>
-              {settings.departmentName}
-            </p>
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-lg border border-slate-200/80 shadow-xs flex items-center gap-3">
-          <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-md shrink-0">
-            <Mail className="w-4 h-4" />
-          </div>
-          <div className="min-w-0">
-            <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">
-              Email hỗ trợ
-            </span>
-            <p className="font-bold text-slate-900 truncate" title={settings.supportEmail}>
-              {settings.supportEmail}
-            </p>
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-lg border border-slate-200/80 shadow-xs flex items-center gap-3">
-          <div className="p-2.5 bg-amber-50 text-amber-600 rounded-md shrink-0">
-            <Users className="w-4 h-4" />
-          </div>
-          <div className="min-w-0">
-            <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">
-              SV tối đa / Giảng viên
-            </span>
-            <p className="font-bold text-slate-900">
-              {settings.maxStudentsPerLecturer} sinh viên / GV
-            </p>
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-lg border border-slate-200/80 shadow-xs flex items-center gap-3">
-          <div className="p-2.5 bg-sky-50 text-sky-600 rounded-md shrink-0">
-            <Clock className="w-4 h-4" />
-          </div>
-          <div className="min-w-0">
-            <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">
-              Hạn nộp báo cáo
-            </span>
-            <p className="font-bold text-slate-900 truncate">
-              {settings.defaultReportDeadlineDay}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* 3. SETTINGS FORM */}
-      <form onSubmit={handleSave} className="space-y-6">
-        <fieldset disabled={isLoadingSettings || isSaving} className="space-y-6 disabled:opacity-70">
+      {!isLoadingSettings && !settingsLoadError && <form onSubmit={handleSave} className="space-y-4">
+        <fieldset disabled={isLoadingSettings || isSaving} className="space-y-4 disabled:opacity-70">
         {/* SECTION 1: FACULTY CONTACT INFORMATION */}
-        <div className="bg-white rounded-lg border border-slate-200/80 shadow-xs p-5 md:p-6 space-y-4">
+        <div className="space-y-4 rounded-xl border border-slate-200/90 bg-white p-5 shadow-2xs md:p-6">
           <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
-            <div className="p-2 bg-blue-50 text-blue-600 rounded-md">
+            <div className="rounded-md bg-[#026aa7]/5 p-2 text-[#026aa7]">
               <Building2 className="w-5 h-5" />
             </div>
             <div>
@@ -305,7 +226,7 @@ export const SettingsView = ({
                     setSettings({ ...settings, departmentName: e.target.value })
                   }
                   placeholder="Ví dụ: Khoa Công nghệ Thông tin"
-                  className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-blue-500 font-medium text-slate-900"
+                  className="w-full rounded-md border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 font-medium text-slate-900 outline-none focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
                 />
               </div>
             </div>
@@ -323,7 +244,7 @@ export const SettingsView = ({
                     setSettings({ ...settings, phone: e.target.value })
                   }
                   placeholder="Ví dụ: 0906891704"
-                  className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-blue-500 font-medium text-slate-900"
+                  className="w-full rounded-md border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 font-medium text-slate-900 outline-none focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
                 />
               </div>
             </div>
@@ -343,7 +264,7 @@ export const SettingsView = ({
                       setSettings({ ...settings, supportEmail: e.target.value })
                     }
                     placeholder="internlink.cntt@gmail.com"
-                    className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-blue-500 font-medium text-slate-900"
+                    className="w-full rounded-md border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 font-medium text-slate-900 outline-none focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
                   />
                 </div>
                 <button
@@ -372,7 +293,7 @@ export const SettingsView = ({
                     setSettings({ ...settings, address: e.target.value })
                   }
                   placeholder="Ví dụ: Tòa nhà A, 227 Nguyễn Văn Cừ, Q.5, TP.HCM"
-                  className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-blue-500 font-medium text-slate-900"
+                  className="w-full rounded-md border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 font-medium text-slate-900 outline-none focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
                 />
               </div>
             </div>
@@ -380,9 +301,9 @@ export const SettingsView = ({
         </div>
 
         {/* SECTION 2: INTERNSHIP RULES & PARAMETERS */}
-        <div className="bg-white rounded-lg border border-slate-200/80 shadow-xs p-5 md:p-6 space-y-4">
+        <div className="space-y-4 rounded-xl border border-slate-200/90 bg-white p-5 shadow-2xs md:p-6">
           <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
-            <div className="p-2 bg-emerald-50 text-emerald-600 rounded-md">
+            <div className="rounded-md bg-[#026aa7]/5 p-2 text-[#026aa7]">
               <Calendar className="w-5 h-5" />
             </div>
             <div>
@@ -413,7 +334,7 @@ export const SettingsView = ({
                       maxStudentsPerLecturer: Number(e.target.value),
                     })
                   }
-                  className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-blue-500 font-bold text-slate-900"
+                  className="w-full rounded-md border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 font-bold text-slate-900 outline-none focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
                 />
               </div>
               <span className="text-[11px] text-slate-400 mt-1 block">
@@ -433,7 +354,7 @@ export const SettingsView = ({
                     defaultReportDeadlineDay: e.target.value,
                   })
                 }
-                className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-blue-500 font-medium text-slate-900"
+                className="w-full rounded-md border border-slate-200 bg-slate-50 p-2 font-medium text-slate-900 outline-none focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
               >
                 <option value="Chủ Nhật (23:59)">Chủ Nhật (23:59 hàng tuần)</option>
                 <option value="Thứ Bảy (23:59)">Thứ Bảy (23:59 hàng tuần)</option>
@@ -461,7 +382,7 @@ export const SettingsView = ({
                       maxFileSizeMb: Number(e.target.value),
                     })
                   }
-                  className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-blue-500 font-bold text-slate-900"
+                  className="w-full rounded-md border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 font-bold text-slate-900 outline-none focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
                 />
               </div>
               <span className="text-[11px] text-slate-400 mt-1 block">
@@ -489,7 +410,7 @@ export const SettingsView = ({
                     allowLateSubmission: e.target.checked,
                   })
                 }
-                className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer"
+                className="h-4 w-4 cursor-pointer rounded border-slate-300 text-[#026aa7] focus:ring-[#026aa7]"
               />
             </label>
 
@@ -511,19 +432,19 @@ export const SettingsView = ({
                     autoLockSemesterEnd: e.target.checked,
                   })
                 }
-                className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer"
+                className="h-4 w-4 cursor-pointer rounded border-slate-300 text-[#026aa7] focus:ring-[#026aa7]"
               />
             </label>
           </div>
         </div>
 
         {/* BOTTOM SAVE BAR */}
-        <div className="flex items-center justify-between bg-slate-50 p-4 rounded-lg border border-slate-200">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs">
           <div className="flex items-center gap-2 text-xs text-slate-600 font-medium">
             {hasUnsavedChanges ? (
               <ShieldAlert className="w-4 h-4 text-amber-600" />
             ) : (
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              <CheckCircle2 className="h-4 w-4 text-[#548a28]" />
             )}
             <span>
               {hasUnsavedChanges
@@ -536,14 +457,14 @@ export const SettingsView = ({
             <button
               type="button"
               onClick={() => setShowResetConfirm(true)}
-              className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-md border border-slate-200 transition-colors"
+              className="inline-flex min-h-10 items-center rounded-md border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
             >
               Đặt lại mặc định
             </button>
             <button
               type="submit"
               disabled={isSaving}
-              className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-md shadow-xs flex items-center gap-1.5 transition-colors disabled:opacity-50"
+              className="inline-flex min-h-10 items-center gap-1.5 rounded-md bg-[#026aa7] px-5 py-2 text-xs font-bold text-white shadow-2xs transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Save className="w-3.5 h-3.5" />
               <span>{isSaving ? "Đang lưu..." : "Lưu cài đặt"}</span>
@@ -551,7 +472,7 @@ export const SettingsView = ({
           </div>
         </div>
         </fieldset>
-      </form>
+      </form>}
 
       {/* CONFIRM RESET DIALOG */}
       <ConfirmDialog

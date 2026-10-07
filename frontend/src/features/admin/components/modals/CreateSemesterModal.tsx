@@ -44,16 +44,16 @@ export const CreateSemesterModal = ({
     description?: string;
   } | null;
 }) => {
-  const [semesterName, setSemesterName] = useState("Thực tập Tốt nghiệp K21 (2026 - 2027)");
-  const [term, setTerm] = useState("Học kỳ I");
-  const [academicYear, setAcademicYear] = useState("2026 - 2027");
-  const [startDate, setStartDate] = useState("2026-09-01");
-  const [endDate, setEndDate] = useState("2026-12-15");
-  const [targetStudents, setTargetStudents] = useState("1350");
-  const [internshipEndWeek, setInternshipEndWeek] = useState("6");
+  const [semesterName, setSemesterName] = useState("");
+  const [term, setTerm] = useState("");
+  const [academicYear, setAcademicYear] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [targetStudents, setTargetStudents] = useState("");
+  const [internshipEndWeek, setInternshipEndWeek] = useState("");
   // Mặc định 1 = kỳ nhập vào CHÍNH LÀ giai đoạn thực tập (tuần thực tập 1 = ngày bắt đầu kỳ).
   // Chỉ tăng lên (vd 14) khi StartDate là đầu CẢ học kỳ của trường chứ không riêng đợt thực tập.
-  const [internshipStartWeek, setInternshipStartWeek] = useState("1");
+  const [internshipStartWeek, setInternshipStartWeek] = useState("");
   const [academicTerms, setAcademicTerms] = useState<SchoolAcademicTermDto[]>([]);
   /** Đã tự sửa ISW về 1 khi mở modal sửa kỳ ngắn có ISW sai → hiển thị ghi chú giải thích. */
   const [autoFixedIsw, setAutoFixedIsw] = useState(false);
@@ -64,15 +64,23 @@ export const CreateSemesterModal = ({
     if (!isOpen) return;
     if (editing?.id) {
       setSemesterName(editing.name);
-      setTerm(editing.term || "Học kỳ I");
+      setTerm(editing.term || "");
       setAcademicYear(editing.academicYear || "");
       setStartDate(parseToInputDate(editing.startDate));
       setEndDate(parseToInputDate(editing.endDate));
-      setTargetStudents(String(editing.targetStudents ?? 0));
+      setTargetStudents(
+        editing.targetStudents == null ? "" : String(editing.targetStudents),
+      );
       const editingStartWeek = Math.min(52, Math.max(1, editing.internshipStartWeek ?? 1));
       const editingWeeks = Math.min(52, Math.max(1, editing.totalWeeks ?? 6));
-      setInternshipStartWeek(String(editingStartWeek));
-      setInternshipEndWeek(String(editingStartWeek + editingWeeks - 1));
+      setInternshipStartWeek(
+        editing.internshipStartWeek == null ? "" : String(editingStartWeek),
+      );
+      setInternshipEndWeek(
+        editing.totalWeeks == null || editing.internshipStartWeek == null
+          ? ""
+          : String(editingStartWeek + editingWeeks - 1),
+      );
       setAutoFixedIsw(false);
 
       // Kỳ ngắn (≤ 3 tháng) gần như chắc chắn là đợt thực tập thuần túy: StartDate =
@@ -90,22 +98,44 @@ export const CreateSemesterModal = ({
         }
       }
     } else {
-      setSemesterName("Thực tập Tốt nghiệp K21 (2026 - 2027)");
-      setTerm("Học kỳ I");
-      setAcademicYear("2026 - 2027");
-      setStartDate("2026-09-01");
-      setEndDate("2026-12-15");
-      setInternshipEndWeek("6");
-      setInternshipStartWeek("1");
+      setSemesterName("");
+      setTerm("");
+      setAcademicYear("");
+      setStartDate("");
+      setEndDate("");
+      setTargetStudents("");
+      setInternshipEndWeek("");
+      setInternshipStartWeek("");
       setAutoFixedIsw(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, editing?.id, editing?.name, editing?.startDate, editing?.endDate]);
+  }, [isOpen, editing]);
 
   useEffect(() => {
     if (!isOpen) return;
-    void schoolAcademicTermsService.getAll().then(setAcademicTerms).catch(() => setAcademicTerms([]));
-  }, [isOpen]);
+    let cancelled = false;
+    void schoolAcademicTermsService
+      .getAll()
+      .then((terms) => {
+        if (cancelled) return;
+        setAcademicTerms(terms);
+        if (!editing?.id) {
+          const firstTerm = terms[0];
+          if (firstTerm) {
+            setAcademicYear((current) => current || firstTerm.academicYear);
+            setTerm((current) => current || firstTerm.term);
+          }
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setAcademicTerms([]);
+          onShowToast(getApiErrorMessage(error));
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, editing?.id, onShowToast]);
 
   const configuredTerm = academicTerms.find(
     (item) => item.academicYear === academicYear && item.term === term,
@@ -124,7 +154,7 @@ export const CreateSemesterModal = ({
     if (!configuredTerm) return;
     setStartDate(configuredTerm.startDate.slice(0, 10));
     setEndDate(configuredTerm.endDate.slice(0, 10));
-  }, [configuredTerm?.id]);
+  }, [configuredTerm]);
 
   if (!isOpen) return null;
 
@@ -134,12 +164,12 @@ export const CreateSemesterModal = ({
   // gần như chắc chắn do đặt InternshipStartWeek > 1 trong khi StartDate là ngày đầu thực tập.
   const parsedStart = startDate ? new Date(startDate) : null;
   const parsedEnd = endDate ? new Date(endDate) : null;
-  const effectiveStartWeek = Math.min(52, Math.max(1, selectedStartWeek || 1));
-  const effectiveTotalWeeks = Math.min(52, Math.max(1, selectedDuration || 1));
-  const internshipPeriodStart = parsedStart
+  const effectiveStartWeek = Math.min(52, Math.max(1, selectedStartWeek));
+  const effectiveTotalWeeks = Math.min(52, Math.max(1, selectedDuration));
+  const internshipPeriodStart = parsedStart && selectedStartWeek > 0
     ? new Date(parsedStart.getTime() + (effectiveStartWeek - 1) * 7 * 86400000)
     : null;
-  const internshipPeriodEnd = internshipPeriodStart
+  const internshipPeriodEnd = internshipPeriodStart && selectedDuration > 0
     ? new Date(internshipPeriodStart.getTime() + effectiveTotalWeeks * 7 * 86400000 - 86400000)
     : null;
   const internshipEndExceedsSemesterEnd = weekRangeInvalid;
@@ -194,7 +224,7 @@ export const CreateSemesterModal = ({
         {/* Modal Header */}
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div className="flex items-center gap-2.5">
-            <div className={`p-2 rounded-md border ${isEditing ? "bg-amber-50 text-amber-600 border-amber-100" : "bg-blue-50 text-blue-600 border-blue-100"}`}>
+            <div className={`p-2 rounded-md border ${isEditing ? "bg-amber-50 text-amber-600 border-amber-100" : "bg-[#026aa7]/5 text-[#026aa7] border-[#026aa7]/15"}`}>
               {isEditing ? <PencilLine className="w-5 h-5" /> : <CalendarPlus className="w-5 h-5" />}
             </div>
             <div>
@@ -226,8 +256,9 @@ export const CreateSemesterModal = ({
               type="text"
               value={semesterName}
               onChange={(e) => setSemesterName(e.target.value)}
+              placeholder="Nhập tên kỳ thực tập"
               required
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-900 outline-none focus:bg-white focus:border-blue-500"
+              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-900 outline-none focus:bg-white focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
             />
           </div>
 
@@ -239,11 +270,20 @@ export const CreateSemesterModal = ({
               <select
                 value={term}
                 onChange={(e) => setTerm(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-900 outline-none focus:bg-white focus:border-blue-500"
+                required
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-900 outline-none focus:bg-white focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
               >
-                <option value="Học kỳ I">Học kỳ I</option>
-                <option value="Học kỳ II">Học kỳ II</option>
-                <option value="Học kỳ Hè">Học kỳ Hè</option>
+                <option value="">Chọn học kỳ</option>
+                {[...new Set([
+                  ...academicTerms
+                    .filter((item) => item.academicYear === academicYear)
+                    .map((item) => item.term),
+                  ...(isEditing && editing?.academicYear === academicYear && editing.term
+                    ? [editing.term]
+                    : []),
+                ])].map((availableTerm) => (
+                  <option key={availableTerm} value={availableTerm}>{availableTerm}</option>
+                ))}
               </select>
             </div>
 
@@ -253,10 +293,19 @@ export const CreateSemesterModal = ({
               </label>
               <select
                 value={academicYear}
-                onChange={(e) => setAcademicYear(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-900 outline-none focus:bg-white focus:border-blue-500"
+                onChange={(e) => {
+                  setAcademicYear(e.target.value);
+                  const matchingTerm = academicTerms.find((item) => item.academicYear === e.target.value);
+                  setTerm(matchingTerm?.term ?? "");
+                }}
+                required
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-900 outline-none focus:bg-white focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
               >
-                {[...new Set([academicYear, ...academicTerms.map((item) => item.academicYear)])].map((year) => <option key={year} value={year}>{year}</option>)}
+                <option value="">Chọn niên khóa</option>
+                {[...new Set([
+                  ...academicTerms.map((item) => item.academicYear),
+                  ...(isEditing && editing?.academicYear ? [editing.academicYear] : []),
+                ])].map((year) => <option key={year} value={year}>{year}</option>)}
               </select>
             </div>
           </div>
@@ -271,7 +320,8 @@ export const CreateSemesterModal = ({
                 value={startDate}
                 readOnly
                 required
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-900 outline-none focus:bg-white focus:border-blue-500"
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-900 outline-none focus:bg-white focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={!startDate}
               />
             </div>
 
@@ -284,7 +334,8 @@ export const CreateSemesterModal = ({
                 value={endDate}
                 readOnly
                 required
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-900 outline-none focus:bg-white focus:border-blue-500"
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-900 outline-none focus:bg-white focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={!endDate}
               />
             </div>
           </div>
@@ -299,7 +350,8 @@ export const CreateSemesterModal = ({
               step={1}
               value={targetStudents}
               onChange={(e) => setTargetStudents(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-900 outline-none focus:bg-white focus:border-blue-500"
+              placeholder="Chưa xác định"
+              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-900 outline-none focus:bg-white focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
             />
           </div>
 
@@ -315,7 +367,7 @@ export const CreateSemesterModal = ({
                 value={internshipStartWeek}
                 onChange={(e) => setInternshipStartWeek(e.target.value)}
                 required
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-900 outline-none focus:bg-white focus:border-blue-500"
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-900 outline-none focus:bg-white focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
               />
               <p className="text-[11px] text-slate-500 mt-1">Khung hiện có: {availableWeeks || "chưa cấu hình"} tuần.</p>
             </div>
@@ -330,7 +382,7 @@ export const CreateSemesterModal = ({
                 value={internshipEndWeek}
                 onChange={(e) => setInternshipEndWeek(e.target.value)}
                 required
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-900 outline-none focus:bg-white focus:border-blue-500"
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-900 outline-none focus:bg-white focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
               />
               <p className="text-[11px] text-slate-500 mt-1">
                 {internshipEndExceedsSemesterEnd
@@ -354,7 +406,7 @@ export const CreateSemesterModal = ({
 
             <button
               type="submit"
-              className={`px-5 py-2 text-white font-bold rounded-md shadow-xs transition-colors flex items-center gap-1.5 ${isEditing ? "bg-amber-600 hover:bg-amber-700" : "bg-blue-600 hover:bg-blue-700"}`}
+              className={`px-5 py-2 text-white font-bold rounded-md shadow-xs transition-colors flex items-center gap-1.5 ${isEditing ? "bg-amber-600 hover:bg-amber-700" : "bg-[#026aa7] hover:bg-[#025a8e]"}`}
             >
               <Save className="w-4 h-4" />
               <span>{isEditing ? "Lưu thay đổi" : "Tạo đợt thực tập"}</span>
@@ -366,7 +418,7 @@ export const CreateSemesterModal = ({
   );
 };
 
-/** "01/09/2026" (vi-VN display) or ISO → "2026-09-01" for <input type="date">. */
+/** Convert a displayed date or ISO date to the value required by date inputs. */
 function parseToInputDate(display: string): string {
   if (!display || display === "—") return "";
   // Already yyyy-MM-dd

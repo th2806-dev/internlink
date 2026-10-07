@@ -1,10 +1,7 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState } from "react";
 import {
-  Users,
   UserPlus,
   Search,
-  Upload,
-  FileSpreadsheet,
   CheckCircle2,
   KeyRound,
   Lock,
@@ -19,8 +16,8 @@ import {
   Sparkles,
   GraduationCap,
   FileUp,
-  Check,
   UserSearch,
+  AlertCircle,
 } from "lucide-react";
 import { useAdminLecturersQuery, LECTURERS_PAGE_SIZE_OPTIONS } from "../../../hooks/useAdminLecturersQuery";
 import { CreateLecturerModal } from "../components/modals/CreateLecturerModal";
@@ -31,18 +28,13 @@ import type {
   LecturerRowForEdit,
 } from "../components/modals/EditLecturerModal";
 import { ImportLecturersModal } from "../components/modals/ImportLecturersModal";
-import { PageHeader } from "../../../components/common/PageHeader";
 import { ConfirmDialog } from "../../../components/common/ConfirmDialog";
 import { Panel } from "../../../components/common/Panel";
 import { Toolbar } from "../../../components/common/Toolbar";
 import { EmptyState } from "../../../components/common/EmptyState";
+import { SkeletonBox } from "../../../components/common/SkeletonLoader";
 import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
 import { getApiErrorMessage } from "../../../lib/apiClient";
-import {
-  buildAssignmentMaps,
-  mapLecturerDtoToRow,
-} from "../../../lib/adminMappers";
-import { adminAssignmentsService } from "../../../services/adminAssignments.service";
 import { adminLecturersService } from "../../../services/adminLecturers.service";
 import { adminUsersService } from "../../../services/adminUsers.service";
 import { useSemester, toApiSemesterId, toApiDepartmentId } from "../../../contexts/SemesterContext";
@@ -75,7 +67,6 @@ export const LecturersView = ({
   });
   const {
     lecturers,
-    counts,
     isPending: isLoadingApi,
     isError,
     error,
@@ -160,17 +151,13 @@ export const LecturersView = ({
     }
   };
 
-  // KPI đếm trên TOÀN BỘ kỳ từ server (không phụ thuộc trang/bộ lọc hiện tại).
-  const totalLecturers = counts.total;
-  const activeLecturers = counts.active;
-  const pendingAccounts = Math.max(0, counts.total - counts.active);
-  const guidingLecturers = counts.guiding;
   // Filter/pagination là server-side → danh sách hiển thị là dữ liệu trang hiện tại.
-  const filteredLecturers = lecturers;
   const paginatedLecturers = lecturers;
-  const totalPages = pagination.totalPages;
-  const currentPage = pagination.page;
-  const pageSize = pagination.pageSize;
+  const pendingAccounts = lecturers.filter((lecturer) => lecturer.accountStatus === "pending").length;
+  const hasActiveFilters =
+    Boolean(searchInput.trim()) ||
+    filter.accountStatus !== "all" ||
+    filter.hasGuidance !== "all";
   const isAllPageSelected =
     paginatedLecturers.length > 0 &&
     paginatedLecturers.every((l) => selectedIds.includes(l.id));
@@ -291,63 +278,86 @@ export const LecturersView = ({
   };
 
   return (
-    <div className="space-y-5 max-w-[1500px] mx-auto">
-      <PageHeader
-        icon={GraduationCap}
-        title="Quản lý Giảng viên"
-        actions={
-          canMutateOps
-            ? [
-                {
-                  label: "Import Excel",
-                  icon: FileUp,
-                  onClick: () => setIsImportModalOpen(true),
-                  variant: "secondary" as const,
-                },
-                {
-                  label: "Thêm giảng viên",
-                  icon: UserPlus,
-                  onClick: () => setIsCreateModalOpen(true),
-                  variant: "primary" as const,
-                },
-              ]
-            : []
-        }
-      >
-        {canMutateOps && (
-          <button
-            type="button"
-            onClick={() => setIsGenerateAccountsModalOpen(true)}
-            className="il-btn-press px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-md shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
-          >
-            <KeyRound className="w-4 h-4" />
-            <span>Cấp tài khoản nhanh ({pendingAccounts})</span>
-          </button>
-        )}
-      </PageHeader>
+    <div className="mx-auto max-w-[1300px] space-y-4 pb-12">
+      <section className="overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-2xs">
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-[#026aa7] px-4 py-3 text-white">
+          <div className="flex min-w-0 items-center gap-2">
+            <GraduationCap className="h-5 w-5 shrink-0 text-white/90" aria-hidden="true" />
+            <div className="min-w-0">
+              <h1 className="text-base font-bold tracking-wide">Quản lý giảng viên</h1>
+              <p className="mt-0.5 text-xs text-white/80">
+                Danh sách giảng viên, thông tin liên hệ, phân công và tài khoản
+              </p>
+            </div>
+          </div>
+          {canMutateOps && (
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsImportModalOpen(true)}
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-white/30 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+              >
+                <FileUp className="h-4 w-4" aria-hidden="true" />
+                Import Excel
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsGenerateAccountsModalOpen(true)}
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-white/30 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+              >
+                <KeyRound className="h-4 w-4" aria-hidden="true" />
+                Cấp tài khoản nhanh
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsCreateModalOpen(true)}
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-md bg-white px-3 text-xs font-bold text-[#026aa7] transition-colors hover:bg-sky-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+              >
+                <UserPlus className="h-4 w-4" aria-hidden="true" />
+                Thêm giảng viên
+              </button>
+            </div>
+          )}
+        </div>
+      </section>
 
       <Toolbar
         left={
-          <p className="text-xs text-slate-500 font-medium">
-            <span className="font-bold text-slate-800">{totalLecturers}</span>{" "}
-            GV ·{" "}
-            <span className="font-bold text-emerald-700">{activeLecturers}</span>{" "}
-            đã cấp TK ·{" "}
-            <span className="font-bold text-amber-700">{pendingAccounts}</span>{" "}
-            chưa TK ·{" "}
-            <span className="font-bold text-sky-700">{guidingLecturers}</span>{" "}
-            đang phân công
-          </p>
+          <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500">
+            <span className="rounded-full border border-[#026aa7]/20 bg-[#026aa7]/5 px-2.5 py-1 text-[11px] font-bold text-[#025a8e]">
+              {selectedSemester.name}
+            </span>
+            <span>
+              {isLoadingApi
+                ? "Đang tải danh sách…"
+                : `${pagination.total.toLocaleString("vi-VN")} giảng viên trong kỳ`}
+            </span>
+          </div>
         }
       />
 
       {/* LECTURERS MAIN TABLE */}
-      <Panel className="space-y-4">
+      <Panel className="space-y-4 rounded-xl border border-slate-200/90 shadow-2xs">
+        {isError && paginatedLecturers.length > 0 && (
+          <div
+            role="alert"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-xs text-rose-800"
+          >
+            <span>{getApiErrorMessage(error)} Danh sách hiện tại vẫn được giữ lại.</span>
+            <button
+              type="button"
+              onClick={() => void refetch()}
+              className="min-h-8 rounded-md border border-rose-300 bg-white px-3 font-bold text-rose-800 transition-colors hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/30"
+            >
+              Thử tải lại
+            </button>
+          </div>
+        )}
         {/* Table Header & Search Filters */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-3">
           <div>
             <h2 className="text-base font-bold text-slate-900 tracking-tight">
-              Danh sách Giảng viên ({filteredLecturers.length})
+              Danh sách giảng viên
             </h2>
             <p className="text-xs text-slate-500 font-medium">
               Bảng thông tin chi tiết và quản lý quyền truy cập
@@ -370,7 +380,7 @@ export const LecturersView = ({
                 }}
                 placeholder="Tìm tên, MSGV, Email..."
                 aria-label="Tìm giảng viên"
-                className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-medium outline-none focus:bg-white focus:border-blue-500"
+                className="w-full rounded-md border border-slate-200 bg-slate-50 py-2 pl-8 pr-3 font-medium outline-none transition-colors focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
               />
             </div>
 
@@ -379,7 +389,7 @@ export const LecturersView = ({
               value={filter.accountStatus}
               onChange={(e) => setAccountStatusFilter(e.target.value)}
               aria-label="Lọc theo trạng thái tài khoản"
-              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-500 cursor-pointer"
+              className="cursor-pointer rounded-md border border-slate-200 bg-slate-50 px-3 py-2 font-bold text-slate-800 outline-none transition-colors focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
             >
               <option value="all">Tất cả trạng thái TK</option>
               <option value="active">Đã cấp tài khoản</option>
@@ -390,7 +400,7 @@ export const LecturersView = ({
               value={filter.hasGuidance}
               onChange={(e) => setHasGuidanceFilter(e.target.value as typeof filter.hasGuidance)}
               aria-label="Lọc theo trạng thái hướng dẫn"
-              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-500 cursor-pointer"
+              className="cursor-pointer rounded-md border border-slate-200 bg-slate-50 px-3 py-2 font-bold text-slate-800 outline-none transition-colors focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
             >
               <option value="all">Mọi trạng thái hướng dẫn</option>
               <option value="yes">Đang hướng dẫn</option>
@@ -410,7 +420,7 @@ export const LecturersView = ({
         </div>
 
         {/* Data Table */}
-        <div className="overflow-x-auto border border-slate-200/80 rounded-md">
+        <div className="overflow-x-auto border border-slate-200/80 rounded-xl">
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
@@ -420,7 +430,7 @@ export const LecturersView = ({
                       type="checkbox"
                       checked={isAllPageSelected}
                       onChange={handleToggleSelectAllPage}
-                      className="rounded text-blue-600 cursor-pointer"
+                      className="rounded text-[#026aa7] cursor-pointer"
                     />
                   </th>
                 )}
@@ -434,7 +444,51 @@ export const LecturersView = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {paginatedLecturers.length === 0 ? (
+              {isError && paginatedLecturers.length === 0 ? (
+                <tr>
+                  <td colSpan={canMutateOps ? 8 : 7} className="p-6">
+                    <div role="alert" className="mx-auto flex max-w-xl flex-col items-center gap-3 text-center">
+                      <AlertCircle className="h-8 w-8 text-rose-600" aria-hidden="true" />
+                      <p className="text-sm font-semibold text-rose-700">
+                        Không thể tải danh sách giảng viên
+                      </p>
+                      <p className="text-xs text-slate-600">{getApiErrorMessage(error)}</p>
+                      <button
+                        type="button"
+                        onClick={() => void refetch()}
+                        className="min-h-9 rounded-md bg-[#026aa7] px-3 text-xs font-bold text-white transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/30"
+                      >
+                        Thử tải lại
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ) : isLoadingApi ? (
+                Array.from({ length: 6 }).map((_, index) => (
+                  <tr key={index} className="animate-pulse">
+                    {canMutateOps && (
+                      <td className="px-3 py-3 text-center">
+                        <SkeletonBox className="mx-auto h-4 w-4" />
+                      </td>
+                    )}
+                    <td className="px-3 py-3">
+                      <div className="flex items-center gap-2.5">
+                        <SkeletonBox className="h-8 w-8 shrink-0 rounded-full" />
+                        <div className="space-y-1">
+                          <SkeletonBox className="h-3.5 w-28" />
+                          <SkeletonBox className="h-2.5 w-20" />
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-3 py-3"><SkeletonBox className="h-3.5 w-16" /></td>
+                    <td className="px-3 py-3"><SkeletonBox className="h-3.5 w-24" /></td>
+                    <td className="px-3 py-3"><SkeletonBox className="h-3.5 w-28" /></td>
+                    <td className="px-3 py-3 text-center"><SkeletonBox className="mx-auto h-3.5 w-8" /></td>
+                    <td className="px-3 py-3 text-center"><SkeletonBox className="mx-auto h-5 w-20 rounded-full" /></td>
+                    <td className="px-3 py-3 text-center"><SkeletonBox className="mx-auto h-6 w-24 rounded-md" /></td>
+                  </tr>
+                ))
+              ) : paginatedLecturers.length === 0 ? (
                 <tr>
                   <td
                     colSpan={canMutateOps ? 8 : 7}
@@ -442,15 +496,32 @@ export const LecturersView = ({
                   >
                     <EmptyState
                       icon={UserSearch}
-                      title="Không tìm thấy giảng viên phù hợp"
-                      description="Hãy thử đổi trạng thái tài khoản hoặc từ khóa tìm kiếm."
-                      action={{
-                        label: "Xóa bộ lọc tìm kiếm",
-                        onClick: () => {
-                          setSearchInput("");
-                          clearFilters();
-                        },
-                      }}
+                      title={
+                        hasActiveFilters
+                          ? "Không tìm thấy giảng viên phù hợp"
+                          : "Chưa có giảng viên để hiển thị"
+                      }
+                      description={
+                        hasActiveFilters
+                          ? "Thử thay đổi từ khóa hoặc bộ lọc để tìm giảng viên."
+                          : "API không trả về giảng viên nào cho kỳ và đơn vị đang chọn."
+                      }
+                      action={
+                        hasActiveFilters
+                          ? {
+                              label: "Xóa bộ lọc tìm kiếm",
+                              onClick: () => {
+                                setSearchInput("");
+                                clearFilters();
+                              },
+                            }
+                          : canMutateOps
+                            ? {
+                                label: "Thêm giảng viên",
+                                onClick: () => setIsCreateModalOpen(true),
+                              }
+                            : undefined
+                      }
                     />
                   </td>
                 </tr>
@@ -460,7 +531,7 @@ export const LecturersView = ({
                   return (
                     <tr
                       key={lec.id}
-                      className={`hover:bg-slate-50/80 transition-colors ${isSelected ? "bg-blue-50/50" : ""}`}
+                      className={`hover:bg-slate-50/80 transition-colors ${isSelected ? "bg-[#026aa7]/5" : ""}`}
                     >
                       {canMutateOps && (
                         <td className="py-3 px-3 text-center">
@@ -468,7 +539,7 @@ export const LecturersView = ({
                             type="checkbox"
                             checked={isSelected}
                             onChange={() => handleToggleSelect(lec.id)}
-                            className="rounded text-blue-600 cursor-pointer"
+                            className="rounded text-[#026aa7] cursor-pointer"
                           />
                         </td>
                       )}
@@ -509,7 +580,7 @@ export const LecturersView = ({
 
                       {/* Contact */}
                       <td className="py-3 px-3">
-                        <p className="font-bold text-blue-600">{lec.email}</p>
+                        <p className="font-bold text-[#026aa7]">{lec.email}</p>
                         <p className="text-[10px] text-slate-400 font-mono">
                           {lec.phone}
                         </p>
@@ -559,7 +630,7 @@ export const LecturersView = ({
 
                           <button
                             onClick={() => setSelectedLecturer(lec)}
-                            className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-blue-600 rounded-lg transition-colors cursor-pointer"
+                            className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-[#026aa7] rounded-lg transition-colors cursor-pointer"
                             title="Xem chi tiết"
                           >
                             <Eye className="w-4 h-4" />
@@ -632,7 +703,7 @@ export const LecturersView = ({
               <select
                 value={pagination.pageSize}
                 onChange={(e) => setPageSize(Number(e.target.value))}
-                className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg font-bold text-slate-800 outline-none focus:border-blue-500 cursor-pointer"
+                className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg font-bold text-slate-800 outline-none focus:border-[#026aa7] cursor-pointer"
                 aria-label="Số giảng viên mỗi trang"
               >
                 {LECTURERS_PAGE_SIZE_OPTIONS.map((size) => (
@@ -690,7 +761,7 @@ export const LecturersView = ({
               <span className="font-bold text-emerald-700">
                 {selectedIds.length > 0
                   ? `${selectedIds.length} gi\u1EA3ng vi\xEAn \u0111\xE3 ch\u1ECDn`
-                  : `${pendingAccounts} gi\u1EA3ng vi\xEAn ch\u01B0a c\xF3 t\xE0i kho\u1EA3n`}
+                  : `${pendingAccounts} gi\u1EA3ng vi\xEAn ch\u01B0a c\xF3 t\xE0i kho\u1EA3n trong danh s\xE1ch hi\u1EC7n t\u1EA1i`}
               </span>
               .
             </p>
@@ -752,7 +823,7 @@ export const LecturersView = ({
                 <h4 className="font-bold text-slate-900 text-sm">
                   {selectedLecturer.fullName}
                 </h4>
-                <p className="text-xs font-mono font-bold text-blue-600">
+                <p className="text-xs font-mono font-bold text-[#026aa7]">
                   {selectedLecturer.employeeId}
                 </p>
                 <p className="text-xs text-slate-500 font-medium">
@@ -778,7 +849,7 @@ export const LecturersView = ({
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400">Email:</span>
-                  <span className="font-bold text-blue-600">
+                  <span className="font-bold text-[#026aa7]">
                     {selectedLecturer.email}
                   </span>
                 </div>
@@ -797,14 +868,14 @@ export const LecturersView = ({
               </div>
 
               {/* Assignment count */}
-              <div className="p-4 bg-blue-50/70 border border-blue-100 rounded-lg">
-                <span className="text-[10px] font-bold uppercase text-blue-600 tracking-wider">
+              <div className="p-4 bg-[#026aa7]/5 border border-[#026aa7]/15 rounded-lg">
+                <span className="text-[10px] font-bold uppercase text-[#026aa7] tracking-wider">
                   SV phân công
                 </span>
-                <p className="text-xl font-bold text-blue-950 mt-1">
+                <p className="text-xl font-bold text-[#005082] mt-1">
                   {selectedLecturer.currentCount ?? 0}
                 </p>
-                <p className="text-[10px] text-blue-700/70 mt-1">
+                <p className="text-[10px] text-[#025a8e]/70 mt-1">
                   Danh sách chi tiết xem tại tab Phân công hoặc Workspace của từng sinh viên.
                 </p>
               </div>
@@ -830,7 +901,7 @@ export const LecturersView = ({
                   setEditingLecturer(selectedLecturer);
                   setSelectedLecturer(null);
                 }}
-                className="w-full py-2 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 font-bold text-xs rounded-md transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                className="w-full py-2 bg-[#026aa7]/5 hover:bg-[#026aa7]/10 text-[#025a8e] border border-[#026aa7]/20 font-bold text-xs rounded-md transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <Pencil className="w-3.5 h-3.5" /> Sửa hồ sơ
               </button>

@@ -161,26 +161,17 @@ export function mapCompanyDtoToEnterprise(c: CompanyDto): Enterprise {
 }
 
 export function mapLecturerCompanySummaryToEnterprise(c: LecturerCompanySummaryDto): Enterprise {
-  const short =
-    c.companyCode ||
-    c.companyName
-      .split(/\s+/)
-      .map((w) => w[0])
-      .join("")
-      .slice(0, 3)
-      .toUpperCase() ||
-    "DN";
   return {
     id: c.id,
     name: c.companyName,
-    shortCode: short,
-    badge: "Đang hướng dẫn",
-    badgeType: "teal",
+    shortCode: c.companyCode || "—",
+    badge: "",
+    badgeType: "gray",
     studentCount: c.assignedStudentsCount ?? 0,
-    activeThisWeek: true,
+    activeThisWeek: false,
     contactEmail: c.contactEmail ?? "—",
     location: c.address ?? "—",
-    status: "Đang hướng dẫn",
+    status: "",
     field: c.industry ?? "—",
     contactPerson: c.contactPerson ?? "—",
     contactPhone: c.contactPhone ?? "—",
@@ -188,9 +179,8 @@ export function mapLecturerCompanySummaryToEnterprise(c: LecturerCompanySummaryD
     capacity: c.assignedStudentsCount ?? 0,
     rating: 0,
     hasStipend: false,
-    isHiring: true,
+    isHiring: false,
     isPriority: false,
-    updatedAt: new Date().toISOString(),
   };
 }
 

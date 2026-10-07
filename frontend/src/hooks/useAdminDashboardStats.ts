@@ -117,7 +117,7 @@ export interface AdminDashboardActivity {
 
 export interface AdminDashboardStats {
   lecturerCount: number;
-  lecturersWithStudents: number;
+  lecturersWithStudents?: number;
   studentCount: number;
   activeStudents: number;
   pendingStudentAccounts: number;
@@ -154,11 +154,30 @@ export function useAdminDashboardStats(
     setIsLoading(true);
     try {
       const effectiveDepartmentId = departmentId === "all" || !departmentId ? undefined : departmentId;
+
       if (platformOverview) {
-        const overview = await adminDashboardService.getOverview(semesterId ?? undefined, effectiveDepartmentId, backendRole);
+        const [overview, notifications] = await Promise.all([
+          adminDashboardService.getOverview(
+            semesterId ?? undefined,
+            effectiveDepartmentId,
+            backendRole,
+          ),
+          notificationService.getMine().catch(() => []),
+        ]);
+
+        const recentActivities: AdminDashboardActivity[] = notifications
+          .slice(0, 5)
+          .map((n) => ({
+            id: n.id,
+            title: n.title,
+            desc: n.content,
+            time: formatRelativeTime(n.createdAt),
+            date: new Date(n.createdAt).toLocaleString("vi-VN"),
+            user: "Hệ thống",
+          }));
+
         setStats({
           lecturerCount: overview.lecturerCount,
-          lecturersWithStudents: 0,
           studentCount: overview.studentCount,
           activeStudents: overview.activeStudents,
           pendingStudentAccounts: 0,
@@ -173,7 +192,7 @@ export function useAdminDashboardStats(
           avgStudentsPerLecturer: 0,
           workloadBreakdown: [],
           actionItems: [],
-          recentActivities: [],
+          recentActivities,
         });
         setUpdatedAt(new Date());
         return;
@@ -187,9 +206,15 @@ export function useAdminDashboardStats(
         notifications,
         allAssignments,
       ] = await Promise.all([
-        adminStudentsService.getAll(0, 500, semesterId ?? undefined, effectiveDepartmentId),
-        adminLecturersService.getAll(0, 500, semesterId ?? undefined, effectiveDepartmentId),
-        adminCompaniesService.getAll(0, 500, semesterId ?? undefined, effectiveDepartmentId),
+        adminStudentsService
+          .getAll(0, 1000, semesterId ?? undefined, effectiveDepartmentId)
+          .catch(() => []),
+        adminLecturersService
+          .getAll(0, 1000, semesterId ?? undefined, effectiveDepartmentId)
+          .catch(() => []),
+        adminCompaniesService
+          .getAll(0, 1000, semesterId ?? undefined, effectiveDepartmentId)
+          .catch(() => []),
         adminDashboardService
           .getInternshipStats(semesterId ?? undefined, effectiveDepartmentId, backendRole)
           .catch(() => ({ ...EMPTY_INTERNSHIP_STATS })),
