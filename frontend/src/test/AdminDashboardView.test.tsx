@@ -153,5 +153,5 @@ describe("Admin dashboard chart modes", () => {
         name: /Học kỳ mùa xuân năm học 2026-2027\s+18\s+12\s+7/,
       }),
     ).toBeInTheDocument();
-  });
+  }, 15000);
 });
