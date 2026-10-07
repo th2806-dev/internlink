@@ -66,40 +66,28 @@ try {
     $sourceLocalSettingsPath = Join-Path $sourceRoot 'backend\InternLink\InternLink.API\appsettings.local.json'
     $apiRoot = 'C:\Apps\InternLink\Api'
     $deployedLocalSettingsPath = Join-Path $apiRoot 'appsettings.local.json'
-    $localSettingsPath = $null
-    $localSettings = $null
 
+    # Clean up stale local settings in source tree so they never shadow appsettings.json
     if (Test-Path $sourceLocalSettingsPath) {
-        $localSettingsPath = $sourceLocalSettingsPath
-    }
-    elseif (Test-Path $deployedLocalSettingsPath) {
-        $localSettingsPath = $deployedLocalSettingsPath
-        Write-Host "Using server-local settings: $localSettingsPath"
-    }
-
-    if ($localSettingsPath) {
-        try {
-            $localSettings = Get-Content $localSettingsPath -Raw | ConvertFrom-Json
-        }
-        catch {
-            Write-Warning "Could not read local settings JSON: $($_.Exception.Message)"
-        }
+        Write-Host "Removing stale local settings in source: $sourceLocalSettingsPath"
+        Remove-Item $sourceLocalSettingsPath -Force -ErrorAction SilentlyContinue
     }
 
     $defaultEmail = $defaultSettings.Email
-    $localEmail = if ($localSettings) { $localSettings.Email } else { $null }
-
     $smtpUsername = [string]$defaultEmail.Username
-    if ($localEmail -and -not [string]::IsNullOrWhiteSpace($localEmail.Username)) {
-        $smtpUsername = [string]$localEmail.Username
-    }
     if ([string]::IsNullOrWhiteSpace($smtpUsername)) {
         $smtpUsername = [Environment]::GetEnvironmentVariable('Email__Username', 'Machine')
     }
 
+    # Prioritize password in appsettings.json
     $smtpPassword = [string]$defaultEmail.Password
-    if ($localEmail -and -not [string]::IsNullOrWhiteSpace($localEmail.Password)) {
-        $smtpPassword = [string]$localEmail.Password
+    if ([string]::IsNullOrWhiteSpace($smtpPassword)) {
+        if (Test-Path $deployedLocalSettingsPath) {
+            try {
+                $depLocal = Get-Content $deployedLocalSettingsPath -Raw | ConvertFrom-Json
+                $smtpPassword = [string]$depLocal.Email.Password
+            } catch {}
+        }
     }
     $smtpPassword = $smtpPassword -replace '\s', ''
 
@@ -239,20 +227,11 @@ if ($LASTEXITCODE -ge 8) {
     throw "API file deployment failed with robocopy exit code $LASTEXITCODE. The API remains stopped and app_offline.htm is retained; rerun this script after resolving the file lock."
 }
 
-if ($localSettingsPath -and (Test-Path $localSettingsPath)) {
-    $deployedSettingsPath = Join-Path $apiRoot 'appsettings.local.json'
-    if ([IO.Path]::GetFullPath($localSettingsPath) -ne [IO.Path]::GetFullPath($deployedSettingsPath)) {
-        Copy-Item -LiteralPath $localSettingsPath -Destination $deployedSettingsPath -Force
-    }
-    $runtimeSettings = Get-Content $deployedSettingsPath -Raw | ConvertFrom-Json
-    $runtimeSettings.Email.Password = $smtpPassword
-    $runtimeSettings | ConvertTo-Json -Depth 100 |
-        Set-Content -LiteralPath $deployedSettingsPath -Encoding UTF8
-    & icacls.exe $deployedSettingsPath /inheritance:r `
-        /grant:r '*S-1-5-18:F' '*S-1-5-32-544:F' 'IIS AppPool\InternLinkApi:R' | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        Write-Warning 'Could not restrict access to the deployed appsettings.local.json secret file.'
-    }
+# Clean up any appsettings.local.json so API always uses appsettings.json directly
+$deployedLocalSettings = Join-Path $apiRoot 'appsettings.local.json'
+if (Test-Path $deployedLocalSettings) {
+    Write-Host 'Removing stale appsettings.local.json from deployed API...'
+    Remove-Item $deployedLocalSettings -Force -ErrorAction SilentlyContinue
 }
 
 Write-Host 'Ensuring upload directories exist on the server...'
