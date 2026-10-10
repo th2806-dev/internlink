@@ -983,13 +983,17 @@ public class LecturerService : ILecturerService
 
         var query = _db.Internships
             .Where(i => i.LecturerId == lecturerId.Value && !i.IsDeleted)
-            .Include(i => i.WeeklyReports)
             .Include(i => i.Semester)
             .AsQueryable();
 
         if (semesterId.HasValue)
             query = query.Where(i => i.SemesterId == semesterId.Value);
         var internships = await query.ToListAsync();
+        var internshipIds = internships.Select(internship => internship.Id).ToHashSet();
+        var weeklyReports = await _db.WeeklyReports
+            .AsNoTracking()
+            .Where(report => internshipIds.Contains(report.InternshipId) && !report.IsDeleted)
+            .ToListAsync();
         var semesterIds = internships
             .Where(internship => internship.SemesterId.HasValue)
             .Select(internship => internship.SemesterId!.Value)
@@ -1036,13 +1040,20 @@ public class LecturerService : ILecturerService
             foreach (var internship in scheduledInternships)
             {
                 var dueDate = scheduleBySemesterWeek[(internship.SemesterId!.Value, week)].DueDate;
-                var submission = internship.WeeklyReports
-                    .Where(report => !report.IsDeleted && report.WeekNumber == week && report.SubmittedAt.HasValue)
+                var submission = weeklyReports
+                    .Where(report =>
+                        report.InternshipId == internship.Id &&
+                        report.WeekNumber == week &&
+                        (report.SubmittedAt.HasValue || report.Status != WeeklyReportStatus.Draft))
                     .OrderByDescending(report => report.SubmittedAt)
+                    .ThenByDescending(report => report.UpdatedAt ?? report.CreatedAt)
                     .FirstOrDefault();
 
-                if (submission?.SubmittedAt is DateTime submittedAt)
+                if (submission != null)
                 {
+                    var submittedAt = submission.SubmittedAt
+                        ?? submission.UpdatedAt
+                        ?? submission.CreatedAt;
                     if (submittedAt <= dueDate) onTime++;
                     else late++;
                 }
@@ -1099,11 +1110,13 @@ public class LecturerService : ILecturerService
         return new GradeDistributionDto
         {
             TotalStudents = total,
-            ExcellentCount = finalized.Count(e => e.FinalGrade >= 9),
-            GoodCount = finalized.Count(e => e.FinalGrade >= 8 && e.FinalGrade < 9),
-            FairCount = finalized.Count(e => e.FinalGrade >= 7 && e.FinalGrade < 8),
-            AverageCount = finalized.Count(e => e.FinalGrade >= 5.5m && e.FinalGrade < 7),
-            FailCount = finalized.Count(e => e.FinalGrade < 5.5m),
+            ExcellentCount = finalized.Count(e => e.FinalGrade >= 8.5m),
+            GoodCount = finalized.Count(e => e.FinalGrade >= 8m && e.FinalGrade < 8.5m),
+            FairCount = finalized.Count(e => e.FinalGrade >= 7m && e.FinalGrade < 8m),
+            AverageGoodCount = finalized.Count(e => e.FinalGrade >= 6.5m && e.FinalGrade < 7m),
+            AverageCount = finalized.Count(e => e.FinalGrade >= 5m && e.FinalGrade < 6.5m),
+            WeakCount = finalized.Count(e => e.FinalGrade >= 4m && e.FinalGrade < 5m),
+            FailCount = finalized.Count(e => e.FinalGrade < 4m),
             NotYetGradedCount = total - finalized.Count,
             OverallAverage = finalized.Any() ? Math.Round(finalized.Average(e => e.FinalGrade), 2) : 0
         };
@@ -1499,5 +1512,3 @@ public class LecturerService : ILecturerService
         return true;
     }
 }
-
-

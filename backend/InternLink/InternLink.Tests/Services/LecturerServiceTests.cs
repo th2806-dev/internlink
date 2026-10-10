@@ -177,6 +177,72 @@ public class LecturerServiceTests
     }
 
     [Fact]
+    public async Task GetGradeDistributionAsync_ShouldUseConversionScaleBoundaries()
+    {
+        var db = GetDb();
+        var (lecturerUser, lecturer, internship1, internship2) = await SeedLecturerDataAsync(db);
+        var semesterId = internship1.SemesterId!.Value;
+        var existingEvaluation = await db.Evaluations.SingleAsync(e => e.InternshipId == internship2.Id);
+        existingEvaluation.FinalGrade = 8.5m;
+
+        db.Evaluations.Add(new Evaluation
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = internship1.Id,
+            FinalGrade = 6.5m,
+            IsFinalized = true,
+            CreatedAt = DateTime.UtcNow,
+        });
+
+        var finalizedScores = new[] { 8.4m, 7m, 5m, 4m, 3.9m };
+        foreach (var score in finalizedScores)
+        {
+            var internship = new Internship
+            {
+                Id = Guid.NewGuid(),
+                StudentId = Guid.NewGuid(),
+                LecturerId = lecturer.Id,
+                SemesterId = semesterId,
+                Status = InternshipStatus.Completed,
+                CreatedAt = DateTime.UtcNow,
+            };
+            db.Internships.Add(internship);
+            db.Evaluations.Add(new Evaluation
+            {
+                Id = Guid.NewGuid(),
+                InternshipId = internship.Id,
+                FinalGrade = score,
+                IsFinalized = true,
+                CreatedAt = DateTime.UtcNow,
+            });
+        }
+
+        db.Internships.Add(new Internship
+        {
+            Id = Guid.NewGuid(),
+            StudentId = Guid.NewGuid(),
+            LecturerId = lecturer.Id,
+            SemesterId = semesterId,
+            Status = InternshipStatus.InProgress,
+            CreatedAt = DateTime.UtcNow,
+        });
+        await db.SaveChangesAsync();
+
+        var result = await new LecturerService(db, _mapper, Mock.Of<INotificationService>())
+            .GetGradeDistributionAsync(lecturerUser.Id, semesterId);
+
+        result.TotalStudents.Should().Be(8);
+        result.ExcellentCount.Should().Be(1);
+        result.GoodCount.Should().Be(1);
+        result.FairCount.Should().Be(1);
+        result.AverageGoodCount.Should().Be(1);
+        result.AverageCount.Should().Be(1);
+        result.WeakCount.Should().Be(1);
+        result.FailCount.Should().Be(1);
+        result.NotYetGradedCount.Should().Be(1);
+    }
+
+    [Fact]
     public async Task GetAssignedSemestersAsync_ShouldReturnOnlySemestersWithAssignedInternships()
     {
         var db = GetDb();
@@ -287,6 +353,166 @@ public class LecturerServiceTests
     }
 
     [Fact]
+    public async Task GetWeeklyTrendAsync_ShouldCountSubmittedReportsWithoutSubmittedAt_AndExcludeClosedWeeks()
+    {
+        var db = GetDb();
+        var (lecturerUser, lecturer, internship1, _) = await SeedLecturerDataAsync(db);
+        var semesterId = internship1.SemesterId!.Value;
+        db.SemesterReportSchedules.AddRange(
+            new SemesterReportSchedule
+            {
+                Id = Guid.NewGuid(),
+                SemesterId = semesterId,
+                LecturerId = lecturer.Id,
+                WeekNumber = 1,
+                Title = "Tuần 1",
+                DueDate = DateTime.UtcNow.AddHours(1),
+                IsSubmissionOpen = true,
+                CreatedAt = DateTime.UtcNow,
+            },
+            new SemesterReportSchedule
+            {
+                Id = Guid.NewGuid(),
+                SemesterId = semesterId,
+                LecturerId = lecturer.Id,
+                WeekNumber = 2,
+                Title = "Tuần 2",
+                DueDate = DateTime.UtcNow.AddDays(1),
+                IsSubmissionOpen = false,
+                CreatedAt = DateTime.UtcNow,
+            });
+        await db.SaveChangesAsync();
+        var service = new LecturerService(db, _mapper, Mock.Of<INotificationService>());
+
+        var result = await service.GetWeeklyTrendAsync(lecturerUser.Id, semesterId);
+
+        result.Should().ContainSingle();
+        result[0].WeekNumber.Should().Be(1);
+        result[0].OnTimeCount.Should().Be(1);
+        result[0].PendingCount.Should().Be(1);
+        result[0].TotalStudents.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task GetWeeklyTrendAsync_ShouldCountReportWithSubmittedAtEvenWhenStatusIsDraft()
+    {
+        var db = GetDb();
+        var (lecturerUser, lecturer, internship1, _) = await SeedLecturerDataAsync(db);
+        var semesterId = internship1.SemesterId!.Value;
+        var submittedAt = DateTime.UtcNow.AddMinutes(-5);
+        db.SemesterReportSchedules.Add(new SemesterReportSchedule
+        {
+            Id = Guid.NewGuid(),
+            SemesterId = semesterId,
+            LecturerId = lecturer.Id,
+            WeekNumber = 1,
+            Title = "Tuần 1",
+            DueDate = DateTime.UtcNow.AddDays(1),
+            IsSubmissionOpen = true,
+            CreatedAt = DateTime.UtcNow,
+        });
+        db.WeeklyReports.Add(new WeeklyReport
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = internship1.Id,
+            WeekNumber = 1,
+            Status = WeeklyReportStatus.Draft,
+            SubmittedAt = submittedAt,
+            Title = "Báo cáo tuần 1",
+            Content = "Nội dung báo cáo",
+            CreatedAt = submittedAt,
+        });
+        await db.SaveChangesAsync();
+        var service = new LecturerService(db, _mapper, Mock.Of<INotificationService>());
+
+        var result = await service.GetWeeklyTrendAsync(lecturerUser.Id, semesterId);
+
+        result.Should().ContainSingle();
+        result[0].OnTimeCount.Should().Be(1);
+        result[0].PendingCount.Should().Be(1);
+        result[0].TotalStudents.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task GetWeeklyTrendAsync_ShouldShowOneSubmissionForWeekTwoAndWeekThreeOutOfEightStudents()
+    {
+        var db = GetDb();
+        var (lecturerUser, lecturer, internship1, internship2) = await SeedLecturerDataAsync(db);
+        var semesterId = internship1.SemesterId!.Value;
+        var now = DateTime.UtcNow;
+        var additionalInternships = Enumerable.Range(0, 6)
+            .Select(_ => new Internship
+            {
+                Id = Guid.NewGuid(),
+                StudentId = Guid.NewGuid(),
+                LecturerId = lecturer.Id,
+                SemesterId = semesterId,
+                Status = InternshipStatus.InProgress,
+                CreatedAt = now,
+            })
+            .ToList();
+
+        db.Internships.AddRange(additionalInternships);
+        db.SemesterReportSchedules.AddRange(
+            new SemesterReportSchedule
+            {
+                Id = Guid.NewGuid(),
+                SemesterId = semesterId,
+                LecturerId = lecturer.Id,
+                WeekNumber = 2,
+                Title = "Tuần 2",
+                DueDate = now.AddDays(1),
+                IsSubmissionOpen = true,
+                CreatedAt = now,
+            },
+            new SemesterReportSchedule
+            {
+                Id = Guid.NewGuid(),
+                SemesterId = semesterId,
+                LecturerId = lecturer.Id,
+                WeekNumber = 3,
+                Title = "Tuần 3",
+                DueDate = now.AddDays(8),
+                IsSubmissionOpen = true,
+                CreatedAt = now,
+            });
+        db.WeeklyReports.AddRange(
+            new WeeklyReport
+            {
+                Id = Guid.NewGuid(),
+                InternshipId = internship1.Id,
+                WeekNumber = 2,
+                Status = WeeklyReportStatus.Approved,
+                SubmittedAt = now.AddHours(-1),
+                Title = "Báo cáo tuần 2",
+                Content = "Nội dung báo cáo tuần 2",
+                CreatedAt = now.AddHours(-1),
+            },
+            new WeeklyReport
+            {
+                Id = Guid.NewGuid(),
+                InternshipId = internship2.Id,
+                WeekNumber = 3,
+                Status = WeeklyReportStatus.Approved,
+                SubmittedAt = now.AddHours(-1),
+                Title = "Báo cáo tuần 3",
+                Content = "Nội dung báo cáo tuần 3",
+                CreatedAt = now.AddHours(-1),
+            });
+        await db.SaveChangesAsync();
+        var service = new LecturerService(db, _mapper, Mock.Of<INotificationService>());
+
+        var result = await service.GetWeeklyTrendAsync(lecturerUser.Id, semesterId);
+
+        result.Should().HaveCount(2);
+        result.Select(item => item.WeekNumber).Should().Equal(2, 3);
+        result.Should().OnlyContain(item =>
+            item.OnTimeCount == 1 &&
+            item.PendingCount == 7 &&
+            item.TotalStudents == 8);
+    }
+
+    [Fact]
     public async Task GetAssignedStudentsAsync_WithFilter_ShouldFilterCorrectly()
     {
         var db = GetDb();
@@ -376,4 +602,3 @@ public class LecturerServiceTests
         result.Should().BeFalse();
     }
 }
-

@@ -51,15 +51,9 @@ public sealed class LecturerParticipationHistoryService : ILecturerParticipation
             OccurredAt = item.OccurredAt,
         }).ToList();
 
-        var loggedInternshipIds = storedLogs
-            .Where(item => item.InternshipId.HasValue)
-            .Select(item => item.InternshipId!.Value)
-            .Distinct()
-            .ToList();
-
         var internships = await _db.Internships.AsNoTracking()
             .Where(item => item.SemesterId == semesterId && !item.IsDeleted
-                && (item.LecturerId == lecturerId || loggedInternshipIds.Contains(item.Id)))
+                && item.LecturerId == lecturerId)
             .Include(item => item.Student)
             .Include(item => item.Company)
             .OrderBy(item => item.Student!.StudentCode)

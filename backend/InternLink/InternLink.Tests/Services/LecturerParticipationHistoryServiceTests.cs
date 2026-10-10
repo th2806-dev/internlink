@@ -141,6 +141,56 @@ public class LecturerParticipationHistoryServiceTests
     }
 
     [Fact]
+    public async Task GetSemesterHistoryAsync_DoesNotListStudentsOutsideLecturerAssignmentEvenWhenActivityWasLogged()
+    {
+        await using var db = CreateDb();
+        var lecturerId = Guid.NewGuid();
+        var otherLecturerId = Guid.NewGuid();
+        var semester = new Semester { Id = Guid.NewGuid(), Name = "HK1", Term = "HK1", AcademicYear = "2026-2027" };
+        var assignedStudent = new Student { Id = Guid.NewGuid(), StudentCode = "SV001", FullName = "Sinh viên được phân công" };
+        var otherStudent = new Student { Id = Guid.NewGuid(), StudentCode = "SV002", FullName = "Sinh viên của giảng viên khác" };
+        var assignedInternship = new Internship
+        {
+            Id = Guid.NewGuid(),
+            StudentId = assignedStudent.Id,
+            SemesterId = semester.Id,
+            LecturerId = lecturerId,
+        };
+        var otherInternship = new Internship
+        {
+            Id = Guid.NewGuid(),
+            StudentId = otherStudent.Id,
+            SemesterId = semester.Id,
+            LecturerId = otherLecturerId,
+        };
+        db.Semesters.Add(semester);
+        db.Students.AddRange(assignedStudent, otherStudent);
+        db.Internships.AddRange(assignedInternship, otherInternship);
+        db.LecturerActivityLogs.Add(new LecturerActivityLog
+        {
+            Id = Guid.NewGuid(),
+            LecturerId = lecturerId,
+            SemesterId = semester.Id,
+            InternshipId = otherInternship.Id,
+            StudentId = otherStudent.Id,
+            StudentName = otherStudent.FullName,
+            ActivityType = "weekly-report-review",
+            Title = "Log cũ của sinh viên",
+            OccurredAt = DateTime.UtcNow,
+        });
+        await db.SaveChangesAsync();
+
+        var history = await new LecturerParticipationHistoryService(db)
+            .GetSemesterHistoryAsync(lecturerId, semester.Id);
+
+        history.Should().NotBeNull();
+        history!.Students.Should().ContainSingle()
+            .Which.StudentId.Should().Be(assignedStudent.Id);
+        history.Activities.Should().ContainSingle()
+            .Which.Title.Should().Be("Log cũ của sinh viên");
+    }
+
+    [Fact]
     public async Task GetSemesterHistoryAsync_UsesStoredLogToRetainHistoricalParticipation()
     {
         await using var db = CreateDb();
