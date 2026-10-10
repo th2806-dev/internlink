@@ -405,5 +405,13 @@ public class WeeklyReportController : ControllerBase
         {
             return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = ex.Message }));
         }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to cancel weekly report submission {ReportId}", id);
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError
+            {
+                Title = InternLink.Shared.Responses.ErrorMessage.InternalServerError,
+            }));
+        }
     }
 }

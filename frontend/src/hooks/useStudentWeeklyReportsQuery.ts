@@ -128,6 +128,21 @@ export function useStudentWeeklyReportsQuery({
     },
   });
 
+  const cancelMutation = useMutation({
+    mutationFn: (reportId: string) =>
+      weeklyReportService.cancelSubmission(reportId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.student.weeklyReports.all,
+      });
+      if (semesterId) {
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.student.dashboard(semesterId),
+        });
+      }
+    },
+  });
+
   return {
     reports: query.data?.reports ?? [],
     rawReports: query.data?.rawReports ?? [],
@@ -139,5 +154,7 @@ export function useStudentWeeklyReportsQuery({
     refetch: query.refetch,
     submitReport: submitMutation.mutateAsync,
     isSubmitting: submitMutation.isPending,
+    cancelSubmission: cancelMutation.mutateAsync,
+    isCancelling: cancelMutation.isPending,
   };
 }

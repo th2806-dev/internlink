@@ -45,7 +45,10 @@ import {
   semesterReportScheduleService,
   type SemesterReportScheduleDto,
 } from "../../../services/semesterReportSchedule.service";
-import type { EvaluationDetailDto } from "../../../types/api";
+import type {
+  EvaluationDetailDto,
+  WeeklyQualityAverageDto,
+} from "../../../types/api";
 
 type ChartMode = "bar" | "line" | "table";
 
@@ -61,6 +64,10 @@ export const DashboardView = ({
   const { reports, loading: reportsLoading } = useWeeklyReports();
 
   const [evaluation, setEvaluation] = useState<EvaluationDetailDto | null>(null);
+  const [weeklyQualityAverages, setWeeklyQualityAverages] = useState<
+    WeeklyQualityAverageDto[]
+  >([]);
+  const [weeklyQualityAveragesError, setWeeklyQualityAveragesError] = useState(false);
   const [reportSchedules, setReportSchedules] = useState<SemesterReportScheduleDto[]>([]);
   const [submissionComments, setSubmissionComments] = useState<
     { id: string; title: string; comment: string; date: string }[]
@@ -74,15 +81,29 @@ export const DashboardView = ({
 
   // Load real evaluation & submission feedbacks from API
   const loadExtra = useCallback(async () => {
+    let weeklyAveragesLoaded = true;
     if (internshipId) {
+      setWeeklyQualityAveragesError(false);
       try {
         const ev = await evaluationService.getByInternship(internshipId);
         setEvaluation(ev);
       } catch {
         setEvaluation(null);
       }
+
+      try {
+        const averages = await evaluationService.getWeeklyQualityAverages(internshipId);
+        setWeeklyQualityAverages(averages);
+        setWeeklyQualityAveragesError(false);
+      } catch {
+        setWeeklyQualityAverages([]);
+        setWeeklyQualityAveragesError(true);
+        weeklyAveragesLoaded = false;
+      }
     } else {
       setEvaluation(null);
+      setWeeklyQualityAverages([]);
+      setWeeklyQualityAveragesError(false);
     }
 
     try {
@@ -102,6 +123,7 @@ export const DashboardView = ({
     } catch {
       setSubmissionComments([]);
     }
+    return weeklyAveragesLoaded;
   }, [internshipId]);
 
   useEffect(() => {
@@ -132,8 +154,13 @@ export const DashboardView = ({
     setIsRefreshing(true);
     try {
       await refresh();
-      await loadExtra();
-      onShowToast?.("Đã làm mới dữ liệu thực tập thành công", "success");
+      const weeklyAveragesLoaded = await loadExtra();
+      onShowToast?.(
+        weeklyAveragesLoaded
+          ? "Đã làm mới dữ liệu thực tập thành công"
+          : "Đã làm mới dữ liệu, nhưng không tải được điểm trung bình nhóm. Hãy thử lại.",
+        weeklyAveragesLoaded ? "success" : "error",
+      );
     } finally {
       setIsRefreshing(false);
     }
@@ -203,131 +230,53 @@ export const DashboardView = ({
     ? Math.ceil((new Date(nextReportSchedule.dueDate).getTime() - Date.now()) / 86_400_000)
     : null;
 
-  // ── Tính điểm QT theo công thức backend (InternshipGradeCalculator) ──
-  // Điểm QT = MIN(10, Nộp_Đủ(max 2) + Đúng_Hạn(max 2) + Chất_Lượng_TB(max 5) + Sáng_Tạo(+1))
-  const gradeBreakdown = useMemo(() => {
-    // Rubric chất lượng từng tuần do GV chấm
-    const weeklyScores = evaluation?.weeklyQualityScores ?? {};
-    const ratedValues = Object.values(weeklyScores).filter(
-      (v) => [1.0, 2.0, 3.5, 4.0, 5.0].includes(v),
-    );
-    const qualityAvg =
-      ratedValues.length > 0
-        ? Math.round((ratedValues.reduce((s, v) => s + v, 0) / ratedValues.length) * 10) / 10
-        : evaluation?.qualityLevel ?? 0;
+  // Thông tin Đơn vị thực tập & Mentor (Ưu tiên Companies.ContactPerson, ContactEmail, ContactPhone)
+  const company = internship?.company;
+  const mentorName =
+    company?.contactPerson?.trim() ||
+    internship?.supervisorName?.trim() ||
+    (profile.supervisorName && profile.supervisorName !== "—" && profile.supervisorName !== "Chưa cập nhật"
+      ? profile.supervisorName
+      : "") ||
+    "Chưa có mentor";
+  const mentorEmail =
+    company?.contactEmail?.trim() ||
+    (profile.supervisorEmail && profile.supervisorEmail !== "—" ? profile.supervisorEmail : "") ||
+    "—";
+  const mentorPhone =
+    company?.contactPhone?.trim() ||
+    (profile.supervisorPhone && profile.supervisorPhone !== "—" ? profile.supervisorPhone : "") ||
+    "—";
 
-    const creative = evaluation?.hasCreativeProduct ? 1.0 : 0;
-
-    // Đếm missing / late từ weekly reports thực tế (không dùng điểm danh)
-    const missingCount = reports.filter((r) => r.status === "draft" || r.status === "revised").length;
-    const lateCount = 0; // Late status không được track trong WeeklyReportData hiện tại
-
-    const submittedCount = reports.filter(
-      (r) => r.status === "submitted" || r.status === "approved",
-    ).length;
-
-    const submissionPts =
-      submittedCount > 0
-        ? Math.max(0, 2.0 - missingCount * 0.5)
-        : 0;
-    const punctualityPts =
-      submittedCount > 0
-        ? Math.max(0, 2.0 - lateCount * 0.5)
-        : 0;
-    const processScore = Math.round(Math.min(10, submissionPts + punctualityPts + qualityAvg + creative) * 10) / 10;
-
-    return { submissionPts, punctualityPts, qualityAvg, creative, processScore, weeklyScores };
-  }, [evaluation, reports]);
-
-  // Dữ liệu biểu đồ: Điểm đánh giá báo cáo tuần (rubric GV) + phân rã Điểm QT
+  // Show one chart position for every weekly report schedule currently enabled by the lecturer.
   const academicResultsData = useMemo(() => {
-    const items: Array<{
-      id: string;
-      name: string;
-      userScore: number;
-      passScore: number;
-      desc: string;
-    }> = [];
+    const groupAveragesByWeek = new Map(
+      weeklyQualityAverages.map((item) => [item.weekNumber, item.averageScore]),
+    );
 
-    // 1. Ưu tiên: Điểm rubric chất lượng TỪNG TUẦN do GV chấm
-    const wq = gradeBreakdown.weeklyScores;
-    const weekEntries = Object.entries(wq)
-      .map(([w, s]) => ({
-        id: `week-${w}`,
-        name: `Tuần ${w}`,
-        userScore: Math.round(Number(s) * 10) / 10,
-        passScore: 3.5,
-        desc: `Rubric chất lượng báo cáo tuần ${w} (thang 5)`,
-      }))
-      .sort((a, b) => {
-        const na = Number(a.name.replace("Tuần ", ""));
-        const nb = Number(b.name.replace("Tuần ", ""));
-        return na - nb;
-      });
+    return reportSchedules
+      .filter((schedule) =>
+        schedule.isSubmissionOpen &&
+        !schedule.isFinalReport &&
+        schedule.weekNumber >= 1,
+      )
+      .sort((left, right) => left.weekNumber - right.weekNumber)
+      .map((schedule) => {
+        const userScore = evaluation?.weeklyQualityScores?.[schedule.weekNumber];
+        const groupAverageScore = groupAveragesByWeek.get(schedule.weekNumber);
 
-    if (weekEntries.length > 0) {
-      items.push(...weekEntries);
-      return items;
-    }
-
-    // 2. Fallback: phân rã Điểm QT theo công thức chấm điểm
-    const { submissionPts, punctualityPts, qualityAvg, creative, processScore } = gradeBreakdown;
-    if (processScore > 0 || reports.length > 0) {
-      items.push({
-        id: "sub",
-        name: "Nộp đủ",
-        userScore: Math.round(submissionPts * 10) / 10,
-        passScore: 2.0,
-        desc: "Điểm nộp đủ bài (max 2.0) – trừ 0.5/bài thiếu",
+        return {
+          id: `week-${schedule.weekNumber}`,
+          weekNumber: schedule.weekNumber,
+          name: `Tuần ${schedule.weekNumber}`,
+          userScore: userScore == null ? null : Math.round(userScore * 10) / 10,
+          groupAverageScore: groupAverageScore == null
+            ? null
+            : Math.round(groupAverageScore * 10) / 10,
+          desc: `Điểm rubric báo cáo tuần ${schedule.weekNumber} (thang 5)`,
+        };
       });
-      items.push({
-        id: "punc",
-        name: "Đúng hạn",
-        userScore: Math.round(punctualityPts * 10) / 10,
-        passScore: 2.0,
-        desc: "Điểm đúng hạn (max 2.0) – trừ 0.5/bài trễ",
-      });
-      items.push({
-        id: "qual",
-        name: "Chất lượng",
-        userScore: Math.round(qualityAvg * 10) / 10,
-        passScore: 3.5,
-        desc: "TB rubric chất lượng các tuần đã chấm (max 5.0)",
-      });
-      if (creative > 0) {
-        items.push({
-          id: "creative",
-          name: "Sáng tạo",
-          userScore: 1.0,
-          passScore: 1.0,
-          desc: "Điểm cộng sản phẩm sáng tạo (+1.0)",
-        });
-      }
-      items.push({
-        id: "process",
-        name: "Điểm QT",
-        userScore: processScore,
-        passScore: 5.0,
-        desc: `Điểm quá trình tổng hợp (thang 10, hệ số 40%)`,
-      });
-      return items;
-    }
-
-    // 3. Fallback cuối: điểm hiện tại từ profile
-    if (profile.currentGrade > 0) {
-      return [
-        {
-          id: "current",
-          name: "Điểm hiện tại",
-          userScore: Math.round(profile.currentGrade * 10) / 10,
-          passScore: 5.0,
-          desc: "Điểm đánh giá cập nhật theo tiến trình thực tập",
-        },
-      ];
-    }
-
-    return [];
-  }, [gradeBreakdown, reports, profile.currentGrade]);
+  }, [evaluation, reportSchedules, weeklyQualityAverages]);
 
   // Real progress counts from weekly reports & profile
   const approvedReports = reports.filter((r) => r.status === "approved").length;
@@ -380,12 +329,11 @@ export const DashboardView = ({
       return;
     }
     const rows = [
-      ["Tiêu chí / Tuần", "Điểm GV chấm", "Mốc chuẩn", "Ghi chú"],
+      ["Tuần", "Điểm của bạn", "Điểm trung bình nhóm"],
       ...academicResultsData.map((d) => [
         d.name,
-        String(d.userScore),
-        String(d.passScore),
-        d.desc,
+        d.userScore == null ? "" : String(d.userScore),
+        d.groupAverageScore == null ? "" : String(d.groupAverageScore),
       ]),
     ];
     const csvContent =
@@ -619,17 +567,22 @@ export const DashboardView = ({
           </div>
 
           {/* Nội dung Biểu đồ hoặc Bảng điểm */}
-          <div className="flex-1 w-full my-auto flex items-center justify-center">
+          <div className="flex-1 w-full my-auto flex flex-col items-center justify-center">
+            {weeklyQualityAveragesError && (
+              <p role="status" className="mb-2 text-center text-[11px] text-amber-700">
+                Không tải được điểm trung bình nhóm. Dùng nút làm mới để thử lại.
+              </p>
+            )}
             {academicResultsData.length === 0 ? (
               <div className="py-12 text-center space-y-2">
                 <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-blue-600">
                   <Award className="h-5 w-5" />
                 </div>
                 <p className="text-xs font-semibold text-slate-700">
-                  Chưa có điểm đánh giá báo cáo tuần
+                  Chưa có tuần báo cáo nào được mở
                 </p>
                 <p className="text-[11px] text-slate-500 max-w-xs mx-auto">
-                  Điểm sẽ tự động hiển thị khi Giảng viên hướng dẫn đánh giá rubric chất lượng cho từng báo cáo tuần.
+                  Biểu đồ sẽ hiển thị các tuần do giảng viên hướng dẫn bật nộp.
                 </p>
               </div>
             ) : chartMode === "table" ? (
@@ -637,10 +590,9 @@ export const DashboardView = ({
                 <table className="w-full text-left text-xs border border-slate-200 rounded-md overflow-hidden">
                   <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200">
                     <tr>
-                      <th className="py-2.5 px-3">Tiêu chí / Tuần</th>
+                      <th className="py-2.5 px-3">Tuần</th>
                       <th className="py-2.5 px-3 text-center">Điểm của bạn</th>
-                      <th className="py-2.5 px-3 text-center">Chuẩn đạt</th>
-                      <th className="py-2.5 px-3">Mô tả</th>
+                      <th className="py-2.5 px-3 text-center">Điểm trung bình nhóm</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -648,12 +600,11 @@ export const DashboardView = ({
                       <tr key={row.id} className="hover:bg-slate-50/80">
                         <td className="py-2.5 px-3 font-semibold">{row.name}</td>
                         <td className="py-2.5 px-3 text-center font-bold text-blue-700">
-                          {row.userScore}
+                          {row.userScore ?? "Chưa chấm"}
                         </td>
                         <td className="py-2.5 px-3 text-center text-slate-500 font-medium">
-                          {row.passScore}
+                          {row.groupAverageScore ?? "Chưa có điểm"}
                         </td>
-                        <td className="py-2.5 px-3 text-[11px] text-slate-500">{row.desc}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -679,13 +630,13 @@ export const DashboardView = ({
                     />
                     <YAxis
                       yAxisId="left"
-                      domain={[0, 10]}
-                      ticks={[0, 5, 10]}
+                      domain={[0, 5]}
+                      ticks={[0, 2.5, 5]}
                       axisLine={false}
                       tickLine={false}
                       tick={false}
                       label={{
-                        value: "Mốc chuẩn",
+                        value: "Điểm trung bình nhóm",
                         angle: -90,
                         position: "insideLeft",
                         style: {
@@ -698,13 +649,13 @@ export const DashboardView = ({
                     <YAxis
                       yAxisId="right"
                       orientation="right"
-                      domain={[0, 10]}
-                      ticks={[0, 5, 10]}
+                      domain={[0, 5]}
+                      ticks={[0, 2.5, 5]}
                       axisLine={false}
                       tickLine={false}
                       tick={false}
                       label={{
-                        value: "Điểm GV chấm",
+                        value: "Điểm của bạn",
                         angle: 90,
                         position: "insideRight",
                         style: {
@@ -719,9 +670,7 @@ export const DashboardView = ({
                         const num = typeof val === "number" ? val : "—";
                         return [
                           num,
-                          name === "userScore"
-                            ? "Điểm GV chấm"
-                            : "Mốc chuẩn",
+                          name === "Điểm của bạn" ? name : "Điểm trung bình nhóm",
                         ];
                       }}
                       contentStyle={{
@@ -734,6 +683,7 @@ export const DashboardView = ({
                       <Bar
                         yAxisId="right"
                         dataKey="userScore"
+                        name="Điểm của bạn"
                         fill="#4d74c9"
                         barSize={48}
                         radius={[2, 2, 0, 0]}
@@ -748,12 +698,26 @@ export const DashboardView = ({
                         />
                       </Bar>
                     )}
+                    {chartMode === "line" && (
+                      <Line
+                        yAxisId="right"
+                        type="monotone"
+                        dataKey="userScore"
+                        name="Điểm của bạn"
+                        stroke="#4d74c9"
+                        strokeWidth={2}
+                        connectNulls={false}
+                        dot={{ r: 3.5, fill: "#ffffff", stroke: "#4d74c9", strokeWidth: 2 }}
+                      />
+                    )}
                     <Line
                       yAxisId="left"
                       type="monotone"
-                      dataKey="passScore"
+                      dataKey="groupAverageScore"
+                      name="Điểm trung bình nhóm"
                       stroke="#7bc043"
                       strokeWidth={2}
+                      connectNulls={false}
                       dot={{
                         r: 3.5,
                         fill: "#ffffff",
@@ -774,11 +738,15 @@ export const DashboardView = ({
               <span className="relative inline-block w-4 h-0.5 bg-[#7bc043]">
                 <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 rounded-full border-2 border-[#7bc043] bg-white" />
               </span>
-              <span>Mốc chuẩn</span>
+              <span>Điểm trung bình nhóm</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="inline-block w-3.5 h-3.5 bg-[#4d74c9] rounded-2xs" />
-              <span>Điểm GV chấm</span>
+              {chartMode === "line" ? (
+                <span className="inline-block w-4 h-0.5 bg-[#4d74c9]" />
+              ) : (
+                <span className="inline-block w-3.5 h-3.5 bg-[#4d74c9] rounded-2xs" />
+              )}
+              <span>Điểm của bạn</span>
             </div>
           </div>
         </div>
@@ -893,19 +861,35 @@ export const DashboardView = ({
                 <span>
                   Mentor:{" "}
                   <strong className="text-slate-800">
-                    {profile.supervisorName && profile.supervisorName !== "—"
-                      ? profile.supervisorName
-                      : "Chưa cập nhật"}
+                    {mentorName}
                   </strong>
                 </span>
               </p>
               <p className="flex items-center gap-1.5 text-[11px]">
                 <Mail className="h-3.5 w-3.5 text-slate-400" />
-                <span className="truncate">{profile.supervisorEmail || "—"}</span>
+                {mentorEmail !== "—" ? (
+                  <a
+                    href={`mailto:${mentorEmail}`}
+                    className="truncate hover:text-blue-600 transition-colors"
+                  >
+                    {mentorEmail}
+                  </a>
+                ) : (
+                  <span className="truncate">—</span>
+                )}
               </p>
               <p className="flex items-center gap-1.5 text-[11px]">
                 <Phone className="h-3.5 w-3.5 text-slate-400" />
-                <span>{profile.supervisorPhone || "—"}</span>
+                {mentorPhone !== "—" ? (
+                  <a
+                    href={`tel:${mentorPhone}`}
+                    className="hover:text-blue-600 transition-colors"
+                  >
+                    {mentorPhone}
+                  </a>
+                ) : (
+                  <span>—</span>
+                )}
               </p>
             </div>
           </div>

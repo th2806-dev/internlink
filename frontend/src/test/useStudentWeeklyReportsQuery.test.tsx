@@ -33,6 +33,7 @@ const mockReports: WeeklyReportDto[] = [
     status: "Submitted",
     createdAt: "2026-09-01T00:00:00Z",
     submittedAt: "2026-09-02T00:00:00Z",
+    dueDate: "2026-09-03T00:00:00Z",
     fileName: "tuan1.pdf",
     feedbacks: [],
     versions: [],
@@ -87,6 +88,7 @@ describe("useStudentWeeklyReportsQuery", () => {
     expect(result.current.reports).toHaveLength(1);
     expect(result.current.reports[0].id).toBe("rep-1");
     expect(result.current.reports[0].weekNumber).toBe(1);
+    expect(result.current.reports[0].deadline).toBe("—");
     expect(result.current.schedules).toHaveLength(1);
     expect(weeklyReportService.getMine).toHaveBeenCalledWith(
       expect.objectContaining({ signal: expect.any(AbortSignal) }),

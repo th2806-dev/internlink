@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CalendarClock, ClipboardCheck, SearchX } from "lucide-react";
 import { Toolbar } from "../../../components/common/Toolbar";
 import { EmptyState } from "../../../components/common/EmptyState";
@@ -12,6 +12,7 @@ import { useLecturerSubmissionsQuery } from "../../../hooks/useLecturerSubmissio
 import { ApiClientError, getApiErrorMessage } from "../../../lib/apiClient";
 import type { ToastType } from "../../../contexts/ToastContext";
 import type { Submission } from "../../../types/submission";
+import { mapWeeklyReportStatusToUi } from "../../../lib/portalMappers";
 import { useSemester } from "../../../contexts/SemesterContext";
 import { semesterReportScheduleService, type SemesterReportScheduleDto } from "../../../services/semesterReportSchedule.service";
 import { ScheduleConfigTab } from "./InternshipEvaluationView";
@@ -36,6 +37,13 @@ interface ReportsViewProps {
   onRefresh?: () => void;
 }
 
+const normalizeReportType = (type: string) =>
+  type === "Sản phẩm" ? "Sản phẩm thực tế" : type;
+const EMPTY_STUDENT_CONTEXT: Record<
+  string,
+  { studentName: string; mssv: string; company: string }
+> = {};
+
 /**
  * Trang Duyệt báo cáo thực tập (lát dọc tiên phong — Gold Standard).
  * Toàn bộ dữ liệu báo cáo do `useLecturerReportsQuery` quản lý:
@@ -43,13 +51,13 @@ interface ReportsViewProps {
  */
 export const ReportsView = ({
   submissions = [],
-  isSubmissionsLoading = false,
-  onUpdateSubmissionStatus,
   showToast,
   semesterId,
   onRefresh,
 }: ReportsViewProps) => {
   const [activeTab, setActiveTab] = useState<"review" | "schedule">("review");
+  const [reviewArea, setReviewArea] = useState<"pending" | "approved">("pending");
+  const [reportType, setReportType] = useState("Tất cả");
   const { semesters } = useSemester();
   const [schedules, setSchedules] = useState<SemesterReportScheduleDto[]>([]);
   const selectedSemester = semesters.find((semester) => semester.id === semesterId);
@@ -73,20 +81,25 @@ export const ReportsView = ({
     .map((schedule) => schedule.weekNumber);
 
   const reports = useLecturerReportsQuery({ semesterId, onReviewed: onRefresh });
+  const setWeeklyReportStatus = reports.setStatus;
+  useEffect(() => {
+    setWeeklyReportStatus(reviewArea === "approved" ? "Approved" : "");
+  }, [setWeeklyReportStatus, reviewArea]);
+
   const submissionsQuery = useLecturerSubmissionsQuery({
     semesterId,
-    enabled: submissions.length === 0,
+    onUpdated: onRefresh,
   });
 
-  const effectiveSubmissions =
-    submissions.length > 0 ? submissions : submissionsQuery.submissions;
+  const effectiveSubmissions = submissionsQuery.isLoading
+    ? submissions
+    : submissionsQuery.submissions;
 
   const effectiveSubmissionsLoading =
-    isSubmissionsLoading ||
-    (submissions.length === 0 && submissionsQuery.isLoading);
+    submissionsQuery.isLoading && effectiveSubmissions.length === 0;
 
   const effectiveUpdateSubmissionStatus =
-    onUpdateSubmissionStatus ?? submissionsQuery.updateSubmissionStatus;
+    submissionsQuery.updateSubmissionStatus;
 
   const {
     items,
@@ -102,14 +115,9 @@ export const ReportsView = ({
     isPlaceholderData,
     filter,
     pagination,
-    setStatus,
     setSearchTerm,
-    applySearch,
-    clearFilters,
     goToPage,
   } = reports;
-
-  const hasFilter = Boolean(filter.status || filter.appliedSearchTerm);
 
   const handleRetry = () => {
     void reports.refetch();
@@ -118,6 +126,90 @@ export const ReportsView = ({
   const handleReview = async (id: string, uiStatus: string, comment?: string, qualityScore?: number) => {
     await reports.reviewReport({ id, uiStatus, comment, qualityScore });
   };
+
+  const searchTerm = filter.searchTerm.trim().toLocaleLowerCase("vi");
+  const studentByInternship = submissionsQuery.studentByInternship ?? EMPTY_STUDENT_CONTEXT;
+  const visibleWeeklyReports = useMemo(
+    () => items.filter((report) => {
+      return reviewArea === "pending"
+        && report.status !== "Approved"
+        && (reportType === "Tất cả" || reportType === "Báo cáo tuần");
+    }),
+    [items, reportType, reviewArea],
+  );
+  const weeklyArchiveItems = useMemo<Submission[]>(() => {
+    if (reviewArea !== "approved" || (reportType !== "Tất cả" && reportType !== "Báo cáo tuần")) {
+      return [];
+    }
+    return items
+      .filter((report) => report.status === "Approved")
+      .map((report): Submission | null => {
+        const student = studentByInternship[report.internshipId];
+        const searchable = [
+          student?.studentName,
+          student?.mssv,
+          student?.company,
+          report.title,
+          report.content,
+          report.fileName,
+        ].filter(Boolean).join(" ").toLocaleLowerCase("vi");
+        if (searchTerm && !searchable.includes(searchTerm)) return null;
+        return {
+          id: `weekly:${report.id}`,
+          internshipId: report.internshipId,
+          sourceType: "weeklyReport" as const,
+          sourceId: report.id,
+          studentName: student?.studentName ?? "—",
+          mssv: student?.mssv ?? "—",
+          avatar: "",
+          company: student?.company ?? "—",
+          reportType: "Báo cáo tuần",
+          time: report.submittedAt
+            ? new Date(report.submittedAt).toLocaleTimeString("vi-VN", {
+                timeZone: "Asia/Ho_Chi_Minh",
+                hour: "2-digit",
+                minute: "2-digit",
+              })
+            : "—",
+          date: report.submittedAt
+            ? new Date(report.submittedAt).toLocaleDateString("vi-VN", {
+                timeZone: "Asia/Ho_Chi_Minh",
+              })
+            : "—",
+          submittedAt: report.submittedAt,
+          status: mapWeeklyReportStatusToUi(report.status),
+          fileName: report.fileName ?? undefined,
+          fileUrl: report.fileUrl ?? report.fileName ?? "",
+          fileSize: "—",
+          summary: report.content || report.title,
+          duplicateScore: 0,
+          lecturerNote: report.lecturerComment ?? "",
+          feedbacks: report.feedbacks ?? [],
+        };
+      })
+      .filter((item): item is Submission => item !== null);
+  }, [items, reportType, reviewArea, searchTerm, studentByInternship]);
+  const visibleSubmissions = useMemo(
+    () => [...effectiveSubmissions.filter((submission) => {
+      const matchesStatus = reviewArea === "approved"
+        ? submission.status === "Đã duyệt"
+        : submission.status !== "Đã duyệt";
+      const matchesType = reportType === "Tất cả"
+        || normalizeReportType(submission.reportType) === reportType;
+      const searchable = [
+        submission.studentName,
+        submission.mssv,
+        submission.company,
+        submission.reportType,
+        submission.fileName,
+        submission.summary,
+        ...(submission.assets ?? []).flatMap((asset) => [asset.label, asset.fileUrl]),
+      ].filter(Boolean).join(" ").toLocaleLowerCase("vi");
+      return matchesStatus && matchesType && (!searchTerm || searchable.includes(searchTerm));
+    }), ...weeklyArchiveItems],
+    [effectiveSubmissions, reportType, reviewArea, searchTerm, weeklyArchiveItems],
+  );
+  const hasVisibleReports = visibleWeeklyReports.length > 0 || visibleSubmissions.length > 0;
 
   const errorStatus =
     error instanceof ApiClientError ? error.status : undefined;
@@ -175,6 +267,53 @@ export const ReportsView = ({
           </div>
         )}
       />
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-2">
+        <div className="flex flex-wrap gap-1" role="tablist" aria-label="Trạng thái báo cáo">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={reviewArea === "pending"}
+            onClick={() => setReviewArea("pending")}
+            className={`inline-flex min-h-10 items-center gap-2 rounded-full px-4 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 ${reviewArea === "pending" ? "bg-amber-500 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"}`}
+          >
+            <ClipboardCheck className="h-4 w-4" /> Chờ duyệt
+            <span className="rounded-full bg-white/20 px-2 py-0.5">
+              {(totals?.pending ?? 0) + (totals?.revision ?? 0) + effectiveSubmissions.filter((item) => item.status !== "Đã duyệt").length}
+            </span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={reviewArea === "approved"}
+            onClick={() => setReviewArea("approved")}
+            className={`inline-flex min-h-10 items-center gap-2 rounded-full px-4 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 ${reviewArea === "approved" ? "bg-emerald-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"}`}
+          >
+            <ClipboardCheck className="h-4 w-4" /> Kho nhóm theo sinh viên
+            <span className="rounded-full bg-white/20 px-2 py-0.5">
+              {(totals?.approved ?? 0) + effectiveSubmissions.filter((item) => item.status === "Đã duyệt").length}
+            </span>
+          </button>
+        </div>
+        <input
+          value={filter.searchTerm}
+          onChange={(event) => setSearchTerm(event.target.value)}
+          placeholder="Tìm sinh viên, MSSV hoặc tên tài nguyên"
+          aria-label="Tìm sinh viên, MSSV hoặc tên tài nguyên"
+          className="min-h-10 min-w-60 flex-1 rounded-full border border-slate-300 px-4 text-sm font-medium text-slate-800 outline-none placeholder:font-normal placeholder:text-slate-500 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20 sm:text-xs"
+        />
+        <select
+          value={reportType}
+          onChange={(event) => setReportType(event.target.value)}
+          aria-label="Lọc theo loại hồ sơ"
+          className="min-h-10 rounded-full border border-slate-300 bg-white px-4 text-xs font-medium text-slate-700 outline-none focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+        >
+          <option>Tất cả</option>
+          <option>Báo cáo tuần</option>
+          <option>Báo cáo cuối kỳ</option>
+          <option>Sản phẩm thực tế</option>
+          <option>Đánh giá doanh nghiệp</option>
+        </select>
+      </div>
       {isTotalsError && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50/50 px-4 py-3 text-xs text-rose-800" role="alert">
           <span>
@@ -217,35 +356,10 @@ export const ReportsView = ({
       {/* ── 3. CÓ DỮ LIỆU / RỖNG ─────────────────────────────────────────── */}
       {!isPending && !isError && (
         <>
-          <div
+          {(reportType === "Tất cả" || reportType === "Báo cáo tuần") && <div
             aria-busy={isFetching}
             className={`flex flex-wrap items-center gap-2 rounded-xl border border-slate-200/90 bg-white p-3 shadow-2xs transition-opacity duration-150 ${isFetching ? "opacity-60" : ""}`}
           >
-            <input
-              value={filter.searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") applySearch();
-              }}
-              placeholder="Tìm sinh viên hoặc tiêu đề báo cáo"
-              aria-label="Tìm sinh viên hoặc tiêu đề báo cáo"
-              className="min-h-10 min-w-60 flex-1 rounded-full border border-slate-300 px-4 text-sm font-medium text-slate-800 outline-none transition-colors placeholder:font-normal placeholder:text-slate-500 hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20 sm:text-xs"
-            />
-            <button type="button" onClick={applySearch} className="inline-flex min-h-10 items-center justify-center rounded-full bg-[#026aa7] px-4 text-xs font-semibold text-white transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2">
-              Tìm
-            </button>
-            <select
-              value={filter.status}
-              onChange={(e) => setStatus(e.target.value)}
-              aria-label="Lọc theo trạng thái"
-              className="min-h-10 rounded-full border border-slate-300 bg-white px-4 text-xs font-medium text-slate-700 outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
-            >
-              <option value="">Tất cả trạng thái</option>
-              <option value="Submitted">Chờ duyệt</option>
-              <option value="RevisionRequested">Yêu cầu sửa</option>
-              <option value="Reviewed">Đã nhận xét</option>
-              <option value="Approved">Đã duyệt</option>
-            </select>
             <button
               type="button"
               disabled={!pagination.hasPrev}
@@ -267,28 +381,15 @@ export const ReportsView = ({
             >
               Sau
             </button>
-          </div>
+          </div>}
 
-          {items.length === 0 ? (
-            <EmptyState
-              icon={SearchX}
-              title="Không có báo cáo nào"
-              description={
-                hasFilter
-                  ? "Không tìm thấy báo cáo khớp với bộ lọc hiện tại. Thử đổi từ khóa hoặc trạng thái khác."
-                  : "Chưa có sinh viên nào nộp báo cáo trong kỳ thực tập này."
-              }
-              {...(hasFilter && {
-                action: { label: "Xóa bộ lọc", onClick: clearFilters },
-              })}
-            />
-          ) : (
+          {visibleWeeklyReports.length > 0 && (
             <div
               className={`transition-opacity duration-150 ${isFetching ? "opacity-60" : ""}`}
               data-testid="reports-list"
             >
               <WeeklyReportsReviewPanel
-                reports={items}
+                reports={visibleWeeklyReports}
                 onReview={handleReview}
                 onShowToast={(msg, type) =>
                   showToast?.(msg, type === "error" ? "danger" : type)
@@ -297,14 +398,28 @@ export const ReportsView = ({
                 isPlaceholderData={isPlaceholderData}
                 isSemesterClosed={isSemesterClosed}
                 closedWeekNumbers={closedWeekNumbers}
+                showHeading={false}
               />
             </div>
+          )}
+          {!hasVisibleReports && (
+            <EmptyState
+              icon={SearchX}
+              title="Không có báo cáo nào"
+              description={
+                searchTerm
+                  ? "Không tìm thấy hồ sơ khớp với từ khóa hiện tại."
+                  : reviewArea === "pending"
+                    ? "Chưa có hồ sơ nào đang chờ xử lý."
+                    : "Chưa có hồ sơ nào được duyệt trong kho."
+              }
+            />
           )}
         </>
       )}
 
       {/* Khu vực bài nộp sản phẩm/cuối kỳ (TanStack Query) */}
-      {submissionsQuery.isError && submissions.length === 0 ? (
+      {submissionsQuery.isError ? (
         <RequestErrorState
           title="Không thể tải danh sách bài nộp"
           message={
@@ -321,9 +436,10 @@ export const ReportsView = ({
         </div>
       ) : (
         <SubmissionsHub
-          submissions={effectiveSubmissions}
+          submissions={visibleSubmissions}
           onUpdateSubmissionStatus={effectiveUpdateSubmissionStatus}
           onToast={showToast}
+          compact
         />
       )}
         </>

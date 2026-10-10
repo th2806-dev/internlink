@@ -112,12 +112,16 @@ export function useLecturerReportsQuery(options: UseLecturerReportsQueryOptions 
     // Giữ dữ liệu trang cũ (mờ nhẹ) cho đến khi trang mới về → không giật màn hình trắng.
     placeholderData: keepPreviousData,
     enabled,
+    refetchInterval: 10_000,
+    refetchIntervalInBackground: false,
   });
 
   const totalsQuery = useQuery({
     queryKey: queryKeys.lecturerReports.totals(semesterId),
     queryFn: ({ signal }) => fetchTotals(semesterId, signal),
     enabled,
+    refetchInterval: 10_000,
+    refetchIntervalInBackground: false,
   });
 
   const reviewMutation = useMutation({

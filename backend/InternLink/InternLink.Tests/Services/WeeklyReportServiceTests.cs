@@ -410,5 +410,86 @@ public class WeeklyReportServiceTests
         result.Should().NotBeNull();
         result!.Status.Should().Be("Submitted");
     }
-}
 
+    [Fact]
+    public async Task SoftDeleteAsync_SubmittedReport_ShouldHideReportAndDeleteUploadedFiles()
+    {
+        var db = GetDb();
+        var (studentUser, _, _, _, internship, report) = await SeedDataAsync(db);
+        var contentRootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        var uploadDirectory = Path.Combine(contentRootPath, "uploads", "weekly-reports", internship.Id.ToString());
+        Directory.CreateDirectory(uploadDirectory);
+
+        var currentFileName = "week-1-v2.pdf";
+        var previousFileName = "week-1-v1.pdf";
+        var currentPath = Path.Combine(uploadDirectory, currentFileName);
+        var previousPath = Path.Combine(uploadDirectory, previousFileName);
+        await File.WriteAllBytesAsync(currentPath, new byte[] { 2 });
+        await File.WriteAllBytesAsync(previousPath, new byte[] { 1 });
+
+        report.Status = WeeklyReportStatus.Submitted;
+        report.FileName = currentFileName;
+        report.FileUrl = $"uploads/weekly-reports/{internship.Id}/{currentFileName}";
+        db.WeeklyReportVersions.AddRange(
+            new WeeklyReportVersion
+            {
+                Id = Guid.NewGuid(),
+                WeeklyReportId = report.Id,
+                Version = 1,
+                FileName = previousFileName,
+                FileUrl = $"uploads/weekly-reports/{internship.Id}/{previousFileName}",
+                FileSize = 1,
+                MimeType = "application/pdf",
+                UploadedById = studentUser.Id,
+                UploadedAt = DateTime.UtcNow.AddMinutes(-1),
+            },
+            new WeeklyReportVersion
+            {
+                Id = Guid.NewGuid(),
+                WeeklyReportId = report.Id,
+                Version = 2,
+                FileName = currentFileName,
+                FileUrl = report.FileUrl,
+                FileSize = 1,
+                MimeType = "application/pdf",
+                UploadedById = studentUser.Id,
+                UploadedAt = DateTime.UtcNow,
+            });
+        await db.SaveChangesAsync();
+
+        try
+        {
+            var deleted = await CreateService(db, contentRootPath: contentRootPath)
+                .SoftDeleteAsync(report.Id, studentUser.Id);
+
+            deleted.Should().BeTrue();
+            (await db.WeeklyReports.SingleAsync(item => item.Id == report.Id)).IsDeleted.Should().BeTrue();
+            var versions = db.WeeklyReportVersions
+                .Where(item => item.WeeklyReportId == report.Id)
+                .ToList();
+            versions.Should().OnlyContain(item => item.IsDeleted);
+            File.Exists(currentPath).Should().BeFalse();
+            File.Exists(previousPath).Should().BeFalse();
+        }
+        finally
+        {
+            if (Directory.Exists(contentRootPath))
+                Directory.Delete(contentRootPath, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task SoftDeleteAsync_ApprovedReport_ShouldRejectCancellation()
+    {
+        var db = GetDb();
+        var (studentUser, _, _, _, _, report) = await SeedDataAsync(db);
+        report.Status = WeeklyReportStatus.Approved;
+        await db.SaveChangesAsync();
+
+        var act = () => CreateService(db).SoftDeleteAsync(report.Id, studentUser.Id);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("Báo cáo đã được giảng viên duyệt, không thể hủy nộp.");
+        (await db.WeeklyReports.SingleAsync(item => item.Id == report.Id)).IsDeleted.Should().BeFalse();
+    }
+}

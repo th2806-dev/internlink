@@ -737,15 +737,37 @@ public class WeeklyReportService : IWeeklyReportService
 
     public async Task<bool> SoftDeleteAsync(Guid id, Guid userId)
     {
-        var report = await LoadOwnedReportAsync(id, userId);
+        var report = await _db.WeeklyReports
+            .Include(r => r.Internship)
+                .ThenInclude(i => i.Student)
+            .Include(r => r.Versions)
+            .FirstOrDefaultAsync(r => r.Id == id && !r.IsDeleted);
         if (report == null)
             return false;
 
-        if (report.Status != WeeklyReportStatus.Draft)
-            throw new InvalidOperationException("Only draft reports can be deleted");
+        if (report.Internship.Student?.UserId != userId)
+            throw new UnauthorizedAccessException("Weekly report does not belong to the current student");
 
+        if (report.Status == WeeklyReportStatus.Approved)
+            throw new InvalidOperationException("Báo cáo đã được giảng viên duyệt, không thể hủy nộp.");
+
+        var filePaths = report.Versions
+            .Where(version => !version.IsDeleted)
+            .Select(version => version.FileUrl)
+            .Append(report.FileUrl)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+        foreach (var filePath in filePaths)
+            DeleteStoredFile(filePath);
+
+        var now = DateTime.UtcNow;
         report.IsDeleted = true;
-        report.UpdatedAt = DateTime.UtcNow;
+        report.UpdatedAt = now;
+        foreach (var version in report.Versions.Where(version => !version.IsDeleted))
+        {
+            version.IsDeleted = true;
+            version.UpdatedAt = now;
+        }
         await _db.SaveChangesAsync();
         return true;
     }
@@ -940,6 +962,14 @@ public class WeeklyReportService : IWeeklyReportService
     {
         if (string.IsNullOrWhiteSpace(relativePath))
             return;
+
+        var normalizedPath = relativePath.Replace('\\', '/');
+        if (Uri.TryCreate(normalizedPath, UriKind.Absolute, out _) ||
+            !normalizedPath.StartsWith($"{UploadFolder}/", StringComparison.OrdinalIgnoreCase) ||
+            normalizedPath.Split('/').Any(segment => segment == ".."))
+        {
+            return;
+        }
 
         var fullPath = ResolveUploadPath(relativePath);
         if (File.Exists(fullPath))

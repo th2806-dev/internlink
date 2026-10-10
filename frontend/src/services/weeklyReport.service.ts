@@ -115,6 +115,12 @@ export const weeklyReportService = {
     });
   },
 
+  cancelSubmission(id: string): Promise<void> {
+    return apiRequest<void>(`/api/WeeklyReport/${id}`, {
+      method: "DELETE",
+    });
+  },
+
   review(
     id: string,
     body: { status: string; lecturerComment?: string; qualityScore?: number },

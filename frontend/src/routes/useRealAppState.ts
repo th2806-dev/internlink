@@ -224,7 +224,7 @@ export function useRealAppState(
       // 1. Ưu tiên: Lấy từ cấu hình báo cáo thực tế của học kỳ (SemesterReportSchedules)
       if (lecturerPortal.schedules && lecturerPortal.schedules.length > 0) {
         const scheduleDeadlines = lecturerPortal.schedules
-          .filter((s) => !s.isFinalReport && s.dueDate)
+          .filter((s) => !s.isFinalReport && s.isSubmissionOpen && s.dueDate)
           .sort((a, b) => a.weekNumber - b.weekNumber)
           .map((s) => {
             const due = safeDate(s.dueDate);
@@ -251,9 +251,7 @@ export function useRealAppState(
           })
           .filter(Boolean) as Deadline[];
 
-        if (scheduleDeadlines.length > 0) {
-          return scheduleDeadlines;
-        }
+        return scheduleDeadlines;
       }
 
       // 2. Fallback: Lấy từ weeklyReports có dueDate
