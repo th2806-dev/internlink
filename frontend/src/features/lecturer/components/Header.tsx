@@ -45,6 +45,8 @@ export const Header = ({
       case "evaluations":
       case "evaluation":
         return "Đánh giá & Chấm điểm";
+      case "attendance":
+        return "Điểm danh & Buổi gặp";
       case "analytics":
         return "Thống kê & Phân tích";
       case "reports":
@@ -54,7 +56,7 @@ export const Header = ({
       case "notifications":
         return "Thông báo";
       case "account":
-        return "Tài khoản & Cài đặt";
+        return "Tài khoản";
       default:
         return "Tổng quan";
     }

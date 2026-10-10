@@ -85,6 +85,10 @@ export function AppRoutes() {
   const currentTabFromPath =
     location.pathname.startsWith("/lecturer/")
       ? location.pathname.split("/")[2] || "dashboard"
+      : location.pathname.startsWith("/admin/")
+      ? location.pathname.split("/")[2] || "dashboard"
+      : location.pathname.startsWith("/student/")
+      ? location.pathname.split("/")[2] || "dashboard"
       : location.pathname.split("/").pop() || "dashboard";
 
   return (

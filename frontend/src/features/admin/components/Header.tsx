@@ -56,33 +56,41 @@ export const Header = ({
     const normalized = tab?.startsWith("admin-") ? tab : `admin-${tab}`;
     switch (normalized) {
       case "admin-dashboard":
-        return "Tổng quan hệ thống";
-      case "admin-lecturers":
-        return "Danh sách Giảng viên";
+        return "Tổng quan";
+      case "admin-semesters":
+        return "Kỳ thực tập";
       case "admin-students":
-        return "Danh sách Sinh viên";
+        return "Sinh viên";
+      case "admin-lecturers":
+        return "Giảng viên";
       case "admin-companies":
         return "Doanh nghiệp";
-      case "admin-users":
-        return "Người dùng";
       case "admin-assignments":
         return "Phân công hướng dẫn";
-      case "admin-semesters":
-        return "Quản lý Kỳ thực tập";
       case "admin-templates":
-        return "Quản lý Biểu mẫu & Tài liệu";
+        return "Biểu mẫu & Tài liệu";
+      case "admin-attendance":
+        return "Điểm danh & Buổi gặp";
       case "admin-report-archive":
         return "Kho báo cáo tuần";
       case "admin-notifications":
-        return "Trung tâm Thông báo";
+        return "Thông báo";
+      case "admin-summary":
+        return "Báo cáo tổng kết";
+      case "admin-departments":
+        return "Khoa";
+      case "admin-users":
+        return "Người dùng";
       case "admin-settings":
-        return "Cài đặt Hệ thống";
+        return "Cài đặt";
       case "admin-backups":
         return "Sao lưu & Khôi phục";
       case "admin-account":
-        return "Hồ sơ Quản trị";
+        return "Tài khoản";
+      case "admin-account-requests":
+        return "Yêu cầu tài khoản";
       default:
-        return "Trang quản trị";
+        return "Tổng quan";
     }
   };
 

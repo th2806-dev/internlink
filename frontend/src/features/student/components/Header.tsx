@@ -28,7 +28,8 @@ export const Header = ({
   const [showProfileMenu, setShowProfileMenu] = useState(false);
 
   const getTabLabel = (tab: string) => {
-    switch (tab) {
+    const normalized = tab?.startsWith("student-") ? tab : `student-${tab}`;
+    switch (normalized) {
       case "student-dashboard":
         return "Tổng quan";
       case "student-internship":
@@ -36,13 +37,13 @@ export const Header = ({
       case "student-weekly-reports":
         return "Báo cáo tuần";
       case "student-submissions":
-        return "Sản phẩm thực tập";
+        return "Hồ sơ & sản phẩm";
       case "student-feedback":
         return "Phản hồi & Chỉnh sửa";
       case "student-templates":
         return "Biểu mẫu & Tài liệu";
       case "student-evaluation":
-        return "Kết quả đánh giá";
+        return "Kết quả Đánh giá";
       case "student-attendance":
         return "Lịch gặp & Điểm danh";
       case "student-notifications":
