@@ -12,6 +12,7 @@ import {
   Presentation,
   Upload,
   Download,
+  ExternalLink,
   RefreshCw,
   Send,
   Plus,
@@ -21,6 +22,7 @@ import {
   Building2,
   Loader2,
   X,
+  Trash2,
 } from "lucide-react";
 import { useStudentPortal } from "../../../contexts/StudentPortalContext";
 import { useSemester } from "../../../contexts/SemesterContext";
@@ -50,6 +52,48 @@ type UploadItem = {
 
 type SubmissionLink = { label: string; url: string };
 
+function mapSubmissionResources(submission: SubmissionDto): UploadItem[] {
+  const base = mapStudentSubmissionToUpload(submission);
+  const status =
+    submission.status === "Approved"
+      ? "Đã duyệt"
+      : submission.status === "RevisionRequested"
+        ? "Cần chỉnh sửa"
+        : submission.status === "Rejected"
+          ? "Không đạt yêu cầu"
+          : submission.status === "Submitted" || submission.status === "Reviewed"
+            ? "Chờ duyệt"
+            : base.status;
+  const assets = submission.assets ?? [];
+  if (assets.length === 0) {
+    return submission.fileUrl || submission.fileName
+      ? [{ ...base, status }]
+      : [];
+  }
+
+  return assets.map((asset) => ({
+    ...base,
+    title: asset.label || asset.fileName || base.title,
+    fileType:
+      asset.assetType === "link"
+        ? "Liên kết"
+        : asset.fileName?.split(".").pop()?.toUpperCase() || "Tệp",
+    size: asset.fileSize
+      ? asset.fileSize < 1024 * 1024
+        ? `${Math.round(asset.fileSize / 1024)} KB`
+        : `${(asset.fileSize / (1024 * 1024)).toFixed(1)} MB`
+      : "—",
+    uploadDate: asset.uploadedAt
+      ? new Date(asset.uploadedAt).toLocaleDateString("vi-VN", {
+          timeZone: "Asia/Ho_Chi_Minh",
+        })
+      : base.uploadDate,
+    status,
+    fileUrl: asset.fileUrl ?? base.fileUrl,
+    assetId: asset.id,
+  }));
+}
+
 export const SubmissionsView: React.FC<{
   onShowToast?: (msg: string, type?: "success" | "error" | "info" | string) => void;
 }> = ({ onShowToast }) => {
@@ -62,15 +106,21 @@ export const SubmissionsView: React.FC<{
   const [rawSubmissions, setRawSubmissions] = useState<SubmissionDto[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  const loadSubmissions = useCallback(async () => {
+  const loadSubmissions = useCallback(async (notifyOnError = true) => {
+    setLoadError(null);
     try {
       setIsLoading(true);
       const rows = await submissionApiService.getMine();
       setRawSubmissions(rows);
-      setUploads(rows.map(mapStudentSubmissionToUpload));
+      setUploads(rows.flatMap(mapSubmissionResources));
+      return true;
     } catch (err) {
-      onShowToast?.(getApiErrorMessage(err), "error");
+      const message = getApiErrorMessage(err);
+      setLoadError(message);
+      if (notifyOnError) onShowToast?.(message, "error");
+      return false;
     } finally {
       setIsLoading(false);
     }
@@ -115,6 +165,7 @@ export const SubmissionsView: React.FC<{
   ]);
   const [replaceFile, setReplaceFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [cancellingSubmissionId, setCancellingSubmissionId] = useState<string | null>(null);
   const [contactMsg, setContactMsg] = useState("");
 
   const evidenceWindowOpen = Boolean(
@@ -136,6 +187,8 @@ export const SubmissionsView: React.FC<{
     uploadCategory === "FinalReport"
       ? uploadFiles.length > 0
       : uploadCategory !== "Evidence" || hasEmployerImage;
+  const validUploadLinks = uploadLinks.filter((link) => link.url.trim());
+  const hasAnyResource = uploadFiles.length > 0 || validUploadLinks.length > 0;
 
   const latestSubmissionOfType = (type: string) =>
     rawSubmissions
@@ -148,18 +201,61 @@ export const SubmissionsView: React.FC<{
   const finalReport = latestSubmissionOfType("FinalReport");
   const productSubmission = latestSubmissionOfType("Product");
   const employerEvidence = latestSubmissionOfType("Evidence");
-
-  const productCount = rawSubmissions.filter(
-    (s) => s.type.toLowerCase() === "product",
-  ).length;
+  const pendingProductSubmissions = rawSubmissions
+    .filter((submission) =>
+      submission.type.toLowerCase() === "product" &&
+      (submission.status === "Submitted" || submission.status === "Reviewed"),
+    )
+    .sort(
+      (first, second) =>
+        new Date(second.submittedAt).getTime() - new Date(first.submittedAt).getTime(),
+    );
 
   const isRevisionRequested = (submission?: SubmissionDto) =>
     submission?.status === "RevisionRequested";
+  const canCancelSubmission = (submission?: SubmissionDto) =>
+    submission?.status === "Submitted" || submission?.status === "Reviewed";
+
+  const handleCancelSubmission = async (submission: SubmissionDto) => {
+    if (!canCancelSubmission(submission) || cancellingSubmissionId) return;
+    if (!window.confirm(`Bạn có chắc muốn hủy nộp "${submission.title || "hồ sơ"}"? Tệp đã tải lên sẽ bị xóa.`)) {
+      return;
+    }
+
+    setCancellingSubmissionId(submission.id);
+    try {
+      await submissionApiService.cancel(submission.id);
+      setRawSubmissions((current) => current.filter((item) => item.id !== submission.id));
+      setUploads((current) => current.filter((item) => item.id !== submission.id));
+      onShowToast?.("Đã hủy nộp hồ sơ và xóa tệp tải lên.", "success");
+    } catch (err) {
+      onShowToast?.(getApiErrorMessage(err), "error");
+    } finally {
+      setCancellingSubmissionId(null);
+    }
+  };
+
+  const renderCancelButton = (submission: SubmissionDto) => (
+    <button
+      type="button"
+      onClick={() => void handleCancelSubmission(submission)}
+      disabled={cancellingSubmissionId !== null}
+      className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-rose-200 bg-white px-3 text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+      aria-label={`Hủy nộp ${submission.title || "hồ sơ"}`}
+    >
+      {cancellingSubmissionId === submission.id
+        ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+        : <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />}
+      {cancellingSubmissionId === submission.id ? "Đang hủy..." : "Hủy nộp"}
+    </button>
+  );
 
   const getSubmissionState = (submission?: SubmissionDto) => {
     if (!submission) return "Chưa nộp";
     if (submission.status === "RevisionRequested") return "Cần bổ sung";
-    if (submission.status === "Rejected") return "Bị từ chối";
+    if (submission.status === "Rejected") return "Không đạt yêu cầu";
+    if (submission.status === "Approved") return "Đã duyệt";
+    if (submission.status === "Submitted" || submission.status === "Reviewed") return "Chờ duyệt";
     return "Đã nộp";
   };
 
@@ -225,8 +321,7 @@ export const SubmissionsView: React.FC<{
 
   const openRevisionUpload = (submission?: SubmissionDto) => {
     if (!submission) return;
-    const item = uploads.find((upload) => upload.id === submission.id);
-    if (!item) return;
+    const item = mapStudentSubmissionToUpload(submission);
     setReplaceTarget(item);
     setUploadNotes(item.notes || "");
     setReplaceFile(null);
@@ -276,7 +371,7 @@ export const SubmissionsView: React.FC<{
       onShowToast?.("Vui lòng đính kèm tệp báo cáo cuối kỳ.", "error");
       return;
     }
-    const links = uploadLinks.filter((link) => link.url.trim());
+    const links = validUploadLinks;
     if (uploadFiles.length === 0 && links.length === 0) {
       onShowToast?.("Vui lòng chọn ít nhất một tệp hoặc thêm một liên kết!", "error");
       return;
@@ -284,37 +379,44 @@ export const SubmissionsView: React.FC<{
 
     setIsSubmitting(true);
     try {
-      const created = [
-        await submissionApiService.bundle({
-          internshipId,
-          type: uploadCategory,
-          title,
-          description: uploadNotes.trim() || undefined,
-          employerScore:
-            uploadCategory === "Evidence" ? Number(employerScore) : undefined,
-          files: uploadFiles,
-          links: links.map((link) => ({
-            label: link.label.trim(),
-            url: link.url.trim(),
-          })),
-        }),
-      ];
-      setUploads((prev) => [...created.map(mapStudentSubmissionToUpload), ...prev]);
-      setRawSubmissions((prev) => [...created, ...prev]);
+      const created = await submissionApiService.bundle({
+        internshipId,
+        type: uploadCategory,
+        title,
+        description: uploadNotes.trim() || undefined,
+        employerScore:
+          uploadCategory === "Evidence" ? Number(employerScore) : undefined,
+        files: uploadFiles,
+        links: links.map((link) => ({
+          label: link.label.trim(),
+          url: link.url.trim(),
+        })),
+      });
+      setUploads((prev) => [
+        ...mapSubmissionResources(created),
+        ...prev.filter((item) => item.id !== created.id),
+      ]);
+      setRawSubmissions((prev) => [
+        created,
+        ...prev.filter((item) => item.id !== created.id),
+      ]);
       setShowUploadModal(false);
-      onShowToast?.(
-        uploadCategory === "Evidence"
-          ? "Đã nộp điểm và ảnh phiếu đánh giá doanh nghiệp thành công."
-          : uploadCategory === "FinalReport"
-          ? "Đã nộp báo cáo cuối kỳ thành công."
-          : `Đã nộp sản phẩm cùng ${uploadFiles.length + links.length} tài nguyên.`,
-        "success",
-      );
       setUploadTitle("");
       setUploadNotes("");
       setEmployerScore("");
       setUploadFiles([]);
       setUploadLinks([{ label: "", url: "" }]);
+      const refreshed = await loadSubmissions(false);
+      onShowToast?.(
+        refreshed
+          ? uploadCategory === "Evidence"
+            ? "Đã nộp điểm và ảnh phiếu đánh giá doanh nghiệp thành công."
+            : uploadCategory === "FinalReport"
+              ? "Đã nộp báo cáo cuối kỳ thành công."
+              : `Đã nộp sản phẩm cùng ${uploadFiles.length + links.length} tài nguyên.`
+          : "Đã nộp thành công nhưng chưa thể làm mới danh sách. Vui lòng thử tải lại.",
+        refreshed ? "success" : "info",
+      );
     } catch (err) {
       onShowToast?.(getApiErrorMessage(err), "error");
     } finally {
@@ -337,10 +439,10 @@ export const SubmissionsView: React.FC<{
         description: uploadNotes.trim() || replaceTarget.notes || undefined,
         file: replaceFile,
       });
-      const mapped = mapStudentSubmissionToUpload(updated);
-      setUploads((prev) =>
-        prev.map((item) => (item.id === replaceTarget.id ? mapped : item)),
-      );
+      setUploads((prev) => [
+        ...mapSubmissionResources(updated),
+        ...prev.filter((item) => item.id !== replaceTarget.id),
+      ]);
       setRawSubmissions((prev) =>
         prev.map((item) => (item.id === replaceTarget.id ? updated : item)),
       );
@@ -451,9 +553,11 @@ export const SubmissionsView: React.FC<{
               <span
                 className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
                   finalReport
-                    ? isRevisionRequested(finalReport)
+                    ? isRevisionRequested(finalReport) || finalReport.status === "Rejected"
                       ? "bg-rose-50 text-rose-700 border-rose-200"
-                      : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                      : finalReport.status === "Approved"
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                        : "bg-sky-50 text-sky-700 border-sky-200"
                     : "bg-slate-100 text-slate-600 border-slate-200"
                 }`}
               >
@@ -481,6 +585,7 @@ export const SubmissionsView: React.FC<{
               ? "Đã hoàn thành nộp"
               : "Nộp báo cáo cuối kỳ"}
           </button>
+          {canCancelSubmission(finalReport) && renderCancelButton(finalReport!)}
         </div>
 
         {/* THẺ 3: SẢN PHẨM THỰC TẾ */}
@@ -491,14 +596,35 @@ export const SubmissionsView: React.FC<{
                 <Package className="h-4 w-4" />
                 <h3 className="text-sm font-bold text-slate-900">Sản phẩm thực tế</h3>
               </div>
-              <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                productSubmission?.status === "Approved"
+                  ? "text-emerald-700 bg-emerald-50 border-emerald-200"
+                  : productSubmission?.status === "Rejected"
+                    ? "text-rose-700 bg-rose-50 border-rose-200"
+                    : "text-slate-500 bg-slate-100 border-slate-200"
+              }`}>
                 {productSubmission ? getSubmissionState(productSubmission) : "Tùy chọn"}
               </span>
             </div>
             <p className="text-xs leading-relaxed text-slate-600">
-              Source code, slide trình chiếu, video demo hoặc link triển khai. Có thể nộp nhiều lần.
+              Source code, slide, ảnh, video hoặc link GitHub/website. Tệp đính kèm không bắt buộc nếu đã có liên kết. Chỉ sản phẩm được duyệt mới được cộng 1 điểm.
             </p>
           </div>
+          {pendingProductSubmissions.length > 0 && (
+            <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50/70 p-3">
+              <p className="text-[11px] font-semibold text-amber-900">
+                {pendingProductSubmissions.length} sản phẩm đang chờ duyệt
+              </p>
+              {pendingProductSubmissions.map((submission) => (
+                <div key={submission.id} className="flex items-center justify-between gap-2">
+                  <span className="min-w-0 truncate text-xs text-slate-700">
+                    {submission.title || "Sản phẩm thực tế"}
+                  </span>
+                  {renderCancelButton(submission)}
+                </div>
+              ))}
+            </div>
+          )}
           <button
             type="button"
             onClick={() => openUploadFor("Product")}
@@ -567,6 +693,7 @@ export const SubmissionsView: React.FC<{
               ? "Đã nộp đánh giá"
               : "Nộp đánh giá doanh nghiệp"}
           </button>
+          {canCancelSubmission(employerEvidence) && renderCancelButton(employerEvidence!)}
         </div>
       </div>
 
@@ -583,9 +710,34 @@ export const SubmissionsView: React.FC<{
                 </h3>
               </div>
               <span className="text-[11px] font-medium bg-slate-100 text-slate-600 px-2.5 py-0.5 rounded-full border border-slate-200">
-                {uploads.length} tài nguyên
+                {uploads.length} tài nguyên đã nộp
               </span>
             </div>
+            {isLoading && uploads.length > 0 && (
+              <div
+                role="status"
+                aria-live="polite"
+                className="flex items-center gap-2 border-b border-slate-100 px-4 py-2 text-xs text-slate-500"
+              >
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-[#026aa7]" aria-hidden="true" />
+                Đang cập nhật danh sách...
+              </div>
+            )}
+            {loadError && uploads.length > 0 && (
+              <div
+                role="alert"
+                className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900"
+              >
+                <span>Không thể làm mới danh sách: {loadError}. Đang giữ dữ liệu đã tải trước đó.</span>
+                <button
+                  type="button"
+                  onClick={() => void loadSubmissions()}
+                  className="font-bold underline underline-offset-2"
+                >
+                  Thử lại
+                </button>
+              </div>
+            )}
 
             {/* Desktop Table */}
             <div className="hidden md:block overflow-x-auto">
@@ -599,22 +751,35 @@ export const SubmissionsView: React.FC<{
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {isLoading ? (
+                  {isLoading && uploads.length === 0 ? (
                     <tr>
                       <td colSpan={4} className="py-12 text-center text-slate-400">
                         <Loader2 className="w-6 h-6 animate-spin mx-auto text-[#026aa7] mb-2" />
                         Đang tải danh sách hồ sơ...
                       </td>
                     </tr>
+                  ) : loadError && uploads.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="py-10 text-center text-rose-700">
+                        <p role="alert">{loadError}</p>
+                        <button
+                          type="button"
+                          onClick={() => void loadSubmissions()}
+                          className="mt-2 font-bold text-[#026aa7] underline underline-offset-2"
+                        >
+                          Thử tải lại
+                        </button>
+                      </td>
+                    </tr>
                   ) : uploads.length === 0 ? (
                     <tr>
                       <td colSpan={4} className="py-12 text-center text-slate-400">
-                        Chưa có hồ sơ nào được nộp. Sử dụng các nút chức năng phía trên để nộp báo cáo hoặc sản phẩm.
+                        Chưa có tài nguyên nào được nộp.
                       </td>
                     </tr>
                   ) : (
                     uploads.map((item) => (
-                      <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
+                      <tr key={`${item.id}:${item.assetId ?? "root"}`} className="hover:bg-slate-50/70 transition-colors">
                         <td className="py-3 px-4">
                           <div className="flex items-start gap-2.5">
                             <span className="mt-0.5 shrink-0">
@@ -642,7 +807,7 @@ export const SubmissionsView: React.FC<{
                         <td className="py-3 px-4 whitespace-nowrap">
                           <span
                             className={`px-2.5 py-0.5 text-[10.5px] font-bold rounded-md border ${
-                              item.status === "Đã hoàn thành"
+                              item.status === "Đã duyệt"
                                 ? "bg-emerald-50 text-emerald-800 border-emerald-200"
                                 : item.status === "Cần chỉnh sửa"
                                 ? "bg-rose-50 text-rose-800 border-rose-200"
@@ -658,30 +823,13 @@ export const SubmissionsView: React.FC<{
                               type="button"
                               onClick={() => void handleDownloadUpload(item)}
                               className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors cursor-pointer"
-                              title="Tải về"
+                              title={item.fileType === "Liên kết" ? "Mở liên kết" : "Tải về"}
+                              aria-label={`${item.fileType === "Liên kết" ? "Mở liên kết" : "Tải về"}: ${item.title}`}
                             >
-                              <Download className="w-4 h-4" />
+                              {item.fileType === "Liên kết"
+                                ? <ExternalLink className="w-4 h-4" />
+                                : <Download className="w-4 h-4" />}
                             </button>
-                            {rawSubmissions.some(
-                              (submission) =>
-                                submission.id === item.id &&
-                                submission.status === "RevisionRequested",
-                            ) && (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  openRevisionUpload(
-                                    rawSubmissions.find(
-                                      (submission) => submission.id === item.id,
-                                    ),
-                                  )
-                                }
-                                className="p-1.5 hover:bg-amber-50 rounded-lg text-amber-700 transition-colors cursor-pointer"
-                                title="Nộp bản chỉnh sửa theo góp ý"
-                              >
-                                <RefreshCw className="w-4 h-4" />
-                              </button>
-                            )}
                           </div>
                         </td>
                       </tr>
@@ -693,39 +841,64 @@ export const SubmissionsView: React.FC<{
 
             {/* Mobile Cards */}
             <div className="md:hidden divide-y divide-slate-100 p-3 space-y-3">
-              {uploads.map((item) => (
-                <div key={item.id} className="p-3 bg-white rounded-lg border border-slate-200 space-y-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      {getCategoryIcon(item.category)}
-                      <h4 className="font-bold text-xs text-slate-800">{item.title}</h4>
-                    </div>
-                    <span
-                      className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
-                        item.status === "Đã hoàn thành"
-                          ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                          : item.status === "Cần chỉnh sửa"
-                          ? "bg-rose-50 text-rose-800 border-rose-200"
-                          : "bg-sky-50 text-sky-800 border-sky-200"
-                      }`}
-                    >
-                      {item.status}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-500">
-                    {item.category} • {item.size} • {item.uploadDate}
-                  </p>
-                  <div className="flex justify-end pt-2 border-t border-slate-100">
-                    <button
-                      type="button"
-                      onClick={() => void handleDownloadUpload(item)}
-                      className="px-3 py-1 bg-slate-100 text-slate-700 font-bold text-xs rounded-lg flex items-center gap-1"
-                    >
-                      <Download className="w-3.5 h-3.5" /> Tải về
-                    </button>
-                  </div>
+              {isLoading && uploads.length === 0 ? (
+                <p className="py-8 text-center text-xs text-slate-400">
+                  <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin text-[#026aa7]" />
+                  Đang tải danh sách hồ sơ...
+                </p>
+              ) : loadError && uploads.length === 0 ? (
+                <div className="py-8 text-center text-xs text-rose-700">
+                  <p role="alert">{loadError}</p>
+                  <button
+                    type="button"
+                    onClick={() => void loadSubmissions()}
+                    className="mt-2 font-bold text-[#026aa7] underline underline-offset-2"
+                  >
+                    Thử tải lại
+                  </button>
                 </div>
-              ))}
+              ) : uploads.length === 0 ? (
+                <p className="py-8 text-center text-xs text-slate-400">
+                  Chưa có tài nguyên nào được nộp.
+                </p>
+              ) : (
+                uploads.map((item) => (
+                  <div key={`${item.id}:${item.assetId ?? "root"}`} className="p-3 bg-white rounded-lg border border-slate-200 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        {getCategoryIcon(item.category)}
+                        <h4 className="font-bold text-xs text-slate-800">{item.title}</h4>
+                      </div>
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                          item.status === "Đã duyệt"
+                            ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                            : item.status === "Cần chỉnh sửa"
+                            ? "bg-rose-50 text-rose-800 border-rose-200"
+                            : "bg-sky-50 text-sky-800 border-sky-200"
+                        }`}
+                      >
+                        {item.status}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      {item.category} • {item.size} • {item.uploadDate}
+                    </p>
+                    <div className="flex justify-end pt-2 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={() => void handleDownloadUpload(item)}
+                        className="px-3 py-1 bg-slate-100 text-slate-700 font-bold text-xs rounded-lg flex items-center gap-1"
+                      >
+                        {item.fileType === "Liên kết"
+                          ? <ExternalLink className="w-3.5 h-3.5" />
+                          : <Download className="w-3.5 h-3.5" />}
+                        {item.fileType === "Liên kết" ? "Mở liên kết" : "Tải về"}
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -908,7 +1081,7 @@ export const SubmissionsView: React.FC<{
 
               <div>
                 <label className="block font-bold text-slate-700 mb-1">
-                  Chọn tệp đính kèm
+                  {uploadCategory === "Product" ? "Tệp đính kèm (không bắt buộc)" : "Chọn tệp đính kèm"}
                 </label>
                 <label className="border-2 border-dashed border-slate-300 bg-slate-50/60 p-4 text-center rounded-xl hover:border-blue-400 transition-colors cursor-pointer space-y-1 block">
                   <input
@@ -937,7 +1110,7 @@ export const SubmissionsView: React.FC<{
                       ? "Tệp báo cáo PDF hoặc Word (bắt buộc)"
                       : uploadCategory === "Evidence"
                       ? "Ảnh phiếu đánh giá có chữ ký/mộc của doanh nghiệp (bắt buộc)"
-                      : "PDF, ZIP, DOCX, PPTX, MP4 hoặc tài liệu liên quan"}
+                      : "Không bắt buộc nếu đã thêm liên kết; có thể chọn nhiều tệp"}
                   </p>
                 </label>
               </div>
@@ -1036,7 +1209,8 @@ export const SubmissionsView: React.FC<{
                   isSubmitting ||
                   (uploadCategory === "Evidence" &&
                     (!evidenceWindowOpen || !employerScoreValid || !hasEmployerImage)) ||
-                  (uploadCategory === "FinalReport" && !hasRequiredUploadFile)
+                  (uploadCategory === "FinalReport" && !hasRequiredUploadFile) ||
+                  (uploadCategory === "Product" && !hasAnyResource)
                 }
                 className="px-4 py-2 bg-[#026aa7] hover:bg-[#025a8f] text-white font-bold text-xs rounded-lg shadow-xs disabled:opacity-50 cursor-pointer"
               >

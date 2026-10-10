@@ -67,6 +67,7 @@ export function mapUiSubmissionStatusToApi(uiStatus: string): string {
     "Chờ duyệt": "Submitted",
     "Cần nhận xét": "Reviewed",
     "Đã nộp": "Submitted",
+    "Từ chối": "Rejected",
   };
   return map[uiStatus] ?? "Reviewed";
 }
@@ -91,6 +92,9 @@ export function mapUiWeeklyReportReviewStatusToApi(uiStatus: string): string {
     "Yêu cầu sửa": "RevisionRequested",
     "Cần chỉnh sửa": "RevisionRequested",
     "Đã xem": "Reviewed",
+    "Đã nộp": "Submitted",
+    "Đã hoàn thành": "Approved",
+    "Bản nháp": "Draft",
   };
   return map[uiStatus] ?? "Reviewed";
 }
@@ -101,6 +105,7 @@ export function mapSubmissionTypeToUi(type: string): string {
     InternshipLog: "Nhật ký thực tập",
     FinalReport: "Báo cáo cuối kỳ",
     Product: "Sản phẩm",
+    Evidence: "Đánh giá doanh nghiệp",
   };
   return map[type] ?? type;
 }
@@ -255,6 +260,7 @@ export function mapSubmissionDtoToRow(
   const firstAsset = s.assets?.[0];
   return {
     id: s.id,
+    internshipId: s.internshipId,
     studentName: ctx.studentName ?? "—",
     mssv: ctx.mssv ?? "—",
     avatar: ctx.avatar ?? DEFAULT_AVATAR,
@@ -291,7 +297,7 @@ export function mapWeeklyReportDtoToUi(r: WeeklyReportDto) {
     weekNumber: r.weekNumber,
     title: r.title,
     content: r.content,
-    deadline: r.dueDate ? formatViDate(r.dueDate).split(" ")[0] : "—",
+    deadline: "—",
     submittedAt: r.submittedAt ? formatViDate(r.submittedAt) : "—",
     version: `v${r.version}`,
     versions: r.versions ?? [],
@@ -647,7 +653,12 @@ export function mapStudentSubmissionToUpload(s: SubmissionDto) {
   return {
     id: s.id,
     title: s.title ?? mapSubmissionTypeToUi(s.type),
-    category: s.type === "FinalReport" ? "Báo cáo tốt nghiệp" : "Sản phẩm thực tế",
+    category:
+      s.type === "FinalReport"
+        ? "Báo cáo tốt nghiệp"
+        : s.type === "Evidence"
+          ? "Đánh giá doanh nghiệp"
+          : "Sản phẩm thực tế",
     fileType: assets.length > 0 ? `${assets.length} tài nguyên` : "—",
     assetId: firstAsset?.id,
     size: "—",

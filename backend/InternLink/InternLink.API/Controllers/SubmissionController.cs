@@ -13,6 +13,7 @@ namespace InternLink.API.Controllers;
 [Authorize]
 public class SubmissionController : ControllerBase
 {
+    private static readonly JsonSerializerOptions BundleJsonOptions = new(JsonSerializerDefaults.Web);
     private readonly ISubmissionService _submissionService;
 
     public SubmissionController(ISubmissionService submissionService)
@@ -157,7 +158,8 @@ public class SubmissionController : ControllerBase
 
             var links = string.IsNullOrWhiteSpace(form.LinksJson)
                 ? new List<SubmissionAssetInput>()
-                : JsonSerializer.Deserialize<List<SubmissionAssetInput>>(form.LinksJson) ?? new List<SubmissionAssetInput>();
+                : JsonSerializer.Deserialize<List<SubmissionAssetInput>>(form.LinksJson, BundleJsonOptions)
+                    ?? new List<SubmissionAssetInput>();
 
             var files = form.Files
                 .Where(file => file.Length > 0)
@@ -347,6 +349,36 @@ public class SubmissionController : ControllerBase
         catch (UnauthorizedAccessException ex)
         {
             return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
+        }
+    }
+
+    [HttpDelete("{id:guid}/cancel")]
+    [Authorize(Policy = "RequireStudent")]
+    public async Task<IActionResult> Cancel(Guid id)
+    {
+        try
+        {
+            var userId = User.GetUserId();
+            if (userId == null)
+                return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
+
+            var cancelled = await _submissionService.CancelAsync(id, userId.Value);
+            if (!cancelled)
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SubmissionNotFound }));
+
+            return Ok(ApiResponse<object>.Ok(null));
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = ex.Message }));
+        }
+        catch (IOException ex)
+        {
+            return StatusCode(500, ApiResponse<object>.Fail(new ApiError { Title = ex.Message }));
         }
     }
 

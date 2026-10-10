@@ -462,7 +462,9 @@ export interface LecturerGradeDistributionDto {
   excellentCount: number;
   goodCount: number;
   fairCount: number;
+  averageGoodCount: number;
   averageCount: number;
+  weakCount: number;
   failCount: number;
   notYetGradedCount: number;
   overallAverage: number;
@@ -696,6 +698,11 @@ export interface EvaluationDetailDto {
     position?: string | null;
     status: string;
   } | null;
+}
+
+export interface WeeklyQualityAverageDto {
+  weekNumber: number;
+  averageScore: number | null;
 }
 
 export interface NotificationDto {

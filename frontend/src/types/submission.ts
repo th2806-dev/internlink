@@ -4,6 +4,7 @@ import type { FeedbackDto, SubmissionAssetDto } from "./api";
 
 export interface Submission {
   id: string;
+  internshipId?: string;
   studentName: string;
   mssv: string;
   avatar: string;

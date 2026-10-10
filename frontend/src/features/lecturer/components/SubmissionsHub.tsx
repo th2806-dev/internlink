@@ -25,12 +25,18 @@ import { Toolbar } from "../../../components/common/Toolbar";
 import { Panel } from "../../../components/common/Panel";
 import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
 import { useSemester } from "../../../contexts/SemesterContext";
+import {
+  mapUiSubmissionStatusToApi,
+  mapUiWeeklyReportReviewStatusToApi,
+} from "../../../lib/portalMappers";
 import { submissionApiService } from "../../../services/submissionApi.service";
 import { weeklyReportService } from "../../../services/weeklyReport.service";
+import type { FeedbackDto } from "../../../types/api";
 import type { Submission } from "../../../types/submission";
 
 interface StudentGroup {
   key: string;
+  internshipId: string;
   studentName: string;
   mssv: string;
   company: string;
@@ -39,6 +45,8 @@ interface StudentGroup {
 
 const isWeekly = (sub: Submission) =>
   sub.sourceType === "weeklyReport" || String(sub.id).startsWith("weekly:");
+const isApprovedStatus = (status: string) =>
+  status === "Đã duyệt" || status === "Đã hoàn thành";
 
 /** ZIP chỉ gom được file bài nộp sản phẩm (endpoint Submission); báo cáo tuần tải riêng theo từng bài. */
 const zipIdsOf = (items: Submission[]) =>
@@ -62,18 +70,37 @@ const statusIcon = (status: string) =>
     <Clock className="w-3 h-3" />
   );
 
+const isPendingReview = (status: string) =>
+  status === "Chờ duyệt" ||
+  status === "Đã nộp" ||
+  status === "Cần nhận xét" ||
+  status === "Quá hạn";
+
+const reviewOrder = (status: string) =>
+  isPendingReview(status)
+    ? 0
+    : status === "Yêu cầu sửa"
+      ? 1
+      : status === "Từ chối"
+        ? 2
+        : status === "Đã duyệt"
+          ? 3
+          : 2;
+
 export const SubmissionsHub = ({
   submissions,
   onUpdateSubmissionStatus,
   onToast,
+  compact = false,
 }: {
   submissions: Submission[];
   onUpdateSubmissionStatus?: (id: string, status: string, note?: string) => unknown;
   onToast?: (msg: string, type?: string) => void;
+  compact?: boolean;
 }) => {
   const { selectedSemester } = useSemester();
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeSubTab, setActiveSubTab] = useState("all");
+  const [activeSubTab, setActiveSubTab] = useState(compact ? "all" : "pending");
   const [selectedReportType, setSelectedReportType] = useState("Tất cả");
   const [selectedCompany, setSelectedCompany] = useState("Tất cả");
   const [selectedDuplicateFilter, setSelectedDuplicateFilter] = useState("Tất cả");
@@ -122,13 +149,7 @@ export const SubmissionsHub = ({
   const stats = useMemo(() => {
     const total = submissions.length;
     const approved = submissions.filter((s) => s.status === "Đã duyệt").length;
-    const pending = submissions.filter(
-      (s) =>
-        s.status === "Chờ duyệt" ||
-        s.status === "Đã nộp" ||
-        s.status === "Cần nhận xét" ||
-        s.status === "Quá hạn",
-    ).length;
+    const pending = submissions.filter((s) => isPendingReview(s.status)).length;
     // "Quá hạn" chỉ thuộc nhóm CHỜ DUYỆT (cần GV xử lý), không đếm vào "cần sửa"
     // để tổng KPI không trùng lặp và khớp bộ lọc tab bên dưới.
     const revision = submissions.filter((s) => s.status === "Yêu cầu sửa").length;
@@ -138,11 +159,7 @@ export const SubmissionsHub = ({
   const filteredSubmissions = useMemo(() => {
     return submissions.filter((sub) => {
       if (activeSubTab === "approved" && sub.status !== "Đã duyệt") return false;
-      if (
-        activeSubTab === "pending" &&
-        (sub.status === "Đã duyệt" || sub.status === "Yêu cầu sửa")
-      )
-        return false;
+      if (activeSubTab === "pending" && !isPendingReview(sub.status)) return false;
       // Tab "Yêu cầu sửa" KHÔNG chứa "Quá hạn" (đã thuộc nhóm chờ duyệt) — khớp KPI stats.
       if (activeSubTab === "revision" && sub.status !== "Yêu cầu sửa") return false;
       if (selectedReportType !== "Tất cả" && sub.reportType !== selectedReportType) return false;
@@ -164,6 +181,13 @@ export const SubmissionsHub = ({
         if (!match) return false;
       }
       return true;
+    }).sort((first, second) => {
+      const statusOrder = reviewOrder(first.status) - reviewOrder(second.status);
+      if (statusOrder !== 0) return statusOrder;
+      return (
+        new Date(second.submittedAt ?? 0).getTime() -
+        new Date(first.submittedAt ?? 0).getTime()
+      );
     });
   }, [submissions, activeSubTab, selectedReportType, selectedCompany, selectedDuplicateFilter, searchQuery]);
 
@@ -171,13 +195,14 @@ export const SubmissionsHub = ({
   const studentGroups = useMemo((): StudentGroup[] => {
     const map = new Map<string, StudentGroup>();
     for (const sub of filteredSubmissions) {
-      const key = sub.mssv && sub.mssv !== "—" ? sub.mssv : sub.studentName || sub.id;
+      const key = sub.internshipId || (sub.mssv && sub.mssv !== "—" ? sub.mssv : sub.studentName || sub.id);
       const existing = map.get(key);
       if (existing) {
         existing.items.push(sub);
       } else {
         map.set(key, {
           key,
+          internshipId: sub.internshipId ?? "",
           studentName: sub.studentName,
           mssv: sub.mssv,
           company: sub.company,
@@ -230,7 +255,8 @@ export const SubmissionsHub = ({
   const groupSummary = (group: StudentGroup) => {
     const approved = group.items.filter((s) => s.status === "Đã duyệt").length;
     const revision = group.items.filter((s) => s.status === "Yêu cầu sửa").length;
-    return { approved, revision, pending: group.items.length - approved - revision };
+    const pending = group.items.filter((s) => isPendingReview(s.status)).length;
+    return { approved, revision, pending };
   };
 
   const handleBatchApprove = async () => {
@@ -270,17 +296,16 @@ export const SubmissionsHub = ({
     }
   };
 
-  // Tải ZIP toàn bộ bài nộp FILE của 1 sinh viên
+  // Tải toàn bộ hồ sơ của đợt thực tập, bao gồm cả báo cáo tuần.
   const handleDownloadStudentZip = async (group: StudentGroup) => {
-    const ids = zipIdsOf(group.items);
-    if (ids.length === 0) {
-      onToast?.("Sinh viên này chỉ có báo cáo tuần — hãy tải file từ từng bài trong nhóm.");
+    if (!group.internshipId) {
+      onToast?.("Không xác định được đợt thực tập để tạo file ZIP.");
       return;
     }
     setZippingStudentKey(group.key);
     try {
-      await submissionApiService.downloadLecturerZip(ids);
-      onToast?.(`Đã tải ${ids.length} bài nộp của ${group.studentName} (.zip).`);
+      await submissionApiService.downloadLecturerInternshipZip(group.internshipId);
+      onToast?.(`Đã tải toàn bộ hồ sơ của ${group.studentName} (.zip).`);
     } catch (err) {
       onToast?.(err instanceof Error ? err.message : "Không thể tạo file ZIP.");
     } finally {
@@ -388,30 +413,33 @@ export const SubmissionsHub = ({
     try {
       const weekly = isWeekly(selectedSubmission);
       const reportId = selectedSubmission.sourceId ?? selectedSubmission.id.replace(/^weekly:/, "");
-      const updated = weekly
-        ? await weeklyReportService.review(reportId, {
-            status: "Reviewed",
-            lecturerComment: feedbackInput.trim(),
-          })
-        : await submissionApiService.addFeedback(selectedSubmission.id, {
-            comment: feedbackInput.trim(),
-            isPublic: true,
-          });
-      const latestFeedback = updated.feedbacks?.[updated.feedbacks.length - 1];
-      const localFeedback = {
-        id: `local-${Date.now()}`,
-        comment: feedbackInput.trim(),
-        isPublic: true,
-        authorRole: "Lecturer" as const,
-        lecturerName: "Giảng viên",
-        createdAt: new Date().toISOString(),
-      };
+      let feedback: FeedbackDto;
+      if (weekly) {
+        await weeklyReportService.review(reportId, {
+          status: mapUiWeeklyReportReviewStatusToApi(selectedSubmission.status),
+          lecturerComment: feedbackInput.trim(),
+        });
+        feedback = {
+          id: `local-${Date.now()}`,
+          comment: feedbackInput.trim(),
+          isPublic: true,
+          authorRole: "Lecturer",
+          lecturerName: "Giảng viên",
+          createdAt: new Date().toISOString(),
+        };
+      } else {
+        feedback = await submissionApiService.addFeedback(selectedSubmission.id, {
+          comment: feedbackInput.trim(),
+          isPublic: true,
+          newStatus: mapUiSubmissionStatusToApi(selectedSubmission.status),
+        });
+      }
       setSelectedSubmission((current) =>
         current
           ? {
               ...current,
-              lecturerNote: latestFeedback?.comment ?? current.lecturerNote,
-              feedbacks: updated.feedbacks ?? [...(current.feedbacks ?? []), localFeedback],
+              lecturerNote: feedback.comment,
+              feedbacks: [...(current.feedbacks ?? []), feedback],
             }
           : current,
       );
@@ -477,7 +505,7 @@ export const SubmissionsHub = ({
 
   return (
     <div className="space-y-5 max-w-[1500px] mx-auto animate-in fade-in duration-200">
-      <PageHeader
+      {!compact && <PageHeader
         icon={FileCheck}
         title="Kho Báo Cáo & Bài Nộp Sinh Viên"
         subtitle={`Tổng hợp báo cáo tuần, giữa kỳ & cuối kỳ do sinh viên tải lên · ${selectedSemester?.name || "Kỳ thực tập đang chọn"}`}
@@ -490,9 +518,9 @@ export const SubmissionsHub = ({
             ariaLabel: "Tải toàn bộ file báo cáo dưới dạng ZIP",
           },
         ]}
-      />
+      />}
 
-      <Toolbar
+      {!compact && <Toolbar
         left={
           <p className="text-xs text-slate-500 font-medium">
             <span className="font-bold text-slate-800">{stats.total}</span> bài
@@ -504,10 +532,11 @@ export const SubmissionsHub = ({
             <span className="font-bold text-rose-700">{stats.revision}</span> cần sửa
           </p>
         }
-      />
+      />}
 
       <Panel className="space-y-4">
         {/* Sub-tabs & filters */}
+        {!compact && <>
         <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
           <div className="flex items-center gap-1.5 p-1 bg-slate-100/80 rounded-md">
             <button
@@ -612,6 +641,7 @@ export const SubmissionsHub = ({
             <option value="danger">🔴 Cảnh báo (&gt;25%)</option>
           </select>
         </div>
+        </>}
 
         {/* List header */}
         {studentGroups.length > 0 && (
@@ -652,9 +682,7 @@ export const SubmissionsHub = ({
           <div className="space-y-2.5">
             {pagedGroups.map((group) => {
               const summary = groupSummary(group);
-              const expanded =
-                expandedStudents.has(group.key) || studentGroups.length === 1;
-              const ids = zipIdsOf(group.items);
+              const expanded = expandedStudents.has(group.key);
               const allSelected =
                 group.items.length > 0 &&
                 group.items.every((s) => selectedSubIds.includes(s.id));
@@ -673,14 +701,18 @@ export const SubmissionsHub = ({
                     <ChevronDown
                       className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`}
                     />
-                    <input
-                      type="checkbox"
-                      checked={allSelected}
-                      onChange={() => toggleGroupSelection(group)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="rounded border-slate-300 text-blue-600 cursor-pointer"
-                      title="Chọn tất cả bài nộp của sinh viên này"
-                    />
+                    {group.items.some((item) =>
+                      !isApprovedStatus(item.status) && item.status !== "Yêu cầu sửa"
+                    ) && (
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        onChange={() => toggleGroupSelection(group)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="rounded border-slate-300 text-blue-600 cursor-pointer"
+                        title="Chọn tất cả bài nộp của sinh viên này"
+                      />
+                    )}
                     <InitialsAvatar name={group.studentName} seed={group.mssv} size={38} />
                     <div className="min-w-0 flex-1">
                       <p className="font-bold text-slate-900 text-sm truncate">{group.studentName}</p>
@@ -719,12 +751,12 @@ export const SubmissionsHub = ({
                         e.stopPropagation();
                         void handleDownloadStudentZip(group);
                       }}
-                      disabled={ids.length === 0 || isZipping}
+                      disabled={!group.internshipId || isZipping}
                       className="shrink-0 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-[11px] flex items-center gap-1 shadow-2xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       title={
-                        ids.length === 0
-                          ? "Chỉ có báo cáo tuần — tải file riêng trong từng bài"
-                          : `Tải ${ids.length} bài nộp của sinh viên này (.zip)`
+                        !group.internshipId
+                          ? "Không xác định được đợt thực tập"
+                          : `Tải toàn bộ hồ sơ của sinh viên này (.zip)`
                       }
                     >
                       {isZipping ? (
@@ -732,7 +764,7 @@ export const SubmissionsHub = ({
                       ) : (
                         <Download className="w-3.5 h-3.5" />
                       )}
-                      <span>{isZipping ? "Đang tạo..." : `Tải .zip (${ids.length})`}</span>
+                      <span>{isZipping ? "Đang tạo..." : "Tải .zip"}</span>
                     </button>
                   </div>
 
@@ -744,12 +776,14 @@ export const SubmissionsHub = ({
                           key={sub.id}
                           className={`flex items-start gap-3 p-3 hover:bg-slate-50/70 transition-colors ${selectedSubIds.includes(sub.id) ? "bg-blue-50/40" : ""}`}
                         >
-                          <input
-                            type="checkbox"
-                            checked={selectedSubIds.includes(sub.id)}
-                            onChange={() => toggleSelect(sub.id)}
-                            className="mt-1 rounded border-slate-300 text-blue-600 cursor-pointer"
-                          />
+                          {!isApprovedStatus(sub.status) && sub.status !== "Yêu cầu sửa" && (
+                            <input
+                              type="checkbox"
+                              checked={selectedSubIds.includes(sub.id)}
+                              onChange={() => toggleSelect(sub.id)}
+                              className="mt-1 rounded border-slate-300 text-blue-600 cursor-pointer"
+                            />
+                          )}
 
                           <div className="min-w-0 flex-1 space-y-1">
                             <div className="flex items-center gap-2 flex-wrap">
@@ -806,7 +840,7 @@ export const SubmissionsHub = ({
                               <Eye className="w-3.5 h-3.5 text-slate-600" />
                             </button>
 
-                            {sub.status !== "Đã duyệt" && (
+                            {!isApprovedStatus(sub.status) && sub.status !== "Yêu cầu sửa" && (
                               <button
                                 onClick={() => void handleApproveRow(sub)}
                                 className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-[11px] shadow-2xs transition-colors flex items-center gap-1"
@@ -926,7 +960,7 @@ export const SubmissionsHub = ({
                     </strong>
                   </span>
                   <span
-                    className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] ${selectedSubmission.status === "Đã duyệt" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}
+                    className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] ${isApprovedStatus(selectedSubmission.status) ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}
                   >
                     {selectedSubmission.status}
                   </span>
@@ -1062,15 +1096,17 @@ export const SubmissionsHub = ({
                   <span>{isUpdatingStatus ? "Đang xử lý..." : "Yêu cầu sửa lại"}</span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => void handleApproveSingle()}
-                  disabled={isUpdatingStatus}
-                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-md text-xs shadow-md transition-colors flex items-center gap-1.5 disabled:opacity-60"
-                >
-                  <Check className="w-4 h-4" />
-                  <span>{isUpdatingStatus ? "Đang xử lý..." : "Phê Duyệt Bài Nộp"}</span>
-                </button>
+                {!isApprovedStatus(selectedSubmission.status) && selectedSubmission.status !== "Yêu cầu sửa" && (
+                  <button
+                    type="button"
+                    onClick={() => void handleApproveSingle()}
+                    disabled={isUpdatingStatus}
+                    className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-md text-xs shadow-md transition-colors flex items-center gap-1.5 disabled:opacity-60"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>{isUpdatingStatus ? "Đang xử lý..." : "Phê Duyệt Bài Nộp"}</span>
+                  </button>
+                )}
               </div>
             </div>
           </div>

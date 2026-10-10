@@ -79,11 +79,13 @@ export function buildStudentProfileFromPortal(
     lecturerName: portal.lecturerName ?? "—",
     lecturerEmail: portal.lecturerEmail ?? "—",
     lecturerPhone: portal.lecturerPhone ?? "—",
-    // CHỈ dùng supervisorName của internship — không fallback sang contactPerson
-    // (người phụ trách hợp đồng/kế toán không phải mentor thực tập của SV).
-    supervisorName: i?.supervisorName ?? "Chưa có mentor",
-    supervisorEmail: "—",
-    supervisorPhone: "—",
+    // Mentor / Người hướng dẫn từ Doanh nghiệp
+    supervisorName:
+      company?.contactPerson?.trim() ||
+      i?.supervisorName?.trim() ||
+      "Chưa có mentor",
+    supervisorEmail: company?.contactEmail?.trim() || "—",
+    supervisorPhone: company?.contactPhone?.trim() || "—",
     companyAddress: company?.address?.trim() || company?.industry?.trim() || "—",
     currentPhase: i
       ? `${internshipStatusToBadge(i.status)}${weeklyReportCount > 0 ? ` • ${weeklyReportCount} báo cáo tuần` : ""}`

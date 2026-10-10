@@ -54,6 +54,18 @@ function formatDateTimeVi(value?: string | null) {
   });
 }
 
+function getScheduleStatus(schedule: SemesterReportScheduleDto, now: number) {
+  const startTime = schedule.startDate ? new Date(schedule.startDate).getTime() : Number.NaN;
+  const dueTime = new Date(schedule.dueDate).getTime();
+
+  if (Number.isFinite(startTime) && now < startTime) return "Chưa bắt đầu";
+  if (Number.isFinite(dueTime) && now > dueTime) return "Quá hạn";
+  if (Number.isFinite(startTime) && now >= startTime && (!Number.isFinite(dueTime) || now <= dueTime)) {
+    return "Đang diễn ra";
+  }
+  return "Chưa bắt đầu";
+}
+
 function initials(name?: string | null) {
   if (!name) return "?";
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -88,6 +100,7 @@ export const InternshipView = ({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeContactModal, setActiveContactModal] = useState<"lecturer" | "mentor" | null>(null);
   const [selectedWeekDetail, setSelectedWeekDetail] = useState<WeeklyPlanItem | null>(null);
+  const [now, setNow] = useState(() => Date.now());
   const [apiWeeklyPlans, setApiWeeklyPlans] = useState<{
     week: number;
     title: string;
@@ -100,6 +113,11 @@ export const InternshipView = ({
   const [schedules, setSchedules] = useState<SemesterReportScheduleDto[]>([]);
   const [contactTopic, setContactTopic] = useState("Hỏi về Báo cáo thực tập tuần");
   const [contactMessage, setContactMessage] = useState("");
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   const isAssigned = Boolean(
     internship?.id &&
@@ -191,7 +209,7 @@ export const InternshipView = ({
           progress: report.progress,
           deliverable: report.deliverable || schedule?.title || `Tuần ${week}`,
           dueDate: schedule?.dueDate ? formatDateTimeVi(schedule.dueDate) : undefined,
-          isSubmissionOpen: schedule?.isSubmissionOpen ?? true,
+          isSubmissionOpen: schedule?.isSubmissionOpen ?? false,
         };
       }
 
@@ -199,14 +217,14 @@ export const InternshipView = ({
         week,
         title: schedule?.title || `Kế hoạch tuần ${week}`,
         goal: schedule?.description || "Chưa có báo cáo tuần",
-        status: "Chưa bắt đầu",
+        status: schedule?.isSubmissionOpen ? getScheduleStatus(schedule, now) : "Chưa bắt đầu",
         progress: 0,
         deliverable: schedule?.title || "Báo cáo tiến độ tuần",
         dueDate: schedule?.dueDate ? formatDateTimeVi(schedule.dueDate) : undefined,
         isSubmissionOpen: schedule?.isSubmissionOpen ?? false,
       };
     });
-  }, [apiWeeklyPlans, schedules, dynamicWeeks]);
+  }, [apiWeeklyPlans, schedules, dynamicWeeks, now]);
 
   const requiredWeeks = useMemo(() => {
     const open = Array.from(
@@ -219,8 +237,13 @@ export const InternshipView = ({
           .map((s) => s.weekNumber),
       ),
     ).sort((a, b) => a - b);
-    return open.length ? open : Array.from({ length: dynamicWeeks }, (_, i) => i + 1);
+    return open;
   }, [schedules, dynamicWeeks]);
+
+  const visibleWeeklyPlans = useMemo(
+    () => weeklyPlans.filter((week) => week.isSubmissionOpen),
+    [weeklyPlans],
+  );
 
   const progressSummary = useMemo(() => {
     const approvedWeeks = new Set(
@@ -261,79 +284,63 @@ export const InternshipView = ({
   }, [internship, profile.companyAddress]);
 
   const timelineSteps = useMemo(() => {
-    const start = internship?.startDate;
-    const end = internship?.endDate;
-    const created = internship?.createdAt;
-    const assigned = internship?.assignedAt;
-    const status = internship?.status ?? "NotStarted";
-    const midWeek = Math.ceil(dynamicWeeks / 2);
-    const week = progressSummary.current;
     const scheduleByWeek = new Map(schedules.map((s) => [s.weekNumber, s]));
-    const midSchedule = scheduleByWeek.get(midWeek);
-    const finalSchedule =
-      schedules.find((s) => s.isFinalReport || s.weekNumber > dynamicWeeks) ??
-      scheduleByWeek.get(dynamicWeeks);
+    const reportByWeek = new Map(weeklyPlans.map((p) => [p.week, p]));
+    const internStatus = internship?.status ?? "NotStarted";
+    const isFinished = internStatus === "Completed" || internStatus === "Graded";
 
-    const steps = [
-      {
-        label: "Đăng ký",
-        date: created ? formatDateVi(created, "short") : "—",
-        phase: 0,
-      },
-      {
-        label: "Được duyệt",
-        date: assigned ? formatDateVi(assigned, "short") : "—",
-        phase: 1,
-      },
-      { label: "Bắt đầu", date: formatDateVi(start, "short"), phase: 2 },
-      {
-        label: "Giữa kỳ",
-        date: midSchedule?.dueDate
-          ? formatDateVi(midSchedule.dueDate, "short")
-          : `Tuần ${midWeek}`,
-        phase: 3,
-      },
-      {
-        label: "Cuối kỳ",
-        date: finalSchedule?.dueDate
-          ? formatDateVi(finalSchedule.dueDate, "short")
-          : formatDateVi(end, "short"),
-        phase: 4,
-      },
-      {
-        label: "Hoàn thành",
-        date: formatDateVi(end, "short"),
-        phase: 5,
-      },
-    ];
+    // Mỗi tuần yêu cầu = 1 node trên timeline
+    const weekSteps = requiredWeeks.map((weekNum) => {
+      const schedule = scheduleByWeek.get(weekNum);
+      const report = reportByWeek.get(weekNum);
 
-    const resolveStatus = (phase: number) => {
-      if (status === "Completed" || status === "Graded") return "done";
-      if (status === "NotStarted") {
-        if (phase === 0) return "done";
-        if (phase === 1) return "active";
-        return "upcoming";
-      }
-      if (phase <= 1) return "done";
-      if (phase === 2) return week >= 1 ? "done" : "active";
-      if (phase === 3) {
-        if (week >= midWeek + 1) return "done";
-        if (week >= midWeek - 1) return "active";
-        return "upcoming";
-      }
-      if (phase === 4) {
-        if (week >= dynamicWeeks) return "active";
-        return "upcoming";
-      }
-      return "upcoming";
-    };
+      // Nhãn ngày: ưu tiên deadline từ schedule, fallback "Tuần N"
+      const dateLabel = schedule?.dueDate
+        ? formatDateVi(schedule.dueDate, "short")
+        : "—";
 
-    return steps.map((s) => ({ ...s, status: resolveStatus(s.phase) }));
-  }, [internship, progressSummary, schedules, dynamicWeeks]);
+      // Trạng thái dựa trên báo cáo thực tế
+      let status: "done" | "active" | "upcoming";
+      if (isFinished) {
+        status = "done";
+      } else if (report && (report.status === "Đã hoàn thành" || report.progress >= 100)) {
+        status = "done";
+      } else if (report && report.status !== "Chưa bắt đầu") {
+        // Đã nộp / Cần chỉnh sửa / Đã xem → đang xử lý
+        status = "active";
+      } else if (weekNum === progressSummary.current) {
+        status = "active";
+      } else if (weekNum < progressSummary.current) {
+        // Tuần đã qua nhưng chưa nộp
+        status = "upcoming";
+      } else {
+        status = "upcoming";
+      }
+
+      return {
+        label: `Tuần ${weekNum}`,
+        sublabel: schedule?.title || report?.title || "",
+        date: dateLabel,
+        status,
+        reportStatus: report?.status ?? "Chưa bắt đầu",
+      };
+    });
+
+    // Thêm mốc Hoàn thành ở cuối
+    const endDate = internship?.endDate;
+    weekSteps.push({
+      label: "Hoàn thành",
+      sublabel: "",
+      date: endDate ? formatDateVi(endDate, "short") : "—",
+      status: isFinished ? "done" : "upcoming",
+      reportStatus: isFinished ? "Đã hoàn thành" : "Chưa bắt đầu",
+    });
+
+    return weekSteps;
+  }, [internship, weeklyPlans, requiredWeeks, schedules, progressSummary]);
 
   const milestones = useMemo(() => {
-    const end = internship?.endDate;
-    const nextWeek = weeklyPlans.find((w) => w.progress < 100);
+    const nextWeek = visibleWeeklyPlans.find((w) => w.progress < 100);
     const scheduleByWeek = new Map(schedules.map((s) => [s.weekNumber, s]));
     const items: {
       title: string;
@@ -358,35 +365,30 @@ export const InternshipView = ({
 
     const midWeekNum = Math.ceil(dynamicWeeks / 2);
     const midSchedule = scheduleByWeek.get(midWeekNum);
-    const midReport = weeklyPlans.find((w) => w.week === midWeekNum);
-    items.push({
-      title: "Đánh giá giữa kỳ",
-      date: midSchedule?.dueDate
-        ? formatDateTimeVi(midSchedule.dueDate)
-        : "—",
-      nearest: false,
-      status:
-        midReport && midReport.status !== "Chưa bắt đầu"
-          ? midReport.status
-          : "Chưa nộp",
-    });
+    const midReport = visibleWeeklyPlans.find((w) => w.week === midWeekNum);
+    if (midSchedule?.isSubmissionOpen) {
+      items.push({
+        title: "Đánh giá giữa kỳ",
+        date: formatDateTimeVi(midSchedule.dueDate),
+        nearest: false,
+        status: midReport?.status ?? getScheduleStatus(midSchedule, now),
+      });
+    }
 
     const finalSchedule =
       schedules.find((s) => s.isFinalReport || s.weekNumber > dynamicWeeks) ??
       scheduleByWeek.get(dynamicWeeks);
-    items.push({
-      title: finalSchedule?.title || "Nộp báo cáo cuối kỳ",
-      date: finalSchedule?.dueDate
-        ? formatDateTimeVi(finalSchedule.dueDate)
-        : end
-          ? formatDateVi(end)
-          : "—",
-      nearest: false,
-      status: "Báo cáo PDF chính thức",
-    });
+    if (finalSchedule?.isSubmissionOpen) {
+      items.push({
+        title: finalSchedule.title || "Nộp báo cáo cuối kỳ",
+        date: formatDateTimeVi(finalSchedule.dueDate),
+        nearest: false,
+        status: getScheduleStatus(finalSchedule, now),
+      });
+    }
 
     return items;
-  }, [weeklyPlans, schedules, internship?.endDate, dynamicWeeks]);
+  }, [visibleWeeklyPlans, schedules, dynamicWeeks, now]);
 
   const goTo = (tab: string) => {
     if (onNavigate) onNavigate(tab);
@@ -625,80 +627,122 @@ export const InternshipView = ({
                 />
               </div>
               <div className="flex justify-between text-[11px] text-slate-500 font-medium">
-                <span>Bắt đầu</span>
+                <span>{internship?.startDate ? formatDateVi(internship.startDate, "short") : "Bắt đầu"}</span>
                 <span className="text-[#026aa7] font-bold">
-                  Đã hoàn thành {progressSummary.done} / {progressSummary.total} tuần ({progressSummary.pct}%)
+                  Đã duyệt {progressSummary.done} / {progressSummary.total} tuần ({progressSummary.pct}%)
                 </span>
-                <span>Kết thúc</span>
+                <span>{internship?.endDate ? formatDateVi(internship.endDate, "short") : "Kết thúc"}</span>
               </div>
             </div>
 
-            {/* Các mốc lộ trình (Desktop + Mobile) */}
+            {/* Các mốc lộ trình theo tuần (Desktop + Mobile) */}
             <div className="pt-2">
-              <div className="hidden sm:flex items-start justify-between px-2">
-                {timelineSteps.map((step, idx, arr) => {
-                  const isDone = step.status === "done";
-                  const isActive = step.status === "active";
-                  const doneCount = timelineSteps.filter((s) => s.status === "done").length;
-                  return (
-                    <React.Fragment key={step.label}>
-                      <div className="flex flex-col items-center min-w-[70px] text-center z-10">
+              <div className="hidden sm:block overflow-x-auto pb-2">
+                <div className="flex w-full items-start px-1">
+                  {timelineSteps.map((step, idx, arr) => {
+                    const isDone = step.status === "done";
+                    const isActive = step.status === "active";
+                    // Connector line giữa 2 node liền kề
+                    const prevDone = idx > 0 && arr[idx - 1].status === "done";
+                    return (
+                      <React.Fragment key={step.label}>
+                        {idx > 0 && (
+                          <div className="mt-3.5 h-0.5 min-w-3 flex-1 self-start">
+                            <div
+                              className={`h-full transition-all duration-300 ${
+                                prevDone && isDone ? "bg-[#026aa7]" : "bg-slate-200"
+                              }`}
+                            />
+                          </div>
+                        )}
                         <div
-                          className={`w-8 h-8 rounded-full font-bold text-xs flex items-center justify-center transition-all ${
-                            isDone
-                              ? "bg-[#026aa7] text-white shadow-2xs"
-                              : isActive
-                                ? "bg-[#026aa7] text-white ring-4 ring-blue-100 font-bold"
-                                : "bg-white text-slate-400 border border-slate-300"
-                          }`}
+                          className="flex min-w-0 flex-1 flex-col items-center text-center"
+                          title={step.sublabel || step.label}
                         >
-                          {isDone ? <CheckCircle2 className="w-4 h-4 text-white" /> : idx + 1}
-                        </div>
-                        <span
-                          className={`text-[11px] font-bold mt-1.5 ${
-                            isActive ? "text-[#026aa7]" : isDone ? "text-slate-800" : "text-slate-400"
-                          }`}
-                        >
-                          {step.label}
-                        </span>
-                        <span className="text-[10px] text-slate-400 font-medium">{step.date}</span>
-                      </div>
-
-                      {idx < arr.length - 1 && (
-                        <div className="flex-1 mt-4 h-0.5 bg-slate-200 self-start">
                           <div
-                            className={`h-full transition-all duration-300 ${
-                              idx < doneCount - 1 ? "bg-[#026aa7]" : "bg-transparent"
+                            className={`w-7 h-7 rounded-full font-bold text-[11px] flex items-center justify-center transition-all ${
+                              isDone
+                                ? "bg-[#026aa7] text-white shadow-2xs"
+                                : isActive
+                                  ? "bg-[#026aa7] text-white ring-[3px] ring-blue-100"
+                                  : "bg-white text-slate-400 border border-slate-300"
                             }`}
-                          />
+                          >
+                            {isDone ? <CheckCircle2 className="w-3.5 h-3.5 text-white" /> : idx + 1}
+                          </div>
+                          <span
+                            className={`text-[10.5px] font-bold mt-1 leading-tight ${
+                              isActive ? "text-[#026aa7]" : isDone ? "text-slate-800" : "text-slate-400"
+                            }`}
+                          >
+                            {step.label}
+                          </span>
+                          <span className="text-[9.5px] text-slate-400 font-medium leading-tight">{step.date}</span>
+                          {step.reportStatus && step.reportStatus !== "Chưa bắt đầu" && step.label !== "Hoàn thành" && (
+                            <span
+                              className={`mt-0.5 text-[8.5px] font-bold px-1.5 py-px rounded-full border leading-tight truncate max-w-[76px] ${
+                                step.reportStatus === "Đã hoàn thành"
+                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                  : step.reportStatus === "Đã nộp" || step.reportStatus === "Đã xem"
+                                    ? "bg-blue-50 text-blue-700 border-blue-200"
+                                    : step.reportStatus === "Cần chỉnh sửa"
+                                      ? "bg-amber-50 text-amber-700 border-amber-200"
+                                      : "bg-slate-50 text-slate-500 border-slate-200"
+                              }`}
+                            >
+                              {step.reportStatus}
+                            </span>
+                          )}
                         </div>
-                      )}
-                    </React.Fragment>
-                  );
-                })}
+                      </React.Fragment>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* Mobile steps */}
-              <ol className="space-y-2.5 sm:hidden" aria-label="Các mốc thực tập">
+              <ol className="space-y-2 sm:hidden" aria-label="Tiến độ theo tuần">
                 {timelineSteps.map((step, index) => {
                   const done = step.status === "done";
                   const active = step.status === "active";
                   return (
-                    <li key={step.label} className="flex items-center gap-3 text-xs">
+                    <li key={step.label} className="flex items-start gap-2.5 text-xs">
                       <span
-                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
-                          done || active
+                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold mt-0.5 ${
+                          done
                             ? "bg-[#026aa7] text-white"
-                            : "border border-slate-300 bg-white text-slate-500"
+                            : active
+                              ? "bg-[#026aa7] text-white ring-2 ring-blue-100"
+                              : "border border-slate-300 bg-white text-slate-500"
                         }`}
                       >
                         {done ? <CheckCircle2 className="h-3.5 w-3.5" /> : index + 1}
                       </span>
-                      <div className="flex-1 flex justify-between items-center border-b border-slate-100 pb-2">
-                        <span className={`font-semibold ${active ? "text-[#026aa7]" : "text-slate-800"}`}>
-                          {step.label}
-                        </span>
-                        <span className="text-[11px] text-slate-400">{step.date}</span>
+                      <div className="flex-1 border-b border-slate-100 pb-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className={`font-bold ${active ? "text-[#026aa7]" : done ? "text-slate-800" : "text-slate-500"}`}>
+                            {step.label}
+                          </span>
+                          <span className="text-[10.5px] text-slate-400 shrink-0">{step.date}</span>
+                        </div>
+                        {step.sublabel && (
+                          <p className="text-[10.5px] text-slate-500 truncate mt-0.5">{step.sublabel}</p>
+                        )}
+                        {step.reportStatus && step.reportStatus !== "Chưa bắt đầu" && step.label !== "Hoàn thành" && (
+                          <span
+                            className={`inline-block mt-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${
+                              step.reportStatus === "Đã hoàn thành"
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                : step.reportStatus === "Đã nộp" || step.reportStatus === "Đã xem"
+                                  ? "bg-blue-50 text-blue-700 border-blue-200"
+                                  : step.reportStatus === "Cần chỉnh sửa"
+                                    ? "bg-amber-50 text-amber-700 border-amber-200"
+                                    : "bg-slate-50 text-slate-500 border-slate-200"
+                            }`}
+                          >
+                            {step.reportStatus}
+                          </span>
+                        )}
                       </div>
                     </li>
                   );
@@ -736,7 +780,7 @@ export const InternshipView = ({
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
                       <tr className="border-b border-slate-200 bg-slate-50/70 text-slate-600 font-bold">
-                        <th className="p-3 w-16">Tuần</th>
+                        <th className="w-20 min-w-20 whitespace-nowrap p-3">Tuần</th>
                         <th className="p-3">Mục tiêu & Sản phẩm</th>
                         <th className="p-3 w-32">Trạng thái</th>
                         <th className="p-3 w-28">Tiến độ</th>
@@ -744,9 +788,15 @@ export const InternshipView = ({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-slate-700">
-                      {weeklyPlans.map((item) => (
+                      {visibleWeeklyPlans.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="p-6 text-center text-slate-500">
+                            Giảng viên chưa mở nộp báo cáo tuần.
+                          </td>
+                        </tr>
+                      ) : visibleWeeklyPlans.map((item) => (
                         <tr key={item.week} className="hover:bg-slate-50/60 transition-colors">
-                          <td className="p-3 font-bold text-[#026aa7]">Tuần {item.week}</td>
+                          <td className="whitespace-nowrap p-3 font-bold text-[#026aa7]">Tuần {item.week}</td>
                           <td className="p-3">
                             <p className="font-semibold text-slate-800">{item.title}</p>
                             <p className="text-[11px] text-slate-500 line-clamp-1">{item.goal}</p>
@@ -765,7 +815,11 @@ export const InternshipView = ({
                                     ? "bg-blue-50 text-blue-800 border-blue-200"
                                     : item.status === "Cần chỉnh sửa"
                                       ? "bg-amber-50 text-amber-800 border-amber-200"
-                                      : "bg-slate-50 text-slate-600 border-slate-200"
+                                        : item.status === "Đang diễn ra"
+                                          ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                                          : item.status === "Quá hạn"
+                                            ? "bg-rose-50 text-rose-800 border-rose-200"
+                                            : "bg-slate-50 text-slate-600 border-slate-200"
                               }`}
                             >
                               {item.status}
@@ -801,7 +855,11 @@ export const InternshipView = ({
 
                 {/* Mobile list */}
                 <div className="md:hidden divide-y divide-slate-100 text-xs p-3 space-y-3">
-                  {weeklyPlans.map((item) => (
+                  {visibleWeeklyPlans.length === 0 ? (
+                    <p className="py-3 text-center text-slate-500">
+                      Giảng viên chưa mở nộp báo cáo tuần.
+                    </p>
+                  ) : visibleWeeklyPlans.map((item) => (
                     <article key={item.week} className="pt-3 first:pt-0 space-y-1.5">
                       <div className="flex items-start justify-between gap-2">
                         <div>
@@ -816,7 +874,11 @@ export const InternshipView = ({
                                 ? "bg-blue-50 text-blue-800 border-blue-200"
                                 : item.status === "Cần chỉnh sửa"
                                   ? "bg-amber-50 text-amber-800 border-amber-200"
-                                  : "bg-slate-50 text-slate-600 border-slate-200"
+                                  : item.status === "Đang diễn ra"
+                                    ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                                    : item.status === "Quá hạn"
+                                      ? "bg-rose-50 text-rose-800 border-rose-200"
+                                      : "bg-slate-50 text-slate-600 border-slate-200"
                           }`}
                         >
                           {item.status}
@@ -853,7 +915,11 @@ export const InternshipView = ({
                 </h3>
 
                 <div className="space-y-2.5 text-xs">
-                  {milestones.map((m, idx) => (
+                  {milestones.length === 0 ? (
+                    <p className="py-2 text-slate-500">
+                      Chưa có mốc nộp bài được mở.
+                    </p>
+                  ) : milestones.map((m, idx) => (
                     <div
                       key={idx}
                       className={`p-3 rounded-lg border transition-all ${

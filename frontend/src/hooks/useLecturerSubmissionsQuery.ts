@@ -1,22 +1,36 @@
+import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { queryKeys } from "../lib/queryKeys";
 import { lecturerInternshipsService } from "../services/lecturerInternships.service";
 import { submissionApiService } from "../services/submissionApi.service";
 import { weeklyReportService } from "../services/weeklyReport.service";
+import { signalRNotificationService } from "../services/signalr.service";
 import {
   mapSubmissionDtoToRow,
   mapUiWeeklyReportReviewStatusToApi,
 } from "../lib/portalMappers";
 import type { Submission } from "../types/submission";
 
+interface LecturerSubmissionListData {
+  submissions: Submission[];
+  studentByInternship: Record<
+    string,
+    { studentName: string; mssv: string; company: string }
+  >;
+}
+
+const EMPTY_STUDENT_CONTEXT: LecturerSubmissionListData["studentByInternship"] = {};
+
 export interface UseLecturerSubmissionsQueryOptions {
   semesterId?: string | null;
   enabled?: boolean;
+  onUpdated?: () => void;
 }
 
 export function useLecturerSubmissionsQuery({
   semesterId,
   enabled = true,
+  onUpdated,
 }: UseLecturerSubmissionsQueryOptions = {}) {
   const queryClient = useQueryClient();
 
@@ -53,11 +67,31 @@ export function useLecturerSubmissionsQuery({
         });
       });
 
-      return mappedSubmissions;
+      return {
+        submissions: mappedSubmissions,
+        studentByInternship: Object.fromEntries(internshipCtx),
+      };
     },
     enabled,
     placeholderData: keepPreviousData,
+    refetchInterval: 10_000,
+    refetchIntervalInBackground: false,
   });
+
+  useEffect(() => {
+    const unsubscribe = signalRNotificationService.onNotification((notification) => {
+      if (notification.link?.includes("/lecturer/reports")) {
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.lecturer.submissions.all,
+        });
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.lecturerReports.all,
+        });
+      }
+    });
+    void signalRNotificationService.start();
+    return unsubscribe;
+  }, [queryClient]);
 
   const updateMutation = useMutation({
     mutationFn: async ({
@@ -78,13 +112,28 @@ export function useLecturerSubmissionsQuery({
         await submissionApiService.review(id, newStatus, note);
       }
     },
-    onSuccess: () => {
+    onSuccess: (_result, { id, newStatus }) => {
+      queryClient.setQueriesData<LecturerSubmissionListData>(
+        { queryKey: queryKeys.lecturer.submissions.all },
+        (current) =>
+          current
+            ? {
+                ...current,
+                submissions: current.submissions.map((submission) =>
+                  submission.id === id
+                    ? { ...submission, status: newStatus }
+                    : submission,
+                ),
+              }
+            : current,
+      );
       void queryClient.invalidateQueries({
         queryKey: queryKeys.lecturer.submissions.all,
       });
       void queryClient.invalidateQueries({
         queryKey: queryKeys.lecturerReports.all,
       });
+      onUpdated?.();
     },
   });
 
@@ -97,7 +146,8 @@ export function useLecturerSubmissionsQuery({
   };
 
   return {
-    submissions: query.data ?? [],
+    submissions: query.data?.submissions ?? [],
+    studentByInternship: query.data?.studentByInternship ?? EMPTY_STUDENT_CONTEXT,
     isLoading: query.isLoading,
     isFetching: query.isFetching,
     isError: query.isError,

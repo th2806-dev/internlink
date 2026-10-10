@@ -3,6 +3,7 @@ import { mapUiSubmissionStatusToApi } from "../lib/portalMappers";
 import type {
   CreateFeedbackRequestDto,
   CreateSubmissionRequestDto,
+  FeedbackDto,
   ResubmitSubmissionRequestDto,
   SubmissionDto,
 } from "../types/api";
@@ -14,6 +15,10 @@ export const submissionApiService = {
 
   getMine(): Promise<SubmissionDto[]> {
     return apiRequest<SubmissionDto[]>("/api/Submission/mine");
+  },
+
+  cancel(id: string): Promise<void> {
+    return apiRequest<void>(`/api/Submission/${id}/cancel`, { method: "DELETE" });
   },
 
   getByInternship(internshipId: string): Promise<SubmissionDto[]> {
@@ -116,7 +121,19 @@ export const submissionApiService = {
       "/api/Lecturer/submissions/download-zip",
       "submissions.zip",
       true,
-      { method: "POST", body: JSON.stringify({ submissionIds: ids }) },
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ submissionIds: ids }),
+      },
+    );
+  },
+
+  downloadLecturerInternshipZip(internshipId: string) {
+    return downloadAuthenticatedFile(
+      `/api/Lecturer/internships/${encodeURIComponent(internshipId)}/submissions/download-zip`,
+      "submissions.zip",
+      true,
     );
   },
 
@@ -130,8 +147,8 @@ export const submissionApiService = {
   addFeedback(
     id: string,
     body: CreateFeedbackRequestDto,
-  ): Promise<SubmissionDto> {
-    return apiRequest<SubmissionDto>(`/api/Submission/${id}/feedback`, {
+  ): Promise<FeedbackDto> {
+    return apiRequest<FeedbackDto>(`/api/Submission/${id}/feedback`, {
       method: "POST",
       body,
     });
@@ -157,7 +174,7 @@ export const submissionApiService = {
   ): Promise<SubmissionDto> {
     const apiStatus = mapUiSubmissionStatusToApi(uiStatus);
     if (comment?.trim()) {
-      return apiRequest<SubmissionDto>(`/api/Submission/${id}/feedback`, {
+      await apiRequest<FeedbackDto>(`/api/Submission/${id}/feedback`, {
         method: "POST",
         body: {
           comment: comment.trim(),
@@ -165,6 +182,7 @@ export const submissionApiService = {
           newStatus: apiStatus,
         },
       });
+      return apiRequest<SubmissionDto>(`/api/Submission/${id}`);
     }
     return apiRequest<SubmissionDto>(`/api/Submission/${id}/status`, {
       method: "PATCH",

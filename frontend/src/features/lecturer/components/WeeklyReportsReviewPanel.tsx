@@ -35,6 +35,7 @@ type WeeklyReportsReviewPanelProps = {
   isPlaceholderData?: boolean;
   isSemesterClosed?: boolean;
   closedWeekNumbers?: number[];
+  showHeading?: boolean;
 };
 
 export function WeeklyReportsReviewPanel({
@@ -45,6 +46,7 @@ export function WeeklyReportsReviewPanel({
   isPlaceholderData = false,
   isSemesterClosed = false,
   closedWeekNumbers = [],
+  showHeading = true,
 }: WeeklyReportsReviewPanelProps) {
   const [commentById, setCommentById] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -143,7 +145,7 @@ export function WeeklyReportsReviewPanel({
 
   return (
     <Panel className="space-y-3">
-      <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+      {showHeading && <div className="flex items-center justify-between border-b border-slate-100 pb-3">
         <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
           <FileCheck2 className="w-4 h-4 text-blue-600" />
           Danh sách báo cáo tuần
@@ -158,7 +160,7 @@ export function WeeklyReportsReviewPanel({
             {reports.length} bài
           </span>
         </div>
-      </div>
+      </div>}
 
       <ul className="divide-y divide-slate-100">
         {reports.map((r) => {

@@ -10,6 +10,8 @@ using InternLink.Infrastructure.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Moq;
+using System.IO.Compression;
+using System.Text;
 using Xunit;
 
 namespace InternLink.Tests.Services;
@@ -265,6 +267,144 @@ public class SubmissionServiceTests
     }
 
     [Fact]
+    public async Task CreateBundleAsync_ProductWithOnlyLinks_ShouldPersistWithoutFiles()
+    {
+        var db = GetDb();
+        var (studentUser, _, _, _, internship, finalReport) = await SeedDataAsync(db);
+        var service = CreateService(db);
+        finalReport.IsDeleted = true;
+        await db.SaveChangesAsync();
+
+        var result = await service.CreateBundleAsync(
+            studentUser.Id,
+            new CreateSubmissionRequest
+            {
+                InternshipId = internship.Id,
+                Type = "Product",
+                Title = "Ứng dụng đã triển khai",
+            },
+            Array.Empty<(Stream Stream, string FileName, long Length, string? ContentType)>(),
+            new[]
+            {
+                new SubmissionAssetInput { Label = "GitHub", Url = "https://github.com/example/project" },
+                new SubmissionAssetInput { Label = "Website", Url = "https://example.com" },
+            });
+
+        result.Assets.Should().HaveCount(2);
+        result.Assets.Should().OnlyContain(asset => asset.AssetType == "link");
+        (await db.SubmissionAssets.CountAsync(asset => asset.SubmissionId == result.Id))
+            .Should().Be(2);
+    }
+
+    [Fact]
+    public async Task CancelAsync_StudentCancelsPendingSubmission_ShouldHideSubmissionAndDeleteUnreferencedFiles()
+    {
+        var db = GetDb();
+        var (studentUser, _, _, _, internship, submission) = await SeedDataAsync(db);
+        var contentRootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        var uploadPath = Path.Combine(contentRootPath, "uploads", "submissions", internship.Id.ToString());
+        Directory.CreateDirectory(uploadPath);
+
+        var primaryFileName = "final-report.pdf";
+        var assetFileName = "supporting-image.png";
+        var primaryRelativePath = $"uploads/submissions/{internship.Id}/{primaryFileName}";
+        var assetRelativePath = $"uploads/submissions/{internship.Id}/{assetFileName}";
+        await File.WriteAllBytesAsync(Path.Combine(uploadPath, primaryFileName), new byte[] { 1 });
+        await File.WriteAllBytesAsync(Path.Combine(uploadPath, assetFileName), new byte[] { 2 });
+        submission.FileName = primaryFileName;
+        submission.FileUrl = primaryRelativePath;
+        var fileAsset = new SubmissionAsset
+        {
+            Id = Guid.NewGuid(),
+            SubmissionId = submission.Id,
+            Submission = submission,
+            Label = assetFileName,
+            FileName = assetFileName,
+            FileUrl = assetRelativePath,
+            AssetType = "file",
+            CreatedAt = DateTime.UtcNow,
+        };
+        var linkAsset = new SubmissionAsset
+        {
+            Id = Guid.NewGuid(),
+            SubmissionId = submission.Id,
+            Submission = submission,
+            Label = "Live link",
+            FileUrl = "https://example.com",
+            AssetType = "link",
+            CreatedAt = DateTime.UtcNow,
+        };
+        await db.SubmissionAssets.AddRangeAsync(fileAsset, linkAsset);
+        await db.SaveChangesAsync();
+        var service = CreateService(db, contentRootPath: contentRootPath);
+
+        try
+        {
+            (await service.CancelAsync(submission.Id, studentUser.Id)).Should().BeTrue();
+
+            (await db.Submissions.FindAsync(submission.Id))!.IsDeleted.Should().BeTrue();
+            (await db.SubmissionAssets.Where(asset => asset.SubmissionId == submission.Id)
+                .ToListAsync()).Should().OnlyContain(asset => asset.IsDeleted);
+            (await service.GetByInternshipAsync(internship.Id)).Should().BeEmpty();
+            File.Exists(Path.Combine(uploadPath, primaryFileName)).Should().BeFalse();
+            File.Exists(Path.Combine(uploadPath, assetFileName)).Should().BeFalse();
+
+            (await service.CancelAsync(submission.Id, studentUser.Id)).Should().BeTrue();
+        }
+        finally
+        {
+            if (Directory.Exists(contentRootPath))
+                Directory.Delete(contentRootPath, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task CancelAsync_ApprovedSubmission_ShouldRejectAndKeepFiles()
+    {
+        var db = GetDb();
+        var (studentUser, _, _, _, internship, submission) = await SeedDataAsync(db);
+        var contentRootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        var uploadPath = Path.Combine(contentRootPath, "uploads", "submissions", internship.Id.ToString());
+        Directory.CreateDirectory(uploadPath);
+
+        const string fileName = "approved-report.pdf";
+        submission.Status = SubmissionStatus.Approved;
+        submission.FileUrl = $"uploads/submissions/{internship.Id}/{fileName}";
+        await db.SaveChangesAsync();
+        var filePath = Path.Combine(uploadPath, fileName);
+        await File.WriteAllBytesAsync(filePath, new byte[] { 3 });
+        var service = CreateService(db, contentRootPath: contentRootPath);
+
+        try
+        {
+            var act = () => service.CancelAsync(submission.Id, studentUser.Id);
+
+            await act.Should().ThrowAsync<InvalidOperationException>()
+                .WithMessage("Chỉ có thể hủy hồ sơ đang chờ giảng viên duyệt.");
+            File.Exists(filePath).Should().BeTrue();
+            (await db.Submissions.FindAsync(submission.Id))!.IsDeleted.Should().BeFalse();
+        }
+        finally
+        {
+            if (Directory.Exists(contentRootPath))
+                Directory.Delete(contentRootPath, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task CancelAsync_NonOwner_ShouldReject()
+    {
+        var db = GetDb();
+        var (_, _, strangerUser, _, _, submission) = await SeedDataAsync(db);
+        var service = CreateService(db);
+
+        var act = () => service.CancelAsync(submission.Id, strangerUser.Id);
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>();
+        (await db.Submissions.FindAsync(submission.Id))!.IsDeleted.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task GetFeedbacksAsync_StudentOwner_ShouldReturnOnlyPublicFeedbacks()
     {
         var db = GetDb();
@@ -438,6 +578,7 @@ public class SubmissionServiceTests
     {
         var db = GetDb();
         var (studentUser, _, _, _, internship, _) = await SeedDataAsync(db);
+        internship.Student!.FullName = "Nguyễn Văn Á";
         var contentRootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
         var service = CreateService(db, contentRootPath: contentRootPath);
         var request = new CreateSubmissionRequest
@@ -459,6 +600,142 @@ public class SubmissionServiceTests
             result.EmployerScore.Should().Be(8.5m);
             (await db.Submissions.SingleAsync(s => s.Id == result.Id)).EmployerScore.Should().Be(8.5m);
             result.Assets.Should().ContainSingle(asset => asset.AssetType == "file");
+            result.Assets.Single().FileName.Should().Be("DanhGiaDoanhNghiep_NguyenVanA_V1.jpg");
+        }
+        finally
+        {
+            if (Directory.Exists(contentRootPath))
+                Directory.Delete(contentRootPath, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task CreateBundleAsync_FinalReport_ShouldUseCanonicalNamesAndNextVersion()
+    {
+        var db = GetDb();
+        var (studentUser, _, _, _, internship, _) = await SeedDataAsync(db);
+        internship.Student!.FullName = "Nguyễn Văn Á";
+        var contentRootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        var service = CreateService(db, contentRootPath: contentRootPath);
+        var request = new CreateSubmissionRequest
+        {
+            InternshipId = internship.Id,
+            Type = "FinalReport",
+            Title = "Báo cáo cuối kỳ",
+        };
+        var files = new[]
+        {
+            (Stream: (Stream)new MemoryStream(new byte[] { 1 }), FileName: "report.pdf", Length: 1L, ContentType: (string?)"application/pdf"),
+            (Stream: (Stream)new MemoryStream(new byte[] { 2 }), FileName: "appendix.docx", Length: 1L, ContentType: (string?)"application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+        };
+
+        try
+        {
+            var result = await service.CreateBundleAsync(studentUser.Id, request, files, Array.Empty<SubmissionAssetInput>());
+
+            result.Assets.Select(asset => asset.FileName).Should().BeEquivalentTo(
+                "BaoCaoCuoiKy_NguyenVanA_V2_01.pdf",
+                "BaoCaoCuoiKy_NguyenVanA_V2_02.docx");
+        }
+        finally
+        {
+            if (Directory.Exists(contentRootPath))
+                Directory.Delete(contentRootPath, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task DownloadInternshipZipAsync_ShouldIncludeWeeklyReportsSubmissionsAndProductLinks()
+    {
+        var db = GetDb();
+        var (_, lecturerUser, _, _, internship, finalReport) = await SeedDataAsync(db);
+        var contentRootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        var uploadFolder = Path.Combine(contentRootPath, "uploads");
+        var finalPath = Path.Combine(uploadFolder, "submissions", internship.Id.ToString(), "final.pdf");
+        var evidencePath = Path.Combine(uploadFolder, "submissions", internship.Id.ToString(), "employer.jpg");
+        var productPath = Path.Combine(uploadFolder, "submissions", internship.Id.ToString(), "product.zip");
+        var weeklyPath = Path.Combine(uploadFolder, "weekly-reports", internship.Id.ToString(), "week-1.pdf");
+        Directory.CreateDirectory(Path.GetDirectoryName(finalPath)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(weeklyPath)!);
+        await File.WriteAllBytesAsync(finalPath, new byte[] { 1 });
+        await File.WriteAllBytesAsync(evidencePath, new byte[] { 2 });
+        await File.WriteAllBytesAsync(productPath, new byte[] { 3 });
+        await File.WriteAllBytesAsync(weeklyPath, new byte[] { 4 });
+
+        finalReport.FileName = "BaoCaoCuoiKy_Student1_V1.pdf";
+        finalReport.FileUrl = Path.GetRelativePath(contentRootPath, finalPath).Replace("\\", "/");
+        var evidence = new Submission
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = internship.Id,
+            Type = SubmissionType.Evidence,
+            Status = SubmissionStatus.Approved,
+            FileName = "DanhGiaDoanhNghiep_Student1_V1.jpg",
+            FileUrl = Path.GetRelativePath(contentRootPath, evidencePath).Replace("\\", "/"),
+            SubmittedAt = DateTime.UtcNow,
+            CreatedAt = DateTime.UtcNow,
+        };
+        var product = new Submission
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = internship.Id,
+            Type = SubmissionType.Product,
+            Status = SubmissionStatus.Approved,
+            Title = "Sản phẩm thực tế",
+            SubmittedAt = DateTime.UtcNow,
+            CreatedAt = DateTime.UtcNow,
+            Assets =
+            {
+                new SubmissionAsset
+                {
+                    Id = Guid.NewGuid(),
+                    Label = "Mã nguồn",
+                    FileName = "product.zip",
+                    FileUrl = Path.GetRelativePath(contentRootPath, productPath).Replace("\\", "/"),
+                    AssetType = "file",
+                },
+                new SubmissionAsset
+                {
+                    Id = Guid.NewGuid(),
+                    Label = "Demo",
+                    FileUrl = "https://example.com/demo",
+                    AssetType = "link",
+                },
+            },
+        };
+        var weeklyReport = new WeeklyReport
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = internship.Id,
+            WeekNumber = 1,
+            Version = 1,
+            Title = "Báo cáo tuần 1",
+            Content = "Nội dung",
+            FileName = "Tuan01_Student1_V1.pdf",
+            FileUrl = Path.GetRelativePath(contentRootPath, weeklyPath).Replace("\\", "/"),
+            Status = WeeklyReportStatus.Approved,
+            CreatedAt = DateTime.UtcNow,
+        };
+        await db.Submissions.AddRangeAsync(evidence, product);
+        await db.WeeklyReports.AddAsync(weeklyReport);
+        await db.SaveChangesAsync();
+
+        try
+        {
+            var service = CreateService(db, contentRootPath: contentRootPath);
+            var result = await service.DownloadInternshipZipAsync(internship.Id, lecturerUser.Id);
+
+            result.Should().NotBeNull();
+            using var zipStream = new MemoryStream(result!.FileContent);
+            using var archive = new ZipArchive(zipStream, ZipArchiveMode.Read);
+            var entries = archive.Entries.Select(entry => entry.FullName).ToArray();
+            entries.Should().Contain(entry => entry.EndsWith("/BaoCaoTuan/Tuan01/Tuan01_Student1_V1.pdf"));
+            entries.Should().Contain(entry => entry.EndsWith("/BaoCaoCuoiKy/BaoCaoCuoiKy_Student1_V1.pdf"));
+            entries.Should().Contain(entry => entry.EndsWith("/DanhGiaDoanhNghiep/DanhGiaDoanhNghiep_Student1_V1.jpg"));
+            entries.Should().Contain(entry => entry.EndsWith("/SanPham/product.zip"));
+            var linksEntry = archive.GetEntry(entries.Single(entry => entry.EndsWith("/SanPham/LienKetSanPham.txt")));
+            using var reader = new StreamReader(linksEntry!.Open(), Encoding.UTF8);
+            (await reader.ReadToEndAsync()).Should().Contain("Demo: https://example.com/demo");
         }
         finally
         {

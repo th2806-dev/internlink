@@ -241,11 +241,13 @@ public sealed class WeeklyTrendDto
 /// </summary>
 public sealed class GradeDistributionDto
 {
-    public int ExcellentCount { get; set; }  // 9.0 - 10.0
-    public int GoodCount { get; set; }       // 8.0 - 8.9
+    public int ExcellentCount { get; set; }  // 8.5 - 10.0
+    public int GoodCount { get; set; }       // 8.0 - 8.4
     public int FairCount { get; set; }       // 7.0 - 7.9
-    public int AverageCount { get; set; }    // 5.5 - 6.9
-    public int FailCount { get; set; }       // < 5.5
+    public int AverageGoodCount { get; set; } // 6.5 - 6.9
+    public int AverageCount { get; set; }    // 5.0 - 6.4
+    public int WeakCount { get; set; }       // 4.0 - 4.9
+    public int FailCount { get; set; }       // 0.0 - 3.9
     public int NotYetGradedCount { get; set; }
     public decimal OverallAverage { get; set; }
     public int TotalStudents { get; set; }
@@ -296,5 +298,4 @@ public sealed class CompanyDetailDto
     public IEnumerable<CompanyPositionDto> Positions { get; set; } = Array.Empty<CompanyPositionDto>();
     public IEnumerable<InternshipListItemDto> Internships { get; set; } = Array.Empty<InternshipListItemDto>();
 }
-
 

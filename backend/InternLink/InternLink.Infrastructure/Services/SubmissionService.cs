@@ -7,6 +7,9 @@ using InternLink.Domain.Enums;
 using InternLink.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
+using System.Text;
+using System.Text.RegularExpressions;
 
 namespace InternLink.Infrastructure.Services;
 
@@ -115,6 +118,7 @@ public class SubmissionService : ISubmissionService
     {
         var internship = await _db.Internships
             .Include(i => i.Student)
+            .Include(i => i.Lecturer)
             .Include(i => i.Semester)
             .FirstOrDefaultAsync(i => i.Id == request.InternshipId && !i.IsDeleted);
 
@@ -143,12 +147,6 @@ public class SubmissionService : ISubmissionService
         if (type == SubmissionType.Evidence && internship.SemesterId.HasValue)
             await EnsureEvidenceUploadWindowOpenAsync(internship.SemesterId.Value);
 
-        if (type == SubmissionType.Product && !await _db.Submissions.AnyAsync(s =>
-            s.InternshipId == request.InternshipId &&
-            s.Type == SubmissionType.FinalReport &&
-            !s.IsDeleted))
-            throw new InvalidOperationException("Báo cáo thực tập tốt nghiệp là sản phẩm bắt buộc trước khi nộp sản phẩm thực tế.");
-
         if (internship.SemesterId.HasValue && type == SubmissionType.FinalReport)
         {
             var totalWeeks = Math.Max(internship.Semester?.TotalWeeks ?? 1, 1);
@@ -172,13 +170,16 @@ public class SubmissionService : ISubmissionService
             }
         }
 
+        var version = HasCanonicalSubmissionFileName(type)
+            ? await GetNextSubmissionVersionAsync(request.InternshipId, type)
+            : 1;
         var submission = new Submission
         {
             Id = Guid.NewGuid(),
             InternshipId = request.InternshipId,
             Type = type,
             Status = SubmissionStatus.Submitted,
-            Version = 1,
+            Version = version,
             Title = request.Title,
             Description = request.Description,
             FileName = request.FileName,
@@ -190,6 +191,7 @@ public class SubmissionService : ISubmissionService
 
         _db.Submissions.Add(submission);
         await _db.SaveChangesAsync();
+        await NotifyLecturerOfSubmissionAsync(internship, submission);
         return (await GetByIdAsync(submission.Id))!;
     }
 
@@ -199,7 +201,29 @@ public class SubmissionService : ISubmissionService
         Stream fileStream,
         string originalFileName)
     {
-        var (relativePath, savedFileName) = await SaveSubmissionFileAsync(fileStream, originalFileName, request.InternshipId);
+        var canonicalName = originalFileName;
+        var preserveFileName = false;
+        if (Enum.TryParse<SubmissionType>(request.Type, true, out var type) &&
+            HasCanonicalSubmissionFileName(type))
+        {
+            var internship = await _db.Internships
+                .Include(item => item.Student)
+                .FirstOrDefaultAsync(item => item.Id == request.InternshipId && !item.IsDeleted);
+            var version = await GetNextSubmissionVersionAsync(request.InternshipId, type);
+            canonicalName = CreateCanonicalSubmissionFileName(
+                type,
+                internship?.Student?.FullName,
+                version,
+                1,
+                1,
+                Path.GetExtension(originalFileName));
+            preserveFileName = true;
+        }
+        var (relativePath, savedFileName) = await SaveSubmissionFileAsync(
+            fileStream,
+            canonicalName,
+            request.InternshipId,
+            preserveFileName);
 
         request.FileName = savedFileName;
         request.FileUrl = relativePath;
@@ -227,6 +251,7 @@ public class SubmissionService : ISubmissionService
 
         var internship = await _db.Internships
             .Include(i => i.Student)
+            .Include(i => i.Lecturer)
             .Include(i => i.Semester)
             .FirstOrDefaultAsync(i => i.Id == request.InternshipId && !i.IsDeleted);
         if (internship == null)
@@ -258,23 +283,16 @@ public class SubmissionService : ISubmissionService
             throw new InvalidOperationException("Điểm doanh nghiệp chỉ áp dụng cho hồ sơ đánh giá doanh nghiệp.");
         }
 
-        if (type == SubmissionType.Product)
-        {
-            var hasFinalReport = await _db.Submissions.AnyAsync(s =>
-                s.InternshipId == request.InternshipId &&
-                s.Type == SubmissionType.FinalReport &&
-                !s.IsDeleted);
-            if (!hasFinalReport)
-                throw new InvalidOperationException("Báo cáo thực tập tốt nghiệp là sản phẩm bắt buộc trước khi nộp sản phẩm thực tế.");
-        }
-
+        var version = HasCanonicalSubmissionFileName(type)
+            ? await GetNextSubmissionVersionAsync(request.InternshipId, type)
+            : 1;
         var submission = new Submission
         {
             Id = Guid.NewGuid(),
             InternshipId = request.InternshipId,
             Type = type,
             Status = SubmissionStatus.Submitted,
-            Version = 1,
+            Version = version,
             Title = request.Title,
             Description = request.Description,
             EmployerScore = request.EmployerScore,
@@ -282,13 +300,28 @@ public class SubmissionService : ISubmissionService
             CreatedAt = DateTime.UtcNow,
         };
 
-        foreach (var file in fileItems)
+        for (var index = 0; index < fileItems.Count; index++)
         {
-            var (relativePath, savedFileName) = await SaveSubmissionFileAsync(file.Stream, file.FileName, request.InternshipId);
+            var file = fileItems[index];
+            var useCanonicalName = HasCanonicalSubmissionFileName(type);
+            var fileName = useCanonicalName
+                ? CreateCanonicalSubmissionFileName(
+                    type,
+                    internship.Student?.FullName,
+                    version,
+                    index + 1,
+                    fileItems.Count,
+                    Path.GetExtension(file.FileName))
+                : file.FileName;
+            var (relativePath, savedFileName) = await SaveSubmissionFileAsync(
+                file.Stream,
+                fileName,
+                request.InternshipId,
+                useCanonicalName);
             submission.Assets.Add(new SubmissionAsset
             {
                 Id = Guid.NewGuid(),
-                Label = file.FileName,
+                Label = useCanonicalName ? savedFileName : file.FileName,
                 FileName = savedFileName,
                 FileUrl = relativePath,
                 AssetType = "file",
@@ -315,6 +348,7 @@ public class SubmissionService : ISubmissionService
 
         _db.Submissions.Add(submission);
         await _db.SaveChangesAsync();
+        await NotifyLecturerOfSubmissionAsync(internship, submission);
         return (await GetByIdAsync(submission.Id))!;
     }
 
@@ -407,7 +441,22 @@ public class SubmissionService : ISubmissionService
         if (existing.Type == SubmissionType.Evidence && existing.Internship.SemesterId.HasValue)
             await EnsureEvidenceUploadWindowOpenAsync(existing.Internship.SemesterId.Value);
 
-        var (relativePath, savedFileName) = await SaveSubmissionFileAsync(fileStream, originalFileName, existing.InternshipId);
+        var version = await GetNextSubmissionVersionAsync(existing.InternshipId, existing.Type);
+        var useCanonicalName = HasCanonicalSubmissionFileName(existing.Type);
+        var fileName = useCanonicalName
+            ? CreateCanonicalSubmissionFileName(
+                existing.Type,
+                existing.Internship.Student?.FullName,
+                version,
+                1,
+                1,
+                Path.GetExtension(originalFileName))
+            : originalFileName;
+        var (relativePath, savedFileName) = await SaveSubmissionFileAsync(
+            fileStream,
+            fileName,
+            existing.InternshipId,
+            useCanonicalName);
 
         request.FileName = savedFileName;
         request.FileUrl = relativePath;
@@ -634,7 +683,150 @@ public class SubmissionService : ISubmissionService
         };
     }
 
+    public async Task<SubmissionZipDownloadDto?> DownloadInternshipZipAsync(Guid internshipId, Guid userId)
+    {
+        var internship = await _db.Internships
+            .Include(item => item.Student)
+            .Include(item => item.Lecturer)
+            .FirstOrDefaultAsync(item => item.Id == internshipId && !item.IsDeleted);
+        if (internship == null)
+            throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.InternshipNotFound);
+
+        await EnsureInternshipActorAccessAsync(internship, userId, isLecturerOrAdmin: true);
+
+        var submissions = await _db.Submissions
+            .Include(item => item.Assets.Where(asset => !asset.IsDeleted))
+            .Where(item => item.InternshipId == internshipId && !item.IsDeleted)
+            .OrderBy(item => item.SubmittedAt)
+            .ToListAsync();
+        var weeklyReports = await _db.WeeklyReports
+            .Where(item => item.InternshipId == internshipId && !item.IsDeleted)
+            .OrderBy(item => item.WeekNumber)
+            .ToListAsync();
+
+        var student = internship.Student;
+        var studentFolder = SanitizeFileName($"{student?.FullName ?? "KhongTen"}_{student?.StudentCode ?? "MSVV"}");
+        var usedEntries = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var hasEntries = false;
+        await using var output = new MemoryStream();
+        using (var archive = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            string UniqueEntryName(string candidate)
+            {
+                var name = candidate;
+                var suffix = 2;
+                while (!usedEntries.Add(name))
+                {
+                    var directory = Path.GetDirectoryName(candidate)?.Replace('\\', '/') ?? string.Empty;
+                    var file = Path.GetFileName(candidate);
+                    var duplicateFile = $"{Path.GetFileNameWithoutExtension(file)}_{suffix}{Path.GetExtension(file)}";
+                    name = string.IsNullOrEmpty(directory) ? duplicateFile : $"{directory}/{duplicateFile}";
+                    suffix++;
+                }
+                return name;
+            }
+
+            async Task<bool> AddStoredFileAsync(string? fileUrl, string? fileName, string entryDirectory)
+            {
+                if (string.IsNullOrWhiteSpace(fileUrl) ||
+                    (Uri.TryCreate(fileUrl, UriKind.Absolute, out var uri) &&
+                     (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)))
+                    return false;
+
+                var fullPath = ResolveUploadPath(fileUrl);
+                if (!File.Exists(fullPath))
+                    return false;
+
+                var safeFileName = (fileName ?? Path.GetFileName(fullPath))
+                    .Replace('\\', '/');
+                safeFileName = Path.GetFileName(safeFileName);
+                if (string.IsNullOrWhiteSpace(safeFileName))
+                    safeFileName = Path.GetFileName(fullPath);
+
+                var entry = archive.CreateEntry(
+                    UniqueEntryName($"{studentFolder}/{entryDirectory}/{safeFileName}"),
+                    CompressionLevel.Fastest);
+                hasEntries = true;
+                await using var entryStream = entry.Open();
+                await using var fileStream = File.OpenRead(fullPath);
+                await fileStream.CopyToAsync(entryStream);
+                return true;
+            }
+
+            foreach (var report in weeklyReports)
+            {
+                var weekFolder = $"BaoCaoTuan/Tuan{report.WeekNumber:D2}";
+                await AddStoredFileAsync(report.FileUrl, report.FileName, weekFolder);
+            }
+
+            foreach (var submission in submissions)
+            {
+                var typeFolder = submission.Type switch
+                {
+                    SubmissionType.FinalReport => "BaoCaoCuoiKy",
+                    SubmissionType.Evidence => "DanhGiaDoanhNghiep",
+                    SubmissionType.Product => "SanPham",
+                    _ => submission.Type.ToString(),
+                };
+                var hasProductLinks = submission.Type == SubmissionType.Product &&
+                    submission.Assets.Any(asset =>
+                        string.Equals(asset.AssetType, "link", StringComparison.OrdinalIgnoreCase) &&
+                        !string.IsNullOrWhiteSpace(asset.FileUrl));
+
+                await AddStoredFileAsync(submission.FileUrl, submission.FileName, typeFolder);
+                foreach (var asset in submission.Assets.Where(asset =>
+                             string.Equals(asset.AssetType, "file", StringComparison.OrdinalIgnoreCase)))
+                    await AddStoredFileAsync(asset.FileUrl, asset.FileName, typeFolder);
+
+                if (hasProductLinks)
+                {
+                    var linksEntry = archive.CreateEntry(
+                        UniqueEntryName($"{studentFolder}/SanPham/LienKetSanPham.txt"),
+                        CompressionLevel.Fastest);
+                    hasEntries = true;
+                    await using var linksStream = linksEntry.Open();
+                    await using var writer = new StreamWriter(linksStream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+                    foreach (var link in submission.Assets.Where(asset =>
+                                 string.Equals(asset.AssetType, "link", StringComparison.OrdinalIgnoreCase) &&
+                                 !string.IsNullOrWhiteSpace(asset.FileUrl)))
+                    {
+                        await writer.WriteLineAsync($"{link.Label ?? "Liên kết"}: {link.FileUrl}");
+                    }
+                }
+            }
+
+            if (!hasEntries)
+            {
+                var noteEntry = archive.CreateEntry($"{studentFolder}/_CHUA_CO_TEP_NOP.txt");
+                await using var noteStream = noteEntry.Open();
+                await using var writer = new StreamWriter(noteStream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+                await writer.WriteLineAsync("Chưa có tệp đính kèm nào được lưu cho đợt thực tập này.");
+            }
+        }
+
+        return new SubmissionZipDownloadDto
+        {
+            FileContent = output.ToArray(),
+            FileName = $"BaiNop_{SanitizeFileName(student?.StudentCode ?? "sinhvien")}_{DateTime.UtcNow:yyyyMMdd_HHmmss}.zip",
+        };
+    }
+
     /// <summary>Bỏ ký tự không hợp lệ trong tên file tải xuống.</summary>
+    private async Task NotifyLecturerOfSubmissionAsync(Internship internship, Submission submission)
+    {
+        var lecturerUserId = internship.Lecturer?.UserId;
+        if (!lecturerUserId.HasValue)
+            return;
+
+        await _notificationService.CreateAsync(new CreateNotificationRequest
+        {
+            UserId = lecturerUserId.Value,
+            Title = "Sinh viên vừa nộp hồ sơ",
+            Content = $"Sinh viên {internship.Student?.FullName ?? "của bạn"} vừa nộp {submission.Title ?? submission.Type.ToString()}.",
+            Link = $"/lecturer/reports?submissionId={submission.Id}",
+        });
+    }
+
     private static string SanitizeFileName(string name)
     {
         var safe = string.Concat(name.Select(c =>
@@ -685,6 +877,40 @@ public class SubmissionService : ISubmissionService
         submission.IsDeleted = true;
         submission.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> CancelAsync(Guid id, Guid studentUserId)
+    {
+        var submission = await _db.Submissions
+            .Include(s => s.Internship)
+                .ThenInclude(i => i.Student)
+            .Include(s => s.Assets)
+            .FirstOrDefaultAsync(s => s.Id == id);
+
+        if (submission == null)
+            return false;
+
+        if (submission.Internship.Student?.UserId != studentUserId)
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessSubmission);
+
+        if (!submission.IsDeleted)
+        {
+            if (submission.Status is not (SubmissionStatus.Submitted or SubmissionStatus.Reviewed))
+                throw new InvalidOperationException("Chỉ có thể hủy hồ sơ đang chờ giảng viên duyệt.");
+
+            submission.IsDeleted = true;
+            submission.UpdatedAt = DateTime.UtcNow;
+            foreach (var asset in submission.Assets.Where(asset => !asset.IsDeleted))
+            {
+                asset.IsDeleted = true;
+                asset.UpdatedAt = DateTime.UtcNow;
+            }
+
+            await _db.SaveChangesAsync();
+        }
+
+        await DeleteUnreferencedSubmissionFilesAsync(submission);
         return true;
     }
 
@@ -880,7 +1106,8 @@ public class SubmissionService : ISubmissionService
     private async Task<(string RelativePath, string SavedFileName)> SaveSubmissionFileAsync(
         Stream fileStream,
         string originalFileName,
-        Guid internshipId)
+        Guid internshipId,
+        bool preserveFileName = false)
     {
         if (fileStream == null || fileStream.Length == 0)
             throw new ArgumentException(InternLink.Shared.Responses.ErrorMessage.FileEmpty);
@@ -893,17 +1120,59 @@ public class SubmissionService : ISubmissionService
         Directory.CreateDirectory(uploadPath);
 
         var safeBase = Path.GetFileNameWithoutExtension(originalFileName);
-        var uniqueFileName = $"{Guid.NewGuid()}_{safeBase}{extension}";
+        var uniqueFileName = preserveFileName
+            ? $"{safeBase}{extension}"
+            : $"{Guid.NewGuid()}_{safeBase}{extension}";
         var fullPath = Path.Combine(uploadPath, uniqueFileName);
         var relativePath = Path.Combine(UploadFolder, internshipId.ToString(), uniqueFileName)
             .Replace("\\", "/");
 
-        await using (var stream = new FileStream(fullPath, FileMode.Create))
+        await using (var stream = new FileStream(
+            fullPath,
+            preserveFileName ? FileMode.CreateNew : FileMode.Create))
         {
             await fileStream.CopyToAsync(stream);
         }
 
         return (relativePath, uniqueFileName);
+    }
+
+    private async Task<int> GetNextSubmissionVersionAsync(Guid internshipId, SubmissionType type)
+    {
+        var latestVersion = await _db.Submissions
+            .Where(submission =>
+                submission.InternshipId == internshipId &&
+                submission.Type == type &&
+                !submission.IsDeleted)
+            .MaxAsync(submission => (int?)submission.Version);
+        return (latestVersion ?? 0) + 1;
+    }
+
+    private static bool HasCanonicalSubmissionFileName(SubmissionType type) =>
+        type is SubmissionType.FinalReport or SubmissionType.Evidence;
+
+    private static string CreateCanonicalSubmissionFileName(
+        SubmissionType type,
+        string? studentName,
+        int version,
+        int fileNumber,
+        int fileCount,
+        string extension)
+    {
+        var normalized = (studentName ?? "SinhVien").Normalize(NormalizationForm.FormD);
+        var nameWithoutMarks = new string(normalized
+            .Where(character => CharUnicodeInfo.GetUnicodeCategory(character) != UnicodeCategory.NonSpacingMark)
+            .ToArray())
+            .Normalize(NormalizationForm.FormC);
+        var safeName = Regex.Replace(nameWithoutMarks, "[^A-Za-z0-9]", string.Empty);
+        if (string.IsNullOrWhiteSpace(safeName))
+            safeName = "SinhVien";
+
+        var typeName = type == SubmissionType.FinalReport
+            ? "BaoCaoCuoiKy"
+            : "DanhGiaDoanhNghiep";
+        var assetSequence = fileCount > 1 ? $"_{fileNumber:D2}" : string.Empty;
+        return $"{typeName}_{safeName}_V{version}{assetSequence}{extension.ToLowerInvariant()}";
     }
 
     private async Task EnsureEvidenceUploadWindowOpenAsync(Guid semesterId)
@@ -941,6 +1210,86 @@ public class SubmissionService : ISubmissionService
         }
 
         return Path.Combine(GetUploadRoot(), normalizedPath);
+    }
+
+    private async Task DeleteUnreferencedSubmissionFilesAsync(Submission submission)
+    {
+        var fileUrls = submission.Assets
+            .Where(asset => string.Equals(asset.AssetType, "file", StringComparison.OrdinalIgnoreCase))
+            .Select(asset => asset.FileUrl)
+            .Append(submission.FileUrl)
+            .Where(fileUrl => !string.IsNullOrWhiteSpace(fileUrl))
+            .Select(fileUrl => fileUrl!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (fileUrls.Count == 0)
+            return;
+
+        var otherSubmissionFiles = await _db.Submissions
+            .Where(other => other.Id != submission.Id && !other.IsDeleted && other.FileUrl != null)
+            .Select(other => other.FileUrl!)
+            .ToListAsync();
+        var otherAssetFiles = await _db.SubmissionAssets
+            .Where(asset =>
+                asset.SubmissionId != submission.Id &&
+                !asset.IsDeleted &&
+                asset.AssetType == "file" &&
+                !asset.Submission.IsDeleted &&
+                asset.FileUrl != null)
+            .Select(asset => asset.FileUrl!)
+            .ToListAsync();
+        var referencedFiles = otherSubmissionFiles
+            .Concat(otherAssetFiles)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var fileUrl in fileUrls)
+        {
+            if (referencedFiles.Contains(fileUrl))
+                continue;
+
+            var fullPath = ResolveManagedSubmissionUploadPath(fileUrl);
+            if (fullPath == null || !File.Exists(fullPath))
+                continue;
+
+            try
+            {
+                File.Delete(fullPath);
+            }
+            catch (IOException ex)
+            {
+                throw new IOException("Hồ sơ đã được hủy nhưng không thể xóa tệp đã tải lên. Vui lòng thử lại.", ex);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                throw new IOException("Hồ sơ đã được hủy nhưng không thể xóa tệp đã tải lên. Vui lòng thử lại.", ex);
+            }
+        }
+    }
+
+    private string? ResolveManagedSubmissionUploadPath(string relativePath)
+    {
+        var normalizedRelativePath = relativePath.Replace('\\', '/');
+        var managedPrefix = $"{UploadFolder}/";
+        if (Path.IsPathRooted(relativePath) ||
+            !normalizedRelativePath.StartsWith(managedPrefix, StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var roots = new[] { _env.ContentRootPath, _env.WebRootPath }
+            .Where(root => !string.IsNullOrWhiteSpace(root))
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var root in roots)
+        {
+            var fullRoot = Path.GetFullPath(root!);
+            var uploadRoot = Path.GetFullPath(Path.Combine(fullRoot, UploadFolder));
+            var fullPath = Path.GetFullPath(Path.Combine(fullRoot, normalizedRelativePath));
+            if (!fullPath.StartsWith(uploadRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (File.Exists(fullPath))
+                return fullPath;
+        }
+
+        return null;
     }
 
     private static string GetMimeType(string extension) => extension switch

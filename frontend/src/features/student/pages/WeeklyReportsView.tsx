@@ -70,6 +70,8 @@ export const WeeklyReportsView = ({
     refetch,
     submitReport,
     isSubmitting: isSubmittingQuery,
+    cancelSubmission,
+    isCancelling,
   } = useStudentWeeklyReportsQuery({
     semesterId: selectedSemester?.id,
   });
@@ -98,11 +100,60 @@ export const WeeklyReportsView = ({
   );
   const requiredWeekCount = requiredSchedules.length || totalWeeks;
 
-  useEffect(() => {
-    if (reports.length > 0) {
-      setSelectedWeek(reports[reports.length - 1].weekNumber);
+  const suggestedWeek = useMemo(() => {
+    const openSchedules = [...requiredSchedules].sort(
+      (a, b) => a.weekNumber - b.weekNumber,
+    );
+    if (openSchedules.length === 0) {
+      return (
+        reports.find((report) => report.status !== "Đã hoàn thành")?.weekNumber ??
+        reports[0]?.weekNumber ??
+        1
+      );
     }
-  }, [reports]);
+
+    const now = Date.now();
+    const currentSchedule = openSchedules.find((schedule) => {
+      const start = schedule.startDate ? new Date(schedule.startDate).getTime() : Number.NaN;
+      const due = new Date(schedule.dueDate).getTime();
+      return Number.isFinite(start) && Number.isFinite(due) && start <= now && now <= due;
+    });
+    if (currentSchedule) return currentSchedule.weekNumber;
+
+    const upcomingSchedule = openSchedules
+      .filter((schedule) => new Date(schedule.dueDate).getTime() >= now)
+      .sort(
+        (a, b) =>
+          new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(),
+      )[0];
+    if (upcomingSchedule) return upcomingSchedule.weekNumber;
+
+    const firstIncompleteSchedule = openSchedules.find((schedule) => {
+      const report = reports.find((item) => item.weekNumber === schedule.weekNumber);
+      return !report || report.status !== "Đã hoàn thành";
+    });
+    if (firstIncompleteSchedule) return firstIncompleteSchedule.weekNumber;
+
+    return openSchedules[openSchedules.length - 1]?.weekNumber ?? 1;
+  }, [requiredSchedules, reports]);
+
+  useEffect(() => {
+    setSelectedWeek(suggestedWeek);
+  }, [suggestedWeek]);
+
+  const handleCancelSubmission = async () => {
+    if (!currentReport.id || isCancelling) return;
+    if (!window.confirm("Bạn có chắc muốn hủy nộp báo cáo tuần này? File đã tải lên sẽ bị xóa.")) {
+      return;
+    }
+    try {
+      await cancelSubmission(currentReport.id);
+      setSelectedPdfFile(null);
+      onShowToast?.("Đã hủy nộp báo cáo và xóa file tải lên.", "success");
+    } catch (err) {
+      onShowToast?.(getApiErrorMessage(err), "error");
+    }
+  };
 
   const emptyWeek = (week: number): WeeklyReportRow => ({
     weekNumber: week,
@@ -118,11 +169,15 @@ export const WeeklyReportsView = ({
   });
 
   const allWeekRows = useMemo(
-    () =>
-      (requiredSchedules.length > 0
-        ? requiredSchedules.map((schedule) => schedule.weekNumber)
-        : Array.from({ length: totalWeeks }, (_, i) => i + 1)
-      ).map((week) => {
+    () => {
+      const weekNumbers = new Set(
+        requiredSchedules.length > 0
+          ? requiredSchedules.map((schedule) => schedule.weekNumber)
+          : Array.from({ length: totalWeeks }, (_, i) => i + 1),
+      );
+      reports.forEach((report) => weekNumbers.add(report.weekNumber));
+
+      return [...weekNumbers].sort((a, b) => a - b).map((week) => {
         const existing = reports.find((r) => r.weekNumber === week);
         const schedule = schedules.find((s) => s.weekNumber === week);
         const deadline = schedule?.dueDate
@@ -139,10 +194,7 @@ export const WeeklyReportsView = ({
         if (existing) {
           return {
             ...existing,
-            deadline:
-              existing.deadline && existing.deadline !== "—"
-                ? existing.deadline
-                : deadline,
+            deadline: schedule?.dueDate ? deadline : existing.deadline,
             allowLateSubmission: schedule ? schedule.allowLateSubmission : true,
             scheduleDueDate: schedule?.dueDate,
             scheduleStartDate: schedule?.startDate,
@@ -155,7 +207,8 @@ export const WeeklyReportsView = ({
           scheduleDueDate: schedule?.dueDate,
           scheduleStartDate: schedule?.startDate,
         };
-      }),
+      });
+    },
     [reports, totalWeeks, schedules, requiredSchedules],
   );
 
@@ -818,6 +871,66 @@ export const WeeklyReportsView = ({
                 </div>
               )}
 
+              {currentReport.id && currentReport.fileName && (
+                <div className="flex flex-col gap-3 rounded-xl border border-blue-200 bg-blue-50/60 p-3.5 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-rose-200 bg-rose-100 font-bold text-rose-700">
+                      PDF
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-bold text-slate-800" title={currentReport.fileName}>
+                        {currentReport.fileName}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {currentReport.fileSize ?? "—"}
+                        {currentReport.submittedAt && currentReport.submittedAt !== "—"
+                          ? ` · Đã nộp ${currentReport.submittedAt}`
+                          : ""}
+                      </p>
+                      {currentReport.status === "Đã hoàn thành" && (
+                        <p className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-emerald-700">
+                          <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+                          Đã được giảng viên duyệt — tuần này hoàn thành
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
+                    <button
+                      type="button"
+                      onClick={() => void handlePreviewReport(undefined, currentReport.fileName)}
+                      className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-100"
+                    >
+                      <Eye className="h-4 w-4" aria-hidden="true" />
+                      Xem
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleDownloadReport(undefined, currentReport.fileName)}
+                      className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-100"
+                    >
+                      <Download className="h-4 w-4" aria-hidden="true" />
+                      Tải về
+                    </button>
+                    {currentReport.status !== "Đã hoàn thành" && (
+                      <button
+                        type="button"
+                        onClick={() => void handleCancelSubmission()}
+                        disabled={isCancelling}
+                        className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-3 text-xs font-bold text-rose-700 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {isCancelling ? (
+                          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                        ) : (
+                          <X className="h-4 w-4" aria-hidden="true" />
+                        )}
+                        {isCancelling ? "Đang hủy..." : "Hủy nộp"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Trạng thái kỳ thực tập đã đóng hoặc khóa nộp */}
               {selectedSemester.status === "completed" ? (
                 <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-700">
@@ -859,6 +972,22 @@ export const WeeklyReportsView = ({
                     <p className="leading-relaxed text-rose-700">
                       Thời hạn nộp báo cáo tuần {selectedWeek} đã kết thúc vào lúc {currentReport.deadline}. Học kỳ hiện tại không cho phép nộp trễ hạn. Vui lòng liên hệ Giảng viên hướng dẫn để được hỗ trợ.
                     </p>
+                  </div>
+                </div>
+              ) : currentReport.status === "Đã hoàn thành" ? (
+                <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-xs text-emerald-800">
+                  <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" aria-hidden="true" />
+                  <div>
+                    <h4 className="text-sm font-bold">Báo cáo tuần đã hoàn thành</h4>
+                    <p className="mt-1">Giảng viên đã duyệt báo cáo này. Không thể hủy nộp hoặc thay đổi file.</p>
+                  </div>
+                </div>
+              ) : currentReport.status === "Đã nộp" || currentReport.status === "Đã xem" ? (
+                <div className="flex items-start gap-3 rounded-xl border border-sky-200 bg-sky-50 p-4 text-xs text-sky-800">
+                  <Clock className="mt-0.5 h-5 w-5 shrink-0 text-sky-600" aria-hidden="true" />
+                  <div>
+                    <h4 className="text-sm font-bold">Báo cáo đang chờ giảng viên xử lý</h4>
+                    <p className="mt-1">Bạn có thể hủy nộp nếu giảng viên chưa duyệt. File sẽ được xóa khỏi hệ thống.</p>
                   </div>
                 </div>
               ) : (
