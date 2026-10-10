@@ -46,6 +46,7 @@ export interface StudentGrade {
   qualityScore: number | null;
   weeklyQualityScores: Record<number, number>;
   productSubmitted: boolean;
+  productStatus: string;
   hasCreativeProduct: boolean;
   processScore: number;
 

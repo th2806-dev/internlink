@@ -19,6 +19,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSemester } from "../../../contexts/SemesterContext";
 import { useStudentPortal } from "../../../contexts/StudentPortalContext";
 import { getApiErrorMessage } from "../../../lib/apiClient";
+import { computeGrade } from "../../../lib/gradingRules";
 import { evaluationService } from "../../../services/evaluation.service";
 import { semesterReportScheduleService, type SemesterReportScheduleDto } from "../../../services/semesterReportSchedule.service";
 import { submissionApiService } from "../../../services/submissionApi.service";
@@ -207,6 +208,29 @@ export const EvaluationView = ({ onShowToast }: { onShowToast: (msg: string) => 
   const employerScoreSubmission = evidenceSubmissions.find((item) => item.employerScore != null);
   const finalReport = submissions.find((item) => item.type.toLowerCase() === "finalreport" && item.status.toLowerCase() !== "rejected");
   const product = submissions.find((item) => item.type.toLowerCase() === "product" && item.status.toLowerCase() !== "rejected");
+  const processScore = useMemo(() => {
+    if (loadErrors.includes("Không tải được lịch báo cáo tuần.")) return null;
+
+    const weeks = schedules
+      .filter((schedule) => !schedule.isFinalReport && schedule.weekNumber >= 1 && (!maxWeeks || schedule.weekNumber <= maxWeeks))
+      .map((schedule) => ({
+        weekNumber: schedule.weekNumber,
+        isSubmissionOpen: schedule.isSubmissionOpen,
+        submittedAt: reportByWeek.get(schedule.weekNumber)?.submittedAt,
+        deadline: schedule.dueDate,
+      }));
+    const weeklyQualityLevels = weeks
+      .map((week) => evaluation?.weeklyQualityScores?.[week.weekNumber])
+      .filter((score): score is number => score != null);
+
+    return computeGrade({
+      weeks,
+      weeklyQualityLevels,
+      hasCreativeProduct: evaluation?.hasCreativeProduct ?? submissions.some(
+        (item) => item.type.toLowerCase() === "product" && item.status.toLowerCase() === "approved",
+      ),
+    }).processScore;
+  }, [evaluation, loadErrors, maxWeeks, reportByWeek, schedules, submissions]);
   const submittedWeekCount = trackedWeeks.filter((week) => Boolean(reportByWeek.get(week)?.submittedAt)).length;
   const lateWeekCount = trackedWeeks.filter((week) => {
     const report = reportByWeek.get(week);
@@ -229,21 +253,6 @@ export const EvaluationView = ({ onShowToast }: { onShowToast: (msg: string) => 
     Approved: "Đã duyệt",
     RevisionRequested: "Cần sửa",
   }[status] ?? status);
-  const criteria = evaluation?.criteriaScores?.length
-    ? evaluation.criteriaScores.map((criterion) => ({
-        name: criterion.criterionName,
-        score: criterion.score,
-        maxScore: criterion.maxScore,
-        comment: criterion.comment,
-      }))
-    : evaluation
-      ? [
-          { name: "Chuyên môn kỹ thuật", score: evaluation.technicalScore, maxScore: 10 },
-          { name: "Giao tiếp", score: evaluation.communicationScore, maxScore: 10 },
-          { name: "Làm việc nhóm", score: evaluation.teamworkScore, maxScore: 10 },
-          { name: "Chủ động", score: evaluation.initiativeScore, maxScore: 10 },
-        ]
-      : [];
   const displayedGrade = loadErrors.includes("Không tải được kết quả đánh giá.")
     ? null
     : finalGrade;
@@ -307,30 +316,60 @@ export const EvaluationView = ({ onShowToast }: { onShowToast: (msg: string) => 
       ) : (
         <>
           {/* ─── HÀNG 1: Điểm tổng kết + Chi tiết đánh giá GV ─── */}
-          <section className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,0.85fr)_minmax(0,1.6fr)]">
+          <section className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1.05fr)_minmax(0,1.5fr)]">
             {/* Card Điểm tổng kết */}
-            <div className="rounded-xl border border-slate-200/90 bg-white shadow-2xs border-l-4 border-l-blue-600">
-              <div className="p-4 flex h-full flex-col justify-between gap-5">
+            <div className="relative overflow-hidden rounded-xl border border-blue-700 bg-gradient-to-br from-blue-800 via-blue-700 to-blue-600 text-white shadow-md shadow-blue-900/15">
+              {evaluation?.isFinalized && displayedGrade != null && (
+                <svg
+                  aria-hidden="true"
+                  className="student-result-fireworks"
+                  viewBox="0 0 360 190"
+                  preserveAspectRatio="xMaxYMin slice"
+                >
+                  <g transform="translate(270 48)">
+                    <g className="student-result-fireworks__burst">
+                      <circle r="2" fill="#fff" />
+                      <path d="M0-27V-19M19-19L14-14M27 0H19M19 19L14 14M0 27V19M-19 19L-14 14M-27 0H-19M-19-19L-14-14" />
+                      <circle cx="0" cy="-34" r="1.5" />
+                      <circle cx="31" cy="0" r="1.5" />
+                      <circle cx="-22" cy="22" r="1.5" />
+                    </g>
+                  </g>
+                  <g transform="translate(330 112)">
+                    <g className="student-result-fireworks__burst student-result-fireworks__burst--delayed">
+                      <circle r="1.5" fill="#fff" />
+                      <path d="M0-19V-13M13-13L9-9M19 0H13M13 13L9 9M0 19V13M-13 13L-9 9M-19 0H-13M-13-13L-9-9" />
+                      <circle cx="0" cy="-25" r="1.2" />
+                      <circle cx="23" cy="0" r="1.2" />
+                      <circle cx="-18" cy="18" r="1.2" />
+                    </g>
+                  </g>
+                </svg>
+              )}
+              <div className="relative z-10 flex flex-col gap-8 p-5 sm:p-6">
                 <div>
-                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                    <Award className="h-4 w-4 text-blue-700" />
+                  <div className="flex items-center gap-2 text-sm font-semibold text-blue-100">
+                    <Award className="h-4 w-4 text-white" />
                     Điểm tổng kết
                   </div>
-                  <div className="mt-4 flex flex-wrap items-end gap-x-3 gap-y-1">
-                    <strong className="font-display text-5xl leading-none text-slate-950">{displayedGrade == null ? "—" : displayedGrade.toFixed(1)}</strong>
-                    <span className="pb-1 text-sm text-slate-500">/ 10 · {classification}</span>
+                  <div className="mt-5 flex flex-wrap items-end gap-x-3 gap-y-2">
+                    <strong className="font-display text-6xl font-extrabold leading-none tracking-tight text-white">{displayedGrade == null ? "—" : displayedGrade.toFixed(1)}</strong>
+                    <span className="pb-1 text-sm font-medium text-blue-100">/ 10</span>
+                    <span className="mb-0.5 inline-flex items-center rounded-full border border-white/25 bg-white/15 px-3 py-1 text-sm font-bold text-white">
+                      {displayedGrade == null ? "Chưa có kết quả" : classification}
+                    </span>
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${
-                    evaluation?.isFinalized ? "bg-emerald-50 text-emerald-800" : evaluation ? "bg-amber-50 text-amber-800" : "bg-slate-100 text-slate-700"
+                    evaluation?.isFinalized ? "bg-emerald-100 text-emerald-900" : "bg-white/15 text-white"
                   }`}>
                     {evaluation?.isFinalized ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Clock3 className="h-3.5 w-3.5" />}
                     {loadErrors.includes("Không tải được kết quả đánh giá.")
                       ? "Chưa tải được kết quả"
                       : evaluation?.isFinalized ? "Đã công bố" : evaluation ? "Chưa công bố" : displayedGrade != null ? "Điểm trên hồ sơ" : "Chưa có kết quả"}
                   </span>
-                  {evaluation && <span className="text-xs text-slate-500">Cập nhật {formatDate(evaluation.updatedAt ?? evaluation.evaluatedAt)}</span>}
+                  {evaluation && <span className="text-xs text-blue-100">Cập nhật {formatDate(evaluation.updatedAt ?? evaluation.evaluatedAt)}</span>}
                 </div>
               </div>
             </div>
@@ -341,7 +380,7 @@ export const EvaluationView = ({ onShowToast }: { onShowToast: (msg: string) => 
                 <div className="flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 pb-3">
                   <div>
                     <h2 className="text-sm font-bold text-slate-900">Chi tiết đánh giá của giảng viên</h2>
-                    <p className="mt-1 text-xs text-slate-500">Điểm theo tiêu chí được lưu trên hệ thống.</p>
+                    <p className="mt-1 text-xs text-slate-500">Các khoản điểm trong đánh giá thực tập.</p>
                   </div>
                   {evaluation?.evaluatedBy?.fullName && (
                     <span className="inline-flex items-center gap-1.5 text-xs text-slate-600">
@@ -349,34 +388,34 @@ export const EvaluationView = ({ onShowToast }: { onShowToast: (msg: string) => 
                     </span>
                   )}
                 </div>
-                {criteria.length > 0 ? (
-                  <dl className="mt-1 divide-y divide-slate-100">
-                    {criteria.map((criterion, index) => (
-                      <div key={`${criterion.name}-${index}`} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1 py-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-                        <dt className="text-sm font-medium text-slate-800">{criterion.name}</dt>
-                        <dd className="row-span-2 text-right text-sm font-bold tabular-nums text-slate-900">
-                          {criterion.score}/{criterion.maxScore}
-                        </dd>
-                        {criterion.comment && <dd className="text-xs leading-5 text-slate-500">{criterion.comment}</dd>}
-                      </div>
-                    ))}
-                  </dl>
-                ) : (
-                  <p className="pt-4 text-sm text-slate-500">Chưa có điểm chi tiết từ giảng viên.</p>
-                )}
-                {evaluation?.oralExamScore != null && (
-                  <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 text-sm">
-                    <span className="text-slate-700">Thi vấn đáp</span>
-                    <strong className="tabular-nums text-slate-900">{evaluation.oralExamScore}/10</strong>
+                <dl className="mt-1 divide-y divide-slate-100">
+                  <div className="flex items-center justify-between gap-4 py-3">
+                    <dt className="text-sm font-medium text-slate-800">Chất lượng báo cáo</dt>
+                    <dd className="text-right text-sm font-bold tabular-nums text-slate-900">
+                      {evaluation?.qualityLevel != null ? `${evaluation.qualityLevel}/5` : "Chưa chấm"}
+                    </dd>
                   </div>
-                )}
-                {evaluation && (
-                  <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 border-t border-slate-100 pt-3 text-xs text-slate-600">
-                    <span>Chất lượng báo cáo: <strong className="text-slate-900">{evaluation.qualityLevel != null ? `${evaluation.qualityLevel}/5` : "Chưa chấm"}</strong></span>
-                    <span>Sản phẩm sáng tạo: <strong className="text-slate-900">{evaluation.hasCreativeProduct ? "Có" : "Không ghi nhận"}</strong></span>
-                    <span>Bảo vệ: <strong className="text-slate-900">{evaluation.defenseStatus === "Completed" ? "Đã hoàn thành" : evaluation.defenseStatus === "Scheduled" ? `Đã lên lịch${evaluation.defenseDate ? ` · ${formatDate(evaluation.defenseDate)}` : ""}` : "Chưa lên lịch"}</strong></span>
+                  <div className="flex items-center justify-between gap-4 py-3">
+                    <dt className="text-sm font-medium text-slate-800">Sản phẩm sáng tạo</dt>
+                    <dd className="text-right text-sm font-bold text-slate-900">
+                      {evaluation?.hasCreativeProduct || submissions.some(
+                        (item) => item.type.toLowerCase() === "product" && item.status.toLowerCase() === "approved",
+                      ) ? "Đạt yêu cầu (+1.0 điểm)" : "Chưa đạt"}
+                    </dd>
                   </div>
-                )}
+                  <div className="flex items-center justify-between gap-4 py-3">
+                    <dt className="text-sm font-medium text-slate-800">Tổng điểm quá trình</dt>
+                    <dd className="text-right text-sm font-bold tabular-nums text-slate-900">
+                      {processScore == null ? "Chưa có dữ liệu" : `${processScore}/10`}
+                    </dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-4 py-3">
+                    <dt className="text-sm font-medium text-slate-800">Thi vấn đáp</dt>
+                    <dd className="text-right text-sm font-bold tabular-nums text-slate-900">
+                      {evaluation?.oralExamScore != null ? `${evaluation.oralExamScore}/10` : "Chưa chấm"}
+                    </dd>
+                  </div>
+                </dl>
               </div>
             </div>
           </section>

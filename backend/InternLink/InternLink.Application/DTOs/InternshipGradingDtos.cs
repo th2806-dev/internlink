@@ -45,6 +45,7 @@ public class InternshipStudentGradeDto
     /// <summary>Mức rubric GV chọn cho TỪNG tuần (key = tuần 1..N).</summary>
     public Dictionary<int, decimal> WeeklyQualityScores { get; set; } = new();
     public bool ProductSubmitted { get; set; }
+    public string ProductStatus { get; set; } = "NotSubmitted";
     public bool HasCreativeProduct { get; set; }
     public decimal ProcessScore { get; set; }
     public decimal? EmployerScore { get; set; }

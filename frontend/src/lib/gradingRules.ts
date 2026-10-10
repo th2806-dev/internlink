@@ -197,6 +197,8 @@ export function resolveSubmission(params: {
 export interface WeekRecord {
   /** 1..6 */
   weekNumber: number;
+  /** Tuần tắt nhận bài không tính thiếu/trễ vào điểm quá trình. */
+  isSubmissionOpen?: boolean;
   /** Thời điểm sinh viên nộp báo cáo tuần (null = chưa nộp) */
   submittedAt?: string | Date | null;
   /** Hạn nộp của tuần này theo cấu hình kỳ báo cáo */
@@ -271,7 +273,9 @@ export function computeGrade(input: GradeInput): GradeResult {
 
   const weekStates = weeks.map((week) => ({
     weekNumber: week.weekNumber,
-    state: resolveSubmission({ submittedAt: week.submittedAt, deadline: week.deadline, now }),
+    state: week.isSubmissionOpen === false
+      ? "pending" as const
+      : resolveSubmission({ submittedAt: week.submittedAt, deadline: week.deadline, now }),
   }));
 
   // Union: tuần bị tính thiếu/vắng khi không nộp quá hạn HOẶC điểm danh V trong tuần đó

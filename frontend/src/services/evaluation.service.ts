@@ -5,6 +5,7 @@ import type {
   EvaluationDetailDto,
   EvaluationListItemDto,
   UpdateEvaluationRequestDto,
+  WeeklyQualityAverageDto,
 } from "../types/api";
 
 export type UiEvaluationPayload = {
@@ -88,6 +89,12 @@ export const evaluationService = {
       if (error instanceof ApiClientError && error.status === 404) return null;
       throw error;
     });
+  },
+
+  getWeeklyQualityAverages(internshipId: string): Promise<WeeklyQualityAverageDto[]> {
+    return apiRequestRaw<WeeklyQualityAverageDto[]>(
+      `/api/Evaluation/internship/${internshipId}/weekly-averages`,
+    );
   },
 
   create(body: CreateEvaluationRequestDto): Promise<EvaluationDetailDto> {

@@ -141,6 +141,12 @@ public class EvaluationDetailDto
     public InternshipSummaryDto? Internship { get; set; }
 }
 
+public class WeeklyQualityAverageDto
+{
+    public int WeekNumber { get; set; }
+    public decimal? AverageScore { get; set; }
+}
+
 public class UpdateDefenseRequest
 {
     public DateTime? DefenseDate { get; set; }

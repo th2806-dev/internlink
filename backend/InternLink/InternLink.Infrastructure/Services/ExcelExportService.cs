@@ -189,9 +189,11 @@ public class ExcelExportService : IExcelExportService
                 // Map scores from Evaluation if available
                 if (evaluations.TryGetValue(internship.Id, out var eval))
                 {
+                    var hasApprovedProduct = internship.Submissions.Any(s =>
+                        !s.IsDeleted && s.Type == SubmissionType.Product && s.Status == SubmissionStatus.Approved);
                     // Điểm tham gia là điểm cộng riêng cho sản phẩm sáng tạo.
-                    dto.DiemThamGia = eval.HasCreativeProduct ? 1m : 0m;
-                    if (eval.HasCreativeProduct)
+                    dto.DiemThamGia = hasApprovedProduct ? 1m : 0m;
+                    if (hasApprovedProduct)
                         dto.GhiChu = "Có sản phẩm sáng tạo";
 
                     // Điểm QT = MIN(10, Điểm QT cơ bản + Điểm tham gia).

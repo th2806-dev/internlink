@@ -659,7 +659,7 @@ export const DashboardView = ({
                     />
                     <Legend
                       verticalAlign="bottom"
-                      height={40}
+                      height={48}
                       iconType="circle"
                       wrapperStyle={{ fontSize: 11 }}
                     />
@@ -670,24 +670,28 @@ export const DashboardView = ({
                           name="Đúng hạn"
                           fill="#4d74c9"
                           stackId="weekly-status"
+                          minPointSize={4}
                         />
                         <Bar
                           dataKey="late"
                           name="Nộp trễ"
                           fill="#fbbf24"
                           stackId="weekly-status"
+                          minPointSize={4}
                         />
                         <Bar
                           dataKey="missing"
                           name="Chưa nộp"
                           fill="#f59e0b"
                           stackId="weekly-status"
+                          minPointSize={4}
                         />
                         <Bar
                           dataKey="pending"
                           name="Còn trong hạn"
                           fill="#38bdf8"
                           stackId="weekly-status"
+                          minPointSize={4}
                         />
                       </>
                     ) : (
@@ -726,6 +730,14 @@ export const DashboardView = ({
                         />
                       </>
                     )}
+                    <Line
+                      type="linear"
+                      dataKey="target"
+                      name="Tổng theo lịch"
+                      stroke="#7bc043"
+                      strokeWidth={2}
+                      dot={{ r: 3, fill: "#ffffff", stroke: "#7bc043", strokeWidth: 2 }}
+                    />
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
@@ -761,22 +773,27 @@ export const DashboardView = ({
                   ))}
                 </ul>
                 <div
-                  className="relative h-[250px] w-full"
+                  className="grid h-[250px] w-full grid-cols-[minmax(0,1fr)_minmax(140px,1fr)] items-center gap-2"
                   role="img"
                   aria-label={`Biểu đồ phân bổ nơi thực tập của ${assignmentTotal} sinh viên`}
                 >
                   <ul
                     aria-label="Chú giải phân bổ nơi thực tập"
-                    className="absolute left-0 top-2 z-10 flex flex-col gap-2 text-[11px] text-slate-700"
+                    className="flex min-w-0 flex-col gap-3 text-[11px] text-slate-700"
                   >
                     {assignmentData.map((item) => (
-                      <li key={item.name} className="flex items-center gap-2">
+                      <li key={item.name} className="flex min-w-0 items-start gap-2">
                         <span
                           aria-hidden="true"
-                          className="h-4 w-8 shrink-0 rounded"
+                          className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded-sm"
                           style={{ backgroundColor: item.color }}
                         />
-                        <span>{item.name}</span>
+                        <span className="min-w-0 leading-4">
+                          <span className="block break-words">{item.name}</span>
+                          <span className="font-semibold tabular-nums text-slate-900">
+                            {item.value} sinh viên · {Math.round((item.value / assignmentTotal) * 100)}%
+                          </span>
+                        </span>
                       </li>
                     ))}
                   </ul>
@@ -786,13 +803,11 @@ export const DashboardView = ({
                         data={assignmentData}
                         dataKey="value"
                         nameKey="name"
-                        cx="60%"
-                        cy="52%"
-                        outerRadius={78}
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={76}
                         startAngle={90}
                         endAngle={-270}
-                        label={({ name }) => name}
-                        labelLine={{ stroke: "#7bc043", strokeWidth: 1 }}
                       >
                         {assignmentData.map((item) => (
                           <Cell

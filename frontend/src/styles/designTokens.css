@@ -446,6 +446,11 @@ textarea {
   .lecturer-sidebar-drawer {
     transition-duration: 0.01ms;
   }
+
+  .student-result-fireworks__burst {
+    animation: none;
+    opacity: 0;
+  }
 }
 
 /* KPI — unified stat strip inside one panel */
@@ -593,6 +598,51 @@ textarea {
 .il-animate-up,
 .il-animate-in {
   animation: il-fade-in 180ms ease both;
+}
+
+.student-result-fireworks {
+  position: absolute;
+  inset: 0 0 auto auto;
+  width: 72%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  opacity: 0.78;
+}
+
+.student-result-fireworks__burst {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: student-result-burst 1.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.student-result-fireworks__burst path {
+  fill: none;
+  stroke: #fde68a;
+  stroke-linecap: round;
+  stroke-width: 1.5;
+}
+
+.student-result-fireworks__burst circle {
+  fill: #fff;
+}
+
+.student-result-fireworks__burst--delayed {
+  animation-delay: 180ms;
+}
+
+@keyframes student-result-burst {
+  0% {
+    opacity: 0;
+    transform: scale(0.25);
+  }
+  22% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
 }
 
 /* Insight / status strip — flat, not gradient hero */

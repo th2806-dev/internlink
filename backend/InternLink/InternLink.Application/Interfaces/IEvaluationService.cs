@@ -29,6 +29,7 @@ public interface IEvaluationService
     /// </summary>
     Task<EvaluationDetailDto?> GetEvaluationByInternshipAsync(Guid internshipId);
     Task<EvaluationDetailDto?> GetEvaluationByInternshipAsync(Guid internshipId, Guid userId, bool isLecturerOrAdmin);
+    Task<IEnumerable<WeeklyQualityAverageDto>?> GetWeeklyQualityAveragesAsync(Guid internshipId, Guid userId, bool isLecturerOrAdmin);
 
     /// <summary>
     /// Get evaluations for a specific student

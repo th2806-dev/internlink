@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Toast } from "../../../components/common/Toast";
 import {
   BarChart2,
@@ -130,6 +130,26 @@ export const LecturerAnalytics = () => {
     (latest, item) => !latest || item.weekNumber > latest.weekNumber ? item : latest,
     null,
   );
+  const weeklyTrendSummary = useMemo(() => {
+    const totals = weeklyTrend.reduce(
+      (summary, item) => ({
+        onTime: summary.onTime + item.onTimeCount,
+        late: summary.late + item.lateCount,
+        missing: summary.missing + item.missingCount,
+        pending: summary.pending + item.pendingCount,
+        opportunities: summary.opportunities + item.totalStudents,
+      }),
+      { onTime: 0, late: 0, missing: 0, pending: 0, opportunities: 0 },
+    );
+    const percent = (count: number) =>
+      totals.opportunities > 0 ? (count / totals.opportunities) * 100 : 0;
+
+    return {
+      ...totals,
+      percent,
+      onTimeRate: totals.opportunities > 0 ? `${percent(totals.onTime).toFixed(1)}%` : "—",
+    };
+  }, [weeklyTrend]);
   const complianceRate = latestWeeklyTrend
     ? `${Math.round(latestWeeklyTrend.complianceRate)}%`
     : "—";
@@ -248,13 +268,16 @@ export const LecturerAnalytics = () => {
               </h3>
               <p className="text-xs text-slate-500">
                 {weeklyTrend.length > 0
-                  ? "Tỷ lệ sinh viên nộp báo cáo đúng hạn, trễ hạn và quá hạn theo từng tuần"
+                  ? "Số sinh viên theo trạng thái trên từng tuần đang bật nhận bài; tỷ lệ tính trên tổng lượt tuần-sinh viên"
                   : "Chưa có dữ liệu báo cáo tuần trong học kỳ đang chọn"}
               </p>
             </div>
-            {hasStatsData && totalStudents > 0 ? (
-              <span className="shrink-0 rounded-full border border-[#7bc043]/30 bg-[#7bc043]/10 px-2.5 py-1 text-xs font-bold text-[#446d20]">
-                {complianceRate} Tuân thủ
+            {weeklyTrendSummary.opportunities > 0 ? (
+              <span
+                title="Tỷ lệ nộp đúng hạn trên tổng số lượt tuần-sinh viên trong biểu đồ"
+                className="shrink-0 rounded-full border border-[#7bc043]/30 bg-[#7bc043]/10 px-2.5 py-1 text-xs font-bold text-[#446d20]"
+              >
+                {weeklyTrendSummary.onTimeRate} đúng hạn
               </span>
             ) : null}
           </div>
@@ -266,8 +289,8 @@ export const LecturerAnalytics = () => {
             ) : weeklyTrend.length === 0 ? (
               <p className="py-4 text-center text-xs text-slate-500">{statsError ? "Không thể hiển thị dữ liệu báo cáo tuần." : "Chưa có dữ liệu báo cáo tuần."}</p>
             ) : (
-              weeklyTrend.map((item, idx) => (
-                <div key={idx} className="space-y-1.5">
+              weeklyTrend.map((item) => (
+                <div key={item.weekNumber} className="space-y-1.5">
                   <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-xs font-bold text-slate-800">
                     <span>{item.label}</span>
                     <span className="text-slate-500 text-[11px]">
@@ -275,24 +298,33 @@ export const LecturerAnalytics = () => {
                       đúng hạn •{" "}
                       <strong className="text-amber-600">{item.lateCount}</strong> trễ
                       • <strong className="text-rose-600">{item.missingCount}</strong>{" "}
-                      thiếu
+                      thiếu • <strong className="text-slate-500">{item.pendingCount}</strong> chưa đến hạn
                     </span>
                   </div>
-                  <div className="h-4 w-full bg-slate-100 rounded-full overflow-hidden flex shadow-inner">
+                  <div
+                    className="flex h-4 w-full overflow-hidden rounded-full bg-slate-100 shadow-inner"
+                    role="img"
+                    aria-label={`${item.label}: ${item.onTimeCount} đúng hạn, ${item.lateCount} trễ hạn, ${item.missingCount} thiếu nộp, ${item.pendingCount} chưa đến hạn, trên ${item.totalStudents} sinh viên`}
+                  >
                     <div
                       style={{ width: `${item.totalStudents > 0 ? (item.onTimeCount / item.totalStudents) * 100 : 0}%` }}
                       className="h-full bg-[#7bc043] transition-all duration-500"
-                      title={`Đúng hạn: ${item.onTimeCount} SV`}
+                      title={`Đúng hạn: ${item.onTimeCount} / ${item.totalStudents} SV`}
                     />
                     <div
                       style={{ width: `${item.totalStudents > 0 ? (item.lateCount / item.totalStudents) * 100 : 0}%` }}
                       className="bg-amber-400 h-full transition-all duration-500"
-                      title={`Trễ hạn: ${item.lateCount} SV`}
+                      title={`Trễ hạn: ${item.lateCount} / ${item.totalStudents} SV`}
                     />
                     <div
                       style={{ width: `${item.totalStudents > 0 ? (item.missingCount / item.totalStudents) * 100 : 0}%` }}
                       className="bg-rose-500 h-full transition-all duration-500"
-                      title={`Thiếu: ${item.missingCount} SV`}
+                      title={`Thiếu: ${item.missingCount} / ${item.totalStudents} SV`}
+                    />
+                    <div
+                      style={{ width: `${item.totalStudents > 0 ? (item.pendingCount / item.totalStudents) * 100 : 0}%` }}
+                      className="h-full bg-slate-300 transition-all duration-500"
+                      title={`Chưa đến hạn: ${item.pendingCount} / ${item.totalStudents} SV`}
                     />
                   </div>
                 </div>
@@ -302,23 +334,24 @@ export const LecturerAnalytics = () => {
 
           <div className="flex items-center justify-between text-[11px] pt-3 border-t border-slate-100 text-slate-600">
             {weeklyTrend.length > 0 ? (() => {
-              const totOnTime = weeklyTrend.reduce((a, w) => a + w.onTimeCount, 0);
-              const totLate = weeklyTrend.reduce((a, w) => a + w.lateCount, 0);
-              const totMissing = weeklyTrend.reduce((a, w) => a + w.missingCount, 0);
-              const totAll = totOnTime + totLate + totMissing || 1;
+              const percent = (count: number) => weeklyTrendSummary.percent(count).toFixed(1);
               return (
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                   <span className="flex items-center gap-1.5 font-semibold">
                     <span className="inline-block h-3 w-3 rounded-sm bg-[#7bc043]" />
-                    Nộp đúng hạn ({((totOnTime / totAll) * 100).toFixed(1)}%)
+                    Đúng hạn {weeklyTrendSummary.onTime} ({percent(weeklyTrendSummary.onTime)}%)
                   </span>
                   <span className="flex items-center gap-1.5 font-semibold">
                     <span className="w-3 h-3 rounded-sm bg-amber-400 inline-block" />
-                    Trễ 1-3 ngày ({((totLate / totAll) * 100).toFixed(1)}%)
+                    Trễ {weeklyTrendSummary.late} ({percent(weeklyTrendSummary.late)}%)
                   </span>
                   <span className="flex items-center gap-1.5 font-semibold">
                     <span className="w-3 h-3 rounded-sm bg-rose-500 inline-block" />
-                    Quá hạn / Thiếu ({((totMissing / totAll) * 100).toFixed(1)}%)
+                    Thiếu {weeklyTrendSummary.missing} ({percent(weeklyTrendSummary.missing)}%)
+                  </span>
+                  <span className="flex items-center gap-1.5 font-semibold">
+                    <span className="inline-block h-3 w-3 rounded-sm bg-slate-300" />
+                    Chưa đến hạn {weeklyTrendSummary.pending} ({percent(weeklyTrendSummary.pending)}%)
                   </span>
                 </div>
               );
@@ -327,7 +360,7 @@ export const LecturerAnalytics = () => {
             )}
             {weeklyTrend.length > 0 ? (
               <span className="font-bold text-[#026aa7]">
-                {weeklyTrend.length} tuần có dữ liệu
+                {weeklyTrend.length} tuần đang bật nhận bài
               </span>
             ) : null}
           </div>
@@ -351,11 +384,14 @@ export const LecturerAnalytics = () => {
                 <p role="status" className="py-4 text-center text-xs text-slate-500">Đang tải phân bố điểm…</p>
               ) : gradeDist ? (
                 [
-                  { label: "Xuất sắc (9.0 - 10.0)", count: gradeDist.excellentCount, color: "bg-[#7bc043]", textColor: "text-[#446d20]" },
-                  { label: "Giỏi (8.0 - 8.9)", count: gradeDist.goodCount, color: "bg-[#4d74c9]", textColor: "text-[#3e5e9f]" },
+                  { label: "Xuất sắc (8.5 - 10.0)", count: gradeDist.excellentCount, color: "bg-[#7bc043]", textColor: "text-[#446d20]" },
+                  { label: "Giỏi (8.0 - 8.4)", count: gradeDist.goodCount, color: "bg-[#4d74c9]", textColor: "text-[#3e5e9f]" },
                   { label: "Khá (7.0 - 7.9)", count: gradeDist.fairCount, color: "bg-amber-500", textColor: "text-amber-700" },
-                  { label: "Trung bình (5.5 - 6.9)", count: gradeDist.averageCount, color: "bg-slate-400", textColor: "text-slate-600" },
-                  { label: "Không đạt (< 5.5)", count: gradeDist.failCount, color: "bg-rose-500", textColor: "text-rose-600" },
+                  { label: "Trung bình khá (6.5 - 6.9)", count: gradeDist.averageGoodCount, color: "bg-cyan-600", textColor: "text-cyan-800" },
+                  { label: "Trung bình (5.0 - 6.4)", count: gradeDist.averageCount, color: "bg-slate-400", textColor: "text-slate-600" },
+                  { label: "Yếu (4.0 - 4.9)", count: gradeDist.weakCount, color: "bg-orange-500", textColor: "text-orange-700" },
+                  { label: "Không thực tập (0.0 - 3.9)", count: gradeDist.failCount, color: "bg-rose-500", textColor: "text-rose-600" },
+                  { label: "Chưa chốt điểm", count: gradeDist.notYetGradedCount, color: "bg-slate-300", textColor: "text-slate-600" },
                 ].map((item, idx) => {
                   const pct = gradeDist.totalStudents > 0 ? ((item.count / gradeDist.totalStudents) * 100).toFixed(1) : "0";
                   return (
@@ -380,7 +416,7 @@ export const LecturerAnalytics = () => {
           </div>
 
           <div className="bg-slate-50 p-3 rounded-md border border-slate-200 text-xs text-slate-600 font-medium flex items-center justify-between">
-            <span>Tỷ lệ xếp loại Khá - Giỏi - Xuất sắc:</span>
+            <span>Tỷ lệ xếp loại Khá - Giỏi - Xuất sắc (từ 7.0):</span>
             <strong className="font-bold text-[#446d20]">
               {gradeDist && gradeDist.totalStudents > 0
                 ? ((((gradeDist.excellentCount + gradeDist.goodCount + gradeDist.fairCount) / gradeDist.totalStudents) * 100).toFixed(1)) + "%"

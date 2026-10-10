@@ -174,6 +174,147 @@ public class EvaluationServiceTests
     }
 
     [Fact]
+    public async Task GetWeeklyQualityAveragesAsync_ShouldUseOpenWeeksAndSameLecturerScoresOnly()
+    {
+        var db = GetDb();
+        var (studentUser, _, _, _, internship, evaluation) = await SeedDataAsync(db);
+        var semester = new Semester
+        {
+            Id = Guid.NewGuid(),
+            Name = "Semester",
+            Term = "Term 1",
+            AcademicYear = "2026-2027",
+            TotalWeeks = 3,
+        };
+        internship.Semester = semester;
+        internship.SemesterId = semester.Id;
+        evaluation.WeeklyQualityJson = """{"1":4,"2":5,"3":3.5,"4":5}""";
+
+        var peerStudent = new Student
+        {
+            Id = Guid.NewGuid(),
+            UserId = Guid.NewGuid(),
+            StudentCode = "SV002",
+            FullName = "Peer student",
+        };
+        var peerInternship = new Internship
+        {
+            Id = Guid.NewGuid(),
+            StudentId = peerStudent.Id,
+            Student = peerStudent,
+            LecturerId = internship.LecturerId,
+            Lecturer = internship.Lecturer,
+            SemesterId = semester.Id,
+            Semester = semester,
+        };
+        var peerEvaluation = new Evaluation
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = peerInternship.Id,
+            Internship = peerInternship,
+            WeeklyQualityJson = """{"1":2,"2":3.5}""",
+        };
+        var otherStudent = new Student
+        {
+            Id = Guid.NewGuid(),
+            UserId = Guid.NewGuid(),
+            StudentCode = "SV003",
+            FullName = "Other lecturer student",
+        };
+        var otherInternship = new Internship
+        {
+            Id = Guid.NewGuid(),
+            StudentId = otherStudent.Id,
+            Student = otherStudent,
+            LecturerId = Guid.NewGuid(),
+            SemesterId = semester.Id,
+            Semester = semester,
+        };
+        var otherLecturerEvaluation = new Evaluation
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = otherInternship.Id,
+            Internship = otherInternship,
+            WeeklyQualityJson = """{"2":1}""",
+        };
+
+        db.Semesters.Add(semester);
+        db.Students.AddRange(peerStudent, otherStudent);
+        db.Internships.AddRange(peerInternship, otherInternship);
+        db.Evaluations.AddRange(peerEvaluation, otherLecturerEvaluation);
+        db.SemesterReportSchedules.AddRange(
+            new SemesterReportSchedule
+            {
+                Id = Guid.NewGuid(),
+                SemesterId = semester.Id,
+                WeekNumber = 1,
+                Title = "Week 1 default",
+                DueDate = DateTime.UtcNow,
+                IsSubmissionOpen = true,
+            },
+            new SemesterReportSchedule
+            {
+                Id = Guid.NewGuid(),
+                SemesterId = semester.Id,
+                LecturerId = internship.LecturerId,
+                WeekNumber = 1,
+                Title = "Week 1 lecturer override",
+                DueDate = DateTime.UtcNow,
+                IsSubmissionOpen = false,
+            },
+            new SemesterReportSchedule
+            {
+                Id = Guid.NewGuid(),
+                SemesterId = semester.Id,
+                WeekNumber = 2,
+                Title = "Week 2",
+                DueDate = DateTime.UtcNow,
+                IsSubmissionOpen = true,
+            },
+            new SemesterReportSchedule
+            {
+                Id = Guid.NewGuid(),
+                SemesterId = semester.Id,
+                WeekNumber = 3,
+                Title = "Week 3",
+                DueDate = DateTime.UtcNow,
+                IsSubmissionOpen = true,
+            },
+            new SemesterReportSchedule
+            {
+                Id = Guid.NewGuid(),
+                SemesterId = semester.Id,
+                WeekNumber = 4,
+                Title = "Final report",
+                DueDate = DateTime.UtcNow,
+                IsSubmissionOpen = true,
+            });
+        await db.SaveChangesAsync();
+
+        var result = await CreateService(db)
+            .GetWeeklyQualityAveragesAsync(internship.Id, studentUser.Id, isLecturerOrAdmin: false);
+
+        result.Should().NotBeNull();
+        result!.Select(item => new { item.WeekNumber, item.AverageScore }).Should().Equal(
+            new { WeekNumber = 2, AverageScore = (decimal?)4.3m },
+            new { WeekNumber = 3, AverageScore = (decimal?)3.5m });
+    }
+
+    [Fact]
+    public async Task GetWeeklyQualityAveragesAsync_ShouldRejectAnotherStudent()
+    {
+        var db = GetDb();
+        var (_, _, strangerUser, _, internship, _) = await SeedDataAsync(db);
+
+        var act = () => CreateService(db).GetWeeklyQualityAveragesAsync(
+            internship.Id,
+            strangerUser.Id,
+            isLecturerOrAdmin: false);
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>();
+    }
+
+    [Fact]
     public async Task CreateEvaluationAsync_Valid_ShouldCreateEvaluation()
     {
         var db = GetDb();

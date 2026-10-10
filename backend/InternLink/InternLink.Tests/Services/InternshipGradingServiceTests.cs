@@ -1,4 +1,5 @@
 using FluentAssertions;
+using InternLink.Application.DTOs;
 using InternLink.Domain.Entities;
 using InternLink.Domain.Enums;
 using InternLink.Infrastructure.Persistence;
@@ -12,6 +13,110 @@ namespace InternLink.Tests.Services;
 
 public sealed class InternshipGradingServiceTests
 {
+    [Fact]
+    public async Task GetSummaryAsync_UsesProductApprovalInsteadOfSavedCreativeFlag()
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .ConfigureWarnings(warnings => warnings.Ignore(InMemoryEventId.TransactionIgnoredWarning))
+            .Options;
+        await using var db = new AppDbContext(options);
+
+        var now = DateTime.UtcNow;
+        var semester = new Semester
+        {
+            Id = Guid.NewGuid(),
+            Name = "Kỳ kiểm thử sản phẩm",
+            Term = "Học kỳ I",
+            AcademicYear = "2026 - 2027",
+            TotalWeeks = 1,
+            StartDate = now.Date,
+            EndDate = now.Date.AddDays(30),
+            CreatedAt = now,
+        };
+        var student = new Student
+        {
+            Id = Guid.NewGuid(),
+            StudentCode = "P4-003",
+            FullName = "Sinh viên kiểm thử sản phẩm",
+            CreatedAt = now,
+        };
+        var internship = new Internship
+        {
+            Id = Guid.NewGuid(),
+            SemesterId = semester.Id,
+            Semester = semester,
+            StudentId = student.Id,
+            Student = student,
+            Status = InternshipStatus.InProgress,
+            CreatedAt = now,
+        };
+        var product = new Submission
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = internship.Id,
+            Internship = internship,
+            Type = SubmissionType.Product,
+            Status = SubmissionStatus.Submitted,
+            SubmittedAt = now,
+            CreatedAt = now,
+        };
+
+        db.Semesters.Add(semester);
+        db.Students.Add(student);
+        db.Internships.Add(internship);
+        db.SemesterReportSchedules.Add(new SemesterReportSchedule
+        {
+            Id = Guid.NewGuid(),
+            SemesterId = semester.Id,
+            WeekNumber = 1,
+            Title = "Báo cáo tuần 1",
+            StartDate = now.Date,
+            DueDate = now.AddDays(7),
+            IsSubmissionOpen = true,
+            CreatedAt = now,
+        });
+        db.Submissions.Add(product);
+        db.Evaluations.Add(new Evaluation
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = internship.Id,
+            Internship = internship,
+            HasCreativeProduct = true,
+            CreatedAt = now,
+        });
+        await db.SaveChangesAsync();
+
+        var service = new InternshipGradingService(
+            db,
+            NullLogger<InternshipGradingService>.Instance,
+            new SemesterService(db));
+
+        var pending = (await service.GetSummaryAsync(semester.Id, lecturerId: null, departmentId: null))
+            .Students.Should().ContainSingle().Subject;
+        pending.ProductSubmitted.Should().BeTrue();
+        pending.ProductStatus.Should().Be(nameof(SubmissionStatus.Submitted));
+        pending.HasCreativeProduct.Should().BeFalse();
+        pending.ProcessScore.Should().Be(0m);
+
+        product.Status = SubmissionStatus.Approved;
+        await db.SaveChangesAsync();
+
+        var approved = (await service.GetSummaryAsync(semester.Id, lecturerId: null, departmentId: null))
+            .Students.Should().ContainSingle().Subject;
+        approved.ProductStatus.Should().Be(nameof(SubmissionStatus.Approved));
+        approved.HasCreativeProduct.Should().BeTrue();
+        approved.ProcessScore.Should().Be(1m);
+
+        var saved = await service.SaveGradeAsync(
+            semester.Id,
+            new SaveInternshipGradeRequestDto { StudentId = student.Id, HasCreativeProduct = false },
+            actorUserId: Guid.NewGuid(),
+            actorLecturerId: null);
+        saved!.HasCreativeProduct.Should().BeTrue();
+        (await db.Evaluations.SingleAsync()).HasCreativeProduct.Should().BeTrue();
+    }
+
     [Fact]
     public async Task GetSummaryAsync_ReturnsEmployerScoreAndProofWithoutChangingProcessScore()
     {

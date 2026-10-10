@@ -186,6 +186,40 @@ public class EvaluationController : ControllerBase
     }
 
     /// <summary>
+    /// Get weekly report score averages for students supervised by the same lecturer.
+    /// </summary>
+    [HttpGet("internship/{internshipId}/weekly-averages")]
+    [ProducesResponseType(typeof(IEnumerable<WeeklyQualityAverageDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IEnumerable<WeeklyQualityAverageDto>>> GetWeeklyQualityAverages(Guid internshipId)
+    {
+        try
+        {
+            var userId = User.GetUserId();
+            if (userId == null)
+                return Unauthorized(InternLink.Shared.Responses.ErrorMessage.Unauthorized);
+
+            var isLecturerOrAdmin = User.IsInRole("Lecturer") || User.IsInRole("SuperAdmin");
+            var averages = await _evaluationService.GetWeeklyQualityAveragesAsync(
+                internshipId,
+                userId.Value,
+                isLecturerOrAdmin);
+            if (averages == null)
+                return NotFound(new { message = InternLink.Shared.Responses.ErrorMessage.InternshipNotFound });
+
+            return Ok(averages);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving weekly score averages for internship {InternshipId}", internshipId);
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = InternLink.Shared.Responses.ErrorMessage.InternalServerError });
+        }
+    }
+
+    /// <summary>
     /// Get evaluations for a specific student
     /// </summary>
     [HttpGet("student/{studentId}")]

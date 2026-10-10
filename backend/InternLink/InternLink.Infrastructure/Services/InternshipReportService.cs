@@ -35,6 +35,7 @@ public class InternshipReportService : IInternshipReportService
             .Include(i => i.Company)
             .Include(i => i.Lecturer)
             .Include(i => i.WeeklyReports)
+            .Include(i => i.Submissions)
             .Include(i => i.Semester)
             .AsNoTracking();
 
@@ -209,7 +210,9 @@ public class InternshipReportService : IInternshipReportService
             }
 
             var (missingCount, lateCount, submittedWeekCount) = CountSubmissionStats(intern, reportScheduleByWeek, nowUtc);
-            var processScore = InternshipGradeCalculator.ComputeProcessScore(missingCount, lateCount, submittedWeekCount, weeklyQualityLevelsByInternship.GetValueOrDefault(intern.Id), eval.HasCreativeProduct);
+            var hasApprovedProduct = intern.Submissions.Any(s =>
+                !s.IsDeleted && s.Type == SubmissionType.Product && s.Status == SubmissionStatus.Approved);
+            var processScore = InternshipGradeCalculator.ComputeProcessScore(missingCount, lateCount, submittedWeekCount, weeklyQualityLevelsByInternship.GetValueOrDefault(intern.Id), hasApprovedProduct);
             var (_, classification) = InternshipGradeCalculator.ComputeAverage(true, processScore, eval.OralExamScore);
             var templateLabel = MapClassificationToTemplateRow(classification);
             if (templateLabel != null)
@@ -923,7 +926,9 @@ public class InternshipReportService : IInternshipReportService
             }
 
             var (missingCount, lateCount, submittedWeekCount) = CountSubmissionStats(intern, reportScheduleByWeek, nowUtc);
-            var processScore = InternshipGradeCalculator.ComputeProcessScore(missingCount, lateCount, submittedWeekCount, weeklyQualityLevelsByInternship.GetValueOrDefault(intern.Id), eval.HasCreativeProduct);
+            var hasApprovedProduct = intern.Submissions.Any(s =>
+                !s.IsDeleted && s.Type == SubmissionType.Product && s.Status == SubmissionStatus.Approved);
+            var processScore = InternshipGradeCalculator.ComputeProcessScore(missingCount, lateCount, submittedWeekCount, weeklyQualityLevelsByInternship.GetValueOrDefault(intern.Id), hasApprovedProduct);
             var (_, classification) = InternshipGradeCalculator.ComputeAverage(true, processScore, eval.OralExamScore);
             gradeCounts[classification]++;
         }

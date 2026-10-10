@@ -140,6 +140,24 @@ describe("computeGrade", () => {
     expect(result.classification).toBe("Khá");
   });
 
+  it("does not penalize weeks where submission is disabled", () => {
+    const result = computeGrade({
+      weeks: [
+        { weekNumber: 1, isSubmissionOpen: true, submittedAt: "2026-09-07T10:00:00Z", deadline: "2026-09-07T23:59:59Z" },
+        { weekNumber: 2, isSubmissionOpen: true, submittedAt: "2026-09-08T10:00:00Z", deadline: "2026-09-08T23:59:59Z" },
+        { weekNumber: 3, isSubmissionOpen: false, submittedAt: null, deadline: "2026-09-09T23:59:59Z" },
+      ],
+      finalReportSubmitted: true,
+      weeklyQualityLevels: [4, 5],
+      hasCreativeProduct: true,
+      now: NOW,
+    });
+
+    expect(result.weekStates[2].state).toBe("pending");
+    expect(result.missingCount).toBe(0);
+    expect(result.processScore).toBe(9.5);
+  });
+
   it("capped at MIN(10, ...)", () => {
     const result = computeGrade({
       weeks: onTimeWeeks(),

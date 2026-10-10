@@ -395,7 +395,6 @@ function GradingTab({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [quality, setQuality] = useState<number | null>(null);
   const [weeklyQuality, setWeeklyQuality] = useState<Record<number, number>>({});
-  const [creative, setCreative] = useState(false);
   const [oralExam, setOralExam] = useState<string>("");
   const [isSaving, setIsSaving] = useState(false);
   const [isDownloadingEmployerProof, setIsDownloadingEmployerProof] = useState(false);
@@ -464,7 +463,6 @@ function GradingTab({
     setSelectedId(student.studentId);
     setQuality(student.qualityScore);
     setWeeklyQuality(student.weeklyQualityScores ?? {});
-    setCreative(student.hasCreativeProduct);
     setOralExam(student.oralExamScore != null ? String(student.oralExamScore) : "");
   };
 
@@ -474,6 +472,7 @@ function GradingTab({
     const result = computeGrade({
       weeks: selected.weeks.map((week) => ({
         weekNumber: week.weekNumber,
+        isSubmissionOpen: week.isSubmissionOpen,
         submittedAt: week.submittedAt,
         deadline: week.deadline,
       })),
@@ -481,7 +480,7 @@ function GradingTab({
       weeklyQualityLevels: Object.values(weeklyQuality),
       finalReportSubmitted: selected.finalReportSubmitted,
       qualityLevel: quality,
-      hasCreativeProduct: creative,
+      hasCreativeProduct: selected.hasCreativeProduct,
       oralExamScore: oralNum != null && !isNaN(oralNum) ? oralNum : null,
     });
     return {
@@ -490,7 +489,7 @@ function GradingTab({
       average: result.averageScore,
       classification: result.classification,
     };
-  }, [selected, quality, weeklyQuality, creative, oralExam]);
+  }, [selected, quality, weeklyQuality, oralExam]);
 
   const saveGrade = async () => {
     if (!semesterId || !selected) return;
@@ -504,7 +503,7 @@ function GradingTab({
         studentId: selected.studentId,
         qualityScore: Object.keys(weeklyQuality).length > 0 ? null : quality,
         weeklyQualityScores: weeklyQuality,
-        hasCreativeProduct: creative,
+        hasCreativeProduct: selected.hasCreativeProduct,
         oralExamScore: eligibleOral,
       });
       setStudents((prev) => prev.map((s) => (s.studentId === updated.studentId ? updated : s)));
@@ -796,24 +795,34 @@ function GradingTab({
                 </p>
               </div>
 
-              {/* Cụm 2 — Thưởng sáng tạo */}
-              <label className="flex cursor-pointer items-center justify-between rounded-lg border border-slate-200 px-3 py-2.5">
+              {/* Cụm 2 — Thưởng sản phẩm được duyệt */}
+              <div className={`flex items-center justify-between rounded-lg border px-3 py-2.5 ${
+                selected.hasCreativeProduct
+                  ? "border-emerald-200 bg-emerald-50"
+                  : selected.productStatus === "Rejected"
+                    ? "border-rose-200 bg-rose-50"
+                    : "border-slate-200 bg-slate-50"
+              }`}>
                 <span className="flex items-center gap-2 text-sm">
                   <Sparkles className="h-4 w-4 text-amber-500" />
-                  Có sản phẩm sáng tạo
+                  {selected.hasCreativeProduct
+                    ? "Sản phẩm đã được duyệt"
+                    : selected.productStatus === "Rejected"
+                      ? "Sản phẩm không đạt yêu cầu"
+                      : selected.productStatus === "RevisionRequested"
+                        ? "Sản phẩm cần bổ sung"
+                        : selected.productSubmitted
+                          ? "Sản phẩm đang chờ duyệt"
+                          : "Chưa nộp sản phẩm"}
                 </span>
-                <span className="flex items-center gap-2">
-                  <span className="text-xs font-medium text-[#446d20]">+1.0đ</span>
-                  <input
-                    type="checkbox"
-                    checked={creative}
-                    onChange={(e) => setCreative(e.target.checked)}
-                    className="h-4 w-4 accent-[#7bc043]"
-                  />
+                <span className={`text-xs font-semibold ${
+                  selected.hasCreativeProduct ? "text-emerald-700" : "text-slate-500"
+                }`}>
+                  {selected.hasCreativeProduct ? "+1.0đ" : "Không cộng điểm"}
                 </span>
-              </label>
+              </div>
               <p className="text-[11px] text-slate-500">
-                {selected.productSubmitted ? "Sinh viên đã nộp sản phẩm. Giảng viên tick để xác nhận cộng 1 điểm." : "Chưa ghi nhận sản phẩm sinh viên."}
+                Điểm cộng được tự động áp dụng khi giảng viên duyệt sản phẩm trong Kho Báo Cáo &amp; Bài Nộp.
               </p>
 
               {/* Cụm 3 — tự đếm + QT tạm tính */}
@@ -1080,6 +1089,7 @@ function SummaryTab({
       const result = computeGrade({
         weeks: s.weeks.map((week) => ({
           weekNumber: week.weekNumber,
+          isSubmissionOpen: week.isSubmissionOpen,
           submittedAt: week.submittedAt,
           deadline: week.deadline,
           isAbsent: week.isAttendanceAbsent,

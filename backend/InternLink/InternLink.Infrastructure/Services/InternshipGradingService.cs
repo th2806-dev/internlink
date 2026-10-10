@@ -283,8 +283,15 @@ public class InternshipGradingService : IInternshipGradingService
                 finalStatus = finalSubmission!.SubmittedAt > (finalSchedule?.DueDate ?? DateTime.MaxValue) ? "late" : "on_time";
 
             evalByInternship.TryGetValue(internship.Id, out var eval);
-            var creative = eval?.HasCreativeProduct ?? false;
-            var productSubmitted = internship.Submissions.Any(s => !s.IsDeleted && s.Type == SubmissionType.Product && s.Status != SubmissionStatus.Rejected);
+            var productSubmissions = internship.Submissions
+                .Where(s => !s.IsDeleted && s.Type == SubmissionType.Product)
+                .OrderByDescending(s => s.SubmittedAt)
+                .ToList();
+            var productSubmitted = productSubmissions.Count > 0;
+            var creative = productSubmissions.Any(s => s.Status == SubmissionStatus.Approved);
+            var productStatus = creative
+                ? SubmissionStatus.Approved.ToString()
+                : productSubmissions.FirstOrDefault()?.Status.ToString() ?? "NotSubmitted";
             var oral = eval?.OralExamScore;
 
             // ── Rubric chất lượng TỪNG TUẦN: đọc mức GV đã chấm theo tuần, trung bình lại ──
@@ -328,6 +335,7 @@ public class InternshipGradingService : IInternshipGradingService
                 QualityScore = quality,
                 WeeklyQualityScores = weeklyQuality,
                 ProductSubmitted = productSubmitted,
+                ProductStatus = productStatus,
                 HasCreativeProduct = creative,
                 ProcessScore = processScore,
                 EmployerScore = employerEvidence?.EmployerScore,
@@ -424,7 +432,9 @@ public class InternshipGradingService : IInternshipGradingService
                 evaluation.QualityLevel = InternshipGradeCalculator.Round1(dto.WeeklyQualityScores.Values.Average());
         }
         if (dto.QualityScore.HasValue) evaluation.QualityLevel = dto.QualityScore;
-        evaluation.HasCreativeProduct = dto.HasCreativeProduct;
+        evaluation.HasCreativeProduct = await _context.Submissions.AsNoTracking().AnyAsync(s =>
+            s.InternshipId == internship.Id && !s.IsDeleted
+            && s.Type == SubmissionType.Product && s.Status == SubmissionStatus.Approved);
         if (dto.OralExamScore.HasValue)
             evaluation.OralExamScore = Math.Clamp(dto.OralExamScore.Value, 0m, 10m);
         if (dto.Note != null) internship.Notes = dto.Note;

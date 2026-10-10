@@ -156,6 +156,8 @@ public class EvaluationService : IEvaluationService
                 .ThenInclude(i => i.Student)
             .Include(e => e.Internship)
                 .ThenInclude(i => i.Company)
+            .Include(e => e.Internship)
+                .ThenInclude(i => i.Submissions)
             .Include(e => e.EvaluatedBy)
             .FirstOrDefaultAsync(e => e.Id == id && !e.IsDeleted);
 
@@ -174,6 +176,8 @@ public class EvaluationService : IEvaluationService
                 .ThenInclude(i => i.Company)
             .Include(e => e.Internship)
                 .ThenInclude(i => i.Lecturer)
+            .Include(e => e.Internship)
+                .ThenInclude(i => i.Submissions)
             .Include(e => e.EvaluatedBy)
             .FirstOrDefaultAsync(e => e.Id == id && !e.IsDeleted);
 
@@ -229,6 +233,8 @@ public class EvaluationService : IEvaluationService
                 .ThenInclude(i => i.Student)
             .Include(e => e.Internship)
                 .ThenInclude(i => i.Company)
+            .Include(e => e.Internship)
+                .ThenInclude(i => i.Submissions)
             .Include(e => e.EvaluatedBy)
             .FirstOrDefaultAsync(e => e.InternshipId == internshipId && !e.IsDeleted);
 
@@ -247,6 +253,8 @@ public class EvaluationService : IEvaluationService
                 .ThenInclude(i => i.Company)
             .Include(e => e.Internship)
                 .ThenInclude(i => i.Lecturer)
+            .Include(e => e.Internship)
+                .ThenInclude(i => i.Submissions)
             .Include(e => e.EvaluatedBy)
             .FirstOrDefaultAsync(e => e.InternshipId == internshipId && !e.IsDeleted);
 
@@ -268,6 +276,101 @@ public class EvaluationService : IEvaluationService
         }
 
         return MapToDetailDto(evaluation);
+    }
+
+    public async Task<IEnumerable<WeeklyQualityAverageDto>?> GetWeeklyQualityAveragesAsync(
+        Guid internshipId,
+        Guid userId,
+        bool isLecturerOrAdmin)
+    {
+        var internship = await _db.Internships
+            .AsNoTracking()
+            .Include(item => item.Student)
+            .Include(item => item.Lecturer)
+            .Include(item => item.Semester)
+            .FirstOrDefaultAsync(item => item.Id == internshipId && !item.IsDeleted);
+
+        if (internship == null)
+            return null;
+
+        var ownsInternship = internship.Student?.UserId == userId;
+        var isAssignedLecturer = internship.Lecturer?.UserId == userId;
+        if (!isLecturerOrAdmin && !ownsInternship)
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessEvaluation);
+
+        if (isLecturerOrAdmin && !isAssignedLecturer && !ownsInternship)
+        {
+            var isSuperAdmin = await _db.Users
+                .AnyAsync(user => user.Id == userId && user.Role == Domain.Enums.Role.SuperAdmin && !user.IsDeleted);
+            if (!isSuperAdmin)
+                throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessEvaluation);
+        }
+
+        if (!internship.SemesterId.HasValue || !internship.LecturerId.HasValue)
+            return Array.Empty<WeeklyQualityAverageDto>();
+
+        var totalWeeks = internship.Semester?.TotalWeeks > 0 ? internship.Semester.TotalWeeks : 6;
+        var schedules = await _db.SemesterReportSchedules
+            .AsNoTracking()
+            .Where(schedule =>
+                schedule.SemesterId == internship.SemesterId.Value &&
+                !schedule.IsDeleted &&
+                (schedule.LecturerId == internship.LecturerId || schedule.LecturerId == null))
+            .ToListAsync();
+        var openWeeks = schedules
+            .GroupBy(schedule => schedule.WeekNumber)
+            .Select(group => group
+                .OrderByDescending(schedule => schedule.LecturerId == internship.LecturerId)
+                .ThenByDescending(schedule => schedule.UpdatedAt ?? schedule.CreatedAt)
+                .ThenByDescending(schedule => schedule.CreatedAt)
+                .First())
+            .Where(schedule => schedule.IsSubmissionOpen && schedule.WeekNumber >= 1 && schedule.WeekNumber <= totalWeeks)
+            .Select(schedule => schedule.WeekNumber)
+            .ToHashSet();
+
+        if (openWeeks.Count == 0)
+            return Array.Empty<WeeklyQualityAverageDto>();
+
+        var weeklyScoreJsonValues = await _db.Evaluations
+            .AsNoTracking()
+            .Where(evaluation =>
+                !evaluation.IsDeleted &&
+                !evaluation.Internship.IsDeleted &&
+                evaluation.Internship.SemesterId == internship.SemesterId &&
+                evaluation.Internship.LecturerId == internship.LecturerId)
+            .Select(evaluation => evaluation.WeeklyQualityJson)
+            .ToListAsync();
+
+        var scoreTotals = new Dictionary<int, (decimal Total, int Count)>();
+        foreach (var json in weeklyScoreJsonValues)
+        {
+            if (string.IsNullOrWhiteSpace(json))
+                continue;
+
+            var scores = JsonSerializer.Deserialize<Dictionary<int, decimal>>(json);
+            if (scores == null)
+                continue;
+
+            foreach (var (weekNumber, score) in scores)
+            {
+                if (!openWeeks.Contains(weekNumber) || score is not (1m or 2m or 3.5m or 4m or 5m))
+                    continue;
+
+                var current = scoreTotals.GetValueOrDefault(weekNumber);
+                scoreTotals[weekNumber] = (current.Total + score, current.Count + 1);
+            }
+        }
+
+        return openWeeks
+            .Order()
+            .Select(weekNumber => new WeeklyQualityAverageDto
+            {
+                WeekNumber = weekNumber,
+                AverageScore = scoreTotals.TryGetValue(weekNumber, out var total)
+                    ? Math.Round(total.Total / total.Count, 1, MidpointRounding.AwayFromZero)
+                    : null,
+            })
+            .ToList();
     }
 
     public async Task<IEnumerable<EvaluationListItemDto>> GetEvaluationsByStudentAsync(Guid studentId, int skip = 0, int take = 100, Guid? lecturerId = null)
@@ -398,6 +501,8 @@ public class EvaluationService : IEvaluationService
                 .ThenInclude(i => i.Student)
             .Include(e => e.Internship)
                 .ThenInclude(i => i.Company)
+            .Include(e => e.Internship)
+                .ThenInclude(i => i.Submissions)
             .Include(e => e.EvaluatedBy)
             .FirstOrDefaultAsync(e => e.Id == evaluation.Id);
 
@@ -472,6 +577,8 @@ public class EvaluationService : IEvaluationService
                 .ThenInclude(i => i.Student)
             .Include(e => e.Internship)
                 .ThenInclude(i => i.Company)
+            .Include(e => e.Internship)
+                .ThenInclude(i => i.Submissions)
             .Include(e => e.EvaluatedBy)
             .FirstOrDefaultAsync(e => e.Id == id && !e.IsDeleted);
 
@@ -516,6 +623,8 @@ public class EvaluationService : IEvaluationService
                 .ThenInclude(i => i.Student)
             .Include(e => e.Internship)
                 .ThenInclude(i => i.Company)
+            .Include(e => e.Internship)
+                .ThenInclude(i => i.Submissions)
             .Include(e => e.EvaluatedBy)
             .FirstOrDefaultAsync(e => e.Id == id && !e.IsDeleted);
 
@@ -545,6 +654,7 @@ public class EvaluationService : IEvaluationService
         var updated = await _db.Evaluations
             .Include(e => e.Internship).ThenInclude(i => i.Student)
             .Include(e => e.Internship).ThenInclude(i => i.Company)
+            .Include(e => e.Internship).ThenInclude(i => i.Submissions)
             .Include(e => e.EvaluatedBy)
             .FirstAsync(e => e.Id == id);
         return MapToDetailDto(updated);
@@ -693,7 +803,9 @@ public class EvaluationService : IEvaluationService
             FinalGrade = evaluation.FinalGrade,
             QualityLevel = evaluation.QualityLevel,
             OralExamScore = evaluation.OralExamScore,
-            HasCreativeProduct = evaluation.HasCreativeProduct,
+            HasCreativeProduct = evaluation.Internship?.Submissions.Any(submission =>
+                !submission.IsDeleted && submission.Type == SubmissionType.Product
+                && submission.Status == SubmissionStatus.Approved) ?? false,
             WeeklyQualityScores = string.IsNullOrWhiteSpace(evaluation.WeeklyQualityJson)
                 ? null
                 : JsonSerializer.Deserialize<Dictionary<int, decimal>>(evaluation.WeeklyQualityJson),
