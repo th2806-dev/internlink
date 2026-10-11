@@ -40,7 +40,7 @@ SELECT
     s.FullName AS StudentFullName,
     wrv.FileName,
     wrv.FileUrl,
-    CAST(NULL AS nvarchar(8000)) AS Content
+    CAST(NULL AS nvarchar(max)) AS Content
 FROM dbo.WeeklyReportVersions AS wrv
 JOIN dbo.WeeklyReports AS wr ON wr.WeeklyReportId = wrv.WeeklyReportId
 JOIN dbo.Internships AS i ON i.InternshipId = wr.InternshipId
