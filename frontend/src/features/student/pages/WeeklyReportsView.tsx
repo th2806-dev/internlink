@@ -21,6 +21,7 @@ import { useSemester } from "../../../contexts/SemesterContext";
 import { SkeletonBox } from "../../../components/common/SkeletonLoader";
 import { RequestErrorState } from "../../../components/common/RequestErrorState";
 import { getApiErrorMessage } from "../../../lib/apiClient";
+import { resolveSubmission } from "../../../lib/gradingRules";
 import { weeklyReportService } from "../../../services/weeklyReport.service";
 import {
   useStudentWeeklyReportsQuery,
@@ -28,6 +29,32 @@ import {
 } from "../../../hooks/useStudentWeeklyReportsQuery";
 import { INTERNSHIP_WEEKS } from "../../../config/internship";
 import { StudentSubPageHeader } from "../components/StudentSubPageHeader";
+
+function getDeadlineStatus(report: Pick<
+  WeeklyReportRow,
+  "submittedAtRaw" | "scheduleDueDate" | "allowLateSubmission"
+>) {
+  if (!report.scheduleDueDate) return null;
+
+  const state = resolveSubmission({
+    submittedAt: report.submittedAtRaw,
+    deadline: report.scheduleDueDate,
+  });
+
+  if (report.submittedAtRaw) {
+    return state === "late"
+      ? { label: "Nộp trễ", className: "bg-amber-100 text-amber-800" }
+      : { label: "Đúng hạn", className: "bg-emerald-100 text-emerald-800" };
+  }
+
+  if (state === "missing") {
+    return report.allowLateSubmission
+      ? { label: "Đã quá hạn", className: "bg-amber-100 text-amber-800" }
+      : { label: "Hết hạn nộp", className: "bg-rose-100 text-rose-800" };
+  }
+
+  return null;
+}
 
 export const WeeklyReportsView = ({
   onShowToast,
@@ -215,6 +242,7 @@ export const WeeklyReportsView = ({
   const currentReport =
     allWeekRows.find((r) => r.weekNumber === selectedWeek) ??
     emptyWeek(selectedWeek);
+  const currentDeadlineStatus = getDeadlineStatus(currentReport);
 
   const versionHistory = useMemo(() => {
     if (!currentReport.submittedAt && currentReport.status === "Chưa nộp") {
@@ -679,6 +707,7 @@ export const WeeklyReportsView = ({
                     ) : (
                       filteredReports.map((rep) => {
                         const isSelected = rep.weekNumber === selectedWeek;
+                        const deadlineStatus = getDeadlineStatus(rep);
                         return (
                           <tr
                             key={rep.weekNumber}
@@ -710,18 +739,11 @@ export const WeeklyReportsView = ({
                             </td>
                             <td className="py-3 px-4 text-slate-600 font-medium whitespace-nowrap">
                               <div>{rep.deadline}</div>
-                              {rep.scheduleDueDate &&
-                                new Date() > new Date(rep.scheduleDueDate) && (
-                                  <span
-                                    className={`inline-block mt-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                                      rep.allowLateSubmission
-                                        ? "bg-amber-100 text-amber-800"
-                                        : "bg-rose-100 text-rose-800"
-                                    }`}
-                                  >
-                                    {rep.allowLateSubmission ? "Nộp trễ" : "Hết hạn"}
-                                  </span>
-                                )}
+                              {deadlineStatus && (
+                                <span className={`inline-block mt-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded ${deadlineStatus.className}`}>
+                                  {deadlineStatus.label}
+                                </span>
+                              )}
                             </td>
                             <td className="py-3 px-4 whitespace-nowrap">
                               <span
@@ -822,20 +844,11 @@ export const WeeklyReportsView = ({
                       <strong className="text-slate-700">
                         {currentReport.deadline}
                       </strong>
-                      {currentReport.scheduleDueDate &&
-                        new Date() > new Date(currentReport.scheduleDueDate) && (
-                          <span
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold ml-1 ${
-                              currentReport.allowLateSubmission
-                                ? "bg-amber-100 text-amber-800 border border-amber-200"
-                                : "bg-rose-100 text-rose-800 border border-rose-200"
-                            }`}
-                          >
-                            {currentReport.allowLateSubmission
-                              ? "Cho phép nộp trễ"
-                              : "Đã khóa nộp"}
-                          </span>
-                        )}
+                      {currentDeadlineStatus && (
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ml-1 border border-current/20 ${currentDeadlineStatus.className}`}>
+                          {currentDeadlineStatus.label}
+                        </span>
+                      )}
                     </p>
                   )}
                 </div>

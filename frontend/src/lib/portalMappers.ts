@@ -299,6 +299,7 @@ export function mapWeeklyReportDtoToUi(r: WeeklyReportDto) {
     content: r.content,
     deadline: "—",
     submittedAt: r.submittedAt ? formatViDate(r.submittedAt) : "—",
+    submittedAtRaw: r.submittedAt ?? null,
     version: `v${r.version}`,
     versions: r.versions ?? [],
     status: uiStatus,

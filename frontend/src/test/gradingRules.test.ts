@@ -89,6 +89,16 @@ describe("resolveSubmission (is_late / is_missing)", () => {
     ).toBe("late");
   });
 
+  it("stays on_time after the deadline when the report was submitted earlier", () => {
+    expect(
+      resolveSubmission({
+        submittedAt: "2026-10-11T08:00:00Z",
+        deadline: "2026-10-11T13:59:00Z",
+        now: new Date("2026-10-11T15:35:00Z"),
+      }),
+    ).toBe("on_time");
+  });
+
   it("missing when not submitted past deadline, pending before deadline", () => {
     expect(resolveSubmission({ submittedAt: null, deadline: "2026-09-07T23:59:59Z", now: NOW })).toBe("missing");
     expect(resolveSubmission({ submittedAt: null, deadline: "2026-09-30T23:59:59Z", now: NOW })).toBe("pending");
