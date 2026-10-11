@@ -1159,7 +1159,10 @@ public class SubmissionService : ISubmissionService
         int fileCount,
         string extension)
     {
-        var normalized = (studentName ?? "SinhVien").Normalize(NormalizationForm.FormD);
+        var mappedName = (studentName ?? "SinhVien")
+            .Replace('Đ', 'D')
+            .Replace('đ', 'd');
+        var normalized = mappedName.Normalize(NormalizationForm.FormD);
         var nameWithoutMarks = new string(normalized
             .Where(character => CharUnicodeInfo.GetUnicodeCategory(character) != UnicodeCategory.NonSpacingMark)
             .ToArray())

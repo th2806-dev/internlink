@@ -578,7 +578,7 @@ public class SubmissionServiceTests
     {
         var db = GetDb();
         var (studentUser, _, _, _, internship, _) = await SeedDataAsync(db);
-        internship.Student!.FullName = "Nguyễn Văn Á";
+        internship.Student!.FullName = "Đặng Nguyễn Duy Khanh";
         var contentRootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
         var service = CreateService(db, contentRootPath: contentRootPath);
         var request = new CreateSubmissionRequest
@@ -600,7 +600,7 @@ public class SubmissionServiceTests
             result.EmployerScore.Should().Be(8.5m);
             (await db.Submissions.SingleAsync(s => s.Id == result.Id)).EmployerScore.Should().Be(8.5m);
             result.Assets.Should().ContainSingle(asset => asset.AssetType == "file");
-            result.Assets.Single().FileName.Should().Be("DanhGiaDoanhNghiep_NguyenVanA_V1.jpg");
+            result.Assets.Single().FileName.Should().Be("DanhGiaDoanhNghiep_DangNguyenDuyKhanh_V1.jpg");
         }
         finally
         {
@@ -614,7 +614,7 @@ public class SubmissionServiceTests
     {
         var db = GetDb();
         var (studentUser, _, _, _, internship, _) = await SeedDataAsync(db);
-        internship.Student!.FullName = "Nguyễn Văn Á";
+        internship.Student!.FullName = "Đặng Nguyễn Duy Khanh";
         var contentRootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
         var service = CreateService(db, contentRootPath: contentRootPath);
         var request = new CreateSubmissionRequest
@@ -634,8 +634,8 @@ public class SubmissionServiceTests
             var result = await service.CreateBundleAsync(studentUser.Id, request, files, Array.Empty<SubmissionAssetInput>());
 
             result.Assets.Select(asset => asset.FileName).Should().BeEquivalentTo(
-                "BaoCaoCuoiKy_NguyenVanA_V2_01.pdf",
-                "BaoCaoCuoiKy_NguyenVanA_V2_02.docx");
+                "BaoCaoCuoiKy_DangNguyenDuyKhanh_V2_01.pdf",
+                "BaoCaoCuoiKy_DangNguyenDuyKhanh_V2_02.docx");
         }
         finally
         {
