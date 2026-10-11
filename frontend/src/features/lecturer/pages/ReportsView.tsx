@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { CalendarClock, ClipboardCheck, SearchX } from "lucide-react";
+import { Archive, CalendarClock, ClipboardCheck, SearchX } from "lucide-react";
 import { Toolbar } from "../../../components/common/Toolbar";
 import { EmptyState } from "../../../components/common/EmptyState";
 import { SkeletonBox, TableSkeleton } from "../../../components/common/SkeletonLoader";
@@ -16,6 +16,7 @@ import { mapWeeklyReportStatusToUi } from "../../../lib/portalMappers";
 import { useSemester } from "../../../contexts/SemesterContext";
 import { semesterReportScheduleService, type SemesterReportScheduleDto } from "../../../services/semesterReportSchedule.service";
 import { ScheduleConfigTab } from "./InternshipEvaluationView";
+import { submissionApiService } from "../../../services/submissionApi.service";
 
 interface ReportsViewProps {
   /** Bài nộp sản phẩm/cuối kỳ (dữ liệu portal legacy — chuyển sang query ở GĐ 3/4). */
@@ -58,6 +59,8 @@ export const ReportsView = ({
   const [activeTab, setActiveTab] = useState<"review" | "schedule">("review");
   const [reviewArea, setReviewArea] = useState<"pending" | "approved">("pending");
   const [reportType, setReportType] = useState("Tất cả");
+  const [zipCategory, setZipCategory] = useState("weekly");
+  const [isDownloadingZip, setIsDownloadingZip] = useState(false);
   const { semesters } = useSemester();
   const [schedules, setSchedules] = useState<SemesterReportScheduleDto[]>([]);
   const selectedSemester = semesters.find((semester) => semester.id === semesterId);
@@ -121,6 +124,19 @@ export const ReportsView = ({
 
   const handleRetry = () => {
     void reports.refetch();
+  };
+
+  const handleDownloadSemesterZip = async () => {
+    if (!semesterId || isDownloadingZip) return;
+    setIsDownloadingZip(true);
+    try {
+      await submissionApiService.downloadLecturerSemesterZip(semesterId, zipCategory);
+      showToast?.("Đã tạo và tải tệp ZIP.", "success");
+    } catch (downloadError) {
+      showToast?.(getApiErrorMessage(downloadError), "danger");
+    } finally {
+      setIsDownloadingZip(false);
+    }
   };
 
   const handleReview = async (id: string, uiStatus: string, comment?: string, qualityScore?: number) => {
@@ -313,6 +329,30 @@ export const ReportsView = ({
           <option>Sản phẩm thực tế</option>
           <option>Đánh giá doanh nghiệp</option>
         </select>
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="sr-only" htmlFor="semester-report-zip-category">Loại hồ sơ cần tải ZIP</label>
+          <select
+            id="semester-report-zip-category"
+            value={zipCategory}
+            onChange={(event) => setZipCategory(event.target.value)}
+            className="min-h-10 rounded-full border border-slate-300 bg-white px-4 text-xs font-medium text-slate-700 outline-none focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+          >
+            <option value="weekly">Tất cả file báo cáo tuần</option>
+            <option value="final">Tất cả file báo cáo cuối kỳ</option>
+            <option value="product">Tất cả file sản phẩm</option>
+            <option value="evidence">Tất cả file minh chứng đánh giá doanh nghiệp</option>
+            <option value="student">Nhóm theo sinh viên</option>
+          </select>
+          <button
+            type="button"
+            onClick={() => void handleDownloadSemesterZip()}
+            disabled={!semesterId || isDownloadingZip}
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full bg-[#026aa7] px-4 text-xs font-semibold text-white transition-colors hover:bg-[#025987] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Archive className="h-4 w-4" aria-hidden="true" />
+            {isDownloadingZip ? "Đang tạo ZIP…" : "Tải ZIP"}
+          </button>
+        </div>
       </div>
       {isTotalsError && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50/50 px-4 py-3 text-xs text-rose-800" role="alert">

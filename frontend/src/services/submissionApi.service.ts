@@ -137,6 +137,14 @@ export const submissionApiService = {
     );
   },
 
+  downloadLecturerSemesterZip(semesterId: string, category: string) {
+    return downloadAuthenticatedFile(
+      `/api/Lecturer/semesters/${encodeURIComponent(semesterId)}/submissions/download-zip?category=${encodeURIComponent(category)}`,
+      "ho-so-thuc-tap.zip",
+      true,
+    );
+  },
+
   updateStatus(id: string, status: string): Promise<SubmissionDto> {
     return apiRequest<SubmissionDto>(`/api/Submission/${id}/status`, {
       method: "PATCH",

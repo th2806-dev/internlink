@@ -811,6 +811,135 @@ public class SubmissionService : ISubmissionService
         };
     }
 
+    public async Task<SubmissionZipDownloadDto?> DownloadSemesterZipAsync(Guid semesterId, string category, Guid userId)
+    {
+        var normalizedCategory = category.Trim().ToLowerInvariant();
+        if (normalizedCategory is not ("weekly" or "final" or "product" or "evidence" or "student"))
+            throw new InvalidOperationException("Loại hồ sơ ZIP không hợp lệ.");
+
+        var actor = await _db.Users.AsNoTracking()
+            .Where(user => user.Id == userId && !user.IsDeleted)
+            .Select(user => new { user.Role, user.DepartmentId })
+            .FirstOrDefaultAsync();
+        if (actor == null)
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.Unauthorized);
+
+        var internshipsQuery = _db.Internships
+            .AsNoTracking()
+            .Where(internship => internship.SemesterId == semesterId
+                && !internship.IsDeleted
+                && internship.Student != null
+                && !internship.Student.IsDeleted);
+
+        if (actor.Role == Role.Lecturer)
+        {
+            internshipsQuery = internshipsQuery.Where(internship => internship.Lecturer != null
+                && internship.Lecturer.UserId == userId);
+        }
+        else if (actor.Role == Role.DepartmentAdmin)
+        {
+            if (!actor.DepartmentId.HasValue)
+                throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessSubmission);
+
+            internshipsQuery = internshipsQuery.Where(internship =>
+                internship.Student!.DepartmentId == actor.DepartmentId.Value);
+        }
+        else if (actor.Role != Role.SuperAdmin)
+        {
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NoAccessSubmission);
+        }
+
+        var internships = await internshipsQuery
+            .Include(internship => internship.Student)
+            .Include(internship => internship.WeeklyReports.Where(report => !report.IsDeleted))
+            .Include(internship => internship.Submissions
+                .Where(submission => !submission.IsDeleted
+                    && (normalizedCategory == "student"
+                        || (normalizedCategory == "final" && submission.Type == SubmissionType.FinalReport)
+                        || (normalizedCategory == "product" && submission.Type == SubmissionType.Product)
+                        || (normalizedCategory == "evidence" && submission.Type == SubmissionType.Evidence))))
+                .ThenInclude(submission => submission.Assets.Where(asset => !asset.IsDeleted))
+            .ToListAsync();
+
+        await using var output = new MemoryStream();
+        var usedEntries = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var addedFiles = 0;
+
+        static string UniqueEntryName(ISet<string> used, string candidate)
+        {
+            var name = candidate;
+            var suffix = 2;
+            while (!used.Add(name))
+            {
+                var directory = Path.GetDirectoryName(candidate)?.Replace('\\', '/') ?? string.Empty;
+                var file = Path.GetFileName(candidate);
+                var duplicateFile = $"{Path.GetFileNameWithoutExtension(file)}_{suffix}{Path.GetExtension(file)}";
+                name = string.IsNullOrEmpty(directory) ? duplicateFile : $"{directory}/{duplicateFile}";
+                suffix++;
+            }
+            return name;
+        }
+
+        using (var archive = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            async Task AddFileAsync(string? fileUrl, string? fileName, string? studentFolder)
+            {
+                if (string.IsNullOrWhiteSpace(fileUrl) ||
+                    (Uri.TryCreate(fileUrl, UriKind.Absolute, out var uri) &&
+                     (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)))
+                    return;
+
+                var fullPath = ResolveUploadPath(fileUrl);
+                if (!File.Exists(fullPath))
+                    return;
+
+                var safeFileName = Path.GetFileName((fileName ?? Path.GetFileName(fullPath)).Replace('\\', '/'));
+                if (string.IsNullOrWhiteSpace(safeFileName))
+                    safeFileName = Path.GetFileName(fullPath);
+
+                var entryName = string.IsNullOrWhiteSpace(studentFolder)
+                    ? safeFileName
+                    : $"{studentFolder}/{safeFileName}";
+                var entry = archive.CreateEntry(UniqueEntryName(usedEntries, entryName), CompressionLevel.Fastest);
+                await using var entryStream = entry.Open();
+                await using var fileStream = File.OpenRead(fullPath);
+                await fileStream.CopyToAsync(entryStream);
+                addedFiles++;
+            }
+
+            foreach (var internship in internships)
+            {
+                var student = internship.Student;
+                var studentFolder = normalizedCategory == "student"
+                    ? SanitizeFileName($"{student?.StudentCode ?? "MSVV"}_{student?.FullName ?? "KhongTen"}")
+                    : null;
+
+                if (normalizedCategory is "weekly" or "student")
+                {
+                    foreach (var report in internship.WeeklyReports.OrderBy(report => report.WeekNumber).ThenBy(report => report.Version))
+                        await AddFileAsync(report.FileUrl, report.FileName, studentFolder);
+                }
+
+                foreach (var submission in internship.Submissions.OrderBy(submission => submission.SubmittedAt))
+                {
+                    await AddFileAsync(submission.FileUrl, submission.FileName, studentFolder);
+                    foreach (var asset in submission.Assets.Where(asset =>
+                                 string.Equals(asset.AssetType, "file", StringComparison.OrdinalIgnoreCase)))
+                        await AddFileAsync(asset.FileUrl, asset.FileName, studentFolder);
+                }
+            }
+        }
+
+        if (addedFiles == 0)
+            return null;
+
+        return new SubmissionZipDownloadDto
+        {
+            FileContent = output.ToArray(),
+            FileName = $"HoSo_{normalizedCategory}_{DateTime.UtcNow:yyyyMMdd_HHmmss}.zip",
+        };
+    }
+
     /// <summary>Bỏ ký tự không hợp lệ trong tên file tải xuống.</summary>
     private async Task NotifyLecturerOfSubmissionAsync(Internship internship, Submission submission)
     {

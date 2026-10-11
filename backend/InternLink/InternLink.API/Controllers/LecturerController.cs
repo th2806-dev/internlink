@@ -431,6 +431,32 @@ public class LecturerController : ControllerBase
         }
     }
 
+    [HttpGet("semesters/{semesterId:guid}/submissions/download-zip")]
+    public async Task<IActionResult> DownloadSemesterSubmissionsZip(
+        Guid semesterId,
+        [FromQuery] string category = "weekly")
+    {
+        var userId = User.GetUserId();
+        if (userId == null)
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
+
+        try
+        {
+            var zip = await _submissionService.DownloadSemesterZipAsync(semesterId, category, userId.Value);
+            if (zip == null)
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.NoSubmissionFiles }));
+            return File(zip.FileContent, "application/zip", zip.FileName);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = ex.Message }));
+        }
+    }
+
     /// <summary>
     /// Give feedback on a submission
     /// </summary>

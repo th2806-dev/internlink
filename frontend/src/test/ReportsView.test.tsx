@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { ReportsView } from "../features/lecturer/pages/ReportsView";
 import { weeklyReportService } from "../services/weeklyReport.service";
+import { submissionApiService } from "../services/submissionApi.service";
 import { ApiClientError } from "../lib/apiClient";
 import type { PaginatedResponse, WeeklyReportDto } from "../types/api";
 
@@ -13,6 +14,12 @@ vi.mock("../services/weeklyReport.service", () => ({
     getAllForLecturer: vi.fn(),
     review: vi.fn(),
     download: vi.fn(),
+  },
+}));
+
+vi.mock("../services/submissionApi.service", () => ({
+  submissionApiService: {
+    downloadLecturerSemesterZip: vi.fn(),
   },
 }));
 
@@ -45,6 +52,7 @@ vi.mock("../hooks/useLecturerSubmissionsQuery", () => ({
 }));
 
 const getAllForLecturer = vi.mocked(weeklyReportService.getAllForLecturer);
+const downloadLecturerSemesterZip = vi.mocked(submissionApiService.downloadLecturerSemesterZip);
 
 function makeReport(id: string, status = "Submitted"): WeeklyReportDto {
   return {
@@ -191,5 +199,26 @@ describe("ReportsView (lát dọc tiên phong /lecturer/reports)", () => {
       .map((call) => call[0])
       .filter((p) => (p?.take ?? 0) > 1);
     expect(listCalls[listCalls.length - 1]).toMatchObject({ skip: 20, take: 20 });
+  });
+
+  it("downloads a ZIP for the selected archive type and semester", async () => {
+    const user = userEvent.setup();
+    getAllForLecturer.mockResolvedValue(makePage([], 0));
+    downloadLecturerSemesterZip.mockResolvedValue({
+      blob: new Blob(),
+      filename: "HoSo_student.zip",
+    });
+
+    renderReportsView();
+
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: "Loại hồ sơ cần tải ZIP" }),
+      "student",
+    );
+    await user.click(screen.getByRole("button", { name: "Tải ZIP" }));
+
+    await waitFor(() => {
+      expect(downloadLecturerSemesterZip).toHaveBeenCalledWith("sem-1", "student");
+    });
   });
 });

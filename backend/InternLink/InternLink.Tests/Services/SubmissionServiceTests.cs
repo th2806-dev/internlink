@@ -645,6 +645,123 @@ public class SubmissionServiceTests
     }
 
     [Fact]
+    public async Task DownloadSemesterZipAsync_ShouldFilterFilesAndGroupStudentFilesInOneFolderLevel()
+    {
+        var db = GetDb();
+        var (_, lecturerUser, _, _, internship, finalReport) = await SeedDataAsync(db);
+        var semesterId = Guid.NewGuid();
+        internship.SemesterId = semesterId;
+        var contentRootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        var uploadFolder = Path.Combine(contentRootPath, "uploads", "semester-zip");
+        Directory.CreateDirectory(uploadFolder);
+        var weeklyPath = Path.Combine(uploadFolder, "weekly.pdf");
+        var finalPath = Path.Combine(uploadFolder, "final.pdf");
+        var productPath = Path.Combine(uploadFolder, "product.zip");
+        var evidencePath = Path.Combine(uploadFolder, "evidence.jpg");
+        await File.WriteAllBytesAsync(weeklyPath, new byte[] { 1 });
+        await File.WriteAllBytesAsync(finalPath, new byte[] { 2 });
+        await File.WriteAllBytesAsync(productPath, new byte[] { 3 });
+        await File.WriteAllBytesAsync(evidencePath, new byte[] { 4 });
+
+        string RelativeUrl(string path) => Path.GetRelativePath(contentRootPath, path).Replace("\\", "/");
+        finalReport.FileName = "final.pdf";
+        finalReport.FileUrl = RelativeUrl(finalPath);
+        var product = new Submission
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = internship.Id,
+            Type = SubmissionType.Product,
+            Status = SubmissionStatus.Submitted,
+            FileName = "product.zip",
+            FileUrl = RelativeUrl(productPath),
+            SubmittedAt = DateTime.UtcNow,
+            CreatedAt = DateTime.UtcNow,
+        };
+        var evidence = new Submission
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = internship.Id,
+            Type = SubmissionType.Evidence,
+            Status = SubmissionStatus.Submitted,
+            FileName = "evidence.jpg",
+            FileUrl = RelativeUrl(evidencePath),
+            SubmittedAt = DateTime.UtcNow,
+            CreatedAt = DateTime.UtcNow,
+        };
+        await db.Submissions.AddRangeAsync(product, evidence);
+        await db.WeeklyReports.AddAsync(new WeeklyReport
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = internship.Id,
+            WeekNumber = 1,
+            Version = 1,
+            Title = "Báo cáo tuần 1",
+            Content = "Nội dung",
+            FileName = "weekly.pdf",
+            FileUrl = RelativeUrl(weeklyPath),
+            CreatedAt = DateTime.UtcNow,
+        });
+        await db.SaveChangesAsync();
+
+        try
+        {
+            var service = CreateService(db, contentRootPath: contentRootPath);
+
+            var weeklyZip = await service.DownloadSemesterZipAsync(semesterId, "weekly", lecturerUser.Id);
+            weeklyZip.Should().NotBeNull();
+            using (var weeklyStream = new MemoryStream(weeklyZip!.FileContent))
+            using (var weeklyArchive = new ZipArchive(weeklyStream, ZipArchiveMode.Read))
+                weeklyArchive.Entries.Select(entry => entry.FullName).Should().Equal("weekly.pdf");
+
+            foreach (var (category, expectedFile) in new[]
+                     {
+                         ("final", "final.pdf"),
+                         ("product", "product.zip"),
+                         ("evidence", "evidence.jpg"),
+                     })
+            {
+                var categoryZip = await service.DownloadSemesterZipAsync(semesterId, category, lecturerUser.Id);
+                categoryZip.Should().NotBeNull();
+                using var categoryStream = new MemoryStream(categoryZip!.FileContent);
+                using var categoryArchive = new ZipArchive(categoryStream, ZipArchiveMode.Read);
+                categoryArchive.Entries.Select(entry => entry.FullName).Should().Equal(expectedFile);
+            }
+
+            var groupedZip = await service.DownloadSemesterZipAsync(semesterId, "student", lecturerUser.Id);
+            groupedZip.Should().NotBeNull();
+            using var groupedStream = new MemoryStream(groupedZip!.FileContent);
+            using var groupedArchive = new ZipArchive(groupedStream, ZipArchiveMode.Read);
+            var entries = groupedArchive.Entries.Select(entry => entry.FullName).ToArray();
+            entries.Should().BeEquivalentTo(
+                "SV001_Student_1/weekly.pdf",
+                "SV001_Student_1/final.pdf",
+                "SV001_Student_1/product.zip",
+                "SV001_Student_1/evidence.jpg");
+            entries.Should().OnlyContain(entry => entry.Count(character => character == '/') == 1);
+        }
+        finally
+        {
+            if (Directory.Exists(contentRootPath))
+                Directory.Delete(contentRootPath, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task DownloadSemesterZipAsync_ShouldRejectUsersWithoutSemesterAccess()
+    {
+        var db = GetDb();
+        var (_, _, strangerUser, _, internship, _) = await SeedDataAsync(db);
+        var service = CreateService(db);
+
+        var act = () => service.DownloadSemesterZipAsync(
+            internship.SemesterId ?? Guid.NewGuid(),
+            "weekly",
+            strangerUser.Id);
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>();
+    }
+
+    [Fact]
     public async Task DownloadInternshipZipAsync_ShouldIncludeWeeklyReportsSubmissionsAndProductLinks()
     {
         var db = GetDb();

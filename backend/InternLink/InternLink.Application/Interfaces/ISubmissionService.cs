@@ -18,6 +18,7 @@ public interface ISubmissionService
     Task<SubmissionFileDownloadDto?> DownloadAssetAsync(Guid submissionId, Guid assetId, Guid userId, bool isLecturerOrAdmin);
     Task<SubmissionZipDownloadDto?> DownloadZipAsync(IEnumerable<Guid> submissionIds, Guid userId);
     Task<SubmissionZipDownloadDto?> DownloadInternshipZipAsync(Guid internshipId, Guid userId);
+    Task<SubmissionZipDownloadDto?> DownloadSemesterZipAsync(Guid semesterId, string category, Guid userId);
     Task<SubmissionDto?> UpdateStatusAsync(Guid id, UpdateSubmissionStatusRequest request, Guid? actorUserId = null);
     Task<bool> SoftDeleteAsync(Guid id, Guid? actorUserId = null);
     Task<bool> CancelAsync(Guid id, Guid studentUserId);
