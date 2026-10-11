@@ -275,6 +275,35 @@ public class WeeklyReportServiceTests
     }
 
     [Fact]
+    public async Task CreateDraftWithFileAsync_ShouldPreserveDInStudentName()
+    {
+        var db = GetDb();
+        var (studentUser, _, _, _, internship, _) = await SeedDataAsync(db);
+        internship.Student!.FullName = "Đặng Nguyễn Duy Khanh";
+        var contentRootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        var service = CreateService(db, contentRootPath: contentRootPath);
+
+        try
+        {
+            var result = await service.CreateDraftWithFileAsync(
+                studentUser.Id,
+                new CreateWeeklyReportRequest { InternshipId = internship.Id, WeekNumber = 2, Title = "Báo cáo tuần 2" },
+                new MemoryStream(new byte[] { 1, 2, 3 }),
+                "anything.pdf",
+                3,
+                "application/pdf");
+
+            result.FileName.Should().Be("Tuan02_DangNguyenDuyKhanh_V1.pdf");
+            result.FileUrl.Should().Contain("Tuan02_DangNguyenDuyKhanh_V1.pdf");
+        }
+        finally
+        {
+            if (Directory.Exists(contentRootPath))
+                Directory.Delete(contentRootPath, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task CreateDraftWithFileAsync_WhenCanonicalFilenameExists_ShouldAdvanceStoredVersion()
     {
         var db = GetDb();

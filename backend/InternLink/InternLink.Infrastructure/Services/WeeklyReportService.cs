@@ -922,7 +922,12 @@ public class WeeklyReportService : IWeeklyReportService
 
     private static string CreateReportFileName(int weekNumber, string? studentName, int version)
     {
-        var normalized = (studentName ?? "SinhVien").Normalize(NormalizationForm.FormD);
+        var rawName = studentName ?? "SinhVien";
+        var mappedName = rawName
+            .Replace('Đ', 'D')
+            .Replace('đ', 'd');
+
+        var normalized = mappedName.Normalize(NormalizationForm.FormD);
         var nameWithoutMarks = new string(normalized
             .Where(character => CharUnicodeInfo.GetUnicodeCategory(character) != UnicodeCategory.NonSpacingMark)
             .ToArray())
