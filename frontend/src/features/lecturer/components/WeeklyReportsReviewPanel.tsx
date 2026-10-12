@@ -118,7 +118,11 @@ export function WeeklyReportsReviewPanel({
     if (!report.fileName) return;
     setPreviewLoadingId(report.id);
     try {
-      const { blob, filename } = await weeklyReportService.download(report.id, report.fileName);
+      const { blob, filename } = await weeklyReportService.download(
+        report.id,
+        report.fileName,
+        false,
+      );
       if (preview?.url) URL.revokeObjectURL(preview.url);
       setPreview({ url: URL.createObjectURL(blob), fileName: filename });
     } catch (err) {
@@ -131,7 +135,11 @@ export function WeeklyReportsReviewPanel({
   const handleDownload = async (report: WeeklyReportDto) => {
     if (!report.fileName) return;
     try {
-      const { blob, filename } = await weeklyReportService.download(report.id, report.fileName);
+      const { blob, filename } = await weeklyReportService.download(
+        report.id,
+        report.fileName,
+        false,
+      );
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
