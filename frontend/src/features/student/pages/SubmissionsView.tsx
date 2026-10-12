@@ -8,6 +8,7 @@ import {
   FileCode,
   Database,
   FileText,
+  Eye,
   Video,
   Presentation,
   Upload,
@@ -27,13 +28,17 @@ import {
 import { useStudentPortal } from "../../../contexts/StudentPortalContext";
 import { useSemester } from "../../../contexts/SemesterContext";
 import { getApiErrorMessage } from "../../../lib/apiClient";
-import { mapStudentSubmissionToUpload } from "../../../lib/portalMappers";
+import {
+  mapStudentSubmissionToUpload,
+  mapWeeklyReportStatusToUi,
+} from "../../../lib/portalMappers";
 import { submissionApiService } from "../../../services/submissionApi.service";
+import { weeklyReportService } from "../../../services/weeklyReport.service";
 import {
   semesterReportScheduleService,
   type SupplementalDeadline,
 } from "../../../services/semesterReportSchedule.service";
-import type { SubmissionDto } from "../../../types/api";
+import type { SubmissionDto, WeeklyReportDto } from "../../../types/api";
 import { StudentSubPageHeader } from "../components/StudentSubPageHeader";
 
 type UploadItem = {
@@ -46,6 +51,9 @@ type UploadItem = {
   uploadDate: string;
   status: string;
   notes: string;
+  sourceType: "submission" | "weeklyReport";
+  fileCategory: string;
+  mimeType?: string;
   fileUrl?: string;
   assetId?: string;
 };
@@ -64,10 +72,21 @@ function mapSubmissionResources(submission: SubmissionDto): UploadItem[] {
           : submission.status === "Submitted" || submission.status === "Reviewed"
             ? "Chờ duyệt"
             : base.status;
+  const fileCategory =
+    submission.type === "FinalReport"
+      ? "Báo cáo cuối kỳ"
+      : submission.type === "Evidence"
+        ? "Đánh giá DN"
+        : "Sản phẩm sáng tạo";
   const assets = submission.assets ?? [];
   if (assets.length === 0) {
     return submission.fileUrl || submission.fileName
-      ? [{ ...base, status }]
+      ? [{
+          ...base,
+          status,
+          sourceType: "submission",
+          fileCategory,
+        }]
       : [];
   }
 
@@ -89,9 +108,62 @@ function mapSubmissionResources(submission: SubmissionDto): UploadItem[] {
         })
       : base.uploadDate,
     status,
+    sourceType: "submission" as const,
+    fileCategory,
+    mimeType: asset.mimeType ?? undefined,
     fileUrl: asset.fileUrl ?? base.fileUrl,
     assetId: asset.id,
   }));
+}
+
+function mapWeeklyReportResources(report: WeeklyReportDto): UploadItem[] {
+  if (!report.fileName && !report.fileUrl) return [];
+  const extension = report.fileName?.split(".").pop()?.toUpperCase() || "Tệp";
+  const mappedStatus = mapWeeklyReportStatusToUi(report.status);
+  const status =
+    mappedStatus === "Đã hoàn thành"
+      ? "Đã duyệt"
+      : mappedStatus === "Cần chỉnh sửa"
+        ? "Cần chỉnh sửa"
+        : mappedStatus === "Bản nháp"
+          ? "Bản nháp"
+          : "Chờ duyệt";
+  return [{
+    id: report.id,
+    title: report.fileName || report.title || `Báo cáo tuần ${report.weekNumber}`,
+    category: `Báo cáo tuần ${report.weekNumber}`,
+    fileCategory: "Báo cáo tuần",
+    fileType: extension,
+    size: report.fileSize
+      ? report.fileSize < 1024 * 1024
+        ? `${Math.round(report.fileSize / 1024)} KB`
+        : `${(report.fileSize / (1024 * 1024)).toFixed(1)} MB`
+      : "—",
+    version: `v${report.version}`,
+    uploadDate: report.submittedAt
+      ? new Date(report.submittedAt).toLocaleDateString("vi-VN", {
+          timeZone: "Asia/Ho_Chi_Minh",
+        })
+      : "—",
+    status,
+    notes: report.lecturerComment ?? "",
+    sourceType: "weeklyReport",
+    mimeType: report.mimeType ?? undefined,
+    fileUrl: report.fileUrl ?? undefined,
+  }];
+}
+
+function getUploadStatusClass(status: string): string {
+  if (status === "Đã duyệt") {
+    return "bg-emerald-50 text-emerald-800 border-emerald-200";
+  }
+  if (status === "Cần chỉnh sửa" || status === "Không đạt yêu cầu") {
+    return "bg-rose-50 text-rose-800 border-rose-200";
+  }
+  if (status === "Bản nháp") {
+    return "bg-slate-100 text-slate-600 border-slate-200";
+  }
+  return "bg-sky-50 text-sky-800 border-sky-200";
 }
 
 export const SubmissionsView: React.FC<{
@@ -104,6 +176,13 @@ export const SubmissionsView: React.FC<{
   const [evidenceDeadline, setEvidenceDeadline] = useState<SupplementalDeadline | null>(null);
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [rawSubmissions, setRawSubmissions] = useState<SubmissionDto[]>([]);
+  const [statusFilter, setStatusFilter] = useState("Tất cả");
+  const [fileCategoryFilter, setFileCategoryFilter] = useState("Tất cả");
+  const [previewUpload, setPreviewUpload] = useState<{
+    url: string;
+    fileName: string;
+    mimeType: string;
+  } | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -112,9 +191,18 @@ export const SubmissionsView: React.FC<{
     setLoadError(null);
     try {
       setIsLoading(true);
-      const rows = await submissionApiService.getMine();
+      const [rows, weeklyReports] = await Promise.all([
+        submissionApiService.getMine(),
+        weeklyReportService.getMine(),
+      ]);
+      const nonWeeklyRows = rows.filter((submission) =>
+        ["FinalReport", "Product", "Evidence"].includes(submission.type),
+      );
       setRawSubmissions(rows);
-      setUploads(rows.flatMap(mapSubmissionResources));
+      setUploads([
+        ...nonWeeklyRows.flatMap(mapSubmissionResources),
+        ...weeklyReports.flatMap(mapWeeklyReportResources),
+      ]);
       return true;
     } catch (err) {
       const message = getApiErrorMessage(err);
@@ -125,6 +213,10 @@ export const SubmissionsView: React.FC<{
       setIsLoading(false);
     }
   }, [onShowToast]);
+
+  useEffect(() => () => {
+    if (previewUpload?.url) URL.revokeObjectURL(previewUpload.url);
+  }, [previewUpload]);
 
   useEffect(() => {
     loadSubmissions();
@@ -321,7 +413,16 @@ export const SubmissionsView: React.FC<{
 
   const openRevisionUpload = (submission?: SubmissionDto) => {
     if (!submission) return;
-    const item = mapStudentSubmissionToUpload(submission);
+    const item = {
+      ...mapStudentSubmissionToUpload(submission),
+      sourceType: "submission" as const,
+      fileCategory:
+        submission.type === "FinalReport"
+          ? "Báo cáo cuối kỳ"
+          : submission.type === "Evidence"
+            ? "Đánh giá DN"
+            : "Sản phẩm sáng tạo",
+    };
     setReplaceTarget(item);
     setUploadNotes(item.notes || "");
     setReplaceFile(null);
@@ -458,14 +559,58 @@ export const SubmissionsView: React.FC<{
   };
 
   const handleDownloadUpload = async (item: UploadItem) => {
-    if (item.fileUrl && /^https?:\/\//i.test(item.fileUrl)) {
+    if (item.fileType === "Liên kết" && item.fileUrl) {
       window.open(item.fileUrl, "_blank", "noopener,noreferrer");
       return;
     }
     try {
-      await (item.assetId
-        ? submissionApiService.downloadAsset(item.id, item.assetId, item.title)
-        : submissionApiService.download(item.id, item.title));
+      if (item.sourceType === "weeklyReport") {
+        await weeklyReportService.download(item.id, item.title);
+      } else {
+        await (item.assetId
+          ? submissionApiService.downloadAsset(item.id, item.assetId, item.title)
+          : submissionApiService.download(item.id, item.title));
+      }
+    } catch (err) {
+      onShowToast?.(getApiErrorMessage(err), "error");
+    }
+  };
+
+  const handlePreviewUpload = async (item: UploadItem) => {
+    if (item.fileType === "Liên kết" && item.fileUrl) {
+      window.open(item.fileUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
+    try {
+      const result =
+        item.sourceType === "weeklyReport"
+          ? await weeklyReportService.download(item.id, item.title, false)
+          : item.assetId
+            ? await submissionApiService.downloadAsset(
+                item.id,
+                item.assetId,
+                item.title,
+                false,
+              )
+            : await submissionApiService.download(item.id, item.title, false);
+      const extension = result.filename.split(".").pop()?.toLowerCase();
+      const responseMimeType = result.blob.type.toLowerCase();
+      const mimeType =
+        (responseMimeType && responseMimeType !== "application/octet-stream"
+          ? responseMimeType
+          : "") ||
+        item.mimeType ||
+        (extension === "pdf"
+          ? "application/pdf"
+          : ["png", "jpg", "jpeg", "gif", "webp"].includes(extension ?? "")
+            ? `image/${extension === "jpg" ? "jpeg" : extension}`
+            : "");
+      if (previewUpload?.url) URL.revokeObjectURL(previewUpload.url);
+      setPreviewUpload({
+        url: URL.createObjectURL(result.blob),
+        fileName: result.filename,
+        mimeType,
+      });
     } catch (err) {
       onShowToast?.(getApiErrorMessage(err), "error");
     }
@@ -495,6 +640,11 @@ export const SubmissionsView: React.FC<{
         return <FileText className="w-4 h-4 text-slate-600" />;
     }
   };
+
+  const filteredUploads = uploads.filter((item) =>
+    (statusFilter === "Tất cả" || item.status === statusFilter) &&
+    (fileCategoryFilter === "Tất cả" || item.fileCategory === fileCategoryFilter),
+  );
 
   return (
     <div className="mx-auto max-w-[1300px] space-y-4 animate-in fade-in duration-200 font-sans pb-12">
@@ -702,16 +852,49 @@ export const SubmissionsView: React.FC<{
         {/* CỘT TRÁI (2/3): HỒ SƠ ĐÃ NỘP */}
         <div className="lg:col-span-2 space-y-4">
           <div className="overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-2xs">
-            <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-[#026aa7]" />
-                <h3 className="text-sm font-bold text-slate-800">
-                  Danh sách hồ sơ & sản phẩm đã nộp
-                </h3>
+            <div className="p-4 border-b border-slate-100 flex flex-col gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-[#026aa7]" />
+                  <h3 className="text-sm font-bold text-slate-800">
+                    Danh sách hồ sơ & sản phẩm đã nộp
+                  </h3>
+                </div>
+                <span className="text-[11px] font-medium bg-slate-100 text-slate-600 px-2.5 py-0.5 rounded-full border border-slate-200">
+                  {filteredUploads.length} / {uploads.length} tài nguyên
+                </span>
               </div>
-              <span className="text-[11px] font-medium bg-slate-100 text-slate-600 px-2.5 py-0.5 rounded-full border border-slate-200">
-                {uploads.length} tài nguyên đã nộp
-              </span>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <label className="flex flex-1 items-center gap-2 text-xs font-semibold text-slate-600">
+                  <span className="shrink-0">Trạng thái</span>
+                  <select
+                    value={statusFilter}
+                    onChange={(event) => setStatusFilter(event.target.value)}
+                    className="min-h-9 w-full rounded-lg border border-slate-200 bg-slate-50 px-2.5 text-xs text-slate-700 outline-none focus:border-blue-500"
+                  >
+                    <option value="Tất cả">Tất cả trạng thái</option>
+                    <option value="Chờ duyệt">Chờ duyệt</option>
+                    <option value="Cần chỉnh sửa">Cần chỉnh sửa</option>
+                    <option value="Đã duyệt">Đã duyệt</option>
+                    <option value="Không đạt yêu cầu">Không đạt yêu cầu</option>
+                    <option value="Bản nháp">Bản nháp</option>
+                  </select>
+                </label>
+                <label className="flex flex-1 items-center gap-2 text-xs font-semibold text-slate-600">
+                  <span className="shrink-0">Loại file</span>
+                  <select
+                    value={fileCategoryFilter}
+                    onChange={(event) => setFileCategoryFilter(event.target.value)}
+                    className="min-h-9 w-full rounded-lg border border-slate-200 bg-slate-50 px-2.5 text-xs text-slate-700 outline-none focus:border-blue-500"
+                  >
+                    <option value="Tất cả">Tất cả loại file</option>
+                    <option value="Báo cáo tuần">Báo cáo tuần</option>
+                    <option value="Báo cáo cuối kỳ">Báo cáo cuối kỳ</option>
+                    <option value="Đánh giá DN">Đánh giá DN</option>
+                    <option value="Sản phẩm sáng tạo">Sản phẩm sáng tạo</option>
+                  </select>
+                </label>
+              </div>
             </div>
             {isLoading && uploads.length > 0 && (
               <div
@@ -771,14 +954,14 @@ export const SubmissionsView: React.FC<{
                         </button>
                       </td>
                     </tr>
-                  ) : uploads.length === 0 ? (
+                  ) : filteredUploads.length === 0 ? (
                     <tr>
                       <td colSpan={4} className="py-12 text-center text-slate-400">
-                        Chưa có tài nguyên nào được nộp.
+                        Không có tài nguyên phù hợp với bộ lọc hiện tại.
                       </td>
                     </tr>
                   ) : (
-                    uploads.map((item) => (
+                    filteredUploads.map((item) => (
                       <tr key={`${item.id}:${item.assetId ?? "root"}`} className="hover:bg-slate-50/70 transition-colors">
                         <td className="py-3 px-4">
                           <div className="flex items-start gap-2.5">
@@ -806,19 +989,24 @@ export const SubmissionsView: React.FC<{
                         </td>
                         <td className="py-3 px-4 whitespace-nowrap">
                           <span
-                            className={`px-2.5 py-0.5 text-[10.5px] font-bold rounded-md border ${
-                              item.status === "Đã duyệt"
-                                ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                                : item.status === "Cần chỉnh sửa"
-                                ? "bg-rose-50 text-rose-800 border-rose-200"
-                                : "bg-sky-50 text-sky-800 border-sky-200"
-                            }`}
+                            className={`px-2.5 py-0.5 text-[10.5px] font-bold rounded-md border ${getUploadStatusClass(item.status)}`}
                           >
                             {item.status}
                           </span>
                         </td>
                         <td className="py-3 px-4 text-right whitespace-nowrap">
                           <div className="flex items-center justify-end gap-1.5">
+                            {item.fileType !== "Liên kết" && (
+                              <button
+                                type="button"
+                                onClick={() => void handlePreviewUpload(item)}
+                                className="p-1.5 hover:bg-blue-50 rounded-lg text-[#026aa7] transition-colors cursor-pointer"
+                                title="Xem trước"
+                                aria-label={`Xem trước: ${item.title}`}
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => void handleDownloadUpload(item)}
@@ -857,12 +1045,12 @@ export const SubmissionsView: React.FC<{
                     Thử tải lại
                   </button>
                 </div>
-              ) : uploads.length === 0 ? (
+              ) : filteredUploads.length === 0 ? (
                 <p className="py-8 text-center text-xs text-slate-400">
-                  Chưa có tài nguyên nào được nộp.
+                  Không có tài nguyên phù hợp với bộ lọc hiện tại.
                 </p>
               ) : (
-                uploads.map((item) => (
+                filteredUploads.map((item) => (
                   <div key={`${item.id}:${item.assetId ?? "root"}`} className="p-3 bg-white rounded-lg border border-slate-200 space-y-2">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2">
@@ -870,13 +1058,7 @@ export const SubmissionsView: React.FC<{
                         <h4 className="font-bold text-xs text-slate-800">{item.title}</h4>
                       </div>
                       <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
-                          item.status === "Đã duyệt"
-                            ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                            : item.status === "Cần chỉnh sửa"
-                            ? "bg-rose-50 text-rose-800 border-rose-200"
-                            : "bg-sky-50 text-sky-800 border-sky-200"
-                        }`}
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getUploadStatusClass(item.status)}`}
                       >
                         {item.status}
                       </span>
@@ -884,7 +1066,17 @@ export const SubmissionsView: React.FC<{
                     <p className="text-[11px] text-slate-500">
                       {item.category} • {item.size} • {item.uploadDate}
                     </p>
-                    <div className="flex justify-end pt-2 border-t border-slate-100">
+                    <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                      {item.fileType !== "Liên kết" && (
+                        <button
+                          type="button"
+                          onClick={() => void handlePreviewUpload(item)}
+                          className="px-3 py-1 bg-blue-50 text-[#026aa7] font-bold text-xs rounded-lg flex items-center gap-1"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          Xem
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => void handleDownloadUpload(item)}
@@ -1359,6 +1551,60 @@ export const SubmissionsView: React.FC<{
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {previewUpload && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-3 sm:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Xem trước ${previewUpload.fileName}`}
+        >
+          <div className="flex h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+              <h3 className="truncate text-sm font-bold text-slate-900">
+                {previewUpload.fileName}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setPreviewUpload(null)}
+                className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800"
+                aria-label="Đóng xem trước"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 bg-slate-100">
+              {previewUpload.mimeType.includes("pdf") ? (
+                <iframe
+                  src={previewUpload.url}
+                  title={`Xem trước ${previewUpload.fileName}`}
+                  className="h-full w-full border-0"
+                />
+              ) : previewUpload.mimeType.startsWith("image/") ? (
+                <div className="flex h-full items-center justify-center overflow-auto p-4">
+                  <img
+                    src={previewUpload.url}
+                    alt={previewUpload.fileName}
+                    className="max-h-full max-w-full object-contain"
+                  />
+                </div>
+              ) : (
+                <div className="flex h-full items-center justify-center p-6 text-center">
+                  <div className="max-w-md rounded-xl border border-slate-200 bg-white p-6">
+                    <FileText className="mx-auto h-8 w-8 text-slate-400" aria-hidden="true" />
+                    <p className="mt-3 text-sm font-semibold text-slate-800">
+                      Không hỗ trợ xem trước định dạng này
+                    </p>
+                    <p className="mt-1 text-xs text-slate-600">
+                      Hãy đóng cửa sổ này và dùng nút “Tải về” để mở tệp trên thiết bị.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
