@@ -59,7 +59,7 @@ function getDeadlineStatus(report: Pick<
 export const WeeklyReportsView = ({
   onShowToast,
 }: {
-  onShowToast?: (msg: string, type?: "success" | "error" | "info" | string) => void;
+  onShowToast?: (msg: string, type?: "success" | "error" | "info") => void;
 }) => {
   const navigate = useNavigate();
   const { internshipId, profile, refresh: refreshProfile } = useStudentPortal();
@@ -89,6 +89,7 @@ export const WeeklyReportsView = ({
 
   const {
     reports,
+    rawReports,
     schedules,
     isLoading: isLoadingApi,
     isFetching,
@@ -279,9 +280,13 @@ export const WeeklyReportsView = ({
     (r) => r.status === "Chưa nộp" || r.status === "Cần chỉnh sửa",
   );
 
-  const approvedCount = reports.filter((r) => r.status === "Đã hoàn thành").length;
-  const needsRevisionCount = reports.filter((r) => r.status === "Cần chỉnh sửa").length;
-  const submittedCount = reports.filter((r) => r.status === "Đang xem xét").length;
+  const approvedCount = rawReports.filter((r) => r.status === "Approved").length;
+  const needsRevisionCount = rawReports.filter(
+    (r) => r.status === "RevisionRequested",
+  ).length;
+  const submittedCount = rawReports.filter(
+    (r) => r.status === "Submitted" || r.status === "Reviewed",
+  ).length;
   const completionRate =
     requiredWeekCount > 0
       ? Math.round((approvedCount / requiredWeekCount) * 100)
@@ -385,10 +390,12 @@ export const WeeklyReportsView = ({
         ? await weeklyReportService.downloadVersion(
             versionId,
             fileName ?? currentReport.fileName,
+            false,
           )
         : await weeklyReportService.download(
             currentReport.id,
             fileName ?? currentReport.fileName,
+            false,
           );
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
@@ -411,10 +418,12 @@ export const WeeklyReportsView = ({
         ? await weeklyReportService.downloadVersion(
             versionId,
             fileName ?? currentReport.fileName,
+            false,
           )
         : await weeklyReportService.download(
             currentReport.id,
             fileName ?? currentReport.fileName,
+            false,
           );
       if (blob.type !== "application/pdf") {
         onShowToast?.("Chỉ hỗ trợ xem trước file PDF.", "info");
@@ -432,7 +441,10 @@ export const WeeklyReportsView = ({
       r.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       r.weekNumber.toString().includes(searchQuery);
     const matchesStatus =
-      statusFilter === "Tất cả" || r.status === statusFilter;
+      statusFilter === "Tất cả" ||
+      (statusFilter === "Đang xem xét"
+        ? r.status === "Đã nộp" || r.status === "Đã xem"
+        : r.status === statusFilter);
     return matchesSearch && matchesStatus;
   });
 

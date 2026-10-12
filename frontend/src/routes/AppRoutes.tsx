@@ -551,7 +551,13 @@ export function AppRoutes() {
                 />
                 <Route
                   path="weekly-reports"
-                  element={<StudentWeeklyReportsView onShowToast={showToast} />}
+                  element={
+                    <StudentWeeklyReportsView
+                      onShowToast={(msg, type) =>
+                        showToast(msg, type === "error" ? "danger" : type)
+                      }
+                    />
+                  }
                 />
                 <Route
                   path="submissions"
