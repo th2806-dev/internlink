@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { ReportsView } from "../features/lecturer/pages/ReportsView";
 import { weeklyReportService } from "../services/weeklyReport.service";
 import { submissionApiService } from "../services/submissionApi.service";
+import { semesterReportScheduleService } from "../services/semesterReportSchedule.service";
 import { ApiClientError } from "../lib/apiClient";
 import type { PaginatedResponse, WeeklyReportDto } from "../types/api";
 
@@ -53,6 +54,7 @@ vi.mock("../hooks/useLecturerSubmissionsQuery", () => ({
 
 const getAllForLecturer = vi.mocked(weeklyReportService.getAllForLecturer);
 const downloadLecturerSemesterZip = vi.mocked(submissionApiService.downloadLecturerSemesterZip);
+const getSchedules = vi.mocked(semesterReportScheduleService.getSchedules);
 
 function makeReport(id: string, status = "Submitted"): WeeklyReportDto {
   return {
@@ -200,6 +202,40 @@ describe("ReportsView (lát dọc tiên phong /lecturer/reports)", () => {
       .filter((p) => (p?.take ?? 0) > 1);
     expect(listCalls[listCalls.length - 1]).toMatchObject({ skip: 20, take: 20 });
   });
+
+  it("cho phép mở modal duyệt báo cáo đã nộp sau khi hạn nộp tuần kết thúc", async () => {
+    const user = userEvent.setup();
+    getAllForLecturer.mockImplementation(async (params) => {
+      if ((params?.take ?? 0) === 1) return totalsResponse(params?.status);
+      return makePage([makeReport("past-deadline-report")], 1);
+    });
+    getSchedules.mockResolvedValue([
+      {
+        id: "schedule-week-1",
+        semesterId: "sem-1",
+        weekNumber: 1,
+        title: "Báo cáo tuần 1",
+        dueDate: "2026-09-01T23:59:59Z",
+        isSubmissionOpen: false,
+        allowLateSubmission: false,
+      },
+    ]);
+
+    renderReportsView();
+
+    const approveButton = await screen.findByRole("button", {
+      name: "Duyệt & Đánh giá",
+    });
+    expect(approveButton).toBeEnabled();
+
+    await user.click(approveButton);
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "Duyệt báo cáo & Đánh giá chất lượng",
+      }),
+    ).toBeInTheDocument();
+  }, 15000);
 
   it("downloads a ZIP for the selected archive type and semester", async () => {
     const user = userEvent.setup();

@@ -174,7 +174,8 @@ export function WeeklyReportsReviewPanel({
         {reports.map((r) => {
           const isPendingItem = r.status === "Submitted";
           const isApprovedItem = r.status === "Approved";
-          const isReadOnly = isSemesterClosed || closedWeekNumbers.includes(r.weekNumber);
+          const isReadOnly = isSemesterClosed;
+          const isSubmissionWindowClosed = closedWeekNumbers.includes(r.weekNumber);
           const qualityObj = r.qualityScore != null ? GR_QUALITY_RUBRIC_LEVELS.find((l) => l.value === r.qualityScore) : null;
 
           return (
@@ -185,7 +186,15 @@ export function WeeklyReportsReviewPanel({
                     <p className="text-sm font-bold text-slate-900">
                       Tuần {r.weekNumber} — {r.title}
                     </p>
-                    {isReadOnly && <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500"><Lock className="h-3 w-3" /> Chỉ xem</span>}
+                    {isReadOnly ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500">
+                        <Lock className="h-3 w-3" /> Chỉ xem
+                      </span>
+                    ) : isSubmissionWindowClosed ? (
+                      <span className="text-[10px] font-semibold text-amber-700">
+                        Đã đóng hạn nộp
+                      </span>
+                    ) : null}
                     <span
                       className={`text-[11px] font-semibold px-2 py-0.5 rounded-md border ${
                         isApprovedItem
