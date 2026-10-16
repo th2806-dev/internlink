@@ -110,6 +110,8 @@ export const DashboardView = ({
     late: number;
     missing: number;
     pending: number;
+    weekNumber?: number;
+    approved?: number;
   }[];
   students?: Student[];
   weeklyReports?: WeeklyReportDto[];
@@ -174,23 +176,42 @@ export const DashboardView = ({
     0,
   );
 
+  const approvedByWeek = useMemo(() => {
+    const map: Record<number, number> = {};
+    weeklyReports.forEach((r) => {
+      if (r.status === "Approved") {
+        map[r.weekNumber] = (map[r.weekNumber] || 0) + 1;
+      }
+    });
+    return map;
+  }, [weeklyReports]);
+
+  const chartData = useMemo(() => {
+    return weeklyTrendData.map((row) => {
+      const weekNum = (row as { weekNumber?: number }).weekNumber ?? parseInt(row.label.replace(/\D/g, ""), 10);
+      const approved = approvedByWeek[weekNum] ?? 0;
+      return {
+        ...row,
+        approved,
+      };
+    });
+  }, [weeklyTrendData, approvedByWeek]);
+
   // ---- Xuất file CSV tiến độ báo cáo tuần ----
   const handleExportCsv = () => {
     const headers = [
       "Tuần",
       "Đúng hạn",
       "Nộp trễ",
-      "Chưa nộp",
-      "Còn trong hạn",
+      "Đã duyệt",
       "Tỷ lệ đúng hạn",
-      "Tổng SV theo lịch",
+      "Mốc số lượng SV",
     ];
-    const rows = weeklyTrendData.map((r) => [
+    const rows = chartData.map((r) => [
       r.label,
       r.value,
       r.late,
-      r.missing,
-      r.pending,
+      r.approved,
       `${Math.round(r.rate)}%`,
       r.target,
     ]);
@@ -562,7 +583,7 @@ export const DashboardView = ({
 
           {/* Nội dung Biểu đồ hoặc Bảng */}
           <div className="flex-1 w-full my-auto flex items-center justify-center py-2">
-            {weeklyTrendData.length === 0 ? (
+            {chartData.length === 0 ? (
               <div className="py-12 text-center space-y-2">
                 <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-blue-600">
                   <FileText className="h-5 w-5" />
@@ -582,14 +603,13 @@ export const DashboardView = ({
                       <th className="py-2 px-3">Tuần</th>
                       <th className="py-2 px-3 text-center">Đúng hạn</th>
                       <th className="py-2 px-3 text-center">Nộp trễ</th>
-                      <th className="py-2 px-3 text-center">Chưa nộp</th>
-                      <th className="py-2 px-3 text-center">Còn trong hạn</th>
+                      <th className="py-2 px-3 text-center">Đã duyệt</th>
                       <th className="py-2 px-3 text-center">Tỷ lệ đúng hạn</th>
-                      <th className="py-2 px-3 text-center">Tổng theo lịch</th>
+                      <th className="py-2 px-3 text-center">Mốc số lượng SV</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-slate-700">
-                    {weeklyTrendData.map((row) => {
+                    {chartData.map((row) => {
                       return (
                         <tr key={row.label} className="hover:bg-slate-50/80">
                           <td className="py-2 px-3 font-semibold">{row.label}</td>
@@ -599,11 +619,8 @@ export const DashboardView = ({
                           <td className="py-2 px-3 text-center font-medium text-amber-600">
                             {row.late}
                           </td>
-                          <td className="py-2 px-3 text-center font-medium text-slate-400">
-                            {row.missing}
-                          </td>
-                          <td className="py-2 px-3 text-center font-medium text-slate-600">
-                            {row.pending}
+                          <td className="py-2 px-3 text-center font-bold text-[#026aa7]">
+                            {row.approved}
                           </td>
                           <td className="py-2 px-3 text-center font-semibold text-emerald-700">
                             {Math.round(row.rate)}%
@@ -625,7 +642,7 @@ export const DashboardView = ({
               >
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart
-                    data={weeklyTrendData}
+                    data={chartData}
                     margin={{ top: 12, right: 12, left: 0, bottom: 4 }}
                   >
                     <CartesianGrid
@@ -663,77 +680,72 @@ export const DashboardView = ({
                       iconType="circle"
                       wrapperStyle={{ fontSize: 11 }}
                     />
-                    {chartMode === "bar" ? (
-                      <>
-                        <Bar
-                          dataKey="value"
-                          name="Đúng hạn"
-                          fill="#4d74c9"
-                          stackId="weekly-status"
-                          minPointSize={4}
-                        />
-                        <Bar
-                          dataKey="late"
-                          name="Nộp trễ"
-                          fill="#fbbf24"
-                          stackId="weekly-status"
-                          minPointSize={4}
-                        />
-                        <Bar
-                          dataKey="missing"
-                          name="Chưa nộp"
-                          fill="#f59e0b"
-                          stackId="weekly-status"
-                          minPointSize={4}
-                        />
-                        <Bar
-                          dataKey="pending"
-                          name="Còn trong hạn"
-                          fill="#38bdf8"
-                          stackId="weekly-status"
-                          minPointSize={4}
-                        />
-                      </>
-                    ) : (
-                      <>
-                        <Line
-                          type="linear"
-                          dataKey="value"
-                          name="Đúng hạn"
-                          stroke="#4d74c9"
-                          strokeWidth={2}
-                          dot={{ r: 4, fill: "#4d74c9" }}
-                        />
-                        <Line
-                          type="linear"
-                          dataKey="late"
-                          name="Nộp trễ"
-                          stroke="#fbbf24"
-                          strokeWidth={2}
-                          dot={{ r: 3, fill: "#fbbf24" }}
-                        />
-                        <Line
-                          type="linear"
-                          dataKey="missing"
-                          name="Chưa nộp"
-                          stroke="#f59e0b"
-                          strokeWidth={2}
-                          dot={{ r: 3, fill: "#f59e0b" }}
-                        />
-                        <Line
-                          type="linear"
-                          dataKey="pending"
-                          name="Còn trong hạn"
-                          stroke="#38bdf8"
-                          strokeWidth={2}
-                          dot={{ r: 3, fill: "#38bdf8" }}
-                        />
-                      </>
+                    {/* Cột 1: Báo cáo đã nộp (Đúng hạn + Nộp trễ) */}
+                    {chartMode === "bar" && (
+                      <Bar
+                        dataKey="value"
+                        name="Đúng hạn"
+                        fill="#93c5fd"
+                        stackId="submitted"
+                        minPointSize={2}
+                      />
                     )}
+                    {chartMode === "bar" && (
+                      <Bar
+                        dataKey="late"
+                        name="Nộp trễ"
+                        fill="#fdba74"
+                        stackId="submitted"
+                        minPointSize={2}
+                      />
+                    )}
+                    {/* Cột 2: Báo cáo đã duyệt (Màu xanh đậm brand) */}
+                    {chartMode === "bar" && (
+                      <Bar
+                        dataKey="approved"
+                        name="Đã duyệt"
+                        fill="#026aa7"
+                        stackId="approved"
+                        minPointSize={2}
+                      />
+                    )}
+
+                    {/* Biểu đồ đường khi chọn chế độ line */}
+                    {chartMode === "line" && (
+                      <Line
+                        type="linear"
+                        dataKey="value"
+                        name="Đúng hạn"
+                        stroke="#93c5fd"
+                        strokeWidth={2}
+                        dot={{ r: 3, fill: "#93c5fd" }}
+                      />
+                    )}
+                    {chartMode === "line" && (
+                      <Line
+                        type="linear"
+                        dataKey="late"
+                        name="Nộp trễ"
+                        stroke="#fdba74"
+                        strokeWidth={2}
+                        dot={{ r: 3, fill: "#fdba74" }}
+                      />
+                    )}
+                    {chartMode === "line" && (
+                      <Line
+                        type="linear"
+                        dataKey="approved"
+                        name="Đã duyệt"
+                        stroke="#026aa7"
+                        strokeWidth={2.5}
+                        dot={{ r: 4, fill: "#026aa7" }}
+                      />
+                    )}
+                    {/* Đường line mốc số lượng sinh viên giữ nguyên */}
                     <Line
                       type="linear"
                       dataKey="target"
-                      name="Tổng theo lịch"
+                      name="Mốc số lượng SV"
                       stroke="#7bc043"
                       strokeWidth={2}
                       dot={{ r: 3, fill: "#ffffff", stroke: "#7bc043", strokeWidth: 2 }}
