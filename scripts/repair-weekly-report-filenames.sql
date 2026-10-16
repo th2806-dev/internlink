@@ -26,7 +26,7 @@ JOIN dbo.Internships AS i ON i.InternshipId = wr.InternshipId
 JOIN dbo.Students AS s ON s.StudentId = i.StudentId
 WHERE wr.IsDeleted = 0
   AND s.IsDeleted = 0
-  AND UNICODE(LEFT(s.FullName, 1)) IN (272, 273)
+  AND (UNICODE(LEFT(s.FullName, 1)) IN (272, 273) OR s.FullName LIKE N'%Đ%' OR s.FullName LIKE N'%đ%' OR CHARINDEX(NCHAR(272), s.FullName) > 0 OR CHARINDEX(NCHAR(273), s.FullName) > 0)
   AND (@InternshipId IS NULL OR wr.InternshipId = @InternshipId)
 
 UNION ALL
@@ -48,6 +48,6 @@ JOIN dbo.Students AS s ON s.StudentId = i.StudentId
 WHERE wrv.IsDeleted = 0
   AND wr.IsDeleted = 0
   AND s.IsDeleted = 0
-  AND UNICODE(LEFT(s.FullName, 1)) IN (272, 273)
+  AND (UNICODE(LEFT(s.FullName, 1)) IN (272, 273) OR s.FullName LIKE N'%Đ%' OR s.FullName LIKE N'%đ%' OR CHARINDEX(NCHAR(272), s.FullName) > 0 OR CHARINDEX(NCHAR(273), s.FullName) > 0)
   AND (@InternshipId IS NULL OR wr.InternshipId = @InternshipId)
 ORDER BY InternshipId, WeekNumber, Version, RecordType;

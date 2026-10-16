@@ -920,21 +920,50 @@ public class WeeklyReportService : IWeeklyReportService
             throw new InvalidOperationException("Tuần thực tập đã hết hạn, nhật ký đang ở chế độ chỉ xem.");
     }
 
+    public static string SanitizeStudentNameForFileName(string? studentName)
+    {
+        if (string.IsNullOrWhiteSpace(studentName))
+            return "SinhVien";
+
+        // Pre-replace Vietnamese D with stroke, Eth, and Unicode variants (both composed and decomposed)
+        var preMapped = studentName
+            .Replace('\u0110', 'D')
+            .Replace('\u0111', 'd')
+            .Replace('\u00D0', 'D')
+            .Replace('\u00F0', 'd')
+            .Replace('\u0189', 'D')
+            .Replace('\u018A', 'D')
+            .Replace('\u0257', 'd')
+            .Replace("Đ", "D")
+            .Replace("đ", "d");
+
+        var normalized = preMapped.Normalize(NormalizationForm.FormD);
+        var sb = new StringBuilder(normalized.Length);
+        foreach (var ch in normalized)
+        {
+            var category = CharUnicodeInfo.GetUnicodeCategory(ch);
+            if (category != UnicodeCategory.NonSpacingMark && category != UnicodeCategory.SpacingCombiningMark)
+            {
+                sb.Append(ch);
+            }
+        }
+
+        var formC = sb.ToString().Normalize(NormalizationForm.FormC);
+        var postMapped = formC
+            .Replace('\u0110', 'D')
+            .Replace('\u0111', 'd')
+            .Replace('\u00D0', 'D')
+            .Replace('\u00F0', 'd')
+            .Replace("Đ", "D")
+            .Replace("đ", "d");
+
+        var safeName = Regex.Replace(postMapped, "[^A-Za-z0-9]", string.Empty);
+        return string.IsNullOrWhiteSpace(safeName) ? "SinhVien" : safeName;
+    }
+
     private static string CreateReportFileName(int weekNumber, string? studentName, int version)
     {
-        var rawName = studentName ?? "SinhVien";
-        var mappedName = rawName
-            .Replace('Đ', 'D')
-            .Replace('đ', 'd');
-
-        var normalized = mappedName.Normalize(NormalizationForm.FormD);
-        var nameWithoutMarks = new string(normalized
-            .Where(character => CharUnicodeInfo.GetUnicodeCategory(character) != UnicodeCategory.NonSpacingMark)
-            .ToArray())
-            .Normalize(NormalizationForm.FormC);
-        var safeName = Regex.Replace(nameWithoutMarks, "[^A-Za-z0-9]", string.Empty);
-        if (string.IsNullOrWhiteSpace(safeName))
-            safeName = "SinhVien";
+        var safeName = SanitizeStudentNameForFileName(studentName);
         return $"Tuan{weekNumber:D2}_{safeName}_V{version}.pdf";
     }
 

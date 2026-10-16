@@ -116,9 +116,11 @@ $candidateRows = New-Object System.Collections.Generic.List[object]
 $skippedCount = 0
 foreach ($record in $records) {
     if ([string]::IsNullOrWhiteSpace($record.StudentFullName) -or
-        -not $record.StudentFullName.StartsWith([string][char]0x0110, [StringComparison]::Ordinal) -and
-        -not $record.StudentFullName.StartsWith([string][char]0x0111, [StringComparison]::Ordinal)) {
-        Write-Verbose "Skipping row $($record.RecordId): student name does not start with U+0110/U+0111."
+        ($record.StudentFullName.IndexOf([char]0x0110) -lt 0 -and
+         $record.StudentFullName.IndexOf([char]0x0111) -lt 0 -and
+         $record.StudentFullName.IndexOf([char]0x00D0) -lt 0 -and
+         $record.StudentFullName.IndexOf([char]0x00F0) -lt 0)) {
+        Write-Verbose "Skipping row $($record.RecordId): student name does not contain Đ/đ."
         $skippedCount++
         continue
     }

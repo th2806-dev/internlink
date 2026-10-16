@@ -304,6 +304,49 @@ public class WeeklyReportServiceTests
     }
 
     [Fact]
+    public async Task CreateDraftWithFileAsync_WhenStudentNameHasDInMiddleOrEnd_ShouldPreserveDInFilename()
+    {
+        var db = GetDb();
+        var (studentUser, _, _, _, internship, _) = await SeedDataAsync(db);
+        internship.Student!.FullName = "Quảng Thành Đạt";
+        var contentRootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        var service = CreateService(db, contentRootPath: contentRootPath);
+
+        try
+        {
+            var result = await service.CreateDraftWithFileAsync(
+                studentUser.Id,
+                new CreateWeeklyReportRequest { InternshipId = internship.Id, WeekNumber = 3, Title = "Báo cáo tuần 3" },
+                new MemoryStream(new byte[] { 1, 2, 3 }),
+                "Bao cao tuan 3 - Quang Thanh Dat.pdf",
+                10,
+                "application/pdf");
+
+            result.FileName.Should().Be("Tuan03_QuangThanhDat_V1.pdf");
+            result.FileUrl.Should().Contain("Tuan03_QuangThanhDat_V1.pdf");
+        }
+        finally
+        {
+            if (Directory.Exists(contentRootPath))
+                Directory.Delete(contentRootPath, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("Quảng Thành Đạt", "QuangThanhDat")]
+    [InlineData("Đặng Nguyễn Duy Khanh", "DangNguyenDuyKhanh")]
+    [InlineData("Nguyễn Văn Đức", "NguyenVanDuc")]
+    [InlineData("Trần Đình Đăng", "TranDinhDang")]
+    [InlineData("Đỗ Đức Đoan", "DoDucDoan")]
+    [InlineData("Lê Thị Đào", "LeThiDao")]
+    [InlineData("Phạm Hoàng Điệp", "PhamHoangDiep")]
+    public void SanitizeStudentNameForFileName_ShouldPreserveD_InAllPositions(string input, string expected)
+    {
+        var result = WeeklyReportService.SanitizeStudentNameForFileName(input);
+        result.Should().Be(expected);
+    }
+
+    [Fact]
     public async Task CreateDraftWithFileAsync_WhenCanonicalFilenameExists_ShouldAdvanceStoredVersion()
     {
         var db = GetDb();

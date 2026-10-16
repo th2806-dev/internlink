@@ -1288,17 +1288,7 @@ public class SubmissionService : ISubmissionService
         int fileCount,
         string extension)
     {
-        var mappedName = (studentName ?? "SinhVien")
-            .Replace('Đ', 'D')
-            .Replace('đ', 'd');
-        var normalized = mappedName.Normalize(NormalizationForm.FormD);
-        var nameWithoutMarks = new string(normalized
-            .Where(character => CharUnicodeInfo.GetUnicodeCategory(character) != UnicodeCategory.NonSpacingMark)
-            .ToArray())
-            .Normalize(NormalizationForm.FormC);
-        var safeName = Regex.Replace(nameWithoutMarks, "[^A-Za-z0-9]", string.Empty);
-        if (string.IsNullOrWhiteSpace(safeName))
-            safeName = "SinhVien";
+        var safeName = WeeklyReportService.SanitizeStudentNameForFileName(studentName);
 
         var typeName = type == SubmissionType.FinalReport
             ? "BaoCaoCuoiKy"
