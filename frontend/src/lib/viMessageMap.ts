@@ -42,8 +42,30 @@ const vietnameseMessages: Record<string, string> = {
   "Error getting average grade": "Đã xảy ra lỗi. Vui lòng thử lại sau.",
   "Error checking evaluation": "Đã xảy ra lỗi. Vui lòng thử lại sau.",
   "Error getting statistics": "Đã xảy ra lỗi. Vui lòng thử lại sau.",
+  "One or more validation errors occurred.": "Dữ liệu nhập vào không hợp lệ. Vui lòng kiểm tra lại.",
+  "The Username field is required.": "Vui lòng nhập tên đăng nhập.",
+  "The Password field is required.": "Vui lòng nhập mật khẩu.",
+  "'Username' must not be empty.": "Vui lòng nhập tên đăng nhập.",
+  "'Password' must not be empty.": "Vui lòng nhập mật khẩu.",
+  "HTTP 400": "Yêu cầu không hợp lệ. Vui lòng kiểm tra lại thông tin.",
 };
 
 export function toVietnameseMessage(message: string): string {
-  return vietnameseMessages[message] ?? message;
+  if (!message) return "";
+  if (vietnameseMessages[message]) return vietnameseMessages[message];
+
+  // Pattern matches for FluentValidation messages
+  if (message.includes("must be at least 6 characters") || message.includes("ít nhất 6 ký tự")) {
+    return "Mật khẩu phải có ít nhất 6 ký tự.";
+  }
+  if (message.includes("must not be empty") || message.includes("is required")) {
+    if (message.toLowerCase().includes("username") || message.toLowerCase().includes("tên đăng nhập")) {
+      return "Vui lòng nhập tên đăng nhập.";
+    }
+    if (message.toLowerCase().includes("password") || message.toLowerCase().includes("mật khẩu")) {
+      return "Vui lòng nhập mật khẩu.";
+    }
+  }
+
+  return message;
 }

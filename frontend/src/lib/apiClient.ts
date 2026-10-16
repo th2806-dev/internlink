@@ -221,10 +221,28 @@ export async function apiRequest<T>(
     }
 
     if (!res.ok || payload.success === false) {
-      const msg =
+      // Extract error message — handle both ApiResponse format and ASP.NET ProblemDetails format
+      let msg =
         payload.error?.title ||
-        payload.error?.detail ||
-        (res.status === 401 ? "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại." : `HTTP ${res.status}`);
+        payload.error?.detail;
+
+      // FluentValidation auto-validation returns ProblemDetails: { errors: { Field: ["msg1", ...] } }
+      if (!msg) {
+        const raw = payload as Record<string, unknown>;
+        const errors = raw.errors as Record<string, string[]> | undefined;
+        if (errors) {
+          const firstMessages = Object.values(errors).flat();
+          if (firstMessages.length > 0) msg = firstMessages[0];
+        }
+        // Fallback: ProblemDetails.title or .detail at root level
+        if (!msg) msg = (raw.title as string) || (raw.detail as string);
+      }
+
+      if (!msg) {
+        msg = res.status === 401
+          ? "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại."
+          : `HTTP ${res.status}`;
+      }
       throw new ApiClientError(msg, res.status, payload);
     }
 

@@ -92,6 +92,10 @@ export function LoginPortal({ onLoginSuccess }: LoginPortalProps) {
       setErrorMessage("Vui lòng nhập mật khẩu truy cập.");
       return;
     }
+    if (password.length < 6) {
+      setErrorMessage("Mật khẩu phải có ít nhất 6 ký tự.");
+      return;
+    }
     if (isLoading) return;
     setIsLoading(true);
 

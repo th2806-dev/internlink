@@ -58,11 +58,11 @@ export const GR_CLOSING_SOON_WINDOW_MS = 48 * 60 * 60 * 1000;
 
 /** Rubric chất lượng bài — 5 mức theo quy định */
 export const GR_QUALITY_RUBRIC_LEVELS = [
-  { value: 1.0, label: "Không tốt" },
+  { value: 1.0, label: "Kém" },
   { value: 2.0, label: "Trung bình" },
   { value: 3.5, label: "Khá" },
-  { value: 4.0, label: "Tốt" },
-  { value: 5.0, label: "Giỏi" },
+  { value: 4.0, label: "Giỏi" },
+  { value: 5.0, label: "Xuất sắc" },
 ] as const;
 
 const VALID_QUALITY_LEVELS = new Set<number>(GR_QUALITY_RUBRIC_LEVELS.map((l) => l.value));

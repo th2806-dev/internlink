@@ -7,7 +7,12 @@ public class ChangePasswordRequestValidator : AbstractValidator<ChangePasswordRe
 {
     public ChangePasswordRequestValidator()
     {
-        RuleFor(x => x.CurrentPassword).NotEmpty().MinimumLength(6);
-        RuleFor(x => x.NewPassword).NotEmpty().MinimumLength(6);
+        RuleFor(x => x.CurrentPassword)
+            .NotEmpty().WithMessage("Vui lòng nhập mật khẩu hiện tại.")
+            .MinimumLength(6).WithMessage("Mật khẩu phải có ít nhất 6 ký tự.");
+
+        RuleFor(x => x.NewPassword)
+            .NotEmpty().WithMessage("Vui lòng nhập mật khẩu mới.")
+            .MinimumLength(6).WithMessage("Mật khẩu mới phải có ít nhất 6 ký tự.");
     }
 }
