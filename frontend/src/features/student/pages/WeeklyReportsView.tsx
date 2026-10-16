@@ -128,6 +128,8 @@ export const WeeklyReportsView = ({
   );
   const requiredWeekCount = requiredSchedules.length || totalWeeks;
 
+  const hasUserSelectedRef = useRef(false);
+
   const suggestedWeek = useMemo(() => {
     const openSchedules = [...requiredSchedules].sort(
       (a, b) => a.weekNumber - b.weekNumber,
@@ -141,13 +143,39 @@ export const WeeklyReportsView = ({
     }
 
     const now = Date.now();
-    const currentSchedule = openSchedules.find((schedule) => {
-      const start = schedule.startDate ? new Date(schedule.startDate).getTime() : Number.NaN;
-      const due = new Date(schedule.dueDate).getTime();
-      return Number.isFinite(start) && Number.isFinite(due) && start <= now && now <= due;
-    });
-    if (currentSchedule) return currentSchedule.weekNumber;
 
+    // 1. Tìm tuần đang mở nhận nộp và chưa hoàn thành (chưa nộp / cần sửa / đang chờ)
+    const currentActiveWeek = openSchedules.find((schedule) => {
+      const start = schedule.startDate ? new Date(schedule.startDate).getTime() : 0;
+      const due = new Date(schedule.dueDate).getTime();
+      if (!Number.isFinite(due) || now > due || now < start) return false;
+      const report = reports.find((item) => item.weekNumber === schedule.weekNumber);
+      return !report || report.status !== "Đã hoàn thành";
+    });
+    if (currentActiveWeek) return currentActiveWeek.weekNumber;
+
+    // 2. Tìm tuần có deadline sắp tới gần nhất mà chưa hoàn thành
+    const upcomingIncompleteSchedule = openSchedules
+      .filter((schedule) => {
+        const due = new Date(schedule.dueDate).getTime();
+        if (!Number.isFinite(due) || due < now) return false;
+        const report = reports.find((item) => item.weekNumber === schedule.weekNumber);
+        return !report || report.status !== "Đã hoàn thành";
+      })
+      .sort(
+        (a, b) =>
+          new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(),
+      )[0];
+    if (upcomingIncompleteSchedule) return upcomingIncompleteSchedule.weekNumber;
+
+    // 3. Nếu không có tuần nào trong hạn, tìm tuần chưa hoàn thành đầu tiên
+    const firstIncompleteSchedule = openSchedules.find((schedule) => {
+      const report = reports.find((item) => item.weekNumber === schedule.weekNumber);
+      return !report || report.status !== "Đã hoàn thành";
+    });
+    if (firstIncompleteSchedule) return firstIncompleteSchedule.weekNumber;
+
+    // 4. Nếu tất cả đã hoàn thành, chọn tuần có deadline gần nhất
     const upcomingSchedule = openSchedules
       .filter((schedule) => new Date(schedule.dueDate).getTime() >= now)
       .sort(
@@ -156,17 +184,13 @@ export const WeeklyReportsView = ({
       )[0];
     if (upcomingSchedule) return upcomingSchedule.weekNumber;
 
-    const firstIncompleteSchedule = openSchedules.find((schedule) => {
-      const report = reports.find((item) => item.weekNumber === schedule.weekNumber);
-      return !report || report.status !== "Đã hoàn thành";
-    });
-    if (firstIncompleteSchedule) return firstIncompleteSchedule.weekNumber;
-
     return openSchedules[openSchedules.length - 1]?.weekNumber ?? 1;
   }, [requiredSchedules, reports]);
 
   useEffect(() => {
-    setSelectedWeek(suggestedWeek);
+    if (!hasUserSelectedRef.current && suggestedWeek) {
+      setSelectedWeek(suggestedWeek);
+    }
   }, [suggestedWeek]);
 
   const handleCancelSubmission = async () => {
@@ -774,7 +798,10 @@ export const WeeklyReportsView = ({
                             </td>
                             <td className="py-3 px-4 text-right whitespace-nowrap">
                               <button
-                                onClick={() => setSelectedWeek(rep.weekNumber)}
+                                onClick={() => {
+                                  hasUserSelectedRef.current = true;
+                                  setSelectedWeek(rep.weekNumber);
+                                }}
                                 className={`px-3 py-1 font-bold text-xs rounded-lg transition-colors cursor-pointer ${
                                   isSelected
                                     ? "bg-[#026aa7] text-white shadow-xs"
@@ -799,7 +826,10 @@ export const WeeklyReportsView = ({
                   return (
                     <div
                       key={rep.weekNumber}
-                      onClick={() => setSelectedWeek(rep.weekNumber)}
+                      onClick={() => {
+                        hasUserSelectedRef.current = true;
+                        setSelectedWeek(rep.weekNumber);
+                      }}
                       className={`p-3 rounded-lg border transition-all cursor-pointer ${
                         isSelected
                           ? "border-blue-400 bg-blue-50/50"

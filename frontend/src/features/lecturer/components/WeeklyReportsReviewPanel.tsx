@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   FileCheck2,
   Check,
@@ -61,6 +62,16 @@ export function WeeklyReportsReviewPanel({
   useEffect(() => () => {
     if (preview?.url) URL.revokeObjectURL(preview.url);
   }, [preview]);
+
+  useEffect(() => {
+    if (evalModalReport || preview) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = prev;
+      };
+    }
+  }, [evalModalReport, preview]);
 
   const pending = reports.filter((r) => r.status === "Submitted");
 
@@ -310,165 +321,169 @@ export function WeeklyReportsReviewPanel({
       </ul>
 
       {/* Modal xem trước file */}
-      {preview && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg w-full max-w-5xl h-[85vh] shadow-xl overflow-hidden flex flex-col">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
-              <p className="text-sm font-bold text-slate-900 truncate">{preview.fileName}</p>
-              <button
-                type="button"
-                onClick={() => setPreview(null)}
-                className="p-1.5 text-slate-500 hover:text-slate-900"
-                title="Đóng xem trước"
-              >
-                <X className="w-5 h-5" />
-              </button>
+      {preview &&
+        createPortal(
+          <div className="fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4 animate-in fade-in duration-100">
+            <div className="bg-white rounded-lg w-full max-w-5xl h-[85vh] shadow-xl overflow-hidden flex flex-col">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
+                <p className="text-sm font-bold text-slate-900 truncate">{preview.fileName}</p>
+                <button
+                  type="button"
+                  onClick={() => setPreview(null)}
+                  className="p-1.5 text-slate-500 hover:text-slate-900"
+                  title="Đóng xem trước"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <iframe
+                title={`Xem trước ${preview.fileName}`}
+                src={preview.url}
+                className="flex-1 w-full"
+              />
             </div>
-            <iframe
-              title={`Xem trước ${preview.fileName}`}
-              src={preview.url}
-              className="flex-1 w-full"
-            />
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
 
       {/* Modal hỏi giảng viên đánh giá mức độ chất lượng khi duyệt */}
-      {evalModalReport && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="bg-white rounded-xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col border border-slate-100">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50/50">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-lg bg-blue-100/70 text-blue-700">
-                  <CheckCircle2 className="w-5 h-5" />
+      {evalModalReport &&
+        createPortal(
+          <div className="fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4 animate-in fade-in duration-100">
+            <div className="bg-white rounded-xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col border border-slate-100">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50/50">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-lg bg-blue-100/70 text-blue-700">
+                    <CheckCircle2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900">
+                      Duyệt báo cáo & Đánh giá chất lượng
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Tuần {evalModalReport.weekNumber} — {evalModalReport.title}
+                    </p>
+                  </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setEvalModalReport(null)}
+                  className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors"
+                  title="Đóng"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
                 <div>
-                  <h3 className="text-base font-bold text-slate-900">
-                    Duyệt báo cáo & Đánh giá chất lượng
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    Tuần {evalModalReport.weekNumber} — {evalModalReport.title}
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
+                    Đánh giá mức độ chất lượng báo cáo <span className="text-red-500">*</span>
+                  </label>
+                  <p className="text-xs text-slate-500 mb-3">
+                    Chọn mức xếp loại theo Rubric chất lượng quy định (tối đa 5 điểm):
                   </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setEvalModalReport(null)}
-                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors"
-                title="Đóng"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
-                  Đánh giá mức độ chất lượng báo cáo <span className="text-red-500">*</span>
-                </label>
-                <p className="text-xs text-slate-500 mb-3">
-                  Chọn mức xếp loại theo Rubric chất lượng quy định (tối đa 5 điểm):
-                </p>
-                <div className="grid grid-cols-1 gap-2">
-                  {GR_QUALITY_RUBRIC_LEVELS.map((level) => {
-                    const isSelected = selectedQuality === level.value;
-                    return (
-                      <button
-                        type="button"
-                        key={level.value}
-                        onClick={() => setSelectedQuality(level.value)}
-                        className={`flex items-center justify-between p-3 rounded-lg border text-left transition-all ${
-                          isSelected
-                            ? "border-blue-600 bg-blue-50/80 text-blue-900 ring-2 ring-blue-500/20 shadow-xs"
-                            : "border-slate-200 bg-white hover:border-slate-300 text-slate-700"
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <span
-                            className={`inline-flex items-center justify-center w-12 py-1 rounded text-xs font-bold ${
-                              isSelected
-                                ? "bg-blue-600 text-white"
-                                : "bg-slate-100 text-slate-700"
-                            }`}
-                          >
-                            {level.value.toFixed(1)}đ
-                          </span>
-                          <div>
-                            <p className="font-semibold text-sm leading-snug">{level.label}</p>
-                            <p className="text-xs text-slate-500">
-                              {level.value === 5.0 && "Nội dung xuất sắc, chi tiết, vượt mục tiêu"}
-                              {level.value === 4.0 && "Nội dung rõ ràng, hoàn thành đầy đủ mục tiêu"}
-                              {level.value === 3.5 && "Nội dung đạt yêu cầu, tiến độ tốt"}
-                              {level.value === 2.0 && "Nội dung cơ bản, cần bổ sung cải thiện"}
-                              {level.value === 1.0 && "Nội dung sơ sài, chưa đạt yêu cầu"}
-                            </p>
+                  <div className="grid grid-cols-1 gap-2">
+                    {GR_QUALITY_RUBRIC_LEVELS.map((level) => {
+                      const isSelected = selectedQuality === level.value;
+                      return (
+                        <button
+                          type="button"
+                          key={level.value}
+                          onClick={() => setSelectedQuality(level.value)}
+                          className={`flex items-center justify-between p-3 rounded-lg border text-left transition-all ${
+                            isSelected
+                              ? "border-blue-600 bg-blue-50/80 text-blue-900 ring-2 ring-blue-500/20 shadow-xs"
+                              : "border-slate-200 bg-white hover:border-slate-300 text-slate-700"
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <span
+                              className={`inline-flex items-center justify-center w-12 py-1 rounded text-xs font-bold ${
+                                isSelected
+                                  ? "bg-blue-600 text-white"
+                                  : "bg-slate-100 text-slate-700"
+                              }`}
+                            >
+                              {level.value.toFixed(1)}đ
+                            </span>
+                            <div>
+                              <p className="font-semibold text-sm leading-snug">{level.label}</p>
+                              <p className="text-xs text-slate-500">
+                                {level.value === 5.0 && "Nội dung xuất sắc, chi tiết, vượt mục tiêu"}
+                                {level.value === 4.0 && "Nội dung rõ ràng, hoàn thành đầy đủ mục tiêu"}
+                                {level.value === 3.5 && "Nội dung đạt yêu cầu, tiến độ tốt"}
+                                {level.value === 2.0 && "Nội dung cơ bản, cần bổ sung cải thiện"}
+                                {level.value === 1.0 && "Nội dung sơ sài, chưa đạt yêu cầu"}
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                        {isSelected && (
-                          <div className="h-5 w-5 rounded-full bg-blue-600 text-white flex items-center justify-center shrink-0">
-                            <Check className="w-3 h-3 stroke-[3]" />
-                          </div>
-                        )}
-                      </button>
-                    );
-                  })}
+                          {isSelected && (
+                            <div className="h-5 w-5 rounded-full bg-blue-600 text-white flex items-center justify-center shrink-0">
+                              <Check className="w-3 h-3 stroke-[3]" />
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                    Nhận xét cho sinh viên (tuỳ chọn)
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={evalComment}
+                    onChange={(e) => setEvalComment(e.target.value)}
+                    placeholder="Nhập nhận xét, hướng dẫn hoặc góp ý cho sinh viên…"
+                    className="w-full text-sm border border-slate-200 rounded-lg p-3 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div className="rounded-lg bg-blue-50/70 p-3 border border-blue-100 text-xs text-blue-800 flex items-start gap-2.5">
+                  <Sparkles className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                  <div className="leading-relaxed">
+                    Kết quả đánh giá chất lượng này sẽ tự động được đồng bộ vào trang{" "}
+                    <strong className="font-semibold">Đánh giá & Chấm điểm (/lecturer/evaluations)</strong>{" "}
+                    để tính Điểm Quá trình (QT) cho sinh viên và không cần chọn lại.
+                  </div>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                  Nhận xét cho sinh viên (tuỳ chọn)
-                </label>
-                <textarea
-                  rows={3}
-                  value={evalComment}
-                  onChange={(e) => setEvalComment(e.target.value)}
-                  placeholder="Nhập nhận xét, hướng dẫn hoặc góp ý cho sinh viên…"
-                  className="w-full text-sm border border-slate-200 rounded-lg p-3 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-
-              <div className="rounded-lg bg-blue-50/70 p-3 border border-blue-100 text-xs text-blue-800 flex items-start gap-2.5">
-                <Sparkles className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-                <div className="leading-relaxed">
-                  Kết quả đánh giá chất lượng này sẽ tự động được đồng bộ vào trang{" "}
-                  <strong className="font-semibold">Đánh giá & Chấm điểm (/lecturer/evaluations)</strong>{" "}
-                  để tính Điểm Quá trình (QT) cho sinh viên và không cần chọn lại.
-                </div>
+              <div className="flex items-center justify-end gap-2.5 px-5 py-3.5 border-t border-slate-100 bg-slate-50">
+                <button
+                  type="button"
+                  onClick={() => setEvalModalReport(null)}
+                  disabled={busyId === evalModalReport.id}
+                  className="il-btn il-btn-secondary text-xs px-4 py-2"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleConfirmApprove()}
+                  disabled={busyId === evalModalReport.id || isReviewing}
+                  className="il-btn il-btn-primary text-xs px-4 py-2 flex items-center gap-1.5"
+                >
+                  {busyId === evalModalReport.id ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Đang lưu…
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                      Xác nhận duyệt & Đánh giá
+                    </>
+                  )}
+                </button>
               </div>
             </div>
-
-            <div className="flex items-center justify-end gap-2.5 px-5 py-3.5 border-t border-slate-100 bg-slate-50">
-              <button
-                type="button"
-                onClick={() => setEvalModalReport(null)}
-                disabled={busyId === evalModalReport.id}
-                className="il-btn il-btn-secondary text-xs px-4 py-2"
-              >
-                Hủy
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleConfirmApprove()}
-                disabled={busyId === evalModalReport.id || isReviewing}
-                className="il-btn il-btn-primary text-xs px-4 py-2 flex items-center gap-1.5"
-              >
-                {busyId === evalModalReport.id ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    Đang lưu…
-                  </>
-                ) : (
-                  <>
-                    <Check className="w-3.5 h-3.5 stroke-[2.5]" />
-                    Xác nhận duyệt & Đánh giá
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
     </Panel>
   );
 }

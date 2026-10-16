@@ -425,7 +425,7 @@ export const ReportsView = ({
 
           {visibleWeeklyReports.length > 0 && (
             <div
-              className={`transition-opacity duration-150 ${isFetching ? "opacity-60" : ""}`}
+              className={`transition-opacity duration-150 ${isPlaceholderData ? "opacity-60" : ""}`}
               data-testid="reports-list"
             >
               <WeeklyReportsReviewPanel

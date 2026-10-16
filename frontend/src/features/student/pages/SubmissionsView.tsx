@@ -327,12 +327,12 @@ export const SubmissionsView: React.FC<{
     }
   };
 
-  const renderCancelButton = (submission: SubmissionDto) => (
+  const renderCancelButton = (submission: SubmissionDto, fullWidth = false) => (
     <button
       type="button"
       onClick={() => void handleCancelSubmission(submission)}
       disabled={cancellingSubmissionId !== null}
-      className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-rose-200 bg-white px-3 text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+      className={`inline-flex min-h-9 ${fullWidth ? "w-full" : ""} items-center justify-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50/70 px-3 text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60`}
       aria-label={`Hủy nộp ${submission.title || "hồ sơ"}`}
     >
       {cancellingSubmissionId === submission.id
@@ -735,7 +735,7 @@ export const SubmissionsView: React.FC<{
               ? "Đã hoàn thành nộp"
               : "Nộp báo cáo cuối kỳ"}
           </button>
-          {canCancelSubmission(finalReport) && renderCancelButton(finalReport!)}
+          {canCancelSubmission(finalReport) && renderCancelButton(finalReport!, true)}
         </div>
 
         {/* THẺ 3: SẢN PHẨM THỰC TẾ */}
@@ -843,7 +843,7 @@ export const SubmissionsView: React.FC<{
               ? "Đã nộp đánh giá"
               : "Nộp đánh giá doanh nghiệp"}
           </button>
-          {canCancelSubmission(employerEvidence) && renderCancelButton(employerEvidence!)}
+          {canCancelSubmission(employerEvidence) && renderCancelButton(employerEvidence!, true)}
         </div>
       </div>
 
@@ -1018,6 +1018,28 @@ export const SubmissionsView: React.FC<{
                                 ? <ExternalLink className="w-4 h-4" />
                                 : <Download className="w-4 h-4" />}
                             </button>
+                            {(() => {
+                              const submission = item.sourceType === "submission"
+                                ? rawSubmissions.find((s) => s.id === item.id)
+                                : undefined;
+                              if (!submission || !canCancelSubmission(submission)) return null;
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() => void handleCancelSubmission(submission)}
+                                  disabled={cancellingSubmissionId !== null}
+                                  className="p-1.5 hover:bg-rose-50 rounded-lg text-rose-600 transition-colors cursor-pointer disabled:opacity-50"
+                                  title={`Hủy nộp: ${item.title}`}
+                                  aria-label={`Hủy nộp: ${item.title}`}
+                                >
+                                  {cancellingSubmissionId === submission.id ? (
+                                    <Loader2 className="w-4 h-4 animate-spin text-rose-600" />
+                                  ) : (
+                                    <Trash2 className="w-4 h-4 text-rose-600" />
+                                  )}
+                                </button>
+                              );
+                            })()}
                           </div>
                         </td>
                       </tr>
@@ -1087,6 +1109,27 @@ export const SubmissionsView: React.FC<{
                           : <Download className="w-3.5 h-3.5" />}
                         {item.fileType === "Liên kết" ? "Mở liên kết" : "Tải về"}
                       </button>
+                      {(() => {
+                        const submission = item.sourceType === "submission"
+                          ? rawSubmissions.find((s) => s.id === item.id)
+                          : undefined;
+                        if (!submission || !canCancelSubmission(submission)) return null;
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => void handleCancelSubmission(submission)}
+                            disabled={cancellingSubmissionId !== null}
+                            className="px-3 py-1 bg-rose-50 text-rose-700 font-bold text-xs rounded-lg flex items-center gap-1 border border-rose-200 hover:bg-rose-100 transition-colors disabled:opacity-50"
+                          >
+                            {cancellingSubmissionId === submission.id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-3.5 h-3.5" />
+                            )}
+                            Hủy nộp
+                          </button>
+                        );
+                      })()}
                     </div>
                   </div>
                 ))
