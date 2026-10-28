@@ -211,8 +211,8 @@ public class ExcelExportService : IExcelExportService
                     var processScore = InternshipGradeCalculator.ComputeProcessScore(
                         reportMissingCount, lateCount, submittedWeekCount, weeklyQualityLevels, false);
                     dto.DiemQT = InternshipGradeCalculator.Round1(Math.Min(10m, processScore + dto.DiemThamGia.Value));
-                    // Cột J: Điểm thi vấn đáp nhập tay
-                    dto.Thi = eval.OralExamScore ?? eval.FinalGrade;
+                    // Cột J chỉ lấy điểm thi vấn đáp nhập tay; FinalGrade là điểm đánh giá tổng hợp.
+                    dto.Thi = eval.OralExamScore;
                 }
                 else
                 {
@@ -666,13 +666,9 @@ public class ExcelExportService : IExcelExportService
 
         const int dataStartRow = 3;
         const int defaultTemplateCapacity = 50; // Rows 3 to 52 in template
+        const int templateSpacerRowCount = 10; // Rows 53 to 62 in template
+        const int spacerRowsToKeep = 2;
         int recordCount = students.Count;
-
-        // 1. Locate or determine the Lookup & Statistics section
-        // In the original template, Rows 64-71 are the lookup table, and Row 72 is the total row.
-        int originalLookupStartRow = 65;
-        int originalLookupEndRow = 71;
-        int originalSumRow = 72;
 
         int extraRows = 0;
         if (recordCount > defaultTemplateCapacity)
@@ -690,12 +686,30 @@ public class ExcelExportService : IExcelExportService
             }
         }
 
-        int lastDataRow = Math.Max(dataStartRow, dataStartRow + recordCount - 1);
-        int currentLookupStartRow = originalLookupStartRow + extraRows;
-        int currentLookupEndRow = originalLookupEndRow + extraRows;
-        int currentSumRow = originalSumRow + extraRows;
+        int lastDataRow = dataStartRow + recordCount - 1;
+        if (recordCount < defaultTemplateCapacity)
+        {
+            int firstUnusedDataRow = dataStartRow + recordCount;
+            int lastTemplateDataRow = dataStartRow + defaultTemplateCapacity - 1;
+            for (int row = lastTemplateDataRow; row >= firstUnusedDataRow; row--)
+            {
+                ws.Row(row).Delete();
+            }
+        }
 
-        // 2. Populate student data rows
+        int spacerStartRow = dataStartRow + recordCount;
+        int lastSpacerRow = spacerStartRow + templateSpacerRowCount - 1;
+        int firstSpacerRowToDelete = spacerStartRow + spacerRowsToKeep;
+        for (int row = lastSpacerRow; row >= firstSpacerRowToDelete; row--)
+        {
+            ws.Row(row).Delete();
+        }
+
+        int currentLookupStartRow = lastDataRow + spacerRowsToKeep + 3;
+        int currentLookupEndRow = currentLookupStartRow + 6;
+        int currentSumRow = currentLookupEndRow + 1;
+
+        // Populate student data rows
         for (int i = 0; i < recordCount; i++)
         {
             int r = dataStartRow + i;
@@ -703,16 +717,7 @@ public class ExcelExportService : IExcelExportService
             MapStudentToRow(ws, r, s, totalWeeks, currentLookupStartRow, currentLookupEndRow);
         }
 
-        // 3. Clear unused template placeholder rows (if fewer than 50 records)
-        if (recordCount < defaultTemplateCapacity)
-        {
-            for (int r = dataStartRow + recordCount; r < dataStartRow + defaultTemplateCapacity; r++)
-            {
-                ClearUnusedRow(ws, r);
-            }
-        }
-
-        // 4. Update Lookup Table & Statistics Formulas
+        // Update lookup and statistics formulas
         UpdateLookupAndStatisticFormulas(ws, dataStartRow, lastDataRow, currentLookupStartRow, currentLookupEndRow, currentSumRow);
     }
 
@@ -724,10 +729,17 @@ public class ExcelExportService : IExcelExportService
         var ws = FindWorksheet(workbook, "TÊN CÔNG TY (2)", "TÊN CÔNG TY", "DANH SÁCH DOANH NGHIỆP");
         if (ws == null) return;
 
+        ws.Cell(1, 1).Value = "STT";
+        ws.Cell(1, 2).Value = "Tên Công Ty";
+        ws.Cell(1, 3).Value = "Địa Chỉ";
+        ws.Cell(1, 4).Value = "Số Lượng";
+        ws.Cell(1, 5).Value = string.Empty;
+        ws.Cell(1, 6).Value = "Liên Hệ";
+        ApplyHeaderStyle(ws, 1, 1, 6);
+
         const int dataStartRow = 2;
         int recordCount = companies.Count;
 
-        // Populate rows
         for (int i = 0; i < recordCount; i++)
         {
             int r = dataStartRow + i;
@@ -735,7 +747,6 @@ public class ExcelExportService : IExcelExportService
             MapCompanyToRow(ws, r, c);
         }
 
-        // Clear any excess existing template rows beyond record count
         int maxRow = ws.LastRowUsed()?.RowNumber() ?? (dataStartRow + recordCount);
         for (int r = dataStartRow + recordCount; r <= maxRow; r++)
         {
@@ -752,6 +763,14 @@ public class ExcelExportService : IExcelExportService
     {
         var ws = FindWorksheet(workbook, "DATABASE", "DANH SÁCH GIẢNG VIÊN PHÂN CÔNG");
         if (ws == null) return;
+
+        ws.Cell(2, 1).Value = "STT";
+        ws.Cell(2, 2).Value = "HỌ TÊN";
+        ws.Cell(2, 3).Value = "LỚP";
+        ws.Cell(2, 4).Value = "CÔNG TY THỰC TẬP";
+        ws.Cell(2, 5).Value = "GV HƯỚNG DẪN";
+        ws.Cell(2, 6).Value = "KHOA / BỘ MÔN";
+        ApplyHeaderStyle(ws, 2, 1, 6);
 
         const int dataStartRow = 3;
         int recordCount = assignments.Count;
@@ -775,6 +794,38 @@ public class ExcelExportService : IExcelExportService
     // ────────────────────────────────────────────────────────────────────────
     // Row Mapping & Formula Helpers
     // ────────────────────────────────────────────────────────────────────────
+
+    private static void ApplyHeaderStyle(IXLWorksheet ws, int row, int startColumn, int endColumn)
+    {
+        for (int col = startColumn; col <= endColumn; col++)
+        {
+            var cell = ws.Cell(row, col);
+            cell.Style.Font.FontName = "Times New Roman";
+            cell.Style.Font.FontSize = 13;
+            cell.Style.Font.Bold = true;
+            cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+            cell.Style.Border.SetOutsideBorder(XLBorderStyleValues.Thin);
+            cell.Style.Border.SetInsideBorder(XLBorderStyleValues.Thin);
+            cell.Style.Border.SetOutsideBorderColor(XLColor.FromHtml("#D1D5DB"));
+            cell.Style.Border.SetInsideBorderColor(XLColor.FromHtml("#D1D5DB"));
+        }
+    }
+
+    private static void ApplyDataRowStyle(IXLWorksheet ws, int row, int startColumn, int endColumn)
+    {
+        for (int col = startColumn; col <= endColumn; col++)
+        {
+            var cell = ws.Cell(row, col);
+            cell.Style.Font.FontName = "Times New Roman";
+            cell.Style.Font.FontSize = 13;
+            cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+            cell.Style.Border.SetOutsideBorder(XLBorderStyleValues.Thin);
+            cell.Style.Border.SetInsideBorder(XLBorderStyleValues.Thin);
+            cell.Style.Border.SetOutsideBorderColor(XLColor.FromHtml("#D1D5DB"));
+            cell.Style.Border.SetInsideBorderColor(XLColor.FromHtml("#D1D5DB"));
+        }
+    }
 
     private static void MapStudentToRow(
         IXLWorksheet ws,
@@ -838,16 +889,7 @@ public class ExcelExportService : IExcelExportService
         var finalReportAddress = ws.Cell(row, finalReportColumn).Address.ColumnLetter;
         ws.Cell(row, eligibilityColumn).FormulaA1 = $"IF(OR(NOT(OR({finalReportAddress}{row}=\"C\",{finalReportAddress}{row}=\"✓\")),(COUNTIF({firstWeekAddress}{row}:{lastWeekAddress}{row},\"V\")>=2)),\"{InternshipGradeCalculator.IneligibleCell}\",\"\")";
 
-        // Formatting styles
-        for (int c = 1; c <= eligibilityColumn; c++)
-        {
-            var cell = ws.Cell(row, c);
-            cell.Style.Font.FontName = "Times New Roman";
-            cell.Style.Font.FontSize = 10;
-            cell.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
-            cell.Style.Border.OutsideBorderColor = XLColor.FromHtml("#D1D5DB");
-            cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
-        }
+        ApplyDataRowStyle(ws, row, 1, eligibilityColumn);
 
         // Alignments
         ws.Cell(row, 1).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
@@ -871,15 +913,7 @@ public class ExcelExportService : IExcelExportService
         ws.Cell(row, 4).Value = c.StudentCount;
         ws.Cell(row, 6).Value = c.ContactInfo;
 
-        for (int col = 1; col <= 6; col++)
-        {
-            var cell = ws.Cell(row, col);
-            cell.Style.Font.FontName = "Times New Roman";
-            cell.Style.Font.FontSize = 10;
-            cell.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
-            cell.Style.Border.OutsideBorderColor = XLColor.FromHtml("#D1D5DB");
-            cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
-        }
+        ApplyDataRowStyle(ws, row, 1, 6);
         ws.Cell(row, 1).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
         ws.Cell(row, 4).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
     }
@@ -893,26 +927,9 @@ public class ExcelExportService : IExcelExportService
         ws.Cell(row, 5).Value = a.LecturerName;
         ws.Cell(row, 6).Value = a.LecturerDepartment;
 
-        for (int col = 1; col <= 6; col++)
-        {
-            var cell = ws.Cell(row, col);
-            cell.Style.Font.FontName = "Times New Roman";
-            cell.Style.Font.FontSize = 10;
-            cell.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
-            cell.Style.Border.OutsideBorderColor = XLColor.FromHtml("#D1D5DB");
-            cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
-        }
+        ApplyDataRowStyle(ws, row, 1, 6);
         ws.Cell(row, 1).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
         ws.Cell(row, 3).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-    }
-
-    private static void ClearUnusedRow(IXLWorksheet ws, int row)
-    {
-        for (int c = 1; c <= 21; c++)
-        {
-            var cell = ws.Cell(row, c);
-            cell.Clear(XLClearOptions.Contents | XLClearOptions.DataValidation);
-        }
     }
 
     private static void CopyTemplateRowStyle(IXLRow sourceRow, IXLRow targetRow)
@@ -949,9 +966,11 @@ public class ExcelExportService : IExcelExportService
         for (int r = lookupStartRow; r <= lookupEndRow; r++)
         {
             // Col M (Col 13): count how many students received rating in Col L
-            ws.Cell(r, 13).FormulaA1 = $"COUNTIF($L${dataStartRow}:$L${lastDataRow},L{r})";
+            ws.Cell(r, 13).FormulaA1 = lastDataRow < dataStartRow
+                ? "0"
+                : $"COUNTIF($L${dataStartRow}:$L${lastDataRow},L{r})";
             // Col N (Col 14): percentage of total
-            ws.Cell(r, 14).FormulaA1 = $"M{r}/$M${sumRow}";
+            ws.Cell(r, 14).FormulaA1 = $"IFERROR(M{r}/$M${sumRow},0)";
         }
 
         // Sum row: Col M (Col 13) = SUM(M{lookupStartRow}:M{lookupEndRow})

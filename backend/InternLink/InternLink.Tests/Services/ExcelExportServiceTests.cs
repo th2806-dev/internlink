@@ -110,7 +110,14 @@ public class ExcelExportServiceTests
         s.GvHuongDan.Should().Be("TS. Nguyễn Văn B");
         s.DiemThamGia.Should().Be(0);
         s.GhiChu.Should().BeEmpty();
-        s.Thi.Should().Be(8.5m);
+        s.Thi.Should().BeNull("the evaluation has a final grade but no oral exam score");
+
+        var storedEvaluation = await db.Evaluations.SingleAsync();
+        storedEvaluation.OralExamScore = 7.5m;
+        await db.SaveChangesAsync();
+
+        var updatedData = await service.GetExportDataAsync(semester.Id);
+        updatedData.Students[0].Thi.Should().Be(7.5m);
         s.Tuan1.Should().Be("–");
 
         data.Companies.Should().HaveCount(1);
@@ -137,10 +144,16 @@ public class ExcelExportServiceTests
         using var ms = new MemoryStream(bytes);
         using var wb = new XLWorkbook(ms);
         wb.Worksheets.Count.Should().BeGreaterThanOrEqualTo(1);
+
+        var ws = wb.Worksheet(1);
+        ws.Cell(5, 9).GetString().Should().Be("BẢNG THỐNG KÊ THEO THANG ĐIỂM QUY ĐỔI");
+        ws.Cell(6, 9).GetString().Should().Be("Hệ 10");
+        ws.Cell(7, 13).FormulaA1.Should().Be("0");
+        ws.Cell(14, 13).HasFormula.Should().BeTrue();
     }
 
     [Fact]
-    public void GenerateFromData_WithFewRecords_ShouldPopulateAndClearUnused()
+    public void GenerateFromData_WithFewRecords_ShouldPopulateAndCompactUnusedRows()
     {
         var db = GetDb();
         var service = CreateService(db);
@@ -179,6 +192,113 @@ public class ExcelExportServiceTests
         ws.Cell(3, 3).GetString().Should().Be("An");
         ws.Cell(3, 11).HasFormula.Should().BeTrue();
         ws.Cell(3, 12).HasFormula.Should().BeTrue();
+        ws.Cell(3, 12).FormulaA1.Should().Contain("$I$8:$L$14");
+        ws.Cell(6, 9).GetString().Should().Be("BẢNG THỐNG KÊ THEO THANG ĐIỂM QUY ĐỔI");
+        ws.Cell(7, 9).GetString().Should().Be("Hệ 10");
+        ws.Cell(7, 9).Style.Font.Bold.Should().BeTrue();
+        ws.Cell(15, 13).HasFormula.Should().BeTrue();
+    }
+
+    [Fact]
+    public void GenerateFromData_ShouldApplyTemplateFormattingAndBordersToAllSheets()
+    {
+        var db = GetDb();
+        var service = CreateService(db);
+
+        var data = new Application.DTOs.Export.InternshipExportDataDto
+        {
+            Students =
+            [
+                new()
+                {
+                    Stt = 1,
+                    StudentCode = "SV01",
+                    Ho = "Nguyễn Văn",
+                    Ten = "An",
+                    Lop = "C23A.TH1",
+                    PhuTrachCongTy = "FPT",
+                    GvHuongDan = "Thầy B",
+                    DiemQT = 8,
+                    Thi = 8.5m,
+                    NopBc = "Đã nộp",
+                }
+            ],
+            Companies =
+            [
+                new()
+                {
+                    Stt = 1,
+                    CompanyName = "FPT Software",
+                    Address = "Q9",
+                    StudentCount = 1,
+                    ContactInfo = "Anh A - 0901",
+                }
+            ],
+            LecturerAssignments =
+            [
+                new()
+                {
+                    Stt = 1,
+                    StudentFullName = "Nguyễn Văn An",
+                    StudentClass = "C23A.TH1",
+                    CompanyName = "FPT Software",
+                    LecturerName = "TS. Nguyễn Văn B",
+                    LecturerDepartment = "CNTT",
+                }
+            ]
+        };
+
+        var bytes = service.GenerateFromData(data);
+        using var ms = new MemoryStream(bytes);
+        using var wb = new XLWorkbook(ms);
+
+        var studentsSheet = wb.Worksheet(1);
+        studentsSheet.Cell(3, 2).Style.Font.FontSize.Should().Be(13);
+        studentsSheet.Cell(3, 2).Style.Border.BottomBorder.Should().Be(XLBorderStyleValues.Thin);
+
+        var companySheet = wb.Worksheets.First(w => w.Name.Contains("CÔNG TY", StringComparison.OrdinalIgnoreCase)
+            || w.Name.Contains("DOANH NGHIỆP", StringComparison.OrdinalIgnoreCase));
+        companySheet.Cell(2, 2).Style.Font.FontSize.Should().Be(13);
+        companySheet.Cell(2, 2).Style.Border.RightBorder.Should().Be(XLBorderStyleValues.Thin);
+
+        var assignmentSheet = wb.Worksheets.First(w => w.Name.Contains("DATABASE", StringComparison.OrdinalIgnoreCase)
+            || w.Name.Contains("GIẢNG VIÊN", StringComparison.OrdinalIgnoreCase));
+        assignmentSheet.Cell(2, 2).Style.Font.FontSize.Should().Be(13);
+        assignmentSheet.Cell(2, 2).Style.Border.BottomBorder.Should().Be(XLBorderStyleValues.Thin);
+    }
+
+    [Fact]
+    public void GenerateFromData_WithThirteenRecords_ShouldKeepTwoUnborderedSpacerRows()
+    {
+        var db = GetDb();
+        var service = CreateService(db);
+        var students = Enumerable.Range(1, 13)
+            .Select(i => new Application.DTOs.Export.InternshipStudentExportDto
+            {
+                Stt = i,
+                StudentCode = $"SV{i:D3}",
+                Ho = "Họ",
+                Ten = $"Tên {i}",
+                Lop = "C23A.TH1"
+            })
+            .ToList();
+
+        var bytes = service.GenerateFromData(
+            new Application.DTOs.Export.InternshipExportDataDto { Students = students });
+
+        using var ms = new MemoryStream(bytes);
+        using var wb = new XLWorkbook(ms);
+        var ws = wb.Worksheet(1);
+
+        ws.Cell(15, 1).GetValue<int>().Should().Be(13);
+        ws.Cell(16, 1).IsEmpty().Should().BeTrue();
+        ws.Cell(17, 1).IsEmpty().Should().BeTrue();
+        ws.Cell(16, 1).Style.Border.BottomBorder.Should().Be(XLBorderStyleValues.None);
+        ws.Cell(17, 1).Style.Border.BottomBorder.Should().Be(XLBorderStyleValues.None);
+        ws.Cell(18, 9).GetString().Should().Be("BẢNG THỐNG KÊ THEO THANG ĐIỂM QUY ĐỔI");
+        ws.Cell(19, 9).GetString().Should().Be("Hệ 10");
+        ws.Cell(20, 13).FormulaA1.Should().Contain("$L$3:$L$15");
+        ws.Cell(27, 13).HasFormula.Should().BeTrue();
     }
 
     [Fact]
@@ -217,6 +337,9 @@ public class ExcelExportServiceTests
         ws.Cell(62, 3).GetString().Should().Be("Tên 60");
         ws.Cell(62, 11).HasFormula.Should().BeTrue();
         ws.Cell(62, 12).HasFormula.Should().BeTrue();
+        ws.Cell(62, 12).FormulaA1.Should().Contain("$I$67:$L$73");
+        ws.Cell(65, 9).GetString().Should().Be("BẢNG THỐNG KÊ THEO THANG ĐIỂM QUY ĐỔI");
+        ws.Cell(66, 9).GetString().Should().Be("Hệ 10");
     }
 
     [Fact]
