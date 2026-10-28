@@ -70,10 +70,17 @@ function summaryAttendanceLabel(status: GradingWeekStatus["attendanceStatus"]): 
 type SummaryScope = "lecturer" | "admin";
 type ReportSection = { id: string; title: string; content: string };
 
+const generateSectionId = (): string => {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return "sec-" + Date.now().toString(36) + "-" + Math.random().toString(36).substring(2, 9);
+};
+
 const REPORT_SECTIONS_PREFIX = "__INTERNLINK_REPORT_SECTIONS_V1__";
 const createDefaultReportSections = (): ReportSection[] => [
-  { id: crypto.randomUUID(), title: "II. BÁO CÁO CHUNG VỀ TÌNH HÌNH THỰC TẬP", content: "" },
-  { id: crypto.randomUUID(), title: "III. ĐIỂM NỔI BẬT VÀ HẠN CHẾ TRONG CÔNG TÁC THỰC TẬP", content: "" },
+  { id: generateSectionId(), title: "II. BÁO CÁO CHUNG VỀ TÌNH HÌNH THỰC TẬP", content: "" },
+  { id: generateSectionId(), title: "III. ĐIỂM NỔI BẬT VÀ HẠN CHẾ TRONG CÔNG TÁC THỰC TẬP", content: "" },
 ];
 
 function loadReportSections(summary: { results?: string | null; difficulties?: string | null; recommendations?: string | null; conclusion?: string | null }): ReportSection[] {
@@ -84,7 +91,7 @@ function loadReportSections(summary: { results?: string | null; difficulties?: s
         typeof item === "object" && item !== null);
       if (sections.length > 0) {
         return sections.map((section) => ({
-          id: typeof section.id === "string" ? section.id : crypto.randomUUID(),
+          id: typeof section.id === "string" ? section.id : generateSectionId(),
           title: typeof section.title === "string" ? section.title : "",
           content: typeof section.content === "string" ? section.content : "",
         }));
@@ -867,7 +874,7 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
               })}
               <button
                 type="button"
-                onClick={() => setReportSections((current) => [...current, { id: crypto.randomUUID(), title: `MỤC ${current.length + 1}`, content: "" }])}
+                onClick={() => setReportSections((current) => [...current, { id: generateSectionId(), title: `MỤC ${current.length + 1}`, content: "" }])}
                 disabled={isReportLoading || Boolean(reportLoadError)}
                 className="inline-flex min-h-10 items-center gap-2 rounded-md border border-[#026aa7]/30 bg-white px-3 text-sm font-semibold text-[#025a8e] transition-colors hover:bg-[#026aa7]/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] disabled:cursor-not-allowed disabled:opacity-50"
               >
