@@ -1,4 +1,4 @@
-# 🎓 InternLink — Hệ Thống Quản Lý Thực Tập Tốt Nghiệp Đại Học
+# 🎓 InternLink — Nền Tảng Quản Lý Thực Tập
 
 <div align="center">
 
