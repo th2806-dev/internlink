@@ -13,6 +13,7 @@ import {
   Eye,
   FileUp,
   PlayCircle,
+  RotateCcw,
   ChevronLeft,
   ChevronRight,
   AlertCircle,
@@ -27,10 +28,12 @@ import { AssignLecturerModal } from "../components/modals/AssignLecturerModal";
 import { ImportStudentsModal } from "../components/modals/ImportStudentsModal";
 import { ImportLecturersModal } from "../components/modals/ImportLecturersModal";
 import { Panel } from "../../../components/common/Panel";
+import { ConfirmDialog } from "../../../components/common/ConfirmDialog";
 import { adminStudentsService } from "../../../services/adminStudents.service";
 import { adminLecturersService } from "../../../services/adminLecturers.service";
 import { adminCompaniesService } from "../../../services/adminCompanies.service";
 import type { ToastType } from "../../../contexts/ToastContext";
+import { getApiErrorMessage } from "../../../lib/apiClient";
 
 const EMPTY_SEMESTER = {
   id: "",
@@ -94,6 +97,7 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
     updateSemester,
     closeSemester,
     startSemester,
+    reopenSemester,
     duplicateSemester,
     refreshApiCounts,
   } = useSemester();
@@ -113,6 +117,11 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
   }>(null);
   const [importType, setImportType] = useState(null);
   const [showAssignModal, setShowAssignModal] = useState(false);
+  const [semesterAwaitingCloseConfirmation, setSemesterAwaitingCloseConfirmation] =
+    useState<Semester | null>(null);
+  const [semesterAwaitingAccountChoice, setSemesterAwaitingAccountChoice] =
+    useState<Semester | null>(null);
+  const [isClosingSemester, setIsClosingSemester] = useState(false);
   const [tableFilterStatus, setTableFilterStatus] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -130,11 +139,37 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
     duplicateSemester(sem, onShowToast);
   };
 
-  const handleCloseSemester = (semId: string, _semName: string) => {
-    closeSemester(semId, onShowToast);
+  const handleCloseSemester = (semester: Semester) => {
+    setSemesterAwaitingCloseConfirmation(semester);
+  };
+  const handleConfirmSemesterClose = () => {
+    setSemesterAwaitingAccountChoice(semesterAwaitingCloseConfirmation);
+    setSemesterAwaitingCloseConfirmation(null);
+  };
+  const handleCloseWithAccountChoice = async (lockStudentAccounts: boolean) => {
+    if (!semesterAwaitingAccountChoice) return;
+    setIsClosingSemester(true);
+    try {
+      await closeSemester(
+        semesterAwaitingAccountChoice.id,
+        lockStudentAccounts,
+        onShowToast,
+      );
+      setSemesterAwaitingAccountChoice(null);
+    } catch (error) {
+      onShowToast(getApiErrorMessage(error), "danger");
+    } finally {
+      setIsClosingSemester(false);
+    }
   };
   const handleStartSemester = (semId: string) => {
     void startSemester(semId, onShowToast);
+  };
+  const handleReopenSemester = (semester: Semester) => {
+    const confirmed = window.confirm(
+      `Mở lại kỳ "${semester.name}"?\n\nKỳ sẽ chuyển sang trạng thái đang hoạt động và tài khoản liên kết của sinh viên, giảng viên sẽ được kích hoạt lại.`
+    );
+    if (confirmed) void reopenSemester(semester.id, onShowToast);
   };
   const activeSem = currentActiveSem;
   const hasRealSemester = !!currentActiveSem.id;
@@ -276,18 +311,17 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
                             <span>Bắt đầu kỳ</span>
                           </button>
                         )}
-                        <button
-                          onClick={() =>
-                            handleCloseSemester(
-                              currentActiveSem.id,
-                              currentActiveSem.name,
-                            )
-                          }
-                          className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-md border border-rose-200 transition-colors flex items-center gap-1.5 cursor-pointer"
-                        >
-                          <Lock className="w-3.5 h-3.5" />
-                          <span>Đóng đợt</span>
-                        </button>
+                        {activeSem.status !== "completed" && (
+                          <button
+                            onClick={() =>
+                              handleCloseSemester(currentActiveSem as Semester)
+                            }
+                            className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-md border border-rose-200 transition-colors flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <Lock className="w-3.5 h-3.5" />
+                            <span>Đóng đợt</span>
+                          </button>
+                        )}
                       </>
                     )}
                   </>
@@ -602,12 +636,24 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
                                 </button>
                               )}
 
+                              {sem.status === "completed" && (
+                                <button
+                                  type="button"
+                                  aria-label={`Mở lại ${sem.name}`}
+                                  onClick={() => handleReopenSemester(sem)}
+                                  className="p-1.5 hover:bg-blue-50 text-slate-600 hover:text-blue-700 rounded-lg transition-colors cursor-pointer"
+                                  title="Mở lại kỳ"
+                                >
+                                  <RotateCcw className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+
                               {sem.status !== "completed" && (
                                 <button
                                   type="button"
                                   aria-label={`Đóng ${sem.name}`}
                                   onClick={() =>
-                                    handleCloseSemester(sem.id, sem.name)
+                                    handleCloseSemester(sem)
                                   }
                                   className="p-1.5 hover:bg-rose-50 text-slate-600 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
                                   title="Đóng kỳ"
@@ -744,6 +790,94 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
         }}
         currentSemesterId={currentActiveSem?.id}
       />
+
+      <ConfirmDialog
+        open={Boolean(semesterAwaitingCloseConfirmation)}
+        title="Xác nhận kết thúc học kỳ?"
+        description={
+          <>
+            Bạn đang yêu cầu kết thúc kỳ thực tập{" "}
+            <strong>{semesterAwaitingCloseConfirmation?.name}</strong>. Kỳ sẽ
+            chuyển sang trạng thái đã hoàn thành. Tiếp tục để chọn cách xử lý
+            tài khoản sinh viên.
+          </>
+        }
+        confirmLabel="Tiếp tục"
+        variant="warning"
+        onConfirm={handleConfirmSemesterClose}
+        onCancel={() => setSemesterAwaitingCloseConfirmation(null)}
+      />
+
+      {semesterAwaitingAccountChoice && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 p-4">
+          <section
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="semester-account-choice-title"
+            className="w-full max-w-lg overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl"
+          >
+            <div className="border-b border-slate-100 px-5 py-4">
+              <h2
+                id="semester-account-choice-title"
+                className="text-base font-bold text-slate-900"
+              >
+                Xử lý tài khoản sinh viên
+              </h2>
+              <p className="mt-1 text-sm text-slate-600">
+                Kỳ <strong>{semesterAwaitingAccountChoice.name}</strong> sẽ kết
+                thúc sau khi bạn chọn một phương án.
+              </p>
+            </div>
+            <div className="space-y-3 p-5">
+              <button
+                type="button"
+                disabled={isClosingSemester}
+                onClick={() => void handleCloseWithAccountChoice(false)}
+                className="w-full rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-left transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <span className="flex flex-wrap items-center gap-2 text-sm font-bold text-blue-900">
+                  <span>Giữ tài khoản hoạt động ở chế độ chỉ xem</span>
+                  <span className="inline-flex items-center rounded-full border border-blue-300 bg-white px-2 py-0.5 text-[10px] font-bold text-blue-800">
+                    Khuyên dùng
+                  </span>
+                </span>
+                <span className="mt-1 block text-xs leading-relaxed text-blue-800">
+                  Sinh viên vẫn đăng nhập được, chỉ xem Kết quả đánh giá và
+                  Tài khoản; không thể sửa hồ sơ hoặc đổi mật khẩu.
+                </span>
+              </button>
+              <button
+                type="button"
+                disabled={isClosingSemester}
+                onClick={() => void handleCloseWithAccountChoice(true)}
+                className="w-full rounded-md border-2 border-rose-300 bg-rose-50 px-4 py-3 text-left transition-colors hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <span className="block text-sm font-bold text-rose-900">
+                  Khóa tài khoản sinh viên
+                </span>
+                <span className="mt-1 block text-xs font-semibold leading-relaxed text-rose-900">
+                  Lưu ý: Sinh viên sẽ bị ngắt quyền truy cập hoàn toàn, không
+                  thể đăng nhập hoặc xem lại bảng điểm và hồ sơ thực tập.
+                </span>
+                <span className="mt-1 block text-xs leading-relaxed text-rose-800">
+                  Người còn internship trong một học kỳ khác đang mở sẽ không
+                  bị khóa.
+                </span>
+              </button>
+            </div>
+            <div className="flex justify-end border-t border-slate-100 px-5 py-3">
+              <button
+                type="button"
+                disabled={isClosingSemester}
+                onClick={() => setSemesterAwaitingAccountChoice(null)}
+                className="min-h-9 rounded-md bg-slate-100 px-4 text-xs font-bold text-slate-700 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Hủy
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 };

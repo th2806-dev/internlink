@@ -16,6 +16,68 @@ namespace InternLink.Tests.Controllers;
 
 public class SemesterReportScheduleControllerTests
 {
+    [Fact]
+    public async Task UpdateSchedule_CompletedSemester_ReturnsBadRequestWithoutUpdating()
+    {
+        var departmentId = Guid.NewGuid();
+        var semesterId = Guid.NewGuid();
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+        await using var db = new AppDbContext(options);
+        db.Semesters.Add(new Semester
+        {
+            Id = semesterId,
+            Name = "Completed semester",
+            Term = "Học kỳ I",
+            AcademicYear = "2026 - 2027",
+            DepartmentId = departmentId,
+            Status = SemesterStatus.Completed,
+            CreatedAt = DateTime.UtcNow,
+        });
+        await db.SaveChangesAsync();
+
+        var semesterService = new Mock<ISemesterService>();
+        var departmentScope = new Mock<IDepartmentScopeService>();
+        departmentScope.Setup(scope => scope.GetCurrentDepartmentId(It.IsAny<ClaimsPrincipal>()))
+            .Returns(departmentId);
+        departmentScope.Setup(scope => scope.HasAccess(It.IsAny<ClaimsPrincipal>(), departmentId))
+            .Returns(true);
+
+        var controller = new SemesterReportScheduleController(
+            semesterService.Object,
+            Mock.Of<ILecturerAccessService>(),
+            departmentScope.Object,
+            db)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    User = new ClaimsPrincipal(new ClaimsIdentity(
+                    [
+                        new Claim(ClaimTypes.Role, "DepartmentAdmin"),
+                        new Claim("DepartmentId", departmentId.ToString()),
+                    ], "test")),
+                },
+            },
+        };
+
+        var result = await controller.UpdateSchedule(
+            semesterId,
+            1,
+            new UpdateReportScheduleRequest { Title = "Updated deadline" });
+
+        result.Should().BeOfType<BadRequestObjectResult>();
+        semesterService.Verify(
+            service => service.UpdateReportScheduleAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<int>(),
+                It.IsAny<UpdateReportScheduleRequest>(),
+                It.IsAny<Guid?>()),
+            Times.Never);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

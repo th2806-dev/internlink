@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using InternLink.API.Extensions;
 using InternLink.Application.DTOs;
 using InternLink.Application.Interfaces;
+using InternLink.Domain.Enums;
 using InternLink.Infrastructure.Persistence;
 using InternLink.Shared.Responses;
 using Microsoft.AspNetCore.Authorization;
@@ -53,14 +54,23 @@ public class SemesterReportScheduleController : ControllerBase
             {
                 throw new UnauthorizedAccessException("Không có quyền thao tác kỳ thực tập của khoa khác hoặc kỳ dùng chung.");
             }
-            return;
+        }
+        else
+        {
+            var userId = User.GetUserId();
+            if (userId == null)
+                throw new UnauthorizedAccessException("Unauthorized");
+
+            await _lecturerAccessService.EnsureCanManageSemesterAsync(semesterId, userId.Value);
         }
 
-        var userId = User.GetUserId();
-        if (userId == null)
-            throw new UnauthorizedAccessException("Unauthorized");
-
-        await _lecturerAccessService.EnsureCanManageSemesterAsync(semesterId, userId.Value);
+        var semesterStatus = await _db.Semesters
+            .AsNoTracking()
+            .Where(semester => semester.Id == semesterId && !semester.IsDeleted)
+            .Select(semester => (SemesterStatus?)semester.Status)
+            .SingleOrDefaultAsync();
+        if (semesterStatus == SemesterStatus.Completed)
+            throw new InvalidOperationException("Học kỳ thực tập đã kết thúc và khóa sổ. Không thể chỉnh sửa cấu hình.");
     }
 
     [HttpGet]

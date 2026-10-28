@@ -193,6 +193,16 @@ public class SemesterService : ISemesterService
 
     public async Task<SemesterDto?> StartSemesterAsync(Guid id)
     {
+        return await ActivateSemesterAsync(id, allowCompleted: false);
+    }
+
+    public async Task<SemesterDto?> ReopenSemesterAsync(Guid id)
+    {
+        return await ActivateSemesterAsync(id, allowCompleted: true);
+    }
+
+    private async Task<SemesterDto?> ActivateSemesterAsync(Guid id, bool allowCompleted)
+    {
         var semester = await _context.Semesters
             .Where(s => s.Id == id && !s.IsDeleted)
             .Include(s => s.Internships)
@@ -202,8 +212,10 @@ public class SemesterService : ISemesterService
         if (semester == null)
             return null;
 
-        if (semester.Status == SemesterStatus.Completed)
+        if (!allowCompleted && semester.Status == SemesterStatus.Completed)
             throw new InvalidOperationException("A completed semester cannot be started again.");
+        if (allowCompleted && semester.Status != SemesterStatus.Completed)
+            throw new InvalidOperationException("Chỉ có thể mở lại học kỳ đã kết thúc.");
 
         // "One active semester" constraint is scoped per department:
         // each department runs its own terms independently.
@@ -270,7 +282,7 @@ public class SemesterService : ISemesterService
         return MapToDto(semester);
     }
 
-    public async Task<bool> CloseSemesterAsync(Guid id)
+    public async Task<bool> CloseSemesterAsync(Guid id, bool lockStudentAccounts)
     {
         var semester = await _context.Semesters
             .Where(s => s.Id == id && !s.IsDeleted)
@@ -282,39 +294,39 @@ public class SemesterService : ISemesterService
         semester.Status = SemesterStatus.Completed;
         semester.UpdatedAt = DateTime.UtcNow;
 
-        // Khóa account SV của kỳ này — NHƯNG chỉ SV không còn kỳ thực tập nào khác đang mở
-        // (audit mục 4.3: SV trùng 2 kỳ không bị khóa oan khi 1 kỳ đóng).
-        var closingStudentUserIds = await _context.Internships
-            .Where(i => i.SemesterId == id && !i.IsDeleted && i.Student.UserId != null)
-            .Select(i => i.Student.UserId!.Value)
-            .Distinct()
-            .ToListAsync();
-
-        if (closingStudentUserIds.Count > 0)
+        if (lockStudentAccounts)
         {
-            // SV còn internship chưa kết thúc (không phải Completed/Graded) ở kỳ KHÁC đang mở → giữ active.
-            var stillBusyUserIds = await _context.Internships
-                .Where(i => !i.IsDeleted
-                    && i.SemesterId != id
-                    && closingStudentUserIds.Contains(i.Student.UserId!.Value)
-                    && i.Status != InternshipStatus.Completed
-                    && i.Status != InternshipStatus.Graded
-                    && i.Semester!.Status == SemesterStatus.Active)
+            var closingStudentUserIds = await _context.Internships
+                .Where(i => i.SemesterId == id && !i.IsDeleted && i.Student.UserId != null)
                 .Select(i => i.Student.UserId!.Value)
                 .Distinct()
                 .ToListAsync();
 
-            var userIdsToLock = closingStudentUserIds.Except(stillBusyUserIds).ToList();
-            if (userIdsToLock.Count > 0)
+            if (closingStudentUserIds.Count > 0)
             {
-                var users = await _context.Users
-                    .Where(u => userIdsToLock.Contains(u.Id) && !u.IsDeleted)
+                var stillBusyUserIds = await _context.Internships
+                    .Where(i => !i.IsDeleted
+                        && i.SemesterId != id
+                        && closingStudentUserIds.Contains(i.Student.UserId!.Value)
+                        && i.Status != InternshipStatus.Completed
+                        && i.Status != InternshipStatus.Graded
+                        && i.Semester!.Status == SemesterStatus.Active)
+                    .Select(i => i.Student.UserId!.Value)
+                    .Distinct()
                     .ToListAsync();
 
-                foreach (var u in users)
+                var userIdsToLock = closingStudentUserIds.Except(stillBusyUserIds).ToList();
+                if (userIdsToLock.Count > 0)
                 {
-                    u.IsActive = false; // Closed term students are deactivated
-                    u.UpdatedAt = DateTime.UtcNow;
+                    var users = await _context.Users
+                        .Where(u => userIdsToLock.Contains(u.Id) && !u.IsDeleted)
+                        .ToListAsync();
+
+                    foreach (var u in users)
+                    {
+                        u.IsActive = false;
+                        u.UpdatedAt = DateTime.UtcNow;
+                    }
                 }
             }
         }

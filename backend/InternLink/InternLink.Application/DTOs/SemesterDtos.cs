@@ -66,3 +66,8 @@ public class UpdateSemesterDto
     /// <summary>Chỉ tiêu sinh viên dự kiến (null = giữ nguyên giá trị cũ).</summary>
     public int? TargetStudents { get; set; }
 }
+
+public sealed class CloseSemesterRequest
+{
+    public bool LockStudentAccounts { get; set; }
+}

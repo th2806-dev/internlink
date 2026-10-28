@@ -93,6 +93,10 @@ public class InternshipGradingController : ControllerBase
         {
             return BadRequest(ApiResponse<InternshipStudentGradeDto>.Fail(ApiError.From(ex.Message, status: 400)));
         }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ApiResponse<InternshipStudentGradeDto>.Fail(ApiError.From(ex.Message, status: 400)));
+        }
         catch (Exception ex)
         {
             return StatusCode(500, ApiResponse<InternshipStudentGradeDto>.Fail(ApiError.From("Lỗi lưu điểm", ex.Message, 500)));

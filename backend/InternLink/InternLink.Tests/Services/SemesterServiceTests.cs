@@ -177,6 +177,59 @@ public class SemesterServiceTests
     }
 
     [Fact]
+    public async Task ReopenSemesterAsync_ShouldReactivateClosedSemesterAndAssociatedAccounts()
+    {
+        var db = GetDb();
+        var semester = new Semester
+        {
+            Id = Guid.NewGuid(),
+            Name = "Closed internship",
+            Term = "Học kỳ I",
+            AcademicYear = "2026 - 2027",
+            StartDate = new DateTime(2026, 9, 1),
+            EndDate = new DateTime(2026, 10, 15),
+            Status = SemesterStatus.Completed,
+            CreatedAt = DateTime.UtcNow,
+        };
+        var studentUser = new User
+        {
+            Id = Guid.NewGuid(),
+            Username = "reopen-student",
+            PasswordHash = "hash",
+            Role = Role.Student,
+            IsActive = false,
+            CreatedAt = DateTime.UtcNow,
+        };
+        var student = new Student
+        {
+            Id = Guid.NewGuid(),
+            UserId = studentUser.Id,
+            StudentCode = "REOPEN01",
+            FullName = "Student",
+            CreatedAt = DateTime.UtcNow,
+        };
+        var internship = new Internship
+        {
+            Id = Guid.NewGuid(),
+            SemesterId = semester.Id,
+            StudentId = student.Id,
+            Status = InternshipStatus.InProgress,
+            CreatedAt = DateTime.UtcNow,
+        };
+        db.Semesters.Add(semester);
+        db.Users.Add(studentUser);
+        db.Students.Add(student);
+        db.Internships.Add(internship);
+        await db.SaveChangesAsync();
+
+        var result = await new SemesterService(db).ReopenSemesterAsync(semester.Id);
+
+        result!.Status.Should().Be(SemesterStatus.Active);
+        (await db.Users.FindAsync(studentUser.Id))!.IsActive.Should().BeTrue();
+        (await db.Internships.FindAsync(internship.Id))!.Status.Should().Be(InternshipStatus.InProgress);
+    }
+
+    [Fact]
     public async Task UpdateSemesterAsync_ShouldSyncInternshipDatesBeforeAnyActivity()
     {
         var db = GetDb();
@@ -565,13 +618,58 @@ public class SemesterServiceTests
             new Internship { Id = Guid.NewGuid(), StudentId = onlyStudent.Id, SemesterId = semesterA.Id, Status = InternshipStatus.InProgress, CreatedAt = DateTime.UtcNow });
         await db.SaveChangesAsync();
 
-        var result = await service.CloseSemesterAsync(semesterA.Id);
+        var result = await service.CloseSemesterAsync(semesterA.Id, lockStudentAccounts: true);
 
         result.Should().BeTrue();
         semesterA.Status.Should().Be(SemesterStatus.Completed);
         // SV còn internship mở ở kỳ B (Active) → giữ active; SV chỉ ở kỳ A → bị khóa.
         busyUser.IsActive.Should().BeTrue();
         onlyUser.IsActive.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task CloseSemesterAsync_ShouldKeepStudentAccountsActiveWhenLockIsNotSelected()
+    {
+        var db = GetDb();
+        var service = new SemesterService(db);
+        var semester = NewSemester("Kỳ kết thúc", SemesterStatus.Active);
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            Username = "archive-student",
+            PasswordHash = "h",
+            Role = Role.Student,
+            IsActive = true,
+            FullName = "Archive student",
+            CreatedAt = DateTime.UtcNow,
+        };
+        var student = new Student
+        {
+            Id = Guid.NewGuid(),
+            UserId = user.Id,
+            StudentCode = "SV03",
+            FullName = user.FullName,
+            CreatedAt = DateTime.UtcNow,
+        };
+
+        db.Semesters.Add(semester);
+        db.Users.Add(user);
+        db.Students.Add(student);
+        db.Internships.Add(new Internship
+        {
+            Id = Guid.NewGuid(),
+            StudentId = student.Id,
+            SemesterId = semester.Id,
+            Status = InternshipStatus.InProgress,
+            CreatedAt = DateTime.UtcNow,
+        });
+        await db.SaveChangesAsync();
+
+        var result = await service.CloseSemesterAsync(semester.Id, lockStudentAccounts: false);
+
+        result.Should().BeTrue();
+        semester.Status.Should().Be(SemesterStatus.Completed);
+        user.IsActive.Should().BeTrue();
     }
 
     [Fact]
@@ -628,4 +726,3 @@ public class SemesterServiceTests
         (await db.Internships.CountAsync(i => i.Status == InternshipStatus.NotStarted)).Should().Be(1);
     }
 }
-

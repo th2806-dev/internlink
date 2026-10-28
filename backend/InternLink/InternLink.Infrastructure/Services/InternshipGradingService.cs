@@ -174,7 +174,7 @@ public class InternshipGradingService : IInternshipGradingService
             }
         }
 
-        var scheduleDtos = schedules.Select(s => new InternshipWeekStatusDto
+        var scheduleDtos = weekSchedules.Select(s => new InternshipWeekStatusDto
         {
             WeekNumber = s.WeekNumber,
             Title = s.Title,
@@ -217,14 +217,14 @@ public class InternshipGradingService : IInternshipGradingService
                 // ── Trạng thái nộp báo cáo tuần (cột T1-T6, chỉ hiển thị + điểm QT) ──
                 var report = submitted.FirstOrDefault(r => r.WeekNumber == schedule.WeekNumber);
                 string status;
-                if (!schedule.IsSubmissionOpen)
-                {
-                    status = "pending";
-                }
-                else if (report.SubmittedAt.HasValue)
+                if (report.SubmittedAt.HasValue)
                 {
                     var deadline = schedule.DueDate;
                     status = deadline != default && report.SubmittedAt.Value > deadline ? "late" : "on_time";
+                }
+                else if (!schedule.IsSubmissionOpen)
+                {
+                    status = "pending";
                 }
                 else if (schedule.DueDate < now)
                 {
@@ -367,12 +367,16 @@ public class InternshipGradingService : IInternshipGradingService
         var internship = await _context.Internships
             .Include(i => i.Student)
             .Include(i => i.Company)
+            .Include(i => i.Semester)
             .FirstOrDefaultAsync(i => i.StudentId == dto.StudentId && i.SemesterId == semesterId && !i.IsDeleted);
 
         if (internship == null) return null;
 
         // Lecturer chỉ được chấm sinh viên của mình
         if (actorLecturerId.HasValue && internship.LecturerId != actorLecturerId.Value) return null;
+
+        if (internship.Semester?.Status == SemesterStatus.Completed)
+            throw new InvalidOperationException("Học kỳ thực tập đã kết thúc và khóa sổ. Không thể chỉnh sửa hoặc lưu điểm.");
 
         if (dto.QualityScore.HasValue && !InternshipGradeCalculator.IsValidQualityLevel(dto.QualityScore))
             throw new ArgumentException("QualityScore phải là 1 trong các mức: 1.0, 2.0, 3.5, 4.0, 5.0");
@@ -518,15 +522,13 @@ public class InternshipGradingService : IInternshipGradingService
                 row => row.OralExamScore!.Value,
                 StringComparer.OrdinalIgnoreCase);
 
-        if (scoreByStudentCode.Count == 0)
-            throw new InvalidOperationException("Chưa có điểm thi trong học kỳ này để xuất.");
-
         return await ExportScoreTemplateColumnAsync(
             "Exam_128224 (Thực tập tốt nghiệp).xlsx",
             "I",
             "điểm thi",
             scoreByStudentCode,
-            cancellationToken);
+            cancellationToken,
+            allowMissingScores: true);
     }
 
     public async Task<byte[]> ExportProcessScoresExcelAsync(Guid semesterId, Guid? departmentId, CancellationToken cancellationToken = default)
@@ -552,9 +554,10 @@ public class InternshipGradingService : IInternshipGradingService
         string scoreColumn,
         string scoreLabel,
         IReadOnlyDictionary<string, decimal> scoreByStudentCode,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool allowMissingScores = false)
     {
-        if (scoreByStudentCode.Count == 0)
+        if (scoreByStudentCode.Count == 0 && !allowMissingScores)
             throw new InvalidOperationException($"Không có dữ liệu {scoreLabel} để xuất.");
 
         var templatePath = Path.Combine(AppContext.BaseDirectory, "Templates", templateFileName);
@@ -619,7 +622,7 @@ public class InternshipGradingService : IInternshipGradingService
                 throw new InvalidOperationException($"Có MSSV có {scoreLabel} nhưng không nằm trong mẫu import; không xuất file để tránh sai dòng.");
             if (templateStudentCodes.Count == 0)
                 throw new InvalidDataException($"Mẫu {scoreLabel} không có danh sách MSSV.");
-            if (missingScoreCount > 0)
+            if (missingScoreCount > 0 && !allowMissingScores)
                 throw new InvalidOperationException($"Chưa thể xuất: còn {missingScoreCount} sinh viên trong mẫu chưa có {scoreLabel}.");
 
             worksheetPart.Worksheet.Save();

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   ClipboardCheck,
   RefreshCw,
@@ -20,11 +20,11 @@ import {
   UserCheck,
   UserX,
   CalendarClock,
-  Lock,
   BarChart3,
   X,
   ChevronLeft,
   ChevronRight,
+  CircleHelp,
 } from "lucide-react";
 import { useSemester } from "../../../contexts/SemesterContext";
 import {
@@ -113,6 +113,7 @@ export function ScheduleConfigTab({
   semesterId?: string;
 }) {
   const { activeSemesterId, selectedSemester } = useSemester();
+  const isSemesterClosed = selectedSemester?.status === "completed";
   const semesterId = selectedSemesterId || (
     selectedSemester?.id && selectedSemester.id !== "all"
       ? selectedSemester.id
@@ -139,7 +140,7 @@ export function ScheduleConfigTab({
     setError(null);
     try {
       let data = await semesterReportScheduleService.getSchedules(semesterId);
-      if (data.length === 0) {
+      if (data.length === 0 && !isSemesterClosed) {
         data = await semesterReportScheduleService.generateDefaults(semesterId);
       }
       setSchedules(data);
@@ -164,7 +165,7 @@ export function ScheduleConfigTab({
     } finally {
       setIsLoading(false);
     }
-  }, [semesterId, onShowToast]);
+  }, [isSemesterClosed, semesterId, onShowToast]);
 
   useEffect(() => {
     void load();
@@ -176,7 +177,7 @@ export function ScheduleConfigTab({
   };
 
   const saveAll = async () => {
-    if (!semesterId || dirtyWeeks.size === 0 || isSaving) return;
+    if (isSemesterClosed || !semesterId || dirtyWeeks.size === 0 || isSaving) return;
     setIsSaving(true);
     let ok = 0;
     try {
@@ -215,6 +216,11 @@ export function ScheduleConfigTab({
 
   return (
     <div className="space-y-4">
+      {isSemesterClosed && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900" role="status">
+          Học kỳ đã kết thúc. Cấu hình deadline đang ở chế độ chỉ xem.
+        </div>
+      )}
       {error && (
         <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           <AlertCircle className="h-4 w-4 shrink-0" />
@@ -222,7 +228,7 @@ export function ScheduleConfigTab({
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-slate-200/90 bg-white px-4 py-3 text-xs shadow-2xs" aria-label="Tổng quan trạng thái deadline">
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-lg border border-slate-200/90 bg-white px-4 py-3 text-xs shadow-2xs" aria-label="Tổng quan trạng thái deadline">
         <span className="text-slate-500">Đang diễn ra: <strong className="text-[#446d20]">{stats.active}</strong></span>
         <span className="text-slate-500">Sắp hết hạn (≤48h): <strong className="text-amber-700">{stats.closing}</strong></span>
         <span className="text-slate-500">Đã đóng: <strong className="text-slate-700">{stats.closed}</strong></span>
@@ -238,15 +244,15 @@ export function ScheduleConfigTab({
               type="button"
               onClick={() => void load()}
               disabled={isLoading}
-              className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-slate-300 px-4 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:opacity-50"
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-slate-300 px-4 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:opacity-50"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} /> Tải lại
             </button>
             <button
               type="button"
               onClick={saveAll}
-              disabled={isSaving || dirtyWeeks.size === 0}
-              className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-[#026aa7] px-4 text-xs font-semibold text-white transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:opacity-50"
+              disabled={isSemesterClosed || isSaving || dirtyWeeks.size === 0}
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-[#026aa7] px-4 text-xs font-semibold text-white transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:opacity-50"
             >
               {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
               Lưu thay đổi{dirtyWeeks.size > 0 ? ` (${dirtyWeeks.size})` : ""}
@@ -303,6 +309,7 @@ export function ScheduleConfigTab({
                           type="datetime-local"
                           value={draft?.startDate ?? ""}
                           onChange={(e) => updateDraft(schedule.weekNumber, { startDate: e.target.value })}
+                          disabled={isSemesterClosed}
                           className="w-52 rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm outline-none focus:border-[#026aa7] focus:ring-2 focus:ring-[#026aa7]/20"
                         />
                       </td>
@@ -311,6 +318,7 @@ export function ScheduleConfigTab({
                           type="datetime-local"
                           value={draft?.dueDate ?? ""}
                           onChange={(e) => updateDraft(schedule.weekNumber, { dueDate: e.target.value })}
+                          disabled={isSemesterClosed}
                           className="w-52 rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm outline-none focus:border-[#026aa7] focus:ring-2 focus:ring-[#026aa7]/20"
                         />
                       </td>
@@ -320,6 +328,8 @@ export function ScheduleConfigTab({
                           role="switch"
                           aria-checked={draft?.isSubmissionOpen}
                           onClick={() => updateDraft(schedule.weekNumber, { isSubmissionOpen: !draft?.isSubmissionOpen })}
+                          disabled={isSemesterClosed}
+                          aria-label={`Kích hoạt nộp ${schedule.title}`}
                           className={`relative h-6 w-11 rounded-full transition-colors ${
                             draft?.isSubmissionOpen ? "bg-[#7bc043]" : "bg-slate-300"
                           }`}
@@ -337,6 +347,8 @@ export function ScheduleConfigTab({
                           role="switch"
                           aria-checked={draft?.allowLateSubmission}
                           onClick={() => updateDraft(schedule.weekNumber, { allowLateSubmission: !draft?.allowLateSubmission })}
+                          disabled={isSemesterClosed}
+                          aria-label={`Cho phép nộp trễ ${schedule.title}`}
                           className={`relative h-6 w-11 rounded-full transition-colors ${
                             draft?.allowLateSubmission ? "bg-[#026aa7]" : "bg-slate-300"
                           }`}
@@ -383,6 +395,7 @@ function GradingTab({
   onShowToast?: (msg: string, type?: string) => void;
 }) {
   const { activeSemesterId, selectedSemester } = useSemester();
+  const isSemesterClosed = selectedSemester?.status === "completed";
   const semesterId = selectedSemester?.id && selectedSemester.id !== "all"
     ? selectedSemester.id
     : activeSemesterId;
@@ -400,6 +413,23 @@ function GradingTab({
   const [isDownloadingEmployerProof, setIsDownloadingEmployerProof] = useState(false);
   const [isPreviewingEmployerProof, setIsPreviewingEmployerProof] = useState(false);
   const [employerProofPreview, setEmployerProofPreview] = useState<{ url: string; mimeType: string; fileName: string } | null>(null);
+  const [isGradingGuideOpen, setIsGradingGuideOpen] = useState(false);
+  const gradingGuideTriggerRef = useRef<HTMLButtonElement>(null);
+  const gradingGuideCloseRef = useRef<HTMLButtonElement>(null);
+  const closeGradingGuide = useCallback(() => {
+    setIsGradingGuideOpen(false);
+    gradingGuideTriggerRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    if (!isGradingGuideOpen) return;
+    gradingGuideCloseRef.current?.focus();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeGradingGuide();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [closeGradingGuide, isGradingGuideOpen]);
 
   useEffect(() => {
     const previewUrl = employerProofPreview?.url;
@@ -492,7 +522,7 @@ function GradingTab({
   }, [selected, quality, weeklyQuality, oralExam]);
 
   const saveGrade = async () => {
-    if (!semesterId || !selected) return;
+    if (isSemesterClosed || !semesterId || !selected) return;
     setIsSaving(true);
     try {
       const oralNum = oralExam.trim() === "" ? null : Number(oralExam);
@@ -573,15 +603,20 @@ function GradingTab({
 
   return (
     <div className="space-y-4">
+      {isSemesterClosed && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900" role="status">
+          Học kỳ đã kết thúc. Điểm số đang ở chế độ chỉ xem.
+        </div>
+      )}
       {error && (
-        <div role="alert" className="flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50/50 px-4 py-3 text-xs text-rose-800">
+        <div role="alert" className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50/50 px-4 py-3 text-xs text-rose-800">
           <AlertCircle className="h-4 w-4 shrink-0" />
           {error}
         </div>
       )}
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
-        <Panel className="rounded-xl border border-slate-200/90 shadow-2xs xl:col-span-3">
+        <Panel className="rounded-lg border border-slate-200/90 shadow-2xs xl:col-span-3">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
               <ClipboardCheck className="h-4 w-4" /> Danh sách sinh viên
@@ -593,7 +628,7 @@ function GradingTab({
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Tìm tên / MSSV / lớp..."
-                  className="min-h-10 w-56 rounded-full border border-slate-300 py-1.5 pl-8 pr-3 text-xs outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus:ring-2 focus:ring-[#026aa7]/20"
+                  className="min-h-11 w-56 rounded-lg border border-slate-300 bg-white py-1.5 pl-8 pr-3 text-xs outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus:ring-2 focus:ring-[#026aa7]/20"
                 />
               </div>
               <button
@@ -601,7 +636,7 @@ function GradingTab({
                 onClick={() => void load()}
                 disabled={isLoading}
                 aria-label="Làm mới danh sách sinh viên"
-                className="inline-flex min-h-10 items-center justify-center rounded-full border border-slate-300 px-3 text-slate-600 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:opacity-50"
+                className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-slate-300 text-slate-600 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:opacity-50"
               >
                 <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
               </button>
@@ -615,7 +650,7 @@ function GradingTab({
           ) : error ? (
             <div className="space-y-3 py-10 text-center text-xs text-rose-700" role="alert">
               <p>Không thể tải danh sách sinh viên: {error}</p>
-              <button type="button" onClick={() => void load()} className="min-h-9 rounded-full bg-[#026aa7] px-4 font-semibold text-white hover:bg-[#025a8e]">Thử lại</button>
+              <button type="button" onClick={() => void load()} className="min-h-11 rounded-lg bg-[#026aa7] px-4 font-semibold text-white hover:bg-[#025a8e]">Thử lại</button>
             </div>
           ) : !semesterId ? (
             <div className="space-y-2 py-10 text-center text-xs text-slate-500">
@@ -691,7 +726,7 @@ function GradingTab({
           )}
         </Panel>
 
-        <Panel className="rounded-xl border border-slate-200/90 shadow-2xs xl:col-span-2">
+        <Panel className="rounded-lg border border-slate-200/90 shadow-2xs xl:sticky xl:top-4 xl:col-span-2 xl:max-h-[calc(100vh-2rem)] xl:self-start xl:overflow-y-auto">
           {!selected ? (
             <div className="flex h-full min-h-[320px] flex-col items-center justify-center text-center text-slate-400">
               <FileText className="mb-2 h-8 w-8" />
@@ -699,21 +734,30 @@ function GradingTab({
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
-                <InitialsAvatar name={selected.fullName} className="h-10 w-10" />
-                <div>
-                  <p className="font-semibold text-slate-900">{selected.fullName}</p>
-                  <p className="text-xs text-slate-400">
-                    {selected.studentCode} · {selected.className}
-                  </p>
+              <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <InitialsAvatar name={selected.fullName} className="h-10 w-10" />
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-900">{selected.fullName}</p>
+                    <p className="text-xs text-slate-400">
+                      {selected.studentCode} · {selected.className}
+                    </p>
+                  </div>
                 </div>
+                <button
+                  ref={gradingGuideTriggerRef}
+                  type="button"
+                  onClick={() => setIsGradingGuideOpen(true)}
+                  aria-label="Hướng dẫn chấm điểm"
+                  title="Hướng dẫn chấm điểm"
+                  className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-[#026aa7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
+                >
+                  <CircleHelp className="h-5 w-5" aria-hidden="true" />
+                </button>
               </div>
 
               {/* Nộp bài + điểm danh theo tuần */}
               <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Nộp bài & điểm danh theo tuần
-                </p>
                 <div className="flex flex-wrap gap-1.5">
                   {openWeeks.map((w) => {
                     const badge = WEEK_STATUS_BADGE[w.status];
@@ -741,11 +785,11 @@ function GradingTab({
                 </div>
               </div>
 
-              {/* Cụm 1 — đánh giá chất lượng theo từng báo cáo tuần (nhận từ duyệt báo cáo tuần, không cho chọn lại) */}
+              {/* Quality is synchronized from reviewed weekly reports. */}
               <div>
                 <div className="mb-2 flex items-center justify-between">
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Chất lượng từng báo cáo (nhận từ duyệt báo cáo)
+                    Chất lượng báo cáo
                   </p>
                   {openWeeklyQuality.length > 0 && (
                     <span className="text-xs font-bold text-[#025a8e] bg-[#026aa7]/5 px-2 py-0.5 rounded border border-[#026aa7]/20">
@@ -789,10 +833,6 @@ function GradingTab({
                     </p>
                   )}
                 </div>
-                <p className="mt-1.5 text-[11px] text-slate-500 flex items-center gap-1">
-                  <Lock className="h-3 w-3 text-slate-400 shrink-0" />
-                  Kết quả xếp loại được tự động đồng bộ từ mục Duyệt báo cáo (/lecturer/reports).
-                </p>
               </div>
 
               {/* Cụm 2 — Thưởng sản phẩm được duyệt */}
@@ -821,15 +861,8 @@ function GradingTab({
                   {selected.hasCreativeProduct ? "+1.0đ" : "Không cộng điểm"}
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500">
-                Điểm cộng được tự động áp dụng khi giảng viên duyệt sản phẩm trong Kho Báo Cáo &amp; Bài Nộp.
-              </p>
-
               {/* Cụm 3 — tự đếm + QT tạm tính */}
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Hệ thống tự đếm
-                </p>
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div className="rounded-md bg-white px-2.5 py-1.5 ring-1 ring-slate-200">
                     <span className="text-slate-500">Thiếu nộp: </span>
@@ -856,9 +889,6 @@ function GradingTab({
                   <span className="text-xs font-medium">Điểm QT tạm tính</span>
                   <span className="text-lg font-bold">{preview?.qt.toFixed(1) ?? selected.processScore.toFixed(1)}</span>
                 </div>
-                <p className="mt-1.5 text-[11px] leading-snug text-slate-400">
-                  QT = MIN(10, Nộp đủ(2) + Đúng hạn(2) + Chất lượng(5) + Sáng tạo(+1)). Số buổi vắng ≥ 2 ảnh hưởng điều kiện dự thi, không trừ điểm QT.
-                </p>
               </div>
 
               {/* Điểm thi vấn đáp + preview TB */}
@@ -869,7 +899,6 @@ function GradingTab({
                     <p className="mt-0.5 text-sm font-bold text-sky-800">
                       {selected.employerScore != null ? `${selected.employerScore.toFixed(1)} / 10` : "Chưa nộp điểm"}
                     </p>
-                    <p className="mt-0.5 text-[10px] font-medium text-sky-700">Tham khảo, không tính vào điểm tổng kết</p>
                   </div>
                   {selected.employerEvidenceSubmissionId ? (
                     <div className="flex flex-wrap items-center gap-2">
@@ -892,7 +921,7 @@ function GradingTab({
                         title={selected.employerEvidenceFileName ?? "Tải phiếu minh chứng"}
                       >
                         <Download className="h-3.5 w-3.5" />
-                        {isDownloadingEmployerProof ? "Đang tải…" : selected.employerEvidenceFileName ?? "Tải phiếu minh chứng"}
+                        {isDownloadingEmployerProof ? "Đang tải…" : "Tải minh chứng"}
                       </button>
                     </div>
                   ) : (
@@ -910,7 +939,7 @@ function GradingTab({
                   value={oralExam}
                   onChange={(e) => setOralExam(e.target.value)}
                   placeholder="Nhập điểm thi..."
-                  disabled={!preview?.eligible}
+                  disabled={isSemesterClosed || !preview?.eligible}
                   title={
                     preview?.eligible
                       ? undefined
@@ -947,8 +976,8 @@ function GradingTab({
               <button
                 type="button"
                 onClick={saveGrade}
-                disabled={isSaving}
-                className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-[#026aa7] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:opacity-50"
+                disabled={isSemesterClosed || isSaving}
+                className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#026aa7] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:opacity-50"
               >
                 {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                 Lưu điểm
@@ -957,6 +986,49 @@ function GradingTab({
           )}
         </Panel>
       </div>
+      {isGradingGuideOpen && (
+        <div
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/50 p-4"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeGradingGuide();
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="grading-guide-title"
+            className="max-h-[min(80vh,38rem)] w-full max-w-lg overflow-y-auto rounded-lg bg-white p-5 shadow-2xl"
+          >
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h2 id="grading-guide-title" className="text-base font-bold text-slate-900">
+                  Hướng dẫn chấm điểm
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Các mục tự động lấy từ trạng thái báo cáo và duyệt bài.
+                </p>
+              </div>
+              <button
+                ref={gradingGuideCloseRef}
+                type="button"
+                onClick={closeGradingGuide}
+                aria-label="Đóng hướng dẫn"
+                className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+            <ul className="space-y-3 text-sm leading-relaxed text-slate-700">
+              <li><strong>Điểm quá trình:</strong> tối đa 10 điểm, gồm nộp đủ (2), đúng hạn (2), chất lượng báo cáo (5) và sản phẩm sáng tạo được duyệt (+1).</li>
+              <li><strong>Chất lượng báo cáo:</strong> tự đồng bộ từ lúc giảng viên duyệt báo cáo tuần.</li>
+              <li><strong>Điều kiện dự thi:</strong> báo cáo cuối kỳ và số buổi vắng được hệ thống kiểm tra; vắng từ 2 buổi trở lên ảnh hưởng điều kiện dự thi, không trừ điểm quá trình.</li>
+              <li><strong>Điểm doanh nghiệp:</strong> chỉ để tham khảo, không tính vào điểm tổng kết.</li>
+              <li><strong>Điểm thi vấn đáp:</strong> nhập theo thang 10 khi sinh viên đủ điều kiện dự thi.</li>
+            </ul>
+          </section>
+        </div>
+      )}
       {employerProofPreview && (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 p-4"
@@ -1022,6 +1094,7 @@ function SummaryTab({
   onShowToast?: (msg: string, type?: string) => void;
 }) {
   const { activeSemesterId, selectedSemester } = useSemester();
+  const isSemesterClosed = selectedSemester?.status === "completed";
   const semesterId = selectedSemester?.id && selectedSemester.id !== "all"
     ? selectedSemester.id
     : activeSemesterId;
@@ -1135,7 +1208,7 @@ function SummaryTab({
   );
 
   const commitOralScore = async (studentId: string) => {
-    if (!semesterId) return;
+    if (isSemesterClosed || !semesterId) return;
     const target = students.find((s) => s.studentId === studentId);
     if (target && !target.isEligible) {
       onShowToast?.(
@@ -1184,6 +1257,11 @@ function SummaryTab({
 
   return (
     <div className="space-y-4">
+      {isSemesterClosed && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900" role="status">
+          Học kỳ đã kết thúc. Bảng điểm đang ở chế độ chỉ xem; bạn vẫn có thể xuất Excel.
+        </div>
+      )}
       {error && (
         <div role="alert" className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           <AlertCircle className="h-4 w-4 shrink-0" />
@@ -1192,12 +1270,12 @@ function SummaryTab({
       )}
 
       {!semesterId && (
-        <div className="flex items-center gap-3 rounded-xl border border-slate-200/90 bg-white p-5 text-xs text-slate-600 shadow-2xs">
+        <div className="flex items-center gap-3 rounded-lg border border-slate-200/90 bg-white p-5 text-xs text-slate-600 shadow-2xs">
           <CalendarDays className="h-5 w-5 shrink-0 text-[#026aa7]" aria-hidden="true" />
           Chọn học kỳ trên banner để xem bảng tổng hợp điểm.
         </div>
       )}
-      <Panel padding="none" className="overflow-hidden rounded-xl border border-slate-200/90 shadow-2xs">
+      <Panel padding="none" className="overflow-hidden rounded-lg border border-slate-200/90 shadow-2xs">
         <div className="flex flex-col gap-3 border-b border-slate-100 p-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
@@ -1215,14 +1293,14 @@ function SummaryTab({
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Tìm tên, MSSV, lớp…"
                 aria-label="Tìm sinh viên"
-                className="min-h-9 w-full rounded-full border border-slate-300 bg-slate-50 py-1.5 pl-8 pr-3 text-xs outline-none transition-colors focus:border-[#026aa7] focus:bg-white focus:ring-2 focus:ring-[#026aa7]/20"
+                className="min-h-11 w-full rounded-lg border border-slate-300 bg-white py-1.5 pl-8 pr-3 text-xs outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus:ring-2 focus:ring-[#026aa7]/20"
               />
             </div>
             <select
               value={statusFilter}
               onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}
               aria-label="Lọc theo trạng thái điểm"
-              className="min-h-9 rounded-full border border-slate-300 bg-slate-50 px-3 py-1.5 text-xs outline-none transition-colors focus:border-[#026aa7] focus:bg-white focus:ring-2 focus:ring-[#026aa7]/20"
+              className="min-h-11 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus:ring-2 focus:ring-[#026aa7]/20"
             >
               <option value="all">Mọi trạng thái</option>
               <option value="finalized">Đã chốt điểm</option>
@@ -1234,7 +1312,7 @@ function SummaryTab({
               disabled={isLoading}
               aria-label="Làm mới bảng điểm"
               title="Làm mới"
-              className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-full border border-slate-300 px-3 text-xs text-slate-600 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:opacity-50"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-slate-300 text-xs text-slate-600 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:opacity-50"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
             </button>
@@ -1304,7 +1382,7 @@ function SummaryTab({
                           onBlur={() => void commitOralScore(s.studentId)}
                           onKeyDown={(e) => e.key === "Enter" && void commitOralScore(s.studentId)}
                           placeholder="—"
-                          disabled={!s.isEligible}
+                          disabled={isSemesterClosed || !s.isEligible}
                           title={
                             s.isEligible
                               ? undefined
@@ -1547,7 +1625,7 @@ function SemesterComparisonTab() {
             {semesters.map((semester) => {
               const checked = selectedIds.includes(semester.id);
               return (
-                <label key={semester.id} className={`flex items-start gap-2 rounded-xl border p-3 text-xs transition-colors ${checked ? "border-[#026aa7]/40 bg-[#026aa7]/5" : "border-slate-200 bg-white"}`}>
+                <label key={semester.id} className={`flex items-start gap-2 rounded-lg border p-3 text-xs transition-colors ${checked ? "border-[#026aa7]/40 bg-[#026aa7]/5" : "border-slate-200 bg-white"}`}>
                   <input
                     type="checkbox"
                     checked={checked}
@@ -1636,7 +1714,7 @@ export const InternshipEvaluationView: React.FC<{
         subtitle="Đánh giá chất lượng, nhập điểm thi và tổng hợp kết quả theo quy định hiện hành."
       />
 
-      <div className="flex flex-wrap gap-1 rounded-xl border border-slate-200/90 bg-white p-1 shadow-2xs" role="tablist" aria-label="Các chức năng đánh giá thực tập">
+      <div className="flex flex-wrap gap-1 rounded-lg border border-slate-200/90 bg-white p-1 shadow-2xs" role="tablist" aria-label="Các chức năng đánh giá thực tập">
         {tabs.map((t) => {
           const Icon = t.icon;
           return (
@@ -1646,7 +1724,7 @@ export const InternshipEvaluationView: React.FC<{
               role="tab"
               aria-selected={tab === t.id}
               onClick={() => setTab(t.id)}
-              className={`inline-flex min-h-10 items-center gap-2 rounded-full px-4 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 ${
+              className={`inline-flex min-h-11 items-center gap-2 rounded-lg px-4 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 ${
                 tab === t.id
                   ? "bg-[#026aa7] text-white shadow-sm"
                   : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"

@@ -1,4 +1,5 @@
 using FluentAssertions;
+using ClosedXML.Excel;
 using InternLink.Application.DTOs;
 using InternLink.Domain.Entities;
 using InternLink.Domain.Enums;
@@ -13,6 +14,238 @@ namespace InternLink.Tests.Services;
 
 public sealed class InternshipGradingServiceTests
 {
+    [Fact]
+    public async Task ExportExamScoresExcelAsync_WithNoScores_ShouldExportTemplateWithBlankScoreCells()
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+        await using var db = new AppDbContext(options);
+        var semester = new Semester
+        {
+            Id = Guid.NewGuid(),
+            Name = "Kỳ chưa có điểm thi",
+            Term = "Học kỳ I",
+            AcademicYear = "2026 - 2027",
+            TotalWeeks = 1,
+            StartDate = DateTime.UtcNow.Date,
+            EndDate = DateTime.UtcNow.Date.AddDays(30),
+        };
+        db.Semesters.Add(semester);
+        await db.SaveChangesAsync();
+
+        var templateCodes = GetExamTemplateStudentCodes();
+        var service = new InternshipGradingService(
+            db,
+            NullLogger<InternshipGradingService>.Instance,
+            new SemesterService(db));
+
+        var bytes = await service.ExportExamScoresExcelAsync(semester.Id, departmentId: null);
+
+        using var stream = new MemoryStream(bytes);
+        using var workbook = new XLWorkbook(stream);
+        var worksheet = workbook.Worksheet(1);
+        foreach (var studentCode in templateCodes)
+        {
+            var row = worksheet.RowsUsed()
+                .First(candidate => candidate.Cell(2).GetString().Trim() == studentCode);
+            row.Cell(9).IsEmpty().Should().BeTrue();
+        }
+    }
+
+    [Fact]
+    public async Task ExportExamScoresExcelAsync_WithPartialScores_ShouldExportAvailableScoresAndLeaveOthersBlank()
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+        await using var db = new AppDbContext(options);
+        var semester = new Semester
+        {
+            Id = Guid.NewGuid(),
+            Name = "Kỳ có điểm thi một phần",
+            Term = "Học kỳ I",
+            AcademicYear = "2026 - 2027",
+            TotalWeeks = 1,
+            StartDate = DateTime.UtcNow.Date,
+            EndDate = DateTime.UtcNow.Date.AddDays(30),
+        };
+        var templateCodes = GetExamTemplateStudentCodes();
+        templateCodes.Should().HaveCountGreaterThan(1);
+        var student = new Student
+        {
+            Id = Guid.NewGuid(),
+            StudentCode = templateCodes[0],
+            FullName = "Sinh viên đã có điểm",
+        };
+        var internship = new Internship
+        {
+            Id = Guid.NewGuid(),
+            SemesterId = semester.Id,
+            StudentId = student.Id,
+            Student = student,
+            Status = InternshipStatus.InProgress,
+        };
+        db.Semesters.Add(semester);
+        db.Students.Add(student);
+        db.Internships.Add(internship);
+        db.Evaluations.Add(new Evaluation
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = internship.Id,
+            Internship = internship,
+            OralExamScore = 8.5m,
+        });
+        await db.SaveChangesAsync();
+
+        var service = new InternshipGradingService(
+            db,
+            NullLogger<InternshipGradingService>.Instance,
+            new SemesterService(db));
+
+        var bytes = await service.ExportExamScoresExcelAsync(semester.Id, departmentId: null);
+
+        using var stream = new MemoryStream(bytes);
+        using var workbook = new XLWorkbook(stream);
+        var worksheet = workbook.Worksheet(1);
+        var scoredRow = worksheet.RowsUsed()
+            .First(row => row.Cell(2).GetString().Trim() == templateCodes[0]);
+        var unscoredRow = worksheet.RowsUsed()
+            .First(row => row.Cell(2).GetString().Trim() == templateCodes[1]);
+        scoredRow.Cell(9).GetValue<decimal>().Should().Be(8.5m);
+        unscoredRow.Cell(9).IsEmpty().Should().BeTrue();
+    }
+
+    private static string[] GetExamTemplateStudentCodes()
+    {
+        var templatePath = Path.Combine(
+            AppContext.BaseDirectory,
+            "Templates",
+            "Exam_128224 (Thực tập tốt nghiệp).xlsx");
+        using var workbook = new XLWorkbook(templatePath);
+        return workbook.Worksheet(1)
+            .RowsUsed()
+            .Where(row => row.RowNumber() >= 2)
+            .Select(row => row.Cell(2).GetString().Trim())
+            .Where(code => !string.IsNullOrWhiteSpace(code))
+            .ToArray();
+    }
+
+    [Fact]
+    public async Task SaveGradeAsync_CompletedSemester_ThrowsAndDoesNotChangeEvaluation()
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+        await using var db = new AppDbContext(options);
+
+        var semester = new Semester
+        {
+            Id = Guid.NewGuid(),
+            Name = "Kỳ đã kết thúc",
+            Term = "Học kỳ I",
+            AcademicYear = "2026 - 2027",
+            TotalWeeks = 1,
+            StartDate = DateTime.UtcNow.Date,
+            EndDate = DateTime.UtcNow.Date.AddDays(30),
+            Status = SemesterStatus.Completed,
+        };
+        var student = new Student
+        {
+            Id = Guid.NewGuid(),
+            StudentCode = "TEST-CLOSED-01",
+            FullName = "Sinh viên kỳ đã kết thúc",
+        };
+        var internship = new Internship
+        {
+            Id = Guid.NewGuid(),
+            SemesterId = semester.Id,
+            Semester = semester,
+            StudentId = student.Id,
+            Student = student,
+            Status = InternshipStatus.InProgress,
+        };
+        var evaluation = new Evaluation
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = internship.Id,
+            Internship = internship,
+            OralExamScore = 7.5m,
+        };
+        db.Semesters.Add(semester);
+        db.Students.Add(student);
+        db.Internships.Add(internship);
+        db.Evaluations.Add(evaluation);
+        await db.SaveChangesAsync();
+
+        var service = new InternshipGradingService(
+            db,
+            NullLogger<InternshipGradingService>.Instance,
+            new SemesterService(db));
+
+        var act = () => service.SaveGradeAsync(
+            semester.Id,
+            new SaveInternshipGradeRequestDto
+            {
+                StudentId = student.Id,
+                OralExamScore = 9m,
+            },
+            actorUserId: Guid.NewGuid(),
+            actorLecturerId: null);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("Học kỳ thực tập đã kết thúc và khóa sổ. Không thể chỉnh sửa hoặc lưu điểm.");
+        (await db.Evaluations.SingleAsync()).OralExamScore.Should().Be(7.5m);
+    }
+
+    [Fact]
+    public async Task GetSummaryAsync_ScheduleContainsWeeklyDeadlinesOnly()
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+        await using var db = new AppDbContext(options);
+
+        var semester = new Semester
+        {
+            Id = Guid.NewGuid(),
+            Name = "Kỳ có báo cáo cuối kỳ",
+            Term = "Học kỳ I",
+            AcademicYear = "2026 - 2027",
+            TotalWeeks = 1,
+            StartDate = DateTime.UtcNow.Date,
+            EndDate = DateTime.UtcNow.Date.AddDays(30),
+        };
+        db.Semesters.Add(semester);
+        db.SemesterReportSchedules.AddRange(
+            new SemesterReportSchedule
+            {
+                Id = Guid.NewGuid(),
+                SemesterId = semester.Id,
+                WeekNumber = 1,
+                Title = "Báo cáo tuần 1",
+                DueDate = DateTime.UtcNow.AddDays(7),
+            },
+            new SemesterReportSchedule
+            {
+                Id = Guid.NewGuid(),
+                SemesterId = semester.Id,
+                WeekNumber = 2,
+                Title = "Báo cáo cuối kỳ",
+                DueDate = DateTime.UtcNow.AddDays(14),
+            });
+        await db.SaveChangesAsync();
+
+        var service = new InternshipGradingService(
+            db,
+            NullLogger<InternshipGradingService>.Instance,
+            new SemesterService(db));
+
+        var summary = await service.GetSummaryAsync(semester.Id, lecturerId: null, departmentId: null);
+
+        summary.Schedule.Should().ContainSingle().Which.WeekNumber.Should().Be(1);
+    }
+
     [Fact]
     public async Task GetSummaryAsync_UsesProductApprovalInsteadOfSavedCreativeFlag()
     {
@@ -248,6 +481,18 @@ public sealed class InternshipGradingServiceTests
             Status = InternshipStatus.InProgress,
             CreatedAt = now,
         };
+        var submittedWeekTwoReport = new WeeklyReport
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = internship.Id,
+            Internship = internship,
+            WeekNumber = 2,
+            Title = "Báo cáo tuần 2",
+            Content = "Nội dung báo cáo",
+            Status = WeeklyReportStatus.Submitted,
+            SubmittedAt = now.AddDays(-1),
+            CreatedAt = now.AddDays(-1),
+        };
         var absentSession = new AttendanceSession
         {
             Id = Guid.NewGuid(),
@@ -339,6 +584,7 @@ public sealed class InternshipGradingServiceTests
         db.Semesters.Add(semester);
         db.Students.Add(student);
         db.Internships.Add(internship);
+        db.WeeklyReports.Add(submittedWeekTwoReport);
         db.AttendanceSessions.AddRange(absentSession, sessionWithoutStudentRecord, generalSession, unmarkedSession);
         for (var week = 1; week <= 4; week++)
         {
@@ -366,6 +612,8 @@ public sealed class InternshipGradingServiceTests
 
         grade.Weeks.Select(week => week.AttendanceStatus).Should().Equal("absent", "present", "no_session", "no_session");
         grade.Weeks[1].IsSubmissionOpen.Should().BeFalse();
+        grade.Weeks.Select(week => week.Status).Should().Equal("pending", "on_time", "pending", "pending");
+        grade.Weeks[1].SubmittedAt.Should().Be(submittedWeekTwoReport.SubmittedAt);
         grade.Weeks[1].IsAttendanceAbsent.Should().BeFalse();
         grade.AbsentCount.Should().Be(1);
     }

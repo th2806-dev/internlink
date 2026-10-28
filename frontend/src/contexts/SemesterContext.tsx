@@ -95,7 +95,12 @@ interface SemesterContextType {
   createSemester: (data: Partial<Semester> & { name: string; term: string; academicYear: string }) => Promise<void>;
   updateSemester: (id: string, data: Partial<Semester> & { name: string; term: string; academicYear: string }, onShowToast?: (msg: string) => void) => Promise<boolean>;
   startSemester: (id: string, onShowToast?: (msg: string) => void) => Promise<void>;
-  closeSemester: (id: string, onShowToast?: (msg: string) => void) => Promise<void>;
+  reopenSemester: (id: string, onShowToast?: (msg: string) => void) => Promise<void>;
+  closeSemester: (
+    id: string,
+    lockStudentAccounts: boolean,
+    onShowToast?: (msg: string) => void,
+  ) => Promise<void>;
   duplicateSemester: (sem: Semester, onShowToast?: (msg: string) => void) => void;
   refreshApiCounts: () => Promise<void>;
 }
@@ -397,16 +402,14 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
-  const closeSemester = async (id: string, onShowToast?: (msg: string) => void) => {
+  const closeSemester = async (
+    id: string,
+    lockStudentAccounts: boolean,
+    onShowToast?: (msg: string) => void,
+  ) => {
     let closedName = "";
 
-
-    try {
-      await adminSemestersService.close(id);
-    } catch (err) {
-      console.warn("Backend close semester call failed, updating local state:", err);
-    }
-
+    await adminSemestersService.close(id, { lockStudentAccounts });
 
     const updated = semesters.map((s) => {
       if (s.id === id) {
@@ -415,7 +418,7 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           ...s,
           status: "completed" as const,
           progressPercent: 100,
-          currentPhase: "Đã hoàn thành & Khóa dữ liệu",
+          currentPhase: "Đã hoàn thành",
         };
       }
       return s;
@@ -432,7 +435,11 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
 
     if (onShowToast) {
-      onShowToast(`Đã đóng kỳ thực tập: "${closedName}". Tài khoản sinh viên đợt này đã chuyển sang chế độ Lưu trữ.`);
+      onShowToast(
+        lockStudentAccounts
+          ? `Đã đóng kỳ thực tập: "${closedName}" và yêu cầu khóa tài khoản sinh viên không còn kỳ đang mở.`
+          : `Đã đóng kỳ thực tập: "${closedName}". Tài khoản sinh viên vẫn hoạt động ở chế độ chỉ xem.`,
+      );
     }
   };
 
@@ -449,6 +456,23 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         return;
       }
       const message = err instanceof Error ? err.message : "Không thể bắt đầu kỳ thực tập.";
+      onShowToast?.(message);
+    }
+  };
+
+  const reopenSemester = async (id: string, onShowToast?: (msg: string) => void) => {
+    try {
+      const reopened = await adminSemestersService.reopen(id);
+      const mapped = mapBackendToFrontend(reopened);
+      setSemesters((prev) => prev.map((semester) => semester.id === id ? mapped : semester));
+      setSelectedSemesterId(id);
+      onShowToast?.(`Đã mở lại kỳ thực tập: "${mapped.name}". Tài khoản sinh viên và giảng viên thuộc kỳ đã được kích hoạt.`);
+    } catch (err) {
+      if (err instanceof ApiClientError && err.status === 409) {
+        onShowToast?.(err.message || "Không thể mở lại kỳ vì đang có kỳ khác hoạt động trong khoa.");
+        return;
+      }
+      const message = err instanceof Error ? err.message : "Không thể mở lại kỳ thực tập.";
       onShowToast?.(message);
     }
   };
@@ -483,6 +507,7 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         createSemester,
         updateSemester,
         startSemester,
+        reopenSemester,
         closeSemester,
         duplicateSemester,
         refreshApiCounts,

@@ -155,16 +155,16 @@ public class AdminSemestersController : ControllerBase
 
     [HttpPost("{id:guid}/close")]
     [Authorize(Policy = "RequireDepartmentAdmin")]
-    public async Task<IActionResult> Close(Guid id)
+    public async Task<IActionResult> Close(Guid id, [FromBody] CloseSemesterRequest request)
     {
         if (!await _deptCanAccessSemester(id))
             return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SemesterNotFound }));
 
-        var success = await _semesterService.CloseSemesterAsync(id);
+        var success = await _semesterService.CloseSemesterAsync(id, request.LockStudentAccounts);
         if (!success)
             return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SemesterNotFound }));
 
-        return Ok(ApiResponse<object>.Ok(new { message = "Semester closed and student accounts archived successfully" }));
+        return Ok(ApiResponse<object>.Ok(new { message = "Semester closed successfully" }));
     }
 
     [HttpPost("{id:guid}/start")]
@@ -181,6 +181,27 @@ public class AdminSemestersController : ControllerBase
                 return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SemesterNotFound }));
 
             return Ok(ApiResponse<SemesterDto>.Ok(started));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(ApiResponse<object>.Fail(new ApiError { Title = ex.Message }));
+        }
+    }
+
+    [HttpPost("{id:guid}/reopen")]
+    [Authorize(Policy = "RequireDepartmentAdmin")]
+    public async Task<IActionResult> Reopen(Guid id)
+    {
+        if (!await _deptCanAccessSemester(id))
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SemesterNotFound }));
+
+        try
+        {
+            var reopened = await _semesterService.ReopenSemesterAsync(id);
+            if (reopened == null)
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SemesterNotFound }));
+
+            return Ok(ApiResponse<SemesterDto>.Ok(reopened));
         }
         catch (InvalidOperationException ex)
         {

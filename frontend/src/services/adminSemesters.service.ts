@@ -110,14 +110,24 @@ export const adminSemestersService = {
     });
   },
 
-  close(id: string): Promise<{ message: string }> {
+  close(
+    id: string,
+    options: { lockStudentAccounts: boolean },
+  ): Promise<{ message: string }> {
     return apiRequest<{ message: string }>(`/api/Admin/semesters/${id}/close`, {
       method: "POST",
+      body: options,
     });
   },
 
   start(id: string): Promise<BackendSemesterDto> {
     return apiRequest<BackendSemesterDto>(`/api/Admin/semesters/${id}/start`, {
+      method: "POST",
+    });
+  },
+
+  reopen(id: string): Promise<BackendSemesterDto> {
+    return apiRequest<BackendSemesterDto>(`/api/Admin/semesters/${id}/reopen`, {
       method: "POST",
     });
   },

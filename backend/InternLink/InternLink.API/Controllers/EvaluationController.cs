@@ -93,7 +93,7 @@ public class EvaluationController : ControllerBase
     /// <summary>
     /// Get evaluation details by ID
     /// </summary>
-    [HttpGet("{id}")]
+    [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(EvaluationDetailDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<EvaluationDetailDto>> GetEvaluationById(Guid id)
