@@ -65,7 +65,7 @@ const PRIORITY_CONFIG: Record<
 function SkeletonCard({ className = "" }: { className?: string }) {
   return (
     <div
-      className={`bg-white rounded-xl border border-slate-200/80 p-5 animate-pulse ${className}`}
+      className={`bg-white rounded-lg border border-slate-200/80 p-5 animate-pulse ${className}`}
     >
       <div className="h-3 w-24 bg-slate-200 rounded mb-3" />
       <div className="h-7 w-16 bg-slate-200 rounded mb-2" />
@@ -98,6 +98,8 @@ export const DashboardView = ({
     interning: number;
     assignedCompanyCount: number;
     pending: number;
+    pendingWeeklyReports?: number;
+    pendingSubmissions?: number;
     overdue: number;
     completed: number;
     avgProg: number;
@@ -140,6 +142,14 @@ export const DashboardView = ({
       ),
     [students],
   );
+  const studentsWithAttendanceRisk = useMemo(
+    () => students.filter((student) => student.absentCount !== undefined && student.absentCount >= 2),
+    [students],
+  );
+  const studentsMissingFinalReport = useMemo(
+    () => students.filter((student) => student.progress >= 75 && student.hasFinalReport === false),
+    [students],
+  );
 
   const handleRefresh = async () => {
     if (!onRefresh) return;
@@ -176,26 +186,12 @@ export const DashboardView = ({
     0,
   );
 
-  const approvedByWeek = useMemo(() => {
-    const map: Record<number, number> = {};
-    weeklyReports.forEach((r) => {
-      if (r.status === "Approved") {
-        map[r.weekNumber] = (map[r.weekNumber] || 0) + 1;
-      }
-    });
-    return map;
-  }, [weeklyReports]);
-
   const chartData = useMemo(() => {
-    return weeklyTrendData.map((row) => {
-      const weekNum = (row as { weekNumber?: number }).weekNumber ?? parseInt(row.label.replace(/\D/g, ""), 10);
-      const approved = approvedByWeek[weekNum] ?? 0;
-      return {
-        ...row,
-        approved,
-      };
-    });
-  }, [weeklyTrendData, approvedByWeek]);
+    return weeklyTrendData.map((row) => ({
+      ...row,
+      approved: row.approved ?? 0,
+    }));
+  }, [weeklyTrendData]);
 
   // ---- Xuất file CSV tiến độ báo cáo tuần ----
   const handleExportCsv = () => {
@@ -362,7 +358,7 @@ export const DashboardView = ({
           onRefresh={onRefresh ? handleRefresh : undefined}
           isRefreshing={isRefreshing}
         />
-        <Panel className="p-10 text-center space-y-4 max-w-xl mx-auto rounded-xl">
+        <Panel className="p-10 text-center space-y-4 max-w-xl mx-auto rounded-lg">
           <div className="w-16 h-16 bg-blue-50 text-blue-700 rounded-full flex items-center justify-center mx-auto">
             <CalendarDays className="w-8 h-8" />
           </div>
@@ -397,7 +393,7 @@ export const DashboardView = ({
         {/* KPI 1: Sinh viên phụ trách */}
         <div
           onClick={() => onNavigate("students")}
-          className="rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs flex flex-col justify-between transition-all hover:border-blue-300 cursor-pointer"
+          className="rounded-lg border border-slate-200/90 bg-white p-4 shadow-2xs flex flex-col justify-between transition-all hover:border-blue-300 cursor-pointer"
         >
           <div>
             <div className="flex items-center justify-between text-xs mb-2">
@@ -423,7 +419,7 @@ export const DashboardView = ({
         {/* KPI 2: Đã có nơi thực tập */}
         <div
           onClick={() => onNavigate("students")}
-          className="rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs flex flex-col justify-between transition-all hover:border-emerald-300 cursor-pointer"
+          className="rounded-lg border border-slate-200/90 bg-white p-4 shadow-2xs flex flex-col justify-between transition-all hover:border-emerald-300 cursor-pointer"
         >
           <div>
             <div className="flex items-center justify-between text-xs mb-2">
@@ -451,12 +447,12 @@ export const DashboardView = ({
         {/* KPI 3: Báo cáo tuần cần duyệt */}
         <div
           onClick={() => onNavigate("reports")}
-          className="rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs flex flex-col justify-between transition-all hover:border-amber-300 cursor-pointer"
+          className="rounded-lg border border-slate-200/90 bg-white p-4 shadow-2xs flex flex-col justify-between transition-all hover:border-amber-300 cursor-pointer"
         >
           <div>
             <div className="flex items-center justify-between text-xs mb-2">
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                Báo cáo cần duyệt
+                Chờ duyệt
               </span>
               <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center">
                 <Clock className="w-4 h-4" />
@@ -474,14 +470,16 @@ export const DashboardView = ({
             </div>
           </div>
           <p className="text-[11px] text-slate-400 font-medium mt-2">
-            {stats.pending > 0 ? "Chờ giảng viên phản hồi" : "Đã duyệt hết"}
+            {stats.pendingWeeklyReports !== undefined && stats.pendingSubmissions !== undefined
+              ? `${stats.pendingWeeklyReports} báo cáo tuần · ${stats.pendingSubmissions} hồ sơ khác`
+              : "Chi tiết chờ duyệt chưa khả dụng"}
           </p>
         </div>
 
         {/* KPI 4: Tiến độ trung bình */}
         <div
           onClick={() => onNavigate("students")}
-          className="rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs flex flex-col justify-between transition-all hover:border-violet-300 cursor-pointer"
+          className="rounded-lg border border-slate-200/90 bg-white p-4 shadow-2xs flex flex-col justify-between transition-all hover:border-violet-300 cursor-pointer"
         >
           <div>
             <div className="flex items-center justify-between text-xs mb-2">
@@ -510,7 +508,7 @@ export const DashboardView = ({
          ═══════════════════════════════════════════════════════════════════ */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* THẺ TRÁI: TIẾN ĐỘ NỘP BÁO CÁO CÁC TUẦN */}
-        <div className="flex flex-col justify-between rounded-xl border border-slate-200/90 bg-white p-4 sm:p-5 shadow-2xs min-h-[380px]">
+        <div className="flex flex-col justify-between rounded-lg border border-slate-200/90 bg-white p-4 sm:p-5 shadow-2xs min-h-[380px]">
           {/* Header & Controls toolbar */}
           <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-3">
             <div className="min-w-0">
@@ -759,7 +757,7 @@ export const DashboardView = ({
         </div>
 
         {/* THẺ PHẢI: PHÂN BỐ TRẠNG THÁI SINH VIÊN */}
-        <div className="flex flex-col justify-between rounded-xl border border-slate-200/90 bg-white p-4 sm:p-5 shadow-2xs min-h-[380px]">
+        <div className="flex flex-col justify-between rounded-lg border border-slate-200/90 bg-white p-4 sm:p-5 shadow-2xs min-h-[380px]">
           <div className="pb-1 text-center">
             <h2 className="text-sm font-bold text-slate-900">
               Phân bổ nơi thực tập
@@ -867,7 +865,7 @@ export const DashboardView = ({
 
       {/* Cảnh báo sinh viên chưa có nơi thực tập */}
       {studentsWithoutCompany.length > 0 && (
-        <div className="flex flex-col gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between shadow-2xs">
+        <div className="flex flex-col gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between shadow-2xs">
           <div className="flex items-start gap-3">
             <Building2 className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
             <p className="text-xs font-medium text-amber-950">
@@ -885,10 +883,35 @@ export const DashboardView = ({
           </button>
         </div>
       )}
+      {(studentsWithAttendanceRisk.length > 0 || studentsMissingFinalReport.length > 0) && (
+        <div className="flex flex-col gap-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-700" aria-hidden="true" />
+            <p className="text-xs leading-relaxed text-rose-950">
+              Cần theo dõi{" "}
+              {studentsWithAttendanceRisk.length > 0 && (
+                <><strong>{studentsWithAttendanceRisk.length} sinh viên</strong> vắng từ 2 buổi</>
+              )}
+              {studentsWithAttendanceRisk.length > 0 && studentsMissingFinalReport.length > 0 && " và "}
+              {studentsMissingFinalReport.length > 0 && (
+                <><strong>{studentsMissingFinalReport.length} sinh viên</strong> chưa nộp báo cáo cuối khi tiến độ đạt từ 75%</>
+              )}
+              .
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => onNavigate("students")}
+            className="shrink-0 self-start text-xs font-bold text-rose-800 underline underline-offset-2 sm:self-auto"
+          >
+            Xem danh sách
+          </button>
+        </div>
+      )}
 
       {/* Action Center (Cần bạn xử lý) */}
       <Panel
-        className={`rounded-xl border ${
+        className={`rounded-lg border ${
           hasWork
             ? "border-amber-200 bg-amber-50/40"
             : "border-emerald-200 bg-emerald-50/40"
@@ -981,7 +1004,7 @@ export const DashboardView = ({
       {/* Deadlines & Hoạt động gần đây */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* Hạn sắp tới */}
-        <Panel className="lg:col-span-7 rounded-xl border border-slate-200/90 shadow-2xs">
+        <Panel className="lg:col-span-7 rounded-lg border border-slate-200/90 shadow-2xs">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <div>
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
@@ -1056,7 +1079,7 @@ export const DashboardView = ({
         </Panel>
 
         {/* Hoạt động gần đây */}
-        <Panel className="lg:col-span-5 rounded-xl border border-slate-200/90 shadow-2xs">
+        <Panel className="lg:col-span-5 rounded-lg border border-slate-200/90 shadow-2xs">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <div>
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">

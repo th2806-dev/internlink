@@ -174,6 +174,8 @@ public class LecturerService : ILecturerService
             InterningCount = interning,
             AverageProgress = averageProgress,
             PendingReviewsCount = pendingReviews,
+            PendingWeeklyReportsCount = pendingReports,
+            PendingSubmissionsCount = pendingSubmissions,
             CompletedCount = completed,
             OverdueReportsCount = overdueReports,
             AverageGrade = avgGrade,
@@ -994,6 +996,13 @@ public class LecturerService : ILecturerService
             .AsNoTracking()
             .Where(report => internshipIds.Contains(report.InternshipId) && !report.IsDeleted)
             .ToListAsync();
+        var finalReports = await _db.Submissions
+            .AsNoTracking()
+            .Where(submission => internshipIds.Contains(submission.InternshipId)
+                && !submission.IsDeleted
+                && submission.Type == SubmissionType.FinalReport
+                && submission.Status != SubmissionStatus.Rejected)
+            .ToListAsync();
         var semesterIds = internships
             .Where(internship => internship.SemesterId.HasValue)
             .Select(internship => internship.SemesterId!.Value)
@@ -1016,11 +1025,22 @@ public class LecturerService : ILecturerService
                     .OrderByDescending(schedule => schedule.LecturerId == lecturerId.Value)
                     .ThenByDescending(schedule => schedule.UpdatedAt ?? schedule.CreatedAt)
                     .First());
+        var totalWeeksBySemester = internships
+            .Where(internship => internship.SemesterId.HasValue)
+            .GroupBy(internship => internship.SemesterId!.Value)
+            .ToDictionary(
+                group => group.Key,
+                group => Math.Max(group.Select(internship => internship.Semester?.TotalWeeks ?? 1).FirstOrDefault(), 1));
         var openWeeks = scheduleBySemesterWeek.Values
-            .Where(schedule => schedule.IsSubmissionOpen && schedule.WeekNumber > 0)
-            .Select(schedule => schedule.WeekNumber)
+            .Where(schedule => schedule.IsSubmissionOpen
+                && schedule.WeekNumber > 0
+                && schedule.WeekNumber <= totalWeeksBySemester.GetValueOrDefault(schedule.SemesterId, 1) + 1)
+            .Select(schedule => (
+                WeekNumber: schedule.WeekNumber,
+                IsFinalReport: schedule.WeekNumber == totalWeeksBySemester.GetValueOrDefault(schedule.SemesterId, 1) + 1))
             .Distinct()
-            .OrderBy(week => week)
+            .OrderBy(week => week.WeekNumber)
+            .ThenBy(week => week.IsFinalReport)
             .ToList();
 
         var trend = new List<WeeklyTrendDto>();
@@ -1029,32 +1049,49 @@ public class LecturerService : ILecturerService
         {
             var scheduledInternships = internships
                 .Where(internship => internship.SemesterId.HasValue
-                    && scheduleBySemesterWeek.TryGetValue((internship.SemesterId.Value, week), out var schedule)
-                    && schedule.IsSubmissionOpen)
+                    && scheduleBySemesterWeek.TryGetValue((internship.SemesterId.Value, week.WeekNumber), out var schedule)
+                    && schedule.IsSubmissionOpen
+                    && schedule.WeekNumber <= totalWeeksBySemester.GetValueOrDefault(internship.SemesterId.Value, 1) + 1
+                    && (schedule.WeekNumber == totalWeeksBySemester.GetValueOrDefault(internship.SemesterId.Value, 1) + 1) == week.IsFinalReport)
                 .ToList();
             var onTime = 0;
             var late = 0;
             var missing = 0;
             var pending = 0;
+            var approved = 0;
 
             foreach (var internship in scheduledInternships)
             {
-                var dueDate = scheduleBySemesterWeek[(internship.SemesterId!.Value, week)].DueDate;
-                var submission = weeklyReports
-                    .Where(report =>
-                        report.InternshipId == internship.Id &&
-                        report.WeekNumber == week &&
-                        (report.SubmittedAt.HasValue || report.Status != WeeklyReportStatus.Draft))
-                    .OrderByDescending(report => report.SubmittedAt)
-                    .ThenByDescending(report => report.UpdatedAt ?? report.CreatedAt)
-                    .FirstOrDefault();
-
-                if (submission != null)
+                var dueDate = scheduleBySemesterWeek[(internship.SemesterId!.Value, week.WeekNumber)].DueDate;
+                DateTime? submittedAt;
+                if (week.IsFinalReport)
                 {
-                    var submittedAt = submission.SubmittedAt
-                        ?? submission.UpdatedAt
-                        ?? submission.CreatedAt;
-                    if (submittedAt <= dueDate) onTime++;
+                    var finalReport = finalReports
+                        .Where(report => report.InternshipId == internship.Id)
+                        .OrderByDescending(report => report.SubmittedAt)
+                        .FirstOrDefault();
+                    submittedAt = finalReport?.SubmittedAt;
+                    if (finalReport?.Status == SubmissionStatus.Approved)
+                        approved++;
+                }
+                else
+                {
+                    var report = weeklyReports
+                        .Where(report =>
+                            report.InternshipId == internship.Id &&
+                            report.WeekNumber == week.WeekNumber &&
+                            (report.SubmittedAt.HasValue || report.Status != WeeklyReportStatus.Draft))
+                        .OrderByDescending(report => report.SubmittedAt)
+                        .ThenByDescending(report => report.UpdatedAt ?? report.CreatedAt)
+                        .FirstOrDefault();
+                    submittedAt = report?.SubmittedAt ?? (report == null ? null : report.UpdatedAt ?? report.CreatedAt);
+                    if (report?.Status == WeeklyReportStatus.Approved)
+                        approved++;
+                }
+
+                if (submittedAt.HasValue)
+                {
+                    if (submittedAt.Value <= dueDate) onTime++;
                     else late++;
                 }
                 else if (dueDate < now)
@@ -1071,12 +1108,13 @@ public class LecturerService : ILecturerService
 
             trend.Add(new WeeklyTrendDto
             {
-                WeekNumber = week,
-                Label = $"Tuần {week}",
+                WeekNumber = week.WeekNumber,
+                Label = week.IsFinalReport ? "Cuối kỳ" : $"Tuần {week.WeekNumber}",
                 OnTimeCount = onTime,
                 LateCount = late,
                 MissingCount = missing,
                 PendingCount = pending,
+                ApprovedCount = approved,
                 TotalStudents = totalStudents,
                 ComplianceRate = totalStudents > 0 ? Math.Round((decimal)onTime / totalStudents * 100, 1) : 0
             });
@@ -1272,7 +1310,8 @@ public class LecturerService : ILecturerService
 
         var internshipIds = list.Select(i => i.Id).ToList();
         var totalSubmissions = list.Sum(i => i.Submissions.Count(s => !s.IsDeleted));
-        var totalWeeklyReports = list.Sum(i => i.WeeklyReports.Count(w => !w.IsDeleted));
+        var totalWeeklyReports = list.Sum(i =>
+            i.WeeklyReports.Count(w => !w.IsDeleted && w.Status == WeeklyReportStatus.Approved));
         var pendingReviews = list.Sum(i => i.Submissions.Count(s => !s.IsDeleted && s.Status == SubmissionStatus.Submitted))
                            + list.Sum(i => i.WeeklyReports.Count(w => !w.IsDeleted && w.Status == WeeklyReportStatus.Submitted));
 

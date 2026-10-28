@@ -61,6 +61,8 @@ export function buildWordReportPreviewData(input: {
     { label: "Trung bình khá", quantity: 0, rate: 0 },
     { label: "Trung bình", quantity: 0, rate: 0 },
     { label: "Yếu", quantity: 0, rate: 0 },
+    { label: "Không hoàn thành", quantity: 0, rate: 0 },
+    { label: "Chưa xếp loại", quantity: 0, rate: 0 },
     { label: "Không thực tập", quantity: 0, rate: 0 },
   ];
 

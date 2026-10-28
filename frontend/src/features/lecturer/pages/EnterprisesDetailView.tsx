@@ -18,6 +18,7 @@ export const EnterprisesDetailView = () => {
         backLabel="Quay lại danh sách"
         backPath="/lecturer/enterprises"
         semesterId={selectedSemesterId}
+        layoutVariant="lecturer"
       />
     </div>
   );

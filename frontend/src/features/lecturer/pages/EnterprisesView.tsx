@@ -91,16 +91,13 @@ export const EnterprisesView = ({
           ? "Các doanh nghiệp đang tiếp nhận sinh viên thuộc nhóm hướng dẫn."
           : "Thông tin doanh nghiệp trong hệ thống."}
       >
-        <span className="rounded-full border border-white/20 bg-white/15 px-3 py-1 text-xs font-semibold text-white">
-          {filteredEnterprises.length} / {enterprises.length} doanh nghiệp
-        </span>
         {onRefresh && (
           <button
             type="button"
             onClick={() => void handleRefresh()}
             disabled={isRefreshing}
             aria-label="Làm mới danh sách doanh nghiệp"
-            className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-white/30 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:opacity-50"
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-white/30 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-60"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin" : ""}`} aria-hidden="true" />
             Làm mới
@@ -131,6 +128,12 @@ export const EnterprisesView = ({
         </Panel>
       ) : (
       <Panel className="space-y-4 rounded-xl border border-slate-200/90 shadow-2xs">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+          <h2 className="text-sm font-bold text-slate-900">Doanh nghiệp được phân công</h2>
+          <p className="text-xs font-medium text-slate-500">
+            {filteredEnterprises.length} / {enterprises.length} doanh nghiệp
+          </p>
+        </div>
         <div className="space-y-4 border-b border-slate-100 pb-4">
           <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-[minmax(240px,1.6fr)_minmax(180px,1fr)]">
             <div className="relative min-w-0">
@@ -143,14 +146,14 @@ export const EnterprisesView = ({
                 value={search}
                 onChange={(event) => updateFilter(setSearch, event.target.value)}
                 placeholder="Tìm tên, mã, lĩnh vực, liên hệ..."
-                className="min-h-11 w-full rounded-full border border-slate-300 bg-white pl-9 pr-3 text-base font-medium text-slate-800 outline-none transition-colors placeholder:font-normal placeholder:text-slate-500 hover:border-slate-400 focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20 sm:text-xs"
+                className="min-h-11 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-4 text-base font-medium text-slate-800 outline-none transition-colors placeholder:font-normal placeholder:text-slate-500 hover:border-slate-400 focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20 sm:text-xs"
               />
             </div>
             <select
               aria-label="Lọc theo lĩnh vực"
               value={fieldFilter}
               onChange={(event) => updateFilter(setFieldFilter, event.target.value)}
-              className="min-h-11 w-full rounded-full border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 outline-none hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+              className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
             >
               <option value="all">Tất cả lĩnh vực</option>
               {fields.map((field) => <option key={field} value={field}>{field}</option>)}
@@ -223,7 +226,7 @@ export const EnterprisesView = ({
           )}
         </div>
 
-        <div className="hidden overflow-x-auto rounded-xl border border-slate-200/90 md:block">
+        <div className="hidden overflow-x-auto rounded-lg border border-slate-200/90 md:block">
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500">
@@ -334,7 +337,7 @@ export const EnterprisesView = ({
                   setPageSize(Number(event.target.value));
                   setCurrentPage(1);
                 }}
-                className="min-h-10 rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs font-bold text-slate-800 outline-none focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+                className="min-h-11 rounded-lg border border-slate-300 bg-white px-3 text-xs font-bold text-slate-800 outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
               >
                 <option value={5}>5 dòng</option>
                 <option value={10}>10 dòng</option>
@@ -348,7 +351,7 @@ export const EnterprisesView = ({
               onClick={() => setCurrentPage((page) => Math.max(page - 1, 1))}
               disabled={visiblePage === 1}
               aria-label="Trang trước"
-              className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg bg-slate-100 text-slate-700 transition-colors hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full bg-slate-100 text-slate-700 transition-colors hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <ChevronLeft className="h-4 w-4" aria-hidden="true" />
             </button>
@@ -360,7 +363,7 @@ export const EnterprisesView = ({
               onClick={() => setCurrentPage((page) => Math.min(page + 1, totalPages))}
               disabled={visiblePage === totalPages}
               aria-label="Trang sau"
-              className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg bg-slate-100 text-slate-700 transition-colors hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full bg-slate-100 text-slate-700 transition-colors hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <ChevronRight className="h-4 w-4" aria-hidden="true" />
             </button>

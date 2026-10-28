@@ -214,6 +214,8 @@ public sealed class LecturerDashboardStatsDto
     public int InterningCount { get; set; }
     public int AverageProgress { get; set; }
     public int PendingReviewsCount { get; set; }
+    public int PendingWeeklyReportsCount { get; set; }
+    public int PendingSubmissionsCount { get; set; }
     public int CompletedCount { get; set; }
     public int OverdueReportsCount { get; set; }
     public decimal AverageGrade { get; set; }
@@ -232,6 +234,7 @@ public sealed class WeeklyTrendDto
     public int LateCount { get; set; }
     public int MissingCount { get; set; }
     public int PendingCount { get; set; }
+    public int ApprovedCount { get; set; }
     public int TotalStudents { get; set; }
     public decimal ComplianceRate { get; set; }
 }
@@ -298,4 +301,3 @@ public sealed class CompanyDetailDto
     public IEnumerable<CompanyPositionDto> Positions { get; set; } = Array.Empty<CompanyPositionDto>();
     public IEnumerable<InternshipListItemDto> Internships { get; set; } = Array.Empty<InternshipListItemDto>();
 }
-

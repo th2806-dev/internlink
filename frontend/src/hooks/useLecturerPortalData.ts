@@ -13,6 +13,7 @@ import { lecturerInternshipsService } from "../services/lecturerInternships.serv
 import { submissionApiService } from "../services/submissionApi.service";
 import { weeklyReportService } from "../services/weeklyReport.service";
 import { lecturerDashboardService } from "../services/lecturerDashboard.service";
+import { attendanceService } from "../services/attendance.service";
 import {
   semesterReportScheduleService,
   type SemesterReportScheduleDto,
@@ -98,7 +99,7 @@ export function useLecturerPortalData(
     setIsLoading(true);
     setError(null);
     try {
-      const [internships, assignedStudents, companies, allSubmissions, allWeeklyReports, stats, trend, meOverview, schedulesData] =
+      const [internships, assignedStudents, companies, allSubmissions, allWeeklyReports, stats, trend, meOverview, schedulesData, absenceSummary] =
         await Promise.all([
           lecturerInternshipsService.getAll(semesterId ?? undefined),
           lecturerInternshipsService.getStudents(semesterId ?? undefined),
@@ -111,6 +112,12 @@ export function useLecturerPortalData(
           semesterId && semesterId !== "all"
             ? semesterReportScheduleService.getSchedules(semesterId).catch(() => [])
             : Promise.resolve([] as SemesterReportScheduleDto[]),
+          semesterId && semesterId !== "all"
+            ? attendanceService.getStudentAbsenceSummary(semesterId).catch((absenceError: unknown) => {
+                onError?.(getApiErrorMessage(absenceError));
+                return null;
+              })
+            : Promise.resolve(null),
         ]);
       // KPI tổng theo trạng thái (server-side) — chạy nền sau khi dữ liệu chính xong
       void loadWeeklyReportTotals().catch(() => {});
@@ -126,9 +133,18 @@ export function useLecturerPortalData(
       }
       setSchedules(schedulesData ?? []);
 
-      const studentRows = assignedStudents.map((item: LecturerStudentListItemDto) =>
-        mapLecturerStudentDtoToStudent(item, lecturerName),
+      const finalReportInternshipIds = new Set(
+        allSubmissions
+          .filter((submission) => submission.type === "FinalReport")
+          .map((submission) => submission.internshipId),
       );
+      const studentRows = assignedStudents.map((item: LecturerStudentListItemDto) => ({
+        ...mapLecturerStudentDtoToStudent(item, lecturerName),
+        studentId: item.studentId,
+        absentCount:
+          absenceSummary === null ? undefined : absenceSummary[item.studentId] ?? 0,
+        hasFinalReport: finalReportInternshipIds.has(item.internshipId),
+      }));
 
       const internshipCtx = new Map(
         internships.map((i) => [

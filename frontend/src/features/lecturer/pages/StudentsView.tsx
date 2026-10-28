@@ -226,22 +226,22 @@ export const StudentsView = ({
                 value={searchQuery}
                 onChange={(event) => updateFilter(setSearchQuery, event.target.value)}
                 placeholder="Tìm tên, MSSV, lớp, ngành, doanh nghiệp, vị trí..."
-                className="min-h-11 w-full rounded-full border border-slate-300 bg-white pl-9 pr-4 text-base font-medium text-slate-800 outline-none transition-colors placeholder:font-normal placeholder:text-slate-500 hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20 sm:text-xs"
+                className="min-h-11 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-4 text-base font-medium text-slate-800 outline-none transition-colors placeholder:font-normal placeholder:text-slate-500 hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20 sm:text-xs"
               />
             </div>
-            <select aria-label="Lọc theo lớp" value={classFilter} onChange={(event) => updateFilter(setClassFilter, event.target.value)} className="min-h-11 w-full rounded-full border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20">
+            <select aria-label="Lọc theo lớp" value={classFilter} onChange={(event) => updateFilter(setClassFilter, event.target.value)} className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20">
               <option value="all">Tất cả lớp</option>
               {classOptions.map((item) => <option key={item} value={item}>Lớp {item}</option>)}
             </select>
-            <select aria-label="Lọc theo doanh nghiệp" value={companyFilter} onChange={(event) => updateFilter(setCompanyFilter, event.target.value)} className="min-h-11 w-full rounded-full border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20">
+            <select aria-label="Lọc theo doanh nghiệp" value={companyFilter} onChange={(event) => updateFilter(setCompanyFilter, event.target.value)} className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20">
               <option value="all">Tất cả doanh nghiệp</option>
               {companyOptions.map((item) => <option key={item} value={item}>{item}</option>)}
             </select>
-            <select aria-label="Lọc theo trạng thái" value={statusFilter} onChange={(event) => updateFilter(setStatusFilter, event.target.value)} className="min-h-11 w-full rounded-full border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20">
+            <select aria-label="Lọc theo trạng thái" value={statusFilter} onChange={(event) => updateFilter(setStatusFilter, event.target.value)} className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20">
               <option value="all">Tất cả trạng thái</option>
               {statusOptions.map((item) => <option key={item} value={item}>{item}</option>)}
             </select>
-            <select aria-label="Sắp xếp sinh viên" value={sortBy} onChange={(event) => updateFilter(setSortBy, event.target.value)} className="min-h-11 w-full rounded-full border border-[#026aa7]/25 bg-[#026aa7]/5 px-4 text-xs font-semibold text-[#025a8e] outline-none transition-colors hover:border-[#026aa7]/50 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20">
+            <select aria-label="Sắp xếp sinh viên" value={sortBy} onChange={(event) => updateFilter(setSortBy, event.target.value)} className="min-h-11 w-full rounded-lg border border-[#026aa7]/25 bg-[#026aa7]/5 px-4 text-xs font-semibold text-[#025a8e] outline-none transition-colors hover:border-[#026aa7]/50 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20">
               <option value="name">Sắp xếp: Tên A-Z</option>
               <option value="class">Sắp xếp: Lớp</option>
               <option value="progress">Sắp xếp: Tiến độ</option>
@@ -293,6 +293,22 @@ export const StudentsView = ({
                       {student.progress}%
                     </dd>
                   </dl>
+                  {(student.absentCount !== undefined && student.absentCount >= 2 ||
+                    student.progress >= 75 && student.hasFinalReport === false) && (
+                    <div className="mt-3 flex flex-wrap gap-1.5" aria-label="Cảnh báo sinh viên">
+                      {student.absentCount !== undefined && student.absentCount >= 2 && (
+                        <span className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-[10px] font-semibold text-rose-800">
+                          <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+                          Vắng {student.absentCount} buổi
+                        </span>
+                      )}
+                      {student.progress >= 75 && student.hasFinalReport === false && (
+                        <span className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-900">
+                          Chưa nộp BC cuối
+                        </span>
+                      )}
+                    </div>
+                  )}
                   <button
                     type="button"
                     onClick={() => navigate(`/lecturer/students/${student.id}`)}
@@ -375,9 +391,22 @@ export const StudentsView = ({
                     </div>
                   </td>
                   <td className="py-3 px-3 text-center">
-                    <span className={`px-2.5 py-0.5 text-[10px] font-bold rounded-md inline-flex items-center border ${statusClass(student)}`}>
-                      {student.status}
-                    </span>
+                    <div className="flex flex-col items-center gap-1.5">
+                      <span className={`px-2.5 py-0.5 text-[10px] font-bold rounded-md inline-flex items-center border ${statusClass(student)}`}>
+                        {student.status}
+                      </span>
+                      {student.absentCount !== undefined && student.absentCount >= 2 && (
+                        <span className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-[10px] font-semibold text-rose-800">
+                          <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+                          Vắng {student.absentCount} buổi
+                        </span>
+                      )}
+                      {student.progress >= 75 && student.hasFinalReport === false && (
+                        <span className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-900">
+                          Chưa nộp BC cuối
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="py-3 px-3 text-center">
                     <button
@@ -400,7 +429,7 @@ export const StudentsView = ({
             <span>Hiển thị {paginatedStudents.length} / {filteredStudents.length} sinh viên</span>
             <div className="flex items-center gap-1.5">
               <span>Số dòng:</span>
-              <select aria-label="Số dòng mỗi trang" value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setCurrentPage(1); }} className="min-h-11 rounded-full border border-slate-300 bg-white px-3 text-xs font-bold text-slate-800 outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20">
+              <select aria-label="Số dòng mỗi trang" value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setCurrentPage(1); }} className="min-h-11 rounded-lg border border-slate-300 bg-white px-3 text-xs font-bold text-slate-800 outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20">
                 <option value={5}>5 dòng</option>
                 <option value={10}>10 dòng</option>
                 <option value={20}>20 dòng</option>

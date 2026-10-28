@@ -460,7 +460,7 @@ export const AttendanceManagementView: React.FC<{
             type="button"
             onClick={loadSessions}
             disabled={isLoading}
-            className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-full border border-white/30 bg-white/10 px-4 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-wait disabled:opacity-60"
+            className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md border border-white/30 bg-white/10 px-4 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-wait disabled:opacity-60"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
             Làm mới
@@ -469,7 +469,7 @@ export const AttendanceManagementView: React.FC<{
             type="button"
             onClick={handleOpenCreateModal}
             disabled={isLoadingAssignedStudents || !attendanceSemesterId}
-            className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-full bg-white px-4 text-xs font-semibold text-[#025a8e] shadow-sm transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#026aa7] disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md bg-white px-4 text-xs font-semibold text-[#025a8e] shadow-sm transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#026aa7] disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Plus className="w-4 h-4" />
             {isLoadingAssignedStudents ? "Đang tải sinh viên..." : "Tạo buổi gặp mới"}
@@ -479,14 +479,14 @@ export const AttendanceManagementView: React.FC<{
             onClick={handleExportWorkSchedule}
             disabled={!attendanceSemesterId || isExportingSchedule}
             title="Xuất file Excel lịch công tác của bạn trong học kỳ này"
-            className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-full border border-white/30 bg-white/10 px-4 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md border border-white/30 bg-white/10 px-4 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-50"
           >
             <FileSpreadsheet className={`w-3.5 h-3.5 ${isExportingSchedule ? "animate-pulse" : ""}`} />
             {isExportingSchedule ? "Đang xuất..." : "Xuất Excel"}
           </button>
       </LecturerSubPageHeader>
 
-      {attendanceSemesterId && <Panel className="rounded-xl border border-slate-200/90 shadow-2xs">
+      {attendanceSemesterId && <Panel className="rounded-lg border border-slate-200/90 shadow-2xs">
         <dl className="grid gap-x-6 gap-y-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
           <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-2">
             <dt className="text-slate-500">Tổng số buổi gặp</dt>
@@ -522,7 +522,7 @@ export const AttendanceManagementView: React.FC<{
       </Panel>}
 
       {/* Main Sessions List */}
-      <Panel className="space-y-4 rounded-xl border border-slate-200/90 shadow-2xs">
+      <Panel className="space-y-4 rounded-lg border border-slate-200/90 shadow-2xs">
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
           <div className="flex items-center gap-2">
             <Calendar className="w-5 h-5 text-[#026aa7]" />
@@ -555,18 +555,18 @@ export const AttendanceManagementView: React.FC<{
               <Calendar className="w-6 h-6" />
             </div>
             <div>
-              <h4 className="text-sm font-bold text-slate-800">Chưa có buổi gặp nào trong học kỳ này</h4>
+              <h4 className="text-sm font-bold text-slate-800">Chưa có buổi điểm danh nào</h4>
               <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                Hãy tạo buổi gặp đầu tiên để lên lịch trao đổi đề cương và hướng dẫn thực tập cho sinh viên.
+                Bấm “Tạo buổi điểm danh” để ghi nhận chuyên cần cho sinh viên trong học kỳ này.
               </p>
             </div>
             <button
               type="button"
               onClick={handleOpenCreateModal}
-              className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full bg-[#026aa7] px-4 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2"
+              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg bg-[#026aa7] px-4 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2"
             >
               <Plus className="w-3.5 h-3.5" />
-              Tạo buổi gặp ngay
+              Tạo buổi điểm danh
             </button>
           </div>
         ) : (
@@ -581,7 +581,7 @@ export const AttendanceManagementView: React.FC<{
               return (
                 <div
                   key={session.id}
-                  className={`p-4 rounded-xl border transition-all flex flex-col justify-between ${
+                  className={`p-4 rounded-lg border transition-all flex flex-col justify-between ${
                     session.status === "Completed"
                       ? "bg-slate-50/50 border-slate-200"
                       : session.status === "Cancelled"
@@ -707,7 +707,7 @@ export const AttendanceManagementView: React.FC<{
                       <button
                         onClick={() => handleOpenMarkModal(session)}
                         title="Điểm danh"
-                        className="px-2.5 py-1 bg-[#026aa7] hover:bg-[#025a8e] text-white font-bold text-xs rounded-full flex items-center gap-1 transition-colors shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2"
+                        className="min-h-11 rounded-lg px-3 py-1 bg-[#026aa7] hover:bg-[#025a8e] text-white font-bold text-xs flex items-center gap-1 transition-colors shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2"
                       >
                         <CalendarCheck className="w-3.5 h-3.5" />
                         <span>Điểm danh</span>
@@ -959,7 +959,7 @@ export const AttendanceManagementView: React.FC<{
                 <button
                   type="submit"
                   disabled={isSubmittingCreate || (!createIsLecturerOnly && selectedStudentIds.length === 0)}
-                  className="min-h-10 rounded-full bg-[#026aa7] px-5 font-bold text-white shadow-sm transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:opacity-50"
+                  className="min-h-11 rounded-lg bg-[#026aa7] px-5 font-bold text-white shadow-sm transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:opacity-50"
                 >
                   {isSubmittingCreate ? "Đang lưu..." : "Lên lịch buổi gặp"}
                 </button>
@@ -1009,13 +1009,13 @@ export const AttendanceManagementView: React.FC<{
                   value={markSearchQuery}
                   onChange={(e) => setMarkSearchQuery(e.target.value)}
                   placeholder="Tìm sinh viên theo tên, MSSV, doanh nghiệp..."
-                  className="w-full rounded-full border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-xs outline-none focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+                  className="min-h-11 w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-xs outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
                 />
               </div>
               <button
                 type="button"
                 onClick={handleMarkAllPresent}
-                className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-[#7bc043]/40 bg-[#7bc043]/10 px-3 text-xs font-bold text-[#446d20] transition-colors hover:bg-[#7bc043]/20"
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-[#7bc043]/40 bg-[#7bc043]/10 px-3 text-xs font-bold text-[#446d20] transition-colors hover:bg-[#7bc043]/20"
               >
                 <Check className="w-3.5 h-3.5" />
                 Đánh dấu tất cả có mặt
@@ -1169,7 +1169,7 @@ export const AttendanceManagementView: React.FC<{
                   type="button"
                   disabled={isSavingMark}
                   onClick={handleSaveAttendance}
-                  className="inline-flex min-h-10 items-center gap-1.5 rounded-full bg-[#026aa7] px-5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:opacity-50"
+                  className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-[#026aa7] px-5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:opacity-50"
                 >
                   <Save className="w-3.5 h-3.5" />
                   {isSavingMark ? "Đang lưu..." : "Lưu điểm danh"}
@@ -1351,7 +1351,7 @@ export const AttendanceManagementView: React.FC<{
                 <button
                   type="submit"
                   disabled={isSubmittingEdit}
-                  className="min-h-10 rounded-full bg-[#026aa7] px-5 font-bold text-white shadow-sm transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:opacity-50"
+                  className="min-h-11 rounded-lg bg-[#026aa7] px-5 font-bold text-white shadow-sm transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:opacity-50"
                 >
                   {isSubmittingEdit ? "Đang lưu..." : "Cập nhật"}
                 </button>

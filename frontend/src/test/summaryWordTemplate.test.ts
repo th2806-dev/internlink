@@ -37,4 +37,20 @@ describe("summaryWordTemplate", () => {
 
     expect(result.gradeSummary).toEqual([]);
   });
+
+  it("includes distinct completion and internship-allocation categories by default", () => {
+    const result = buildWordReportPreviewData({});
+
+    expect(result.gradeSummary.map((row) => row.label)).toEqual([
+      "Xuất sắc",
+      "Giỏi",
+      "Khá",
+      "Trung bình khá",
+      "Trung bình",
+      "Yếu",
+      "Không hoàn thành",
+      "Chưa xếp loại",
+      "Không thực tập",
+    ]);
+  });
 });

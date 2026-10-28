@@ -63,7 +63,7 @@ export const Header = ({
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 sm:h-15 items-center justify-between border-b border-slate-200/90 bg-white px-3.5 sm:px-5 lg:px-6">
+    <header className="sticky top-0 z-30 flex h-14 shrink-0 sm:h-15 items-center justify-between border-b border-slate-200/90 bg-white px-3.5 sm:px-5 lg:px-6">
       {/* Left: Mobile hamburger menu & Breadcrumbs */}
       <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
         <button

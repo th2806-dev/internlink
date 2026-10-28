@@ -9,9 +9,11 @@ import {
   FileSpreadsheet,
   FileText,
   Loader2,
+  Plus,
   RefreshCw,
   Save,
   Search,
+  Trash2,
   Users,
   XCircle,
 } from "lucide-react";
@@ -66,6 +68,38 @@ function summaryAttendanceLabel(status: GradingWeekStatus["attendanceStatus"]): 
 }
 
 type SummaryScope = "lecturer" | "admin";
+type ReportSection = { id: string; title: string; content: string };
+
+const REPORT_SECTIONS_PREFIX = "__INTERNLINK_REPORT_SECTIONS_V1__";
+const createDefaultReportSections = (): ReportSection[] => [
+  { id: crypto.randomUUID(), title: "II. BÁO CÁO CHUNG VỀ TÌNH HÌNH THỰC TẬP", content: "" },
+  { id: crypto.randomUUID(), title: "III. ĐIỂM NỔI BẬT VÀ HẠN CHẾ TRONG CÔNG TÁC THỰC TẬP", content: "" },
+];
+
+function loadReportSections(summary: { results?: string | null; difficulties?: string | null; recommendations?: string | null; conclusion?: string | null }): ReportSection[] {
+  if (summary.results?.startsWith(REPORT_SECTIONS_PREFIX)) {
+    const parsed: unknown = JSON.parse(summary.results.slice(REPORT_SECTIONS_PREFIX.length));
+    if (Array.isArray(parsed)) {
+      const sections = parsed.filter((item): item is Partial<ReportSection> =>
+        typeof item === "object" && item !== null);
+      if (sections.length > 0) {
+        return sections.map((section) => ({
+          id: typeof section.id === "string" ? section.id : crypto.randomUUID(),
+          title: typeof section.title === "string" ? section.title : "",
+          content: typeof section.content === "string" ? section.content : "",
+        }));
+      }
+    }
+    throw new Error("Nội dung các mục báo cáo đã lưu không đúng định dạng.");
+  }
+
+  const defaults = createDefaultReportSections();
+  defaults[0].content = summary.results ?? "";
+  defaults[1].content = [summary.difficulties, summary.recommendations, summary.conclusion]
+    .filter((content) => content?.trim())
+    .join("\n\n");
+  return defaults;
+}
 
 export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?: (msg: string) => void; scope?: SummaryScope }) => {
   const { selectedSemester, selectedDepartment } = useSemester();
@@ -85,7 +119,7 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
   const [studentsReloadKey, setStudentsReloadKey] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [exporting, setExporting] = useState<ExportKind | "exam" | "process" | null>(null);
-  const [reportContent, setReportContent] = useState({ results: "", difficulties: "", recommendations: "", conclusion: "" });
+  const [reportSections, setReportSections] = useState<ReportSection[]>(createDefaultReportSections);
   const [isReportLoading, setIsReportLoading] = useState(false);
   const [reportLoadError, setReportLoadError] = useState<string | null>(null);
   const [reportReloadKey, setReportReloadKey] = useState(0);
@@ -215,7 +249,7 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
   useEffect(() => {
     let cancelled = false;
     if (!semesterId) {
-      setReportContent({ results: "", difficulties: "", recommendations: "", conclusion: "" });
+      setReportSections(createDefaultReportSections());
       setReportSavedAt(null);
       setReportLoadError(null);
       setIsReportLoading(false);
@@ -223,7 +257,7 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
     }
     setIsReportLoading(true);
     setReportLoadError(null);
-    setReportContent({ results: "", difficulties: "", recommendations: "", conclusion: "" });
+    setReportSections(createDefaultReportSections());
     setReportSavedAt(null);
     // Admin khoa: nội dung tổng kết CẤP KHOA (lưu theo Kỳ + Khoa, inject vào Word khi admin xuất).
     // Giảng viên: nội dung tổng kết của nhóm hướng dẫn (lưu theo Kỳ + Giảng viên).
@@ -232,12 +266,7 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
       : lecturerInternshipsService.getSemesterSummary(semesterId);
     void loadSummary.then((summary) => {
       if (!cancelled) {
-        setReportContent({
-          results: summary.results ?? "",
-          difficulties: summary.difficulties ?? "",
-          recommendations: summary.recommendations ?? "",
-          conclusion: summary.conclusion ?? "",
-        });
+        setReportSections(loadReportSections(summary));
         setReportSavedAt(summary.updatedAt ?? null);
       }
     }).catch((error) => {
@@ -300,11 +329,22 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
     const adminGrades = adminGradeSummary?.students ?? [];
     let gradeSummary: { label: string; quantity: number; rate: number }[];
     if (isAdminScope) {
-      const classificationCounts = new Map<string, number>();
+      const labels = ["Xuất sắc", "Giỏi", "Khá", "Trung bình khá", "Trung bình", "Yếu", "Không hoàn thành", "Chưa xếp loại", "Không thực tập"];
+      const classificationCounts = new Map(labels.map((label) => [label, 0]));
       adminGrades.forEach((grade) => {
-        const classification = grade.classification?.trim()
-          || (grade.averageScore == null ? "Chưa có điểm tổng kết" : "Chưa xếp loại");
-        classificationCounts.set(classification, (classificationCounts.get(classification) ?? 0) + 1);
+        let label: string;
+        if (!grade.companyName?.trim()) {
+          label = "Không thực tập";
+        } else if (!grade.isEligible) {
+          label = "Không hoàn thành";
+        } else if (grade.oralExamScore == null) {
+          label = "Chưa xếp loại";
+        } else {
+          const classification = grade.classification?.trim();
+          label = classification === "Không đạt" ? "Yếu" : classification || "Chưa xếp loại";
+          if (!classificationCounts.has(label)) label = "Chưa xếp loại";
+        }
+        classificationCounts.set(label, (classificationCounts.get(label) ?? 0) + 1);
       });
       gradeSummary = [...classificationCounts].map(([label, quantity]) => ({
         label,
@@ -322,6 +362,11 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
       const kha = shareOf((grade) => grade >= 6.5 && grade < 8);
       const tb = shareOf((grade) => grade >= 5 && grade < 6.5);
       const yeu = shareOf((grade) => grade < 5);
+      const noCompany = students.filter((student) => !student.companyName?.trim()).length;
+      const notEligible = students.filter((student) => Boolean(student.companyName?.trim()) && student.isEligible === false).length;
+      const unclassified = students.filter((student) =>
+        Boolean(student.companyName?.trim()) && student.isEligible !== false && student.finalGrade == null,
+      ).length;
       gradeSummary = [
         { label: "Xuất sắc", quantity: xs, rate: percentOf(xs) },
         { label: "Giỏi", quantity: gioi, rate: percentOf(gioi) },
@@ -329,7 +374,9 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
         { label: "Trung bình khá", quantity: 0, rate: 0 },
         { label: "Trung bình", quantity: tb, rate: percentOf(tb) },
         { label: "Yếu", quantity: yeu, rate: percentOf(yeu) },
-        { label: "Không thực tập", quantity: students.length - graded.length, rate: percentOf(students.length - graded.length) },
+        { label: "Không hoàn thành", quantity: notEligible, rate: percentOf(notEligible) },
+        { label: "Chưa xếp loại", quantity: unclassified, rate: percentOf(unclassified) },
+        { label: "Không thực tập", quantity: noCompany, rate: percentOf(noCompany) },
       ];
     }
 
@@ -343,25 +390,25 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
         : new Set(students.map((student) => student.companyName).filter(Boolean)).size,
       registeredStudents: isAdminScope ? adminGrades.length : students.length,
       completedStudents: isAdminScope
-        ? adminGrades.filter((student) => student.averageScore != null).length
-        : students.filter((student) => student.isEvaluationFinalized || student.finalGrade != null).length,
+        ? adminGrades.filter((student) => Boolean(student.companyName?.trim()) && student.isEligible).length
+        : students.filter((student) => Boolean(student.companyName?.trim()) && student.isEligible !== false).length,
       incompleteStudents: isAdminScope
-        ? adminGrades.filter((student) => student.averageScore == null).length
-        : students.filter((student) => !student.isEvaluationFinalized && student.finalGrade == null).length,
+        ? adminGrades.filter((student) => Boolean(student.companyName?.trim()) && !student.isEligible).length
+        : students.filter((student) => Boolean(student.companyName?.trim()) && student.isEligible === false).length,
       gradeSummary,
     });
   }, [adminGradeSummary, isAdminScope, selectedDepartment.name, selectedSemester, students]);
 
   const incompleteStudents = useMemo(
     () => isAdminScope
-      ? (adminGradeSummary?.students ?? []).filter((student) => !student.isEligible).slice(0, 10).map((student) => ({
+      ? (adminGradeSummary?.students ?? []).filter((student) => Boolean(student.companyName?.trim()) && !student.isEligible).slice(0, 10).map((student) => ({
           studentId: student.studentId,
           studentCode: student.studentCode,
           fullName: student.fullName,
           class: student.className,
           notes: student.ineligibleReasons.join("; "),
         }))
-      : students.filter((student) => !student.isEvaluationFinalized && student.finalGrade == null).slice(0, 10),
+      : students.filter((student) => Boolean(student.companyName?.trim()) && student.isEligible === false).slice(0, 10),
     [adminGradeSummary, isAdminScope, students],
   );
 
@@ -393,11 +440,24 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
       onShowToast?.("Chưa thể lưu vì nội dung báo cáo chưa tải thành công. Vui lòng tải lại trước.");
       return;
     }
+    if (reportSections.some((section) => !section.title.trim())) {
+      onShowToast?.("Vui lòng nhập tiêu đề cho tất cả các mục báo cáo trước khi lưu.");
+      return;
+    }
     setIsSavingReport(true);
     try {
+      const summaryRequest = {
+        results: `${REPORT_SECTIONS_PREFIX}${JSON.stringify(reportSections.map((section) => ({
+          ...section,
+          title: section.title.trim(),
+        })))}`,
+        difficulties: "",
+        recommendations: "",
+        conclusion: "",
+      };
       const saved = isAdminScope
-        ? await adminSemestersService.saveFacultySummary(semesterId, reportContent)
-        : await lecturerInternshipsService.saveSemesterSummary(semesterId, reportContent);
+        ? await adminSemestersService.saveFacultySummary(semesterId, summaryRequest)
+        : await lecturerInternshipsService.saveSemesterSummary(semesterId, summaryRequest);
       setReportSavedAt(saved.updatedAt ?? new Date().toISOString());
       onShowToast?.(isAdminScope ? "Đã lưu báo cáo tổng kết công tác của khoa." : "Đã lưu nội dung tổng kết của nhóm hướng dẫn.");
     } catch (error) {
@@ -730,7 +790,7 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
       </Panel>}
 
       {activeModule === "report" && (
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
           <Panel className="space-y-4 rounded-xl border-slate-200/90 shadow-2xs">
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 border-b border-slate-100 pb-3">
               <div>
@@ -752,18 +812,68 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
                 </button>
               </div>
             )}
-            <div className="grid md:grid-cols-2 gap-4">
-              {([
-                ["results", "Kết quả thực hiện", "Tổng hợp tiến độ hướng dẫn, số sinh viên hoàn thành, kết quả nổi bật..."],
-                ["difficulties", "Khó khăn, vướng mắc", "Nêu các vấn đề trong quá trình hướng dẫn, phối hợp doanh nghiệp, tiến độ..."],
-                ["recommendations", "Kiến nghị, đề xuất", "Đề xuất với Khoa, Phòng Đào tạo hoặc Ban Giám hiệu cho kỳ tiếp theo..."],
-                ["conclusion", "Kết luận", "Nhận định chung và xác nhận mức độ hoàn thành công tác hướng dẫn..."],
-              ] as const).map(([key, label, placeholder]) => (
-                <label key={key} className="block">
-                  <span className="text-xs font-bold text-slate-800">{label}</span>
-                  <textarea value={reportContent[key]} onChange={(event) => setReportContent((current) => ({ ...current, [key]: event.target.value }))} rows={isAdminScope ? 3 : 5} placeholder={isReportLoading ? "Đang tải nội dung đã lưu..." : placeholder} disabled={isAdminScope && (!semesterId || isReportLoading || Boolean(reportLoadError))} className="mt-2 w-full resize-y rounded-md border border-slate-200 bg-white p-3 text-xs leading-5 outline-none focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500" />
-                </label>
-              ))}
+            {isAdminScope && (
+              <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2.5 text-xs leading-5 text-sky-950">
+                <strong>Phân biệt trạng thái:</strong> “Không thực tập” là chưa được phân bổ doanh nghiệp; “Không hoàn thành” là đã có doanh nghiệp nhưng không đủ điều kiện dự thi.
+              </div>
+            )}
+            <div className="space-y-4">
+              {reportSections.map((section, index) => {
+                const titleId = `report-section-title-${section.id}`;
+                const contentId = `report-section-content-${section.id}`;
+                return (
+                  <section key={section.id} className="space-y-3 rounded-md border border-slate-200 bg-slate-50/70 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <label htmlFor={titleId} className="text-xs font-bold text-slate-800">Tiêu đề mục {index + 1}</label>
+                      {reportSections.length > 2 && (
+                        <button
+                          type="button"
+                          onClick={() => setReportSections((current) => current.filter((item) => item.id !== section.id))}
+                          disabled={isReportLoading || Boolean(reportLoadError)}
+                          className="inline-flex min-h-9 items-center gap-2 rounded-md px-3 text-xs font-semibold text-rose-700 hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 disabled:opacity-50"
+                          aria-label={`Xóa mục ${index + 1}`}
+                        >
+                          <Trash2 className="h-4 w-4" aria-hidden="true" />
+                          Xóa mục
+                        </button>
+                      )}
+                    </div>
+                    <input
+                      id={titleId}
+                      value={section.title}
+                      maxLength={160}
+                      required
+                      onChange={(event) => setReportSections((current) => current.map((item) =>
+                        item.id === section.id ? { ...item, title: event.target.value } : item))}
+                      disabled={isReportLoading || Boolean(reportLoadError)}
+                      className="w-full rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20 disabled:cursor-not-allowed disabled:bg-slate-100"
+                    />
+                    <label htmlFor={contentId} className="flex items-center justify-between gap-2 text-xs font-bold text-slate-800">
+                      <span>Nội dung</span>
+                      <span className="font-normal tabular-nums text-slate-500">{section.content.length} ký tự</span>
+                    </label>
+                    <textarea
+                      id={contentId}
+                      value={section.content}
+                      onChange={(event) => setReportSections((current) => current.map((item) =>
+                        item.id === section.id ? { ...item, content: event.target.value } : item))}
+                      rows={isAdminScope ? 7 : 5}
+                      placeholder={isReportLoading ? "Đang tải nội dung đã lưu..." : "Nhập nội dung cho mục này..."}
+                      disabled={isAdminScope && (!semesterId || isReportLoading || Boolean(reportLoadError))}
+                      className="w-full resize-y rounded-md border border-slate-200 bg-white p-3 text-sm leading-6 outline-none focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
+                    />
+                  </section>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => setReportSections((current) => [...current, { id: crypto.randomUUID(), title: `MỤC ${current.length + 1}`, content: "" }])}
+                disabled={isReportLoading || Boolean(reportLoadError)}
+                className="inline-flex min-h-10 items-center gap-2 rounded-md border border-[#026aa7]/30 bg-white px-3 text-sm font-semibold text-[#025a8e] transition-colors hover:bg-[#026aa7]/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                Thêm mục báo cáo
+              </button>
             </div>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-100">
               <p className="text-[11px] text-slate-500">{isAdminScope ? "Nội dung được lưu theo học kỳ của khoa và dùng để xuất báo cáo Word cấp khoa." : "Nội dung được lưu theo học kỳ và giảng viên, sau đó được dùng khi xuất Word."}</p>
@@ -775,11 +885,16 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
             <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3">
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Xem trước Word</p>
-                <p className="text-xs font-semibold text-slate-800">Mẫu báo cáo tổng kết công tác</p>
+                <p className="text-xs font-semibold text-slate-800">Nội dung báo cáo tổng kết</p>
               </div>
               <span className="rounded-md border border-[#026aa7]/20 bg-[#026aa7]/5 px-2 py-1 text-[10px] font-semibold text-[#025a8e]">A4</span>
             </div>
             <div className={`overflow-y-auto bg-slate-100 ${isAdminScope ? "max-h-[70vh] p-2 md:p-3" : "p-4 md:p-6"}`}>
+              {isAdminScope && (
+                <p className="mx-auto mb-2 max-w-[780px] rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-4 text-amber-900">
+                  Bản này để rà nội dung. Số liệu đang tính trên sinh viên có hồ sơ thực tập; file Word xuất sẽ dùng đầy đủ dữ liệu cùng khóa và định dạng của mẫu chính thức.
+                </p>
+              )}
               {isAdminScope && (!semesterId || isLoading || studentsLoadError || !adminGradeSummary) ? (
                 <div className="mx-auto flex min-h-64 max-w-[780px] items-center justify-center rounded-xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-600 shadow-sm">
                   {studentsLoadError
@@ -808,9 +923,9 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
                   <p className="mt-3 font-bold">1. Số lượng sinh viên thực tập:</p>
                   <ul className="mt-2 space-y-1 pl-5 list-disc">
                     <li>Số lượng doanh nghiệp nhận sinh viên thực tập: {reportPreview.stats.companyCount} đơn vị</li>
-                    <li>Số lượng sinh viên trong kỳ: {reportPreview.stats.registeredStudents} sinh viên</li>
-                    <li>{isAdminScope ? "Số sinh viên đã có điểm tổng kết" : "Số lượng sinh viên hoàn thành đợt thực tập"}: {reportPreview.stats.completedStudents} sinh viên</li>
-                    <li>{isAdminScope ? "Số sinh viên chưa có điểm tổng kết" : "Số sinh viên không hoàn thành thực tập"}: {reportPreview.stats.incompleteStudents} sinh viên</li>
+                    <li>Sinh viên có hồ sơ thực tập: {reportPreview.stats.registeredStudents} sinh viên</li>
+                    <li>Số lượng sinh viên hoàn thành đợt thực tập: {reportPreview.stats.completedStudents} sinh viên</li>
+                    <li>Số sinh viên không hoàn thành (đã phân bổ doanh nghiệp nhưng không đủ điều kiện dự thi): {reportPreview.stats.incompleteStudents} sinh viên</li>
                   </ul>
 
                   <p className="mt-4 font-bold">2. Thống kê kết quả thực tập:</p>
@@ -833,67 +948,61 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
                     </tbody>
                   </table>
 
-                  <p className="mt-4 font-bold">3. {isAdminScope ? "Danh sách sinh viên chưa đủ điều kiện" : "Danh sách sinh viên không hoàn thành thực tập"}</p>
+                  <p className="mt-4 font-bold">3. Danh sách sinh viên không hoàn thành thực tập</p>
                   <table className="mt-2 w-full border border-slate-300 border-collapse text-center text-[10px]">
                     <thead>
                       <tr>
                         <th className="border border-slate-300 px-1 py-1">TT</th>
                         <th className="border border-slate-300 px-1 py-1">MSSV</th>
-                        <th className="border border-slate-300 px-1 py-1">Họ</th>
-                        <th className="border border-slate-300 px-1 py-1">Tên</th>
+                        <th className="border border-slate-300 px-1 py-1">Họ và tên</th>
                         <th className="border border-slate-300 px-1 py-1">Lớp</th>
                         <th className="border border-slate-300 px-1 py-1">Lý do</th>
                       </tr>
                     </thead>
                     <tbody>
                       {incompleteStudents.length > 0 ? incompleteStudents.map((student, index) => {
-                        const nameParts = student.fullName.trim().split(/\s+/);
-                        const ho = nameParts.slice(0, -1).join(" ") || "";
-                        const ten = nameParts[nameParts.length - 1] || student.fullName;
                         return (
                           <tr key={student.studentId}>
                             <td className="border border-slate-300 px-1 py-1">{index + 1}</td>
                             <td className="border border-slate-300 px-1 py-1">{student.studentCode}</td>
-                            <td className="border border-slate-300 px-1 py-1">{ho}</td>
-                            <td className="border border-slate-300 px-1 py-1">{ten}</td>
+                            <td className="border border-slate-300 px-1 py-1">{student.fullName}</td>
                             <td className="border border-slate-300 px-1 py-1">{student.class || "—"}</td>
-                            <td className="border border-slate-300 px-1 py-1 text-left">{student.notes || (isAdminScope ? "Chưa đủ điều kiện theo tiêu chí thực tập" : "Chưa hoàn thành thực tập")}</td>
+                            <td className="border border-slate-300 px-1 py-1 text-left">{student.notes || "Không đủ điều kiện dự thi"}</td>
                           </tr>
                         );
                       }) : (
                         <tr>
-                          <td colSpan={6} className="border border-slate-300 px-1 py-2 text-center">{isAdminScope ? "Không có sinh viên chưa đủ điều kiện" : "Không có sinh viên không hoàn thành thực tập"}</td>
+                          <td colSpan={5} className="border border-slate-300 px-1 py-2 text-center">Không có sinh viên không hoàn thành thực tập</td>
                         </tr>
                       )}
                     </tbody>
                   </table>
                 </div>
 
-                <div className="mt-6">
-                  <p className="font-bold uppercase text-[11px]">II. BÁO CÁO CHUNG VỀ TÌNH HÌNH THỰC TẬP</p>
-                  <div className="mt-2 whitespace-pre-wrap min-h-[80px]">{reportContent.results || "Chưa có nội dung tổng hợp..."}</div>
-                </div>
-
-                <div className="mt-6">
-                  <p className="font-bold uppercase text-[11px]">III. ĐIỂM NỔI BẬT VÀ HẠN CHẾ TRONG CÔNG TÁC THỰC TẬP</p>
-                  <div className="mt-2 whitespace-pre-wrap min-h-[80px]">
-                    {[reportContent.difficulties, reportContent.recommendations, reportContent.conclusion]
-                      .filter(Boolean)
-                      .join("\n\n") || "Chưa có nội dung điểm nổi bật và hạn chế..."}
+                {reportSections.map((section, index) => (
+                  <div key={section.id} className="mt-6">
+                    <p className="font-bold uppercase text-[11px]">{section.title || `MỤC ${index + 1}`}</p>
+                    <div className="mt-2 min-h-[40px] whitespace-pre-wrap">
+                      {section.content || "Chưa có nội dung..."}
+                    </div>
                   </div>
-                </div>
+                ))}
 
                 <div className="mt-10 text-[10px]">
                   <div className="flex justify-between">
                     <div className="text-center">
                       <p className="font-bold">TRƯỞNG PHÒNG ĐÀO TẠO</p>
+                      <p className="mt-12 font-bold">Nguyễn Ngọc Trung</p>
                     </div>
                     <div className="text-center">
                       <p className="font-bold">TRƯỞNG KHOA</p>
+                      <p className="mt-12 font-bold">Bùi Đức Minh</p>
                     </div>
                   </div>
                   <div className="mt-8 text-center">
                     <p className="font-bold">KT. HIỆU TRƯỞNG</p>
+                    <p className="font-bold">PHÓ HIỆU TRƯỞNG</p>
+                    <p className="mt-12 font-bold">Phan Huy Đức</p>
                   </div>
                 </div>
               </div>}

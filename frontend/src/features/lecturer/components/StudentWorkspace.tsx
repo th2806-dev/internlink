@@ -28,6 +28,7 @@ import { StudentReportsTab } from "./StudentReportsTab";
 import { attendanceService } from "../../../services/attendance.service";
 import type { AttendanceRecordDto } from "../../../types/api";
 import { getApiErrorMessage } from "../../../lib/apiClient";
+import { formatDateVi } from "../../../lib/formatDateTimeVi";
 
 export function StudentWorkspace({
   internshipId: initialInternshipId,
@@ -229,11 +230,14 @@ export function StudentWorkspace({
             <div className="grid grid-cols-2 gap-3 text-xs">
               <InfoRow label="Doanh nghiệp" value={company?.companyName ?? "Chưa có"} highlight />
               <InfoRow label="Vị trí" value={detail.position ?? "—"} />
-              <InfoRow label="Mentor DN" value={detail.supervisorName ?? "—"} />
+              <InfoRow
+                label="Mentor DN"
+                value={company?.contactPerson?.trim() || detail.supervisorName?.trim() || "—"}
+              />
               <InfoRow label="Trạng thái" value={mapInternshipStatusToUi(internshipStatus)} />
               <InfoRow
                 label="Thời gian"
-                value={`${detail.startDate?.slice(0, 10) ?? "—"} → ${detail.endDate?.slice(0, 10) ?? "—"}`}
+                value={`${formatDateVi(detail.startDate)} → ${formatDateVi(detail.endDate)}`}
               />
             </div>
           </Panel>

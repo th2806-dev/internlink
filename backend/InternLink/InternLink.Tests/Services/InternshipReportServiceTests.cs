@@ -63,6 +63,22 @@ public class InternshipReportServiceTests
             Class = "C23A.TH1",
             Department = studentDepartment,
         };
+        var unassignedStudent = new Student
+        {
+            Id = Guid.NewGuid(),
+            StudentCode = "SV004",
+            FullName = "Nguyễn Văn E",
+            Class = "C23A.TH1",
+            Department = studentDepartment,
+        };
+        var unregisteredStudent = new Student
+        {
+            Id = Guid.NewGuid(),
+            StudentCode = "SV005",
+            FullName = "Võ Thị F",
+            Class = "C23A.TH1",
+            Department = studentDepartment,
+        };
         var otherDeptStudent = new Student
         {
             Id = Guid.NewGuid(),
@@ -96,6 +112,17 @@ public class InternshipReportServiceTests
             SemesterId = semester.Id,
             Status = InternshipStatus.InProgress,
         };
+        var unassignedInternship = new Internship
+        {
+            Id = Guid.NewGuid(),
+            StudentId = unassignedStudent.Id,
+            Student = unassignedStudent,
+            CompanyId = null,
+            LecturerId = lecturer.Id,
+            Lecturer = lecturer,
+            SemesterId = semester.Id,
+            Status = InternshipStatus.NotStarted,
+        };
         var otherDeptInternship = new Internship
         {
             Id = Guid.NewGuid(),
@@ -112,8 +139,8 @@ public class InternshipReportServiceTests
         await db.Semesters.AddAsync(semester);
         await db.Companies.AddAsync(company);
         await db.Lecturers.AddAsync(lecturer);
-        await db.Students.AddRangeAsync(completedStudent, incompleteStudent, otherDeptStudent);
-        await db.Internships.AddRangeAsync(completedInternship, incompleteInternship, otherDeptInternship);
+        await db.Students.AddRangeAsync(completedStudent, incompleteStudent, unassignedStudent, unregisteredStudent, otherDeptStudent);
+        await db.Internships.AddRangeAsync(completedInternship, incompleteInternship, unassignedInternship, otherDeptInternship);
         await db.Evaluations.AddAsync(new Evaluation
         {
             Id = Guid.NewGuid(),
@@ -149,16 +176,38 @@ public class InternshipReportServiceTests
         text.Should().NotContain("{SO_DOANH_NGHIEP}");
         text.Should().NotContain("{SO_SV_DANG_KY}");
         text.Should().NotContain("{SL_XUAT_SAC}");
-        text.Should().Contain("3 sinh viên"); // SO_SV_DANG_KY
+        text.Should().Contain("4 sinh viên"); // SO_SV_DANG_KY
         text.Should().Contain("1 đơn vị"); // SO_DOANH_NGHIEP
+        text.Should().Contain("Không hoàn thành");
+        text.Should().Contain("Chưa xếp loại");
+        text.Should().Contain("Không thực tập");
 
-        // Bảng SV không hoàn thành: tách Họ | Tên theo mẫu
+        var statsTable = doc.MainDocumentPart.Document.Body!.Descendants<Table>()
+            .First(table => table.InnerText.Contains("Xuất sắc") && table.InnerText.Contains("TỔNG"));
+        var statusCounts = statsTable.Descendants<TableRow>()
+            .Select(row => row.Descendants<TableCell>().Select(cell => cell.InnerText).ToList())
+            .Where(cells => cells.Count >= 3)
+            .ToDictionary(cells => cells[0].Trim(), cells => cells[1].Trim());
+        statusCounts["Không hoàn thành"].Should().Be("2");
+        statusCounts["Chưa xếp loại"].Should().Be("1");
+        statusCounts["Không thực tập"].Should().Be("2");
+        statusCounts["TỔNG"].Should().Be("5");
+
+        // Bảng SV không hoàn thành dùng một cột họ tên đầy đủ.
         text.Should().Contain("SV002");
-        text.Should().Contain("Lê Thị");
+        text.Should().Contain("Lê Thị C");
         text.Should().Contain("C23A.TH1");
         text.Should().NotContain("{#ds_khong_hoan_thanh}");
         text.Should().NotContain("{stt}");
         text.Should().NotContain("{mssv}");
+
+        var incompleteTable = doc.MainDocumentPart.Document.Body!.Descendants<Table>()
+            .First(table => table.InnerText.Contains("SV002"));
+        incompleteTable.Descendants<TableRow>().First().InnerText.Should().Contain("Họ và tên");
+        var studentRow = incompleteTable.Descendants<TableRow>()
+            .First(row => row.InnerText.Contains("SV002"));
+        studentRow.Elements<TableCell>().Should().HaveCount(5);
+        studentRow.Elements<TableCell>().ElementAt(2).InnerText.Should().Contain("Lê Thị C");
     }
 
     [Fact]
@@ -178,5 +227,41 @@ public class InternshipReportServiceTests
         text.Should().NotContain("SV003");
         text.Should().NotContain("Phạm Văn");
         text.Should().NotContain("QTKD01");
+    }
+
+    [Fact]
+    public async Task ExportC22AWordReportAsync_ShouldUseCustomSectionTitlesAndAdditionalSections()
+    {
+        var (db, semesterId) = await SeedAsync();
+        const string prefix = "__INTERNLINK_REPORT_SECTIONS_V1__";
+        var sections = """
+            [
+              { "id": "section-1", "title": "I. KẾT QUẢ TRIỂN KHAI", "content": "Nội dung kết quả." },
+              { "id": "section-2", "title": "II. KHÓ KHĂN VÀ KIẾN NGHỊ", "content": "Nội dung kiến nghị." },
+              { "id": "section-3", "title": "III. ĐỊNH HƯỚNG KỲ TỚI", "content": "Nội dung định hướng." }
+            ]
+            """;
+        await db.Set<SemesterFacultySummary>().AddAsync(new SemesterFacultySummary
+        {
+            Id = Guid.NewGuid(),
+            SemesterId = semesterId,
+            Results = prefix + sections,
+        });
+        await db.SaveChangesAsync();
+
+        var service = new InternshipReportService(db);
+        var bytes = await service.ExportC22AWordReportAsync(semesterId);
+
+        using var ms = new MemoryStream(bytes);
+        using var doc = WordprocessingDocument.Open(ms, false);
+        var paragraphs = doc.MainDocumentPart!.Document.Body!.Descendants<Paragraph>()
+            .Select(paragraph => paragraph.InnerText)
+            .ToList();
+        paragraphs.Should().Contain("I. KẾT QUẢ TRIỂN KHAI");
+        paragraphs.Should().Contain("II. KHÓ KHĂN VÀ KIẾN NGHỊ");
+        paragraphs.Should().Contain(paragraph => paragraph.Contains("III. ĐỊNH HƯỚNG KỲ TỚI")
+            && paragraph.Contains("Nội dung định hướng."));
+        paragraphs.Should().Contain(paragraph => paragraph.Contains("Nội dung kết quả."));
+        paragraphs.Should().Contain(paragraph => paragraph.Contains("Nội dung kiến nghị."));
     }
 }

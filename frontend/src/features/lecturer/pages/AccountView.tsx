@@ -171,14 +171,14 @@ export const AccountView = () => {
         title="Thông tin Tài khoản"
         subtitle="Quản lý hồ sơ cá nhân, thông tin giảng viên và bảo mật mật khẩu tài khoản."
       >
-        <span className="rounded-full border border-white/20 bg-white/15 px-3 py-1 text-xs font-semibold text-white">
+        <span className="rounded-md border border-white/20 bg-white/15 px-3 py-1 text-xs font-semibold text-white">
           Mã GV: {profile.lecturerCode || "—"}
         </span>
         <button
           type="button"
           onClick={() => { setEditing(true); setDraft({ ...profile }); }}
           disabled={editing}
-          className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-white/30 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-white/30 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Edit3 className="h-3.5 w-3.5" aria-hidden="true" />
           {editing ? "Đang chỉnh sửa" : "Chỉnh sửa hồ sơ"}
@@ -186,22 +186,22 @@ export const AccountView = () => {
         <button
           type="button"
           onClick={() => void logout()}
-          className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-white/30 bg-rose-600 px-3 text-xs font-semibold text-white transition-colors hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+          className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-white/30 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-rose-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
         >
           <LogOut className="h-3.5 w-3.5" /> Đăng xuất
         </button>
       </LecturerSubPageHeader>
 
-      {message && <p role="status" className="rounded-xl border border-[#7bc043]/30 bg-[#7bc043]/10 p-3 text-xs font-semibold text-[#446d20]">{message}</p>}
-      {error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-700">{error}</p>}
+      {message && <p role="status" className="rounded-lg border border-[#7bc043]/30 bg-[#7bc043]/10 p-3 text-xs font-semibold text-[#446d20]">{message}</p>}
+      {error && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-700">{error}</p>}
 
       {loading ? (
-        <Panel role="status" className="rounded-xl border border-slate-200/90 py-12 text-center text-xs text-slate-500 shadow-2xs">Đang tải thông tin tài khoản...</Panel>
+        <Panel role="status" className="rounded-lg border border-slate-200/90 py-12 text-center text-xs text-slate-500 shadow-2xs">Đang tải thông tin tài khoản...</Panel>
       ) : (
         <>
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         <div className="space-y-5 lg:col-span-2">
-        <Panel className="space-y-4 rounded-xl border border-slate-200/90 shadow-2xs">
+        <Panel className="space-y-4 rounded-lg border border-slate-200/90 shadow-2xs">
           <div className="flex flex-col justify-between gap-4 border-b border-slate-100 pb-4 sm:flex-row sm:items-center">
             <div className="flex items-center gap-4">
               <InitialsAvatar
@@ -224,13 +224,13 @@ export const AccountView = () => {
           </div>
         </Panel>
 
-            <Panel className="space-y-4 rounded-xl border border-slate-200/90 shadow-2xs">
+            <Panel className="space-y-4 rounded-lg border border-slate-200/90 shadow-2xs">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <h2 className="flex items-center gap-2 text-base font-bold text-slate-900">
                   <User className="h-5 w-5 text-[#026aa7]" /> Hồ sơ cá nhân
                 </h2>
                 {!editing && (
-                  <button type="button" onClick={() => { setEditing(true); setDraft({ ...profile }); }} className="inline-flex min-h-9 items-center gap-1 rounded-full bg-[#026aa7]/5 px-4 text-xs font-bold text-[#025a8e] transition-colors hover:bg-[#026aa7]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]">
+                  <button type="button" onClick={() => { setEditing(true); setDraft({ ...profile }); }} className="inline-flex min-h-11 items-center gap-1 rounded-lg bg-[#026aa7]/5 px-4 text-xs font-bold text-[#025a8e] transition-colors hover:bg-[#026aa7]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]">
                     <Edit3 className="h-3.5 w-3.5" /> Chỉnh sửa
                   </button>
                 )}
@@ -255,8 +255,8 @@ export const AccountView = () => {
                           title={field === "office" ? "Thông tin văn phòng do khoa quản lý" : undefined}
                           aria-disabled={field === "office" ? "true" : undefined}
                           className={field === "office"
-                            ? "w-full cursor-not-allowed rounded-xl border border-slate-200 bg-slate-100 py-2.5 pl-9 pr-3 font-medium text-slate-400 italic"
-                            : "w-full rounded-xl border border-slate-300 bg-slate-50 py-2.5 pl-9 pr-3 font-medium outline-none transition-colors focus:border-[#026aa7] focus:bg-white focus:ring-2 focus:ring-[#026aa7]/20 disabled:bg-slate-100 disabled:text-slate-500"}
+                            ? "min-h-11 w-full cursor-not-allowed rounded-lg border border-slate-200 bg-slate-100 py-2.5 pl-9 pr-3 font-medium text-slate-400 italic"
+                            : "min-h-11 w-full rounded-lg border border-slate-300 bg-slate-50 py-2.5 pl-9 pr-3 font-medium outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus:bg-white focus:ring-2 focus:ring-[#026aa7]/20 disabled:bg-slate-100 disabled:text-slate-500"}
                         />
                       </span>
                     </label>
@@ -271,29 +271,29 @@ export const AccountView = () => {
                     <div className="rounded-md border border-slate-200 bg-slate-50 p-3"><p className="text-[10px] font-bold uppercase text-slate-400">Vai trò</p><p className="mt-0.5 font-bold text-slate-900">Giảng viên hướng dẫn</p></div>
                   </div>
                 </div>
-                {editing && <div className="flex justify-end gap-2 border-t border-slate-100 pt-3"><button type="button" onClick={() => { setDraft({ ...profile }); setEditing(false); }} className="inline-flex min-h-10 items-center gap-1.5 rounded-full bg-slate-100 px-4 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-200"><X className="h-3.5 w-3.5" /> Hủy</button><button type="submit" disabled={saving} className="inline-flex min-h-10 items-center gap-1.5 rounded-full bg-[#026aa7] px-4 text-xs font-bold text-white transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:opacity-60">{saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} {saving ? "Đang lưu..." : "Lưu thay đổi"}</button></div>}
+                {editing && <div className="flex justify-end gap-2 border-t border-slate-100 pt-3"><button type="button" onClick={() => { setDraft({ ...profile }); setEditing(false); }} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-slate-100 px-4 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-200"><X className="h-3.5 w-3.5" /> Hủy</button><button type="submit" disabled={saving} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-[#026aa7] px-4 text-xs font-bold text-white transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:opacity-60">{saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} {saving ? "Đang lưu..." : "Lưu thay đổi"}</button></div>}
               </form>
             </Panel>
         </div>
 
           <div className="space-y-5">
-          <Panel className="h-fit space-y-4 rounded-xl border border-slate-200/90 shadow-2xs">
+          <Panel className="h-fit space-y-4 rounded-lg border border-slate-200/90 shadow-2xs">
             <div className="flex items-center gap-2 border-b border-slate-100 pb-3"><ShieldCheck className="h-4 w-4 text-[#026aa7]" /><h3 className="text-sm font-bold text-slate-900">Bảo mật</h3></div>
             <form onSubmit={changePassword} className="space-y-3 border-t border-slate-100 pt-4 text-xs">
               <p className="flex items-center gap-1.5 font-bold text-slate-800"><Key className="h-3.5 w-3.5 text-[#026aa7]" /> Đổi mật khẩu</p>
               {([currentPassword, newPassword, confirmPassword] as const).map((value, index) => {
                 const labels = ["Mật khẩu hiện tại", "Mật khẩu mới", "Xác nhận mật khẩu mới"];
                 const placeholders = ["Nhập mật khẩu hiện tại", "Tối thiểu 8 ký tự", "Nhập lại mật khẩu mới"];
-                return <label key={labels[index]} className="block font-bold text-slate-700">{labels[index]} *<span className="relative mt-1 block"><Lock className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" /><input type={showPasswords ? "text" : "password"} value={value} onChange={(event) => [setCurrentPassword, setNewPassword, setConfirmPassword][index](event.target.value)} autoComplete={index === 0 ? "current-password" : "new-password"} placeholder={placeholders[index]} className="min-h-10 w-full rounded-xl border border-slate-300 bg-slate-50 py-2 pl-9 pr-9 font-medium outline-none transition-colors focus:border-[#026aa7] focus:bg-white focus:ring-2 focus:ring-[#026aa7]/20" required minLength={index > 0 ? 8 : undefined} /><button type="button" onClick={() => setShowPasswords((current) => !current)} className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]" title={showPasswords ? "Ẩn mật khẩu" : "Hiện mật khẩu"} aria-label={showPasswords ? "Ẩn mật khẩu" : "Hiện mật khẩu"}>{showPasswords ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}</button></span></label>;
+                return <label key={labels[index]} className="block font-bold text-slate-700">{labels[index]} *<span className="relative mt-1 block"><Lock className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" /><input type={showPasswords ? "text" : "password"} value={value} onChange={(event) => [setCurrentPassword, setNewPassword, setConfirmPassword][index](event.target.value)} autoComplete={index === 0 ? "current-password" : "new-password"} placeholder={placeholders[index]} className="min-h-11 w-full rounded-lg border border-slate-300 bg-slate-50 py-2 pl-9 pr-9 font-medium outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus:bg-white focus:ring-2 focus:ring-[#026aa7]/20" required minLength={index > 0 ? 8 : undefined} /><button type="button" onClick={() => setShowPasswords((current) => !current)} className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]" title={showPasswords ? "Ẩn mật khẩu" : "Hiện mật khẩu"} aria-label={showPasswords ? "Ẩn mật khẩu" : "Hiện mật khẩu"}>{showPasswords ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}</button></span></label>;
               })}
               <PasswordStrengthMeter password={newPassword} confirmPassword={confirmPassword} />
-              <button type="submit" disabled={changingPassword || newPassword.length < 8 || newPassword !== confirmPassword} className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-full bg-[#026aa7] px-4 py-2.5 text-xs font-bold text-white transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:opacity-50"><Key className="h-3.5 w-3.5" />{changingPassword ? "Đang cập nhật..." : "Cập nhật mật khẩu"}</button>
+              <button type="submit" disabled={changingPassword || newPassword.length < 8 || newPassword !== confirmPassword} className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg bg-[#026aa7] px-4 py-2.5 text-xs font-bold text-white transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:opacity-50"><Key className="h-3.5 w-3.5" />{changingPassword ? "Đang cập nhật..." : "Cập nhật mật khẩu"}</button>
             </form>
           </Panel>
-          <Panel className="h-fit space-y-3 rounded-xl border border-slate-200/90 shadow-2xs">
+          <Panel className="h-fit space-y-3 rounded-lg border border-slate-200/90 shadow-2xs">
             <div className="flex items-center gap-2 border-b border-slate-100 pb-3"><LogOut className="h-4 w-4 text-rose-600" /><h3 className="text-sm font-bold text-slate-900">Đăng xuất hệ thống</h3></div>
             <p className="text-xs font-medium leading-relaxed text-slate-500">Đăng xuất phiên làm việc khỏi trình duyệt này. Dữ liệu hướng dẫn vẫn được lưu trên hệ thống.</p>
-            <button type="button" onClick={() => void logout()} className="flex w-full items-center justify-center gap-1.5 rounded-md border border-rose-200 bg-rose-50 py-2 text-xs font-bold text-rose-700 transition-colors hover:bg-rose-100"><LogOut className="h-3.5 w-3.5" /> Đăng xuất ngay</button>
+            <button type="button" onClick={() => void logout()} className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 py-2 text-xs font-bold text-rose-700 transition-colors hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2"><LogOut className="h-3.5 w-3.5" /> Đăng xuất ngay</button>
           </Panel>
           </div>
         </div>

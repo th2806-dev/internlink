@@ -129,10 +129,13 @@ describe("ReportsView (lát dọc tiên phong /lecturer/reports)", () => {
     // KPI lấy từ tổng server-side (toàn kỳ), không phải đếm theo trang.
     expect(await screen.findByText("45 báo cáo")).toBeInTheDocument();
     expect(screen.getByText("1-20 / 45")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Trạng thái duyệt" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Báo cáo tuần cần duyệt" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Tải hồ sơ học kỳ" })).toBeInTheDocument();
 
     // Hàng đợi duyệt hiển thị báo cáo Submitted của trang hiện tại.
     expect(await screen.findByText(/Tuần 1 — Báo cáo r1/)).toBeInTheDocument();
-    expect(screen.getByTestId("submissions-hub")).toBeInTheDocument();
+    expect(screen.queryByTestId("submissions-hub")).not.toBeInTheDocument();
     expect(screen.queryByTestId("request-error-state")).not.toBeInTheDocument();
     expect(screen.queryByTestId("reports-loading")).not.toBeInTheDocument();
   });
@@ -174,7 +177,7 @@ describe("ReportsView (lát dọc tiên phong /lecturer/reports)", () => {
     expect(await screen.findByText("Không có báo cáo nào")).toBeInTheDocument();
     expect(screen.queryByTestId("request-error-state")).not.toBeInTheDocument();
     expect(screen.getByText("0 / 0")).toBeInTheDocument();
-    expect(screen.getByTestId("submissions-hub")).toBeInTheDocument();
+    expect(screen.queryByTestId("submissions-hub")).not.toBeInTheDocument();
   });
 
   it("Test 5 — bấm sang trang 2: gọi API skip=20 và cập nhật dữ liệu chính xác", async () => {

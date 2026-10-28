@@ -64,7 +64,7 @@ export function LecturerPageBanner({
           </h1>
         </div>
         <div className="flex items-center gap-2">
-          <span className="rounded-full border border-white/20 bg-white/15 px-2 py-0.5 text-[10.5px] font-medium">
+          <span className="rounded-md border border-white/20 bg-white/15 px-2 py-0.5 text-[10.5px] font-medium">
             {selectedSemester?.id ? selectedSemester.name : "Chưa có học kỳ"}
           </span>
           {onRefresh && (
@@ -106,7 +106,7 @@ export function LecturerPageBanner({
                 aria-label="Đơn vị quản lý"
                 value={department}
                 disabled
-                className="h-9 w-full appearance-none rounded-full border border-slate-300 bg-white px-3.5 pr-8 text-xs font-medium text-slate-800 shadow-2xs disabled:cursor-default disabled:text-slate-500"
+                className="h-9 w-full appearance-none rounded-lg border border-slate-300 bg-white px-3.5 pr-8 text-xs font-medium text-slate-800 shadow-2xs disabled:cursor-default disabled:text-slate-500"
               >
                 <option value={department}>{department || "Chưa cập nhật"}</option>
               </select>
@@ -124,7 +124,7 @@ export function LecturerPageBanner({
                 value={currentAcademicYear}
                 onChange={(event) => handleYearChange(event.target.value)}
                 disabled={academicYears.length === 0}
-                className="h-9 w-full appearance-none rounded-full border border-slate-300 bg-white px-3.5 pr-8 text-xs font-medium text-slate-800 shadow-2xs hover:border-slate-400 focus:border-[#026aa7] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/20 disabled:cursor-default disabled:text-slate-500"
+                className="h-9 w-full appearance-none rounded-lg border border-slate-300 bg-white px-3.5 pr-8 text-xs font-medium text-slate-800 shadow-2xs hover:border-slate-400 focus:border-[#026aa7] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/20 disabled:cursor-default disabled:text-slate-500"
               >
                 <option value="">{academicYears.length === 0 ? "Chưa cập nhật" : "Chọn năm học"}</option>
                 {academicYears.map((year) => (
@@ -147,7 +147,7 @@ export function LecturerPageBanner({
                 value={currentTerm}
                 onChange={(event) => handleTermChange(event.target.value)}
                 disabled={terms.length === 0}
-                className="h-9 w-full appearance-none rounded-full border border-slate-300 bg-white px-3.5 pr-8 text-xs font-medium text-slate-800 shadow-2xs hover:border-slate-400 focus:border-[#026aa7] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/20 disabled:cursor-default disabled:text-slate-500"
+                className="h-9 w-full appearance-none rounded-lg border border-slate-300 bg-white px-3.5 pr-8 text-xs font-medium text-slate-800 shadow-2xs hover:border-slate-400 focus:border-[#026aa7] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/20 disabled:cursor-default disabled:text-slate-500"
               >
                 <option value="">{terms.length === 0 ? "Chưa cập nhật" : "Chọn học kỳ"}</option>
                 {terms.map((term) => (

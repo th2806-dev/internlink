@@ -340,7 +340,15 @@ public class LecturerServiceTests
     public async Task GetDashboardStatsAsync_ValidLecturer_ShouldReturnCorrectCalculations()
     {
         var db = GetDb();
-        var (lecturerUser, _, _, _) = await SeedLecturerDataAsync(db);
+        var (lecturerUser, _, internship, _) = await SeedLecturerDataAsync(db);
+        db.Submissions.Add(new Submission
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = internship.Id,
+            Status = SubmissionStatus.Submitted,
+            CreatedAt = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
         var service = new LecturerService(db, _mapper, Mock.Of<INotificationService>());
 
         var stats = await service.GetDashboardStatsAsync(lecturerUser.Id);
@@ -348,8 +356,62 @@ public class LecturerServiceTests
         stats.TotalStudents.Should().Be(2);
         stats.InterningCount.Should().Be(1);
         stats.CompletedCount.Should().Be(1);
-        stats.PendingReviewsCount.Should().Be(1); // 1 submitted weekly report
+        stats.PendingReviewsCount.Should().Be(2);
+        stats.PendingWeeklyReportsCount.Should().Be(1);
+        stats.PendingSubmissionsCount.Should().Be(1);
         stats.AverageGrade.Should().Be(9.0m);
+    }
+
+    [Fact]
+    public async Task GetCompanyDetailAsync_ShouldReturnCountsFromSelectedSemesterRecords()
+    {
+        var db = GetDb();
+        var (lecturerUser, _, internship, _) = await SeedLecturerDataAsync(db);
+        db.WeeklyReports.AddRange(
+            new WeeklyReport
+            {
+                Id = Guid.NewGuid(),
+                InternshipId = internship.Id,
+                WeekNumber = 2,
+                Status = WeeklyReportStatus.Approved,
+                Title = "Báo cáo tuần 2",
+                Content = "Đã duyệt",
+                CreatedAt = DateTime.UtcNow
+            },
+            new WeeklyReport
+            {
+                Id = Guid.NewGuid(),
+                InternshipId = internship.Id,
+                WeekNumber = 3,
+                Status = WeeklyReportStatus.Draft,
+                Title = "Báo cáo tuần 3",
+                Content = "Bản nháp",
+                CreatedAt = DateTime.UtcNow
+            });
+        db.Submissions.AddRange(
+            new Submission
+            {
+                Id = Guid.NewGuid(),
+                InternshipId = internship.Id,
+                Status = SubmissionStatus.Submitted,
+                CreatedAt = DateTime.UtcNow
+            },
+            new Submission
+            {
+                Id = Guid.NewGuid(),
+                InternshipId = internship.Id,
+                Status = SubmissionStatus.Approved,
+                CreatedAt = DateTime.UtcNow
+            });
+        await db.SaveChangesAsync();
+
+        var result = await new LecturerService(db, _mapper, Mock.Of<INotificationService>())
+            .GetCompanyDetailAsync(internship.CompanyId!.Value, lecturerUser.Id, internship.SemesterId);
+
+        result.Should().NotBeNull();
+        result!.TotalWeeklyReports.Should().Be(1);
+        result.TotalSubmissions.Should().Be(2);
+        result.PendingReviewsCount.Should().Be(2);
     }
 
     [Fact]
@@ -391,6 +453,69 @@ public class LecturerServiceTests
         result[0].OnTimeCount.Should().Be(1);
         result[0].PendingCount.Should().Be(1);
         result[0].TotalStudents.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task GetWeeklyTrendAsync_ShouldLabelFinalReportSeparatelyAndExcludeWeeksBeyondIt()
+    {
+        var db = GetDb();
+        var (lecturerUser, lecturer, internship, _) = await SeedLecturerDataAsync(db);
+        var semesterId = internship.SemesterId!.Value;
+        db.SemesterReportSchedules.AddRange(
+            new SemesterReportSchedule
+            {
+                Id = Guid.NewGuid(),
+                SemesterId = semesterId,
+                LecturerId = lecturer.Id,
+                WeekNumber = 1,
+                Title = "Tuần 1",
+                DueDate = DateTime.UtcNow.AddDays(1),
+                IsSubmissionOpen = true,
+                CreatedAt = DateTime.UtcNow,
+            },
+            new SemesterReportSchedule
+            {
+                Id = Guid.NewGuid(),
+                SemesterId = semesterId,
+                LecturerId = lecturer.Id,
+                WeekNumber = 7,
+                Title = "Báo cáo cuối kỳ",
+                DueDate = DateTime.UtcNow.AddDays(2),
+                IsSubmissionOpen = true,
+                CreatedAt = DateTime.UtcNow,
+            },
+            new SemesterReportSchedule
+            {
+                Id = Guid.NewGuid(),
+                SemesterId = semesterId,
+                LecturerId = lecturer.Id,
+                WeekNumber = 8,
+                Title = "Tuần không hợp lệ",
+                DueDate = DateTime.UtcNow.AddDays(3),
+                IsSubmissionOpen = true,
+                CreatedAt = DateTime.UtcNow,
+            });
+        db.Submissions.Add(new Submission
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = internship.Id,
+            Type = SubmissionType.FinalReport,
+            Status = SubmissionStatus.Approved,
+            SubmittedAt = DateTime.UtcNow,
+            Title = "Báo cáo cuối kỳ",
+            CreatedAt = DateTime.UtcNow,
+        });
+        await db.SaveChangesAsync();
+        var service = new LecturerService(db, _mapper, Mock.Of<INotificationService>());
+
+        var result = await service.GetWeeklyTrendAsync(lecturerUser.Id, semesterId);
+
+        result.Should().HaveCount(2);
+        result.Select(item => item.WeekNumber).Should().Equal(1, 7);
+        result.Select(item => item.Label).Should().Equal("Tuần 1", "Cuối kỳ");
+        result[1].OnTimeCount.Should().Be(1);
+        result[1].PendingCount.Should().Be(1);
+        result[1].ApprovedCount.Should().Be(1);
     }
 
     [Fact]
@@ -510,6 +635,7 @@ public class LecturerServiceTests
             item.OnTimeCount == 1 &&
             item.PendingCount == 7 &&
             item.TotalStudents == 8);
+        result.Should().OnlyContain(item => item.ApprovedCount == 1);
     }
 
     [Fact]

@@ -396,7 +396,7 @@ export const TemplatesView = () => {
             type="button"
             onClick={() => void handleRefresh()}
             disabled={isLoadingDocs}
-            className="inline-flex min-h-9 items-center justify-center gap-2 rounded-full border border-white/30 bg-white/10 px-4 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-wait disabled:opacity-60"
+            className="inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-white/30 bg-white/10 px-4 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-wait disabled:opacity-60"
           >
             <RefreshCw className={`h-4 w-4 ${isLoadingDocs ? "animate-spin" : ""}`} aria-hidden="true" />
             Làm mới
@@ -404,7 +404,7 @@ export const TemplatesView = () => {
           <button
             type="button"
             onClick={() => setUploadModalOpen(true)}
-            className="inline-flex min-h-9 flex-1 items-center justify-center gap-2 rounded-full bg-white px-5 text-xs font-semibold text-[#025a8e] transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#026aa7] sm:flex-none"
+            className="inline-flex min-h-9 flex-1 items-center justify-center gap-2 rounded-md bg-white px-5 text-xs font-semibold text-[#025a8e] transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#026aa7] sm:flex-none"
           >
             <CloudUpload className="h-4 w-4" aria-hidden="true" />
             Tải tài liệu cho sinh viên
@@ -413,13 +413,19 @@ export const TemplatesView = () => {
 
       {/* TAB SELECTOR & FILTERS */}
       <Panel className="space-y-4 rounded-xl border border-slate-200/90 shadow-2xs">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+          <h2 className="text-sm font-bold text-slate-900">Biểu mẫu & tài liệu</h2>
+          <p className="text-xs font-medium text-slate-500">
+            {filteredDocuments.length} / {documents.length} tài liệu
+          </p>
+        </div>
         {/* TOP ROW: TABS & ACTION BUTTONS */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-100">
           {/* Main Circulation Status Tabs */}
           <div className="flex items-center gap-1.5 flex-wrap">
             <button
               onClick={() => setActiveTab("CIRCULATING")}
-              className={`min-h-11 rounded-full px-4 text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+              className={`min-h-11 rounded-lg px-4 text-xs font-semibold transition-colors flex items-center gap-1.5 ${
                 activeTab === "CIRCULATING"
                 ? "bg-[#026aa7] text-white shadow-2xs"
                   : "bg-slate-100 text-slate-700 hover:bg-slate-200"
@@ -438,7 +444,7 @@ export const TemplatesView = () => {
 
             <button
               onClick={() => setActiveTab("ARCHIVED")}
-              className={`min-h-11 rounded-full px-4 text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+              className={`min-h-11 rounded-lg px-4 text-xs font-semibold transition-colors flex items-center gap-1.5 ${
                 activeTab === "ARCHIVED"
                 ? "bg-amber-600 text-white shadow-2xs"
                   : "bg-slate-100 text-slate-700 hover:bg-slate-200"
@@ -457,7 +463,7 @@ export const TemplatesView = () => {
 
             <button
               onClick={() => setActiveTab("ALL")}
-              className={`min-h-11 rounded-full px-4 text-xs font-semibold transition-colors ${
+              className={`min-h-11 rounded-lg px-4 text-xs font-semibold transition-colors ${
                 activeTab === "ALL"
                 ? "bg-slate-800 text-white shadow-2xs"
                   : "bg-slate-100 text-slate-700 hover:bg-slate-200"
@@ -484,14 +490,14 @@ export const TemplatesView = () => {
                   setDepartmentFilter("Tất cả");
                   setFileTypeFilter("Tất cả");
                 }}
-                className="min-h-11 rounded-full px-3 text-xs font-semibold text-[#026aa7] hover:bg-[#026aa7]/5 hover:text-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/30"
+                className="min-h-11 rounded-lg px-3 text-xs font-semibold text-[#026aa7] hover:bg-[#026aa7]/5 hover:text-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/30"
               >
                 Xóa bộ lọc
               </button>
             )}
 
             {/* Toggle View Mode */}
-            <div className="flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 p-1 shrink-0">
+            <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-100 p-1 shrink-0">
               <button
                 onClick={() => setViewMode("table")}
                 className={`p-1.5 rounded-lg transition-colors ${
@@ -529,7 +535,7 @@ export const TemplatesView = () => {
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Tìm tên tài liệu, người đăng, nội dung..."
               aria-label="Tìm tài liệu"
-              className="min-h-11 w-full rounded-full border border-slate-300 bg-white pl-10 pr-4 text-base font-medium text-slate-800 outline-none transition-colors placeholder:font-normal placeholder:text-slate-500 hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20 sm:text-xs"
+              className="min-h-11 w-full rounded-lg border border-slate-300 bg-white pl-10 pr-4 text-base font-medium text-slate-800 outline-none transition-colors placeholder:font-normal placeholder:text-slate-500 hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20 sm:text-xs"
             />
           </div>
 
@@ -538,7 +544,7 @@ export const TemplatesView = () => {
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
               aria-label="Lọc theo danh mục"
-              className="min-h-11 w-full rounded-full border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+              className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
             >
               <option value="Tất cả">Tất cả Danh mục</option>
               {categories.map((category) => (
@@ -552,7 +558,7 @@ export const TemplatesView = () => {
               value={semesterFilter}
               onChange={(e) => setSemesterFilter(e.target.value)}
               aria-label="Lọc theo đợt thực tập"
-              className="min-h-11 w-full rounded-full border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+              className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
             >
               <option value="Tất cả">Tất cả Đợt thực tập</option>
               {semesters.map((s) => (
@@ -566,7 +572,7 @@ export const TemplatesView = () => {
               value={departmentFilter}
               onChange={(e) => setDepartmentFilter(e.target.value)}
               aria-label="Lọc theo đơn vị"
-              className="min-h-11 w-full rounded-full border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+              className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
             >
               <option value="Tất cả">Tất cả đơn vị</option>
               {departments.map((department) => (
@@ -580,7 +586,7 @@ export const TemplatesView = () => {
               value={fileTypeFilter}
               onChange={(e) => setFileTypeFilter(e.target.value)}
               aria-label="Lọc theo định dạng tệp"
-              className="min-h-11 w-full rounded-full border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+              className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
             >
               <option value="Tất cả">Tất cả Định dạng</option>
               {fileTypes.map((fileType) => (
@@ -600,7 +606,7 @@ export const TemplatesView = () => {
           <button
             type="button"
             onClick={() => void loadDocuments()}
-            className="min-h-11 rounded-full bg-[#026aa7] px-5 text-xs font-semibold text-white transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2"
+            className="min-h-11 rounded-lg bg-[#026aa7] px-5 text-xs font-semibold text-white transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2"
           >
             Thử tải lại
           </button>
@@ -889,7 +895,7 @@ export const TemplatesView = () => {
 
                       <button
                         onClick={() => handleDownload(doc)}
-                        className="flex min-h-11 flex-1 items-center justify-center gap-1 rounded-full bg-[#026aa7] py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2"
+                        className="flex min-h-11 flex-1 items-center justify-center gap-1 rounded-lg bg-[#026aa7] py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2"
                       >
                         <Download className="w-3.5 h-3.5" />
                         <span>Tải về</span>
