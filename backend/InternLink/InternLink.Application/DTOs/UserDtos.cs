@@ -52,4 +52,5 @@ public class ResetPasswordResultDto
     public string Username { get; set; } = null!;
     public bool EmailSent { get; set; }
     public string? EmailMessage { get; set; }
+    public string? TemporaryPassword { get; set; }
 }

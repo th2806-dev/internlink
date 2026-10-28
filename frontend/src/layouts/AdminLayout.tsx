@@ -40,7 +40,7 @@ export default function AdminLayout({
   }, [isSidebarOpen]);
 
   return (
-    <div className="min-h-screen bg-[var(--il-surface-bg)] text-slate-800 font-sans flex antialiased">
+    <div className="h-dvh overflow-hidden bg-[var(--il-surface-bg)] text-slate-800 font-sans flex antialiased">
       {isSidebarOpen && (
         <button
           type="button"
@@ -60,7 +60,7 @@ export default function AdminLayout({
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
       />
-      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-y-auto">
         <AdminHeader
           activeTab={activeTab}
           onNavigate={onNavigate}

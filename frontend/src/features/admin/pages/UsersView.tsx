@@ -14,6 +14,8 @@ import {
   ChevronLeft,
   ChevronRight,
   RefreshCw,
+  Copy,
+  X,
 } from "lucide-react";
 import { ConfirmDialog } from "../../../components/common/ConfirmDialog";
 import { Panel } from "../../../components/common/Panel";
@@ -105,6 +107,12 @@ export const UsersView = ({
 
   const [searchInput, setSearchInput] = useState(q);
   const [resetTarget, setResetTarget] = useState<AdminUser | null>(null);
+  const [resetResult, setResetResult] = useState<{
+    fullName: string;
+    username: string;
+    temporaryPassword: string;
+    emailMessage?: string | null;
+  } | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
 
@@ -163,14 +171,33 @@ export const UsersView = ({
     if (!resetTarget) return;
     try {
       const res = await resetUserPassword(resetTarget.id);
-      onShowToast(
-        res.emailSent
-          ? `Đã gửi email đặt lại mật khẩu cho ${resetTarget.fullName}`
-          : `Đã reset mật khẩu tạm cho ${res.username || resetTarget.fullName}`,
-      );
       setResetTarget(null);
+      if (res.emailSent) {
+        onShowToast(`Đã gửi email đặt lại mật khẩu cho ${resetTarget.fullName}`);
+      } else if (res.temporaryPassword) {
+        setResetResult({
+          fullName: resetTarget.fullName,
+          username: res.username || resetTarget.code,
+          temporaryPassword: res.temporaryPassword,
+          emailMessage: res.emailMessage,
+        });
+      } else {
+        throw new Error(
+          res.emailMessage || "Không nhận được mật khẩu tạm. Vui lòng kiểm tra trạng thái email và thử lại.",
+        );
+      }
     } catch (err) {
       onShowToast(getApiErrorMessage(err));
+    }
+  };
+
+  const copyTemporaryPassword = async () => {
+    if (!resetResult) return;
+    try {
+      await navigator.clipboard.writeText(resetResult.temporaryPassword);
+      onShowToast("Đã sao chép mật khẩu tạm.");
+    } catch {
+      onShowToast("Không thể truy cập clipboard. Vui lòng chọn và sao chép mật khẩu thủ công.", "danger");
     }
   };
 
@@ -575,6 +602,71 @@ export const UsersView = ({
         onConfirm={() => void confirmDelete()}
         onCancel={() => setDeleteTarget(null)}
       />
+
+      {resetResult && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/50 p-4"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setResetResult(null);
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="reset-result-title"
+            className="w-full max-w-md space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-2xl"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 id="reset-result-title" className="text-base font-bold text-slate-900">
+                  Đã đặt lại mật khẩu
+                </h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  {resetResult.emailMessage || "Email không gửi được."}{" "}
+                  Mật khẩu tạm của {resetResult.fullName} chỉ hiển thị lần này; người dùng sẽ phải đổi sau khi đăng nhập.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setResetResult(null)}
+                aria-label="Đóng thông báo mật khẩu tạm"
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+            <label htmlFor="temporary-password" className="block text-xs font-semibold text-slate-700">
+              Tài khoản: {resetResult.username}
+            </label>
+            <input
+              id="temporary-password"
+              type="text"
+              readOnly
+              value={resetResult.temporaryPassword}
+              autoComplete="off"
+              className="min-h-11 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 font-mono text-sm text-slate-900"
+            />
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setResetResult(null)}
+                className="min-h-11 rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
+              >
+                Đóng
+              </button>
+              <button
+                type="button"
+                onClick={() => void copyTemporaryPassword()}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[#026aa7] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2"
+              >
+                <Copy className="h-4 w-4" aria-hidden="true" />
+                Sao chép mật khẩu
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
 
       <CreateUserModal
         isOpen={isCreateOpen}

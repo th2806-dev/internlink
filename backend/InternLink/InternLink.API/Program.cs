@@ -122,6 +122,7 @@ if (app.Environment.IsProduction())
 }
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseMiddleware<InternLink.API.Middleware.StudentArchiveReadOnlyMiddleware>();
 
 app.MapControllers();
 app.MapHub<NotificationHub>("/hubs/notifications");

@@ -22,3 +22,17 @@ export function formatDateTimeVi(value: string | Date): string {
     second: "2-digit",
   }).format(date);
 }
+
+export function formatDateVi(value?: string | Date | null): string {
+  if (!value) return "—";
+
+  const date = parseBackendDate(value);
+  if (Number.isNaN(date.getTime())) return "—";
+
+  return new Intl.DateTimeFormat("vi-VN", {
+    timeZone: BACKEND_TIMEZONE,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
+}

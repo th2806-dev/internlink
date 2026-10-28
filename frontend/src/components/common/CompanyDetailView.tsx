@@ -71,6 +71,7 @@ interface CompanyDetailViewProps {
   }>;
   studentPath?: (internshipId: string) => string;
   isAdmin?: boolean;
+  layoutVariant?: "default" | "lecturer";
 }
 
 function formatViDate(iso?: string | null) {
@@ -102,7 +103,10 @@ export const CompanyDetailView = ({
   actions = [],
   studentPath = (internshipId) => `/lecturer/students/${internshipId}`,
   isAdmin = false,
+  layoutVariant = "default",
 }: CompanyDetailViewProps) => {
+  const isLecturerLayout = layoutVariant === "lecturer";
+  const panelRadius = isLecturerLayout ? "rounded-lg" : "rounded-xl";
   const params = useParams<{ id?: string; companyId?: string }>();
   const companyId = params.companyId ?? params.id;
   const navigate = useNavigate();
@@ -328,7 +332,7 @@ export const CompanyDetailView = ({
 
   if (loading) {
     return (
-      <div className="flex min-h-32 items-center justify-center rounded-xl border border-slate-200/90 bg-white py-12 text-sm font-medium text-slate-500 shadow-2xs">
+      <div className={`flex min-h-32 items-center justify-center ${panelRadius} border border-slate-200/90 bg-white py-12 text-sm font-medium text-slate-500 shadow-2xs`}>
         <span role="status">Đang tải thông tin doanh nghiệp…</span>
       </div>
     );
@@ -355,7 +359,7 @@ export const CompanyDetailView = ({
             ...actions,
           ]}
         />
-        <Panel role="alert" className="rounded-xl border border-rose-200 bg-rose-50/40 shadow-2xs">
+        <Panel role="alert" className={`${panelRadius} border border-rose-200 bg-rose-50/40 shadow-2xs`}>
           <div className="flex items-start gap-3 text-rose-700">
             <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
             <div className="text-sm">
@@ -410,7 +414,8 @@ export const CompanyDetailView = ({
       />
 
       {/* THÔNG TIN CƠ BẢN */}
-      <Panel className="space-y-4 rounded-xl border border-slate-200/90 shadow-2xs">
+      <div className={isLecturerLayout ? "grid grid-cols-1 gap-4 lg:grid-cols-3" : "space-y-4"}>
+      <Panel className={`space-y-4 ${panelRadius} border border-slate-200/90 shadow-2xs ${isLecturerLayout ? "lg:col-span-2" : ""}`}>
         <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-3">
           <div className="flex items-center gap-3">
             <div className="flex h-12 w-12 items-center justify-center rounded-full border border-[#026aa7]/20 bg-[#026aa7]/5 font-bold text-[#025a8e]">
@@ -424,38 +429,38 @@ export const CompanyDetailView = ({
         </div>
 
         <div className="grid gap-3 md:grid-cols-2 text-xs">
-          <div className="rounded-xl border border-slate-200/90 p-3 shadow-2xs">
+          <div className={`${panelRadius} border border-slate-200/90 p-3 shadow-2xs`}>
             <span className="text-slate-500">Lĩnh vực hoạt động</span>
             <strong className="mt-1 block text-slate-900">{detail.industry ?? "—"}</strong>
           </div>
-          <div className="rounded-xl border border-slate-200/90 p-3 shadow-2xs">
+          <div className={`${panelRadius} border border-slate-200/90 p-3 shadow-2xs`}>
             <span className="text-slate-500 flex items-center gap-1">
               <Building2 className="w-3.5 h-3.5" />Địa chỉ
             </span>
             <strong className="mt-1 block text-slate-900">{detail.address ?? "—"}</strong>
           </div>
-          <div className="rounded-xl border border-slate-200/90 p-3 shadow-2xs">
+          <div className={`${panelRadius} border border-slate-200/90 p-3 shadow-2xs`}>
             <span className="text-slate-500 flex items-center gap-1">
               <Users className="w-3.5 h-3.5" />Sinh viên được phân công
             </span>
             <strong className="mt-1 block text-slate-900">{totalStudents} sinh viên</strong>
           </div>
-          <div className="rounded-xl border border-slate-200/90 p-3 shadow-2xs">
+          <div className={`${panelRadius} border border-slate-200/90 p-3 shadow-2xs`}>
             <span className="text-slate-500 flex items-center gap-1">
               <FileText className="w-3.5 h-3.5" />Bài nộp / báo cáo tuần
             </span>
             <strong className="mt-1 block text-slate-900">
-              {detail.totalSubmissions} bài · {detail.totalWeeklyReports} nhật ký
+              {detail.totalSubmissions} bài · {detail.totalWeeklyReports} báo cáo tuần đã duyệt
             </strong>
           </div>
-          <div className="rounded-xl border border-slate-200/90 p-3 shadow-2xs">
+          <div className={`${panelRadius} border border-slate-200/90 p-3 shadow-2xs`}>
             <span className="text-slate-500 flex items-center gap-1">
               <Mail className="w-3.5 h-3.5" />Người liên hệ
             </span>
             <strong className="mt-1 block text-slate-900">{detail.contactPerson ?? "—"}</strong>
             <p className="text-[10px] text-slate-500 mt-0.5">{detail.contactEmail ?? "—"}</p>
           </div>
-          <div className="rounded-xl border border-slate-200/90 p-3 shadow-2xs">
+          <div className={`${panelRadius} border border-slate-200/90 p-3 shadow-2xs`}>
             <span className="text-slate-500 flex items-center gap-1">
               <Phone className="w-3.5 h-3.5" />Số điện thoại
             </span>
@@ -465,7 +470,7 @@ export const CompanyDetailView = ({
       </Panel>
 
       {/* VỊ TRÍ TUYỂN DỤNG */}
-      <Panel className="space-y-4 rounded-xl border border-slate-200/90 shadow-2xs">
+      <Panel className={`space-y-4 ${panelRadius} border border-slate-200/90 shadow-2xs ${isLecturerLayout ? "lg:col-span-1" : ""}`}>
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div>
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
@@ -480,7 +485,7 @@ export const CompanyDetailView = ({
             <button
               type="button"
               onClick={openCreatePosition}
-              className="inline-flex min-h-10 items-center gap-1.5 rounded-full bg-[#026aa7] px-4 text-xs font-semibold text-white transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2"
+              className={`inline-flex min-h-10 items-center gap-1.5 ${isLecturerLayout ? "rounded-md" : "rounded-full"} bg-[#026aa7] px-4 text-xs font-semibold text-white transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2`}
             >
               <Plus className="w-3.5 h-3.5" />
               Thêm vị trí
@@ -489,7 +494,7 @@ export const CompanyDetailView = ({
         </div>
 
         {positions.length === 0 ? (
-          <div className="space-y-2 rounded-xl border border-dashed border-slate-200 bg-slate-50/50 py-10 text-center">
+          <div className={`space-y-2 ${panelRadius} border border-dashed border-slate-200 bg-slate-50/50 py-10 text-center`}>
             <Briefcase className="mx-auto mb-2 h-8 w-8 text-slate-300" />
             <p className="text-xs font-medium text-slate-600">Chưa có vị trí tuyển dụng nào</p>
             {isAdmin && (
@@ -499,7 +504,7 @@ export const CompanyDetailView = ({
             )}
           </div>
         ) : (
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className={isLecturerLayout ? "grid gap-3" : "grid gap-3 md:grid-cols-2"}>
             {positions.map((p) => {
               const filledRatio = p.slots > 0 ? Math.min(100, Math.round((p.filledSlots / p.slots) * 100)) : 0;
               return (
@@ -617,7 +622,7 @@ export const CompanyDetailView = ({
       </Panel>
 
       {/* DANH SÁCH SINH VIÊN THỰC TẬP */}
-      <Panel className="space-y-4 rounded-xl border border-slate-200/90 shadow-2xs">
+      <Panel className={`space-y-4 ${panelRadius} border border-slate-200/90 shadow-2xs ${isLecturerLayout ? "lg:col-span-2" : ""}`}>
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div>
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
@@ -648,7 +653,7 @@ export const CompanyDetailView = ({
                 <button
                   type="button"
                   key={internship.id}
-                  className="flex w-full flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200/90 bg-slate-50 p-3 text-left transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2"
+                  className={`flex w-full flex-wrap items-center justify-between gap-2 ${panelRadius} border border-slate-200/90 bg-slate-50 p-3 text-left transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2`}
                   onClick={() => navigate(studentPath(internship.id))}
                 >
                   <span className="flex items-center gap-3 min-w-0 flex-1">
@@ -693,7 +698,7 @@ export const CompanyDetailView = ({
       </Panel>
 
       {/* TỔNG HỢP HOẠT ĐỘNG */}
-      <Panel className="space-y-4 rounded-xl border border-slate-200/90 shadow-2xs">
+      <Panel className={`space-y-4 ${panelRadius} border border-slate-200/90 shadow-2xs ${isLecturerLayout ? "lg:col-span-1" : ""}`}>
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div>
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
@@ -724,16 +729,17 @@ export const CompanyDetailView = ({
             <dd className="font-semibold tabular-nums text-slate-900">{detail.totalSubmissions}</dd>
           </div>
           <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-2">
-            <dt className="text-slate-500">Báo cáo tuần</dt>
+            <dt className="text-slate-500">Báo cáo tuần đã duyệt</dt>
             <dd className="font-semibold tabular-nums text-slate-900">{detail.totalWeeklyReports}</dd>
           </div>
         </dl>
       </Panel>
+      </div>
 
       {/* MODAL THÊM / SỬA VỊ TRÍ */}
       {isPositionModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          <div className={`bg-white ${panelRadius} shadow-xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-150`}>
             <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 bg-slate-50/50">
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <Briefcase className="w-4 h-4 text-blue-600" />
@@ -875,7 +881,7 @@ export const CompanyDetailView = ({
       {/* MODAL SỬA THÔNG TIN DOANH NGHIỆP */}
       {isCompanyModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          <div className={`bg-white ${panelRadius} shadow-xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-150`}>
             <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 bg-slate-50/50">
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <Building2 className="w-4 h-4 text-blue-600" />
@@ -1010,7 +1016,7 @@ export const CompanyDetailView = ({
       {/* CONFIRM DELETE MODAL */}
       {deletePositionId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-sm p-5 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+          <div className={`bg-white ${panelRadius} shadow-xl border border-slate-200 w-full max-w-sm p-5 space-y-4 animate-in fade-in zoom-in-95 duration-150`}>
             <div className="flex items-center gap-3 text-rose-600">
               <AlertCircle className="w-5 h-5 shrink-0" />
               <h3 className="text-sm font-bold text-slate-900">Xác nhận xóa vị trí</h3>

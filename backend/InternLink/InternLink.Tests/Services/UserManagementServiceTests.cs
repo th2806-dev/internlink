@@ -143,6 +143,7 @@ public class UserManagementServiceTests
         result.Should().NotBeNull();
         result!.EmailSent.Should().BeTrue();
         result.Username.Should().Be("reset.me");
+        result.TemporaryPassword.Should().BeNull();
 
         var updated = await db.Users.FindAsync(entity.Id);
         updated!.MustChangePassword.Should().BeTrue();
@@ -152,6 +153,38 @@ public class UserManagementServiceTests
                 r.Username == "reset.me" &&
                 !string.IsNullOrEmpty(r.NewPassword)),
             It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ResetPasswordAsync_WithoutEmail_ShouldReturnOneTimeTemporaryPassword()
+    {
+        var db = GetDb();
+        var entity = new User
+        {
+            Id = Guid.NewGuid(),
+            Username = "reset.no-email",
+            FullName = "No Email",
+            PasswordHash = "old-hash",
+            Role = Role.Student,
+            MustChangePassword = false,
+            CreatedAt = DateTime.UtcNow
+        };
+        await db.Users.AddAsync(entity);
+        await db.SaveChangesAsync();
+
+        var email = new Mock<IEmailService>();
+        var service = CreateService(db, email.Object);
+
+        var result = await service.ResetPasswordAsync(entity.Id);
+
+        result.Should().NotBeNull();
+        result!.EmailSent.Should().BeFalse();
+        result.TemporaryPassword.Should().NotBeNullOrWhiteSpace();
+        result.TemporaryPassword.Should().HaveLength(8);
+        (await db.Users.FindAsync(entity.Id))!.MustChangePassword.Should().BeTrue();
+        email.Verify(e => e.SendPasswordResetAsync(
+            It.IsAny<PasswordResetEmailRequest>(),
+            It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]

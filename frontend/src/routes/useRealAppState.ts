@@ -163,6 +163,8 @@ export function useRealAppState(
       interning: apiStats?.interningCount ?? interning,
       assignedCompanyCount: apiStats?.assignedCompanyCount ?? interning,
       pending: apiStats?.pendingReviewsCount ?? pending,
+      pendingWeeklyReports: apiStats?.pendingWeeklyReportsCount,
+      pendingSubmissions: apiStats?.pendingSubmissionsCount,
       overdue: apiStats?.overdueReportsCount ?? overdue,
       completed: apiStats?.completedCount ?? completed,
       avgProg: total > 0 ? avgProg : apiStats?.averageProgress ?? 0,
@@ -197,6 +199,7 @@ export function useRealAppState(
       late: week.lateCount,
       missing: week.missingCount,
       pending: week.pendingCount,
+      approved: week.approvedCount,
     }));
   }, [lecturerPortal.weeklyTrend]);
 

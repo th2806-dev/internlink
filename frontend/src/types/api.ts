@@ -43,6 +43,7 @@ export interface CurrentUserDto {
   role: string;
   isActive: boolean;
   mustChangePassword: boolean;
+  isArchiveReadOnly?: boolean;
   departmentId?: string | null;
 }
 
@@ -350,6 +351,7 @@ export interface StudentPortalProfileDto {
   lecturerPhone?: string | null;
   progressPercent?: number | null;
   progressBreakdown?: ProgressBreakdownDto | null;
+  isArchiveReadOnly?: boolean;
 }
 
 // --- Portal DTOs (Lecturer / Student) ---
@@ -440,6 +442,8 @@ export interface LecturerDashboardStatsDto {
   interningCount: number;
   averageProgress: number;
   pendingReviewsCount: number;
+  pendingWeeklyReportsCount: number;
+  pendingSubmissionsCount: number;
   completedCount: number;
   overdueReportsCount: number;
   averageGrade: number;
@@ -454,6 +458,7 @@ export interface LecturerWeeklyTrendDto {
   lateCount: number;
   missingCount: number;
   pendingCount: number;
+  approvedCount: number;
   totalStudents: number;
   complianceRate: number;
 }

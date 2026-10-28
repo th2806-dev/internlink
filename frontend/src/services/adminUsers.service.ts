@@ -52,7 +52,13 @@ export const adminUsersService = {
   },
 
   resetPassword(id: string, backendRole?: string | null) {
-    return apiRequest<{ userId: string; username: string; emailSent: boolean }>(
+    return apiRequest<{
+      userId: string;
+      username: string;
+      emailSent: boolean;
+      emailMessage?: string | null;
+      temporaryPassword?: string | null;
+    }>(
       `${getUsersPrefix(backendRole)}/${id}/reset-password`,
       { method: "POST" },
     );

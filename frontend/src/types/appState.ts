@@ -23,6 +23,8 @@ export interface Stats {
   interning: number;
   assignedCompanyCount: number;
   pending: number;
+  pendingWeeklyReports?: number;
+  pendingSubmissions?: number;
   overdue: number;
   completed: number;
   avgProg: number;
@@ -60,6 +62,7 @@ export interface AppState {
     late: number;
     missing: number;
     pending: number;
+    approved: number;
   }[];
   lecturerEnterprises?: any[];
   handleUpdateSubmissionStatus: (submissionId: string, status: string) => void;

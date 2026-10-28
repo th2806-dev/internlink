@@ -253,7 +253,7 @@ public class UserManagementService : IUserManagementService
             Id = Guid.NewGuid(),
             UserId = user.Id,
             Title = "Cấp lại mật khẩu tài khoản InternLink",
-            Content = $"Mật khẩu tài khoản {user.Username} đã được thiết lập lại thành công. Mật khẩu tạm thời mới đã được gửi đến email của bạn.",
+            Content = $"Mật khẩu tài khoản {user.Username} đã được thiết lập lại. Nếu tài khoản có email, mật khẩu tạm thời sẽ được gửi đến địa chỉ đó.",
             Link = "/login",
             IsRead = false,
             CreatedAt = DateTime.UtcNow
@@ -289,7 +289,8 @@ public class UserManagementService : IUserManagementService
             UserId = user.Id,
             Username = user.Username,
             EmailSent = emailSent,
-            EmailMessage = emailMessage
+            EmailMessage = emailMessage,
+            TemporaryPassword = emailSent ? null : newPassword
         };
     }
 

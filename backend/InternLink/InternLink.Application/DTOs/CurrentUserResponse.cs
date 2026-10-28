@@ -10,5 +10,6 @@ public sealed class CurrentUserResponse
     public string Role { get; set; } = null!;
     public bool IsActive { get; set; }
     public bool MustChangePassword { get; set; }
+    public bool IsArchiveReadOnly { get; set; }
     public Guid? DepartmentId { get; set; }
 }

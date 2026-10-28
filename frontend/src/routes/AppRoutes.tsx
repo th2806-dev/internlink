@@ -96,7 +96,16 @@ export function AppRoutes() {
       {/* Public auth routes */}
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
-      <Route path="/change-password" element={<ChangePasswordPage />} />
+      <Route
+        path="/change-password"
+        element={
+          isLoggedIn && role === "student" && user?.isArchiveReadOnly ? (
+            <Navigate to="/student/evaluation" replace />
+          ) : (
+            <ChangePasswordPage />
+          )
+        }
+      />
 
       {/* Public Login Route */}
       <Route
@@ -127,12 +136,13 @@ export function AppRoutes() {
                     role: user.role,
                     backendRole: user.backendRole,
                     email: user.email,
+                    isArchiveReadOnly: user.isArchiveReadOnly,
                   },
                   mustChangePassword: user.mustChangePassword,
                 });
                 showToast(`Chào mừng ${user.name}`);
                 const returnUrl = (location.state as { from?: { pathname?: string } })?.from?.pathname;
-                if (user.mustChangePassword) {
+                if (user.mustChangePassword && !user.isArchiveReadOnly) {
                   navigate("/change-password");
                 } else if (returnUrl && returnUrl !== "/login") {
                   navigate(returnUrl);

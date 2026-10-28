@@ -228,14 +228,18 @@ export async function apiRequest<T>(
 
       // FluentValidation auto-validation returns ProblemDetails: { errors: { Field: ["msg1", ...] } }
       if (!msg) {
-        const raw = payload as Record<string, unknown>;
-        const errors = raw.errors as Record<string, string[]> | undefined;
+        const raw = payload as ApiResponse<T> & {
+          errors?: Record<string, string[]>;
+          title?: string;
+          detail?: string;
+        };
+        const errors = raw.errors;
         if (errors) {
           const firstMessages = Object.values(errors).flat();
           if (firstMessages.length > 0) msg = firstMessages[0];
         }
         // Fallback: ProblemDetails.title or .detail at root level
-        if (!msg) msg = (raw.title as string) || (raw.detail as string);
+        if (!msg) msg = raw.title || raw.detail;
       }
 
       if (!msg) {
@@ -490,4 +494,3 @@ export function extractItems<T>(res: unknown): T[] {
   if (Array.isArray(obj.results)) return obj.results as T[];
   return [];
 }
-

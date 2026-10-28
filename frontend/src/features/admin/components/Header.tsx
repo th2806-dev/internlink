@@ -103,7 +103,7 @@ export const Header = ({
   };
 
   return (
-    <header className="sticky top-0 z-30 flex flex-col border-b border-slate-200/90 bg-white">
+    <header className="sticky top-0 z-30 flex shrink-0 flex-col border-b border-slate-200/90 bg-white">
       {/* Main Topbar Row */}
       <div className="flex h-14 sm:h-15 w-full min-w-0 items-center justify-between px-3.5 sm:px-5 lg:px-6 gap-3">
         {/* Left: Hamburger & Breadcrumbs */}
