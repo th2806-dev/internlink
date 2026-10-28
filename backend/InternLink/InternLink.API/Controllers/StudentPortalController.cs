@@ -90,6 +90,11 @@ public class StudentPortalController : ControllerBase
         var profile = await _studentService.GetPortalProfileByUserIdAsync(userId.Value);
         if (profile?.Internship == null)
             return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.StudentInternshipMissing }));
+        if (profile.Internship.CompanyId == null)
+            return BadRequest(ApiResponse<object>.Fail(new ApiError
+            {
+                Title = "Sinh viên chưa được phân công đơn vị thực tập, không thể xuất phiếu đánh giá."
+            }));
 
         try
         {

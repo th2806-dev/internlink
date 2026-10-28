@@ -156,7 +156,7 @@ export const TemplatesView: React.FC<{
 
       </div>
       {/* 2. MAIN WORKSPACE: DANH SÁCH BIỂU MẪU & CỘT HƯỚNG DẪN */}
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-4 items-start">
+      <div className="grid grid-cols-1 gap-4 items-start lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         {/* CỘT TRÁI: KHO TÀI LIỆU VÀ BỘ LỌC */}
         <div className="overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-2xs">
           {/* Header & Controls */}

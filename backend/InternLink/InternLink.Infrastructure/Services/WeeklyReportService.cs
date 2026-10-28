@@ -438,6 +438,9 @@ public class WeeklyReportService : IWeeklyReportService
         if (report.Internship?.Student?.UserId != userId)
             throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NotOwnerInternship);
 
+        if (report.Internship.CompanyId == null)
+            throw new InvalidOperationException("Sinh viên chưa được phân công đơn vị thực tập.");
+
         if (report.Status != WeeklyReportStatus.Draft && report.Status != WeeklyReportStatus.RevisionRequested)
             throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.OnlyDraftOrRevisionSubmittable);
 
@@ -503,6 +506,8 @@ public class WeeklyReportService : IWeeklyReportService
                 .ThenInclude(i => i.Student)
             .Include(r => r.Internship)
                 .ThenInclude(i => i.Lecturer)
+            .Include(r => r.Internship)
+                .ThenInclude(i => i.Semester)
             .FirstOrDefaultAsync(r => r.Id == id && !r.IsDeleted);
 
         if (report == null)
@@ -526,7 +531,7 @@ public class WeeklyReportService : IWeeklyReportService
         if (status is not (WeeklyReportStatus.Reviewed or WeeklyReportStatus.RevisionRequested or WeeklyReportStatus.Approved))
             throw new InvalidOperationException("Review status must be Reviewed, RevisionRequested, or Approved");
 
-        await EnsureReviewWindowOpenAsync(report);
+        EnsureSemesterOpenForReview(report);
 
         report.Status = status;
         report.LecturerComment = request.LecturerComment;
@@ -897,27 +902,10 @@ public class WeeklyReportService : IWeeklyReportService
             throw new InvalidOperationException($"Hạn nộp báo cáo tuần {weekNumber} đã kết thúc vào ngày {schedule.DueDate:dd/MM/yyyy HH:mm}. Không cho phép nộp muộn.");
     }
 
-    private async Task EnsureReviewWindowOpenAsync(WeeklyReport report)
+    private static void EnsureSemesterOpenForReview(WeeklyReport report)
     {
         if (report.Internship.Semester?.Status == SemesterStatus.Completed)
             throw new InvalidOperationException("Kỳ thực tập đã đóng, nhật ký đang ở chế độ chỉ xem.");
-
-        if (report.Internship.SemesterId == null)
-            return;
-
-        var schedule = await _db.SemesterReportSchedules
-            .Where(item => item.SemesterId == report.Internship.SemesterId && item.WeekNumber == report.WeekNumber && !item.IsDeleted
-                && (item.LecturerId == null || (report.Internship.LecturerId != null && item.LecturerId == report.Internship.LecturerId)))
-            .OrderByDescending(item => item.LecturerId != null)
-            .ThenByDescending(item => item.UpdatedAt ?? item.CreatedAt)
-            .ThenByDescending(item => item.CreatedAt)
-            .FirstOrDefaultAsync();
-
-        if (schedule?.IsSubmissionOpen == false)
-            throw new InvalidOperationException("Tuần thực tập đã đóng, nhật ký đang ở chế độ chỉ xem.");
-
-        if (schedule != null && DateTime.UtcNow > schedule.DueDate)
-            throw new InvalidOperationException("Tuần thực tập đã hết hạn, nhật ký đang ở chế độ chỉ xem.");
     }
 
     public static string SanitizeStudentNameForFileName(string? studentName)

@@ -42,9 +42,23 @@ export const Sidebar = ({
   isOpen?: boolean;
   onClose?: () => void;
 }) => {
-  const { profile } = useStudentPortal();
+  const { profile, isArchiveReadOnly } = useStudentPortal();
   const displayName = profile.name || studentName;
-  const navSections: StudentNavSection[] = [
+  const navSections: StudentNavSection[] = isArchiveReadOnly
+    ? [
+        {
+          title: "HỒ SƠ LƯU TRỮ",
+          items: [
+            {
+              id: "student-evaluation",
+              label: "Kết quả Đánh giá",
+              icon: Award,
+            },
+            { id: "student-account", label: "Tài khoản", icon: User },
+          ],
+        },
+      ]
+    : [
     {
       title: "",
       items: [
@@ -112,7 +126,7 @@ export const Sidebar = ({
         { id: "student-account", label: "Tài khoản", icon: User },
       ],
     },
-  ];
+      ];
 
   return (
     <aside

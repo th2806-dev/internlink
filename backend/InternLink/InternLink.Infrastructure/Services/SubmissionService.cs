@@ -128,6 +128,8 @@ public class SubmissionService : ISubmissionService
         if (internship.Student?.UserId != userId)
             throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NotOwnerInternship);
 
+        EnsureSubmissionAllowedForInternship(internship);
+
         if (!Enum.TryParse<SubmissionType>(request.Type, true, out var type))
             throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.InvalidSubmissionTypeDetail(request.Type));
 
@@ -147,28 +149,8 @@ public class SubmissionService : ISubmissionService
         if (type == SubmissionType.Evidence && internship.SemesterId.HasValue)
             await EnsureEvidenceUploadWindowOpenAsync(internship.SemesterId.Value);
 
-        if (internship.SemesterId.HasValue && type == SubmissionType.FinalReport)
-        {
-            var totalWeeks = Math.Max(internship.Semester?.TotalWeeks ?? 1, 1);
-            // Lịch hiệu lực = override riêng của GV hướng dẫn (nếu có) đè lịch chung kỳ.
-            var ownLecturerId = internship.LecturerId;
-            var schedule = await _db.SemesterReportSchedules
-                .Where(s => s.SemesterId == internship.SemesterId.Value && s.WeekNumber == totalWeeks + 1 && !s.IsDeleted
-                    && (s.LecturerId == null || (ownLecturerId != null && s.LecturerId == ownLecturerId)))
-                .OrderByDescending(s => s.LecturerId != null)
-                .ThenByDescending(s => s.UpdatedAt ?? s.CreatedAt)
-                .ThenByDescending(s => s.CreatedAt)
-                .FirstOrDefaultAsync();
-            if (schedule != null)
-            {
-                if (!schedule.IsSubmissionOpen)
-                    throw new InvalidOperationException("Báo cáo cuối kỳ hiện đang tạm dừng nhận.");
-                if (schedule.StartDate.HasValue && DateTime.UtcNow < schedule.StartDate.Value)
-                    throw new InvalidOperationException($"Báo cáo cuối kỳ chưa mở nhận trước ngày {schedule.StartDate.Value:dd/MM/yyyy HH:mm}.");
-                if (!schedule.AllowLateSubmission && DateTime.UtcNow > schedule.DueDate)
-                    throw new InvalidOperationException($"Hạn nộp báo cáo cuối kỳ đã kết thúc vào ngày {schedule.DueDate:dd/MM/yyyy HH:mm}.");
-            }
-        }
+        if (type == SubmissionType.FinalReport)
+            await EnsureFinalReportSubmissionWindowOpenAsync(internship);
 
         var version = HasCanonicalSubmissionFileName(type)
             ? await GetNextSubmissionVersionAsync(request.InternshipId, type)
@@ -258,6 +240,7 @@ public class SubmissionService : ISubmissionService
             throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.InternshipNotFound);
         if (internship.Student?.UserId != userId)
             throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NotOwnerInternship);
+        EnsureSubmissionAllowedForInternship(internship);
 
         var fileItems = files.ToList();
         var linkItems = links
@@ -282,6 +265,9 @@ public class SubmissionService : ISubmissionService
         {
             throw new InvalidOperationException("Điểm doanh nghiệp chỉ áp dụng cho hồ sơ đánh giá doanh nghiệp.");
         }
+
+        if (type == SubmissionType.FinalReport)
+            await EnsureFinalReportSubmissionWindowOpenAsync(internship);
 
         var version = HasCanonicalSubmissionFileName(type)
             ? await GetNextSubmissionVersionAsync(request.InternshipId, type)
@@ -367,6 +353,8 @@ public class SubmissionService : ISubmissionService
         if (existing.Internship.Student?.UserId != userId)
             throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NotOwnerSubmission);
 
+        EnsureSubmissionAllowedForInternship(existing.Internship);
+
         if (existing.Status != SubmissionStatus.RevisionRequested)
             throw new InvalidOperationException("Resubmit is only allowed when status is RevisionRequested");
         var employerScore = request.EmployerScore ?? existing.EmployerScore;
@@ -431,6 +419,8 @@ public class SubmissionService : ISubmissionService
 
         if (existing.Internship.Student?.UserId != userId)
             throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NotOwnerSubmission);
+
+        EnsureSubmissionAllowedForInternship(existing.Internship);
 
         if (existing.Status != SubmissionStatus.RevisionRequested)
             throw new InvalidOperationException("Resubmit is only allowed when status is RevisionRequested");
@@ -1308,10 +1298,43 @@ public class SubmissionService : ISubmissionService
             throw new InvalidOperationException("Admin khoa chưa cấu hình thời hạn nộp minh chứng cho kỳ này.");
 
         var now = DateTime.UtcNow;
-        if (now < deadline.StartDate)
-            throw new InvalidOperationException($"Chưa đến thời gian nộp minh chứng. Mở nhận từ {deadline.StartDate:dd/MM/yyyy HH:mm}.");
         if (now > deadline.EndDate)
             throw new InvalidOperationException($"Thời hạn nộp minh chứng đã kết thúc vào {deadline.EndDate:dd/MM/yyyy HH:mm}.");
+    }
+
+    private async Task EnsureFinalReportSubmissionWindowOpenAsync(Internship internship)
+    {
+        if (!internship.SemesterId.HasValue)
+            return;
+
+        var totalWeeks = Math.Max(internship.Semester?.TotalWeeks ?? 1, 1);
+        var schedule = await _db.SemesterReportSchedules
+            .Where(s => s.SemesterId == internship.SemesterId.Value
+                && s.WeekNumber == totalWeeks + 1
+                && !s.IsDeleted
+                && (s.LecturerId == null
+                    || (internship.LecturerId != null && s.LecturerId == internship.LecturerId)))
+            .OrderByDescending(s => s.LecturerId != null)
+            .ThenByDescending(s => s.UpdatedAt ?? s.CreatedAt)
+            .ThenByDescending(s => s.CreatedAt)
+            .FirstOrDefaultAsync();
+
+        if (schedule == null)
+            return;
+
+        if (!schedule.IsSubmissionOpen)
+            throw new InvalidOperationException("Báo cáo cuối kỳ hiện đang tạm dừng nhận.");
+        if (!schedule.AllowLateSubmission && DateTime.UtcNow > schedule.DueDate)
+            throw new InvalidOperationException($"Hạn nộp báo cáo cuối kỳ đã kết thúc vào ngày {schedule.DueDate:dd/MM/yyyy HH:mm}.");
+    }
+
+    private static void EnsureSubmissionAllowedForInternship(Internship internship)
+    {
+        if (!internship.CompanyId.HasValue)
+            throw new InvalidOperationException("Sinh viên chưa được phân công đơn vị thực tập.");
+
+        if (internship.Semester?.Status == SemesterStatus.Completed)
+            throw new InvalidOperationException("Học kỳ thực tập đã kết thúc. Không thể nộp hoặc cập nhật hồ sơ.");
     }
 
     private string GetUploadRoot() => _env.ContentRootPath;

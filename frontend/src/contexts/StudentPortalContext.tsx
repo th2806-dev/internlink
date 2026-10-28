@@ -8,6 +8,7 @@ type StudentPortalContextValue = {
   internship: InternshipDto | null;
   internshipId: string | null;
   portalData: StudentPortalProfileDto | null;
+  isArchiveReadOnly: boolean;
   isLoading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
@@ -20,7 +21,12 @@ const StudentPortalContext = createContext<StudentPortalContextValue | null>(
 export function StudentPortalProvider({ children }: { children: ReactNode }) {
   const value = useStudentPortalContext();
   return (
-    <StudentPortalContext.Provider value={value}>
+    <StudentPortalContext.Provider
+      value={{
+        ...value,
+        isArchiveReadOnly: value.isArchiveReadOnly,
+      }}
+    >
       {children}
     </StudentPortalContext.Provider>
   );

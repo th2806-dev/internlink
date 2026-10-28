@@ -539,37 +539,48 @@ export const FeedbackView = ({
                     <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">
                       Tiến trình xử lý
                     </p>
-                    <div className="flex items-center gap-1">
-                      {WORKFLOW_STEPS.map((step, i) => (
-                        <div key={step} className="flex items-center flex-1 min-w-0">
-                          <div
-                            className={`w-6 h-6 rounded-full text-[10px] font-bold flex items-center justify-center shrink-0 ${
-                              i + 1 <= selectedFeedback.currentWorkflowStep
-                                ? "bg-blue-600 text-white"
-                                : "bg-slate-100 text-slate-400"
-                            }`}
-                            title={step}
+                    <div className="relative">
+                      <div
+                        aria-hidden="true"
+                        className="absolute left-[10%] right-[10%] top-3 h-0.5 bg-slate-200"
+                      />
+                      <div
+                        aria-hidden="true"
+                        className="absolute left-[10%] top-3 h-0.5 bg-blue-600"
+                        style={{
+                          width: `${Math.min(1, Math.max(0, (selectedFeedback.currentWorkflowStep - 1) / (WORKFLOW_STEPS.length - 1))) * 80}%`,
+                        }}
+                      />
+                      <ol
+                        aria-label="Tiến trình xử lý phản hồi"
+                        className="relative grid grid-cols-5"
+                      >
+                        {WORKFLOW_STEPS.map((step, i) => (
+                          <li
+                            key={step}
+                            className="flex min-w-0 flex-col items-center gap-2"
+                            aria-current={
+                              i + 1 === selectedFeedback.currentWorkflowStep
+                                ? "step"
+                                : undefined
+                            }
                           >
-                            {i + 1}
-                          </div>
-                          {i < WORKFLOW_STEPS.length - 1 && (
-                            <div
-                              className={`flex-1 h-0.5 mx-0.5 ${
-                                i + 1 < selectedFeedback.currentWorkflowStep
-                                  ? "bg-blue-600"
-                                  : "bg-slate-200"
+                            <span
+                              className={`flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold ${
+                                i + 1 <= selectedFeedback.currentWorkflowStep
+                                  ? "bg-blue-600 text-white"
+                                  : "bg-slate-100 text-slate-400"
                               }`}
-                            />
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                    <div className="flex justify-between text-[9px] text-slate-400 font-medium">
-                      {WORKFLOW_STEPS.map((step) => (
-                        <span key={step} className="truncate px-0.5">
-                          {step}
-                        </span>
-                      ))}
+                              title={step}
+                            >
+                              {i + 1}
+                            </span>
+                            <span className="w-full px-0.5 text-center text-[9px] font-medium leading-tight text-slate-500">
+                              {step}
+                            </span>
+                          </li>
+                        ))}
+                      </ol>
                     </div>
                   </div>
 

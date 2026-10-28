@@ -162,6 +162,8 @@ export function useStudentPortalContext() {
     internship,
     internshipId,
     portalData,
+    isArchiveReadOnly:
+      portalData?.isArchiveReadOnly ?? user?.isArchiveReadOnly ?? false,
     isLoading,
     error,
     refresh: load,

@@ -30,6 +30,18 @@ import {
 import { INTERNSHIP_WEEKS } from "../../../config/internship";
 import { StudentSubPageHeader } from "../components/StudentSubPageHeader";
 
+const MAX_WEEKLY_REPORT_FILE_SIZE = 15 * 1024 * 1024;
+
+function getWeeklyReportFileError(file: File): string | null {
+  if (!file.name.toLowerCase().endsWith(".pdf")) {
+    return "Hệ thống chỉ chấp nhận định dạng file PDF (.pdf)!";
+  }
+  if (file.size > MAX_WEEKLY_REPORT_FILE_SIZE) {
+    return "Dung lượng file vượt quá giới hạn 15MB!";
+  }
+  return null;
+}
+
 function getDeadlineStatus(report: Pick<
   WeeklyReportRow,
   "submittedAtRaw" | "scheduleDueDate" | "allowLateSubmission"
@@ -319,12 +331,11 @@ export const WeeklyReportsView = ({
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.name.toLowerCase().endsWith(".pdf")) {
-      onShowToast?.("Hệ thống chỉ chấp nhận định dạng file PDF (.pdf)!", "error");
-      return;
-    }
-    if (file.size > 20 * 1024 * 1024) {
-      onShowToast?.("Dung lượng file vượt quá giới hạn 20MB!", "error");
+    const errorMessage = getWeeklyReportFileError(file);
+    e.currentTarget.value = "";
+    if (errorMessage) {
+      setSelectedPdfFile(null);
+      onShowToast?.(errorMessage, "error");
       return;
     }
     const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
@@ -342,12 +353,10 @@ export const WeeklyReportsView = ({
     setIsDragging(false);
     const file = e.dataTransfer.files?.[0];
     if (!file) return;
-    if (!file.name.toLowerCase().endsWith(".pdf")) {
-      onShowToast?.("Hệ thống chỉ chấp nhận định dạng file PDF (.pdf)!", "error");
-      return;
-    }
-    if (file.size > 20 * 1024 * 1024) {
-      onShowToast?.("Dung lượng file vượt quá giới hạn 20MB!", "error");
+    const errorMessage = getWeeklyReportFileError(file);
+    if (errorMessage) {
+      setSelectedPdfFile(null);
+      onShowToast?.(errorMessage, "error");
       return;
     }
     const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
@@ -487,7 +496,7 @@ export const WeeklyReportsView = ({
           <button
             type="button"
             onClick={() => setShowRequirementModal(true)}
-            className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-white/30 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-white/30 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
           >
             <ShieldCheck className="h-4 w-4" aria-hidden="true" />
             <span>Quy định nộp</span>
@@ -1077,7 +1086,7 @@ export const WeeklyReportsView = ({
                         Bấm để chọn file PDF hoặc kéo thả file báo cáo vào đây
                       </p>
                       <p className="text-[11px] text-slate-400 font-medium mt-0.5">
-                        Chỉ chấp nhận định dạng <strong>PDF (.pdf)</strong> • Dung lượng tối đa <strong>20MB</strong>
+                        Chỉ chấp nhận định dạng <strong>PDF (.pdf)</strong> • Dung lượng tối đa <strong>15MB</strong>
                       </p>
                     </div>
                   </div>
@@ -1100,6 +1109,18 @@ export const WeeklyReportsView = ({
                       </div>
 
                       <div className="flex items-center gap-2 self-end sm:self-center">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedPdfFile(null);
+                            if (fileInputRef.current) fileInputRef.current.value = "";
+                          }}
+                          aria-label="Bỏ file đã chọn"
+                          title="Bỏ file đã chọn"
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-colors hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+                        >
+                          <X className="h-4 w-4" aria-hidden="true" />
+                        </button>
                         <button
                           type="button"
                           onClick={handleFileSelect}
@@ -1273,7 +1294,7 @@ export const WeeklyReportsView = ({
                 <p className="font-bold text-slate-900 mb-1">1. Quy định file báo cáo:</p>
                 <ul className="list-disc list-inside space-y-1 pl-2 text-slate-600">
                   <li>Soạn thảo bằng Microsoft Word theo biểu mẫu chuẩn của Khoa.</li>
-                  <li>Xuất file định dạng <strong>PDF (.pdf)</strong> trước khi nộp lên hệ thống. Dung lượng dưới 20MB.</li>
+                  <li>Xuất file định dạng <strong>PDF (.pdf)</strong> trước khi nộp lên hệ thống. Dung lượng tối đa 15MB.</li>
                   <li>
                     Cấu trúc tên file:{" "}
                     <code className="bg-slate-100 px-1.5 py-0.5 rounded font-mono text-blue-700">

@@ -17,6 +17,7 @@ import {
   Clock,
 } from "lucide-react";
 import { useStudentPortal } from "../../../contexts/StudentPortalContext";
+import type { ToastType } from "../../../contexts/ToastContext";
 import { useSemester } from "../../../contexts/SemesterContext";
 import { CompanyAvatar } from "../../../components/common/CompanyAvatar";
 import { StudentSubPageHeader } from "../components/StudentSubPageHeader";
@@ -25,8 +26,11 @@ import { mapWeeklyReportStatusToUi } from "../../../lib/portalMappers";
 import { weeklyReportService } from "../../../services/weeklyReport.service";
 import {
   semesterReportScheduleService,
+  type SupplementalDeadline,
   type SemesterReportScheduleDto,
 } from "../../../services/semesterReportSchedule.service";
+import { submissionApiService } from "../../../services/submissionApi.service";
+import type { SubmissionDto } from "../../../types/api";
 
 function formatDateVi(value?: string | null, style: "short" | "full" = "full") {
   if (!value) return "—";
@@ -89,7 +93,7 @@ export const InternshipView = ({
   onShowToast,
   onNavigate,
 }: {
-  onShowToast: (msg: string, type?: "success" | "error" | "info") => void;
+  onShowToast: (msg: string, type?: ToastType) => void;
   onNavigate?: (tab: string) => void;
 }) => {
   const { profile, internship, internshipId, refresh } = useStudentPortal();
@@ -111,6 +115,8 @@ export const InternshipView = ({
     submittedAt?: string | null;
   }[]>([]);
   const [schedules, setSchedules] = useState<SemesterReportScheduleDto[]>([]);
+  const [evidenceDeadline, setEvidenceDeadline] = useState<SupplementalDeadline | null>(null);
+  const [submissions, setSubmissions] = useState<SubmissionDto[]>([]);
   const [contactTopic, setContactTopic] = useState("Hỏi về Báo cáo thực tập tuần");
   const [contactMessage, setContactMessage] = useState("");
 
@@ -131,14 +137,20 @@ export const InternshipView = ({
     let cancelled = false;
     (async () => {
       try {
-        const [reports, fetchedSchedules] = await Promise.all([
+        const [reports, fetchedSchedules, fetchedEvidenceDeadline, fetchedSubmissions] = await Promise.all([
           weeklyReportService.getMine().catch(() => []),
           currentSemesterId
             ? semesterReportScheduleService.getSchedules(currentSemesterId).catch(() => [] as SemesterReportScheduleDto[])
             : Promise.resolve([] as SemesterReportScheduleDto[]),
+          currentSemesterId
+            ? semesterReportScheduleService.getEvidenceDeadline(currentSemesterId).catch(() => null)
+            : Promise.resolve(null),
+          submissionApiService.getMine().catch(() => []),
         ]);
         if (cancelled) return;
         setSchedules(fetchedSchedules);
+        setEvidenceDeadline(fetchedEvidenceDeadline);
+        setSubmissions(fetchedSubmissions);
         setApiWeeklyPlans(
           reports.map((r) => ({
             week: r.weekNumber,
@@ -165,13 +177,19 @@ export const InternshipView = ({
     try {
       await refresh();
       if (internshipId) {
-        const [reports, fetchedSchedules] = await Promise.all([
+        const [reports, fetchedSchedules, fetchedEvidenceDeadline, fetchedSubmissions] = await Promise.all([
           weeklyReportService.getMine().catch(() => []),
           currentSemesterId
             ? semesterReportScheduleService.getSchedules(currentSemesterId).catch(() => [] as SemesterReportScheduleDto[])
             : Promise.resolve([] as SemesterReportScheduleDto[]),
+          currentSemesterId
+            ? semesterReportScheduleService.getEvidenceDeadline(currentSemesterId).catch(() => null)
+            : Promise.resolve(null),
+          submissionApiService.getMine().catch(() => []),
         ]);
         setSchedules(fetchedSchedules);
+        setEvidenceDeadline(fetchedEvidenceDeadline);
+        setSubmissions(fetchedSubmissions);
         setApiWeeklyPlans(
           reports.map((r) => ({
             week: r.weekNumber,
@@ -283,6 +301,8 @@ export const InternshipView = ({
     );
   }, [internship, profile.companyAddress]);
 
+  const currentProgressWeek = progressSummary.current;
+
   const timelineSteps = useMemo(() => {
     const scheduleByWeek = new Map(schedules.map((s) => [s.weekNumber, s]));
     const reportByWeek = new Map(weeklyPlans.map((p) => [p.week, p]));
@@ -308,9 +328,9 @@ export const InternshipView = ({
       } else if (report && report.status !== "Chưa bắt đầu") {
         // Đã nộp / Cần chỉnh sửa / Đã xem → đang xử lý
         status = "active";
-      } else if (weekNum === progressSummary.current) {
+      } else if (weekNum === currentProgressWeek) {
         status = "active";
-      } else if (weekNum < progressSummary.current) {
+      } else if (weekNum < currentProgressWeek) {
         // Tuần đã qua nhưng chưa nộp
         status = "upcoming";
       } else {
@@ -337,11 +357,67 @@ export const InternshipView = ({
     });
 
     return weekSteps;
-  }, [internship, weeklyPlans, requiredWeeks, schedules, progressSummary]);
+  }, [internship, weeklyPlans, requiredWeeks, schedules, currentProgressWeek]);
 
   const milestones = useMemo(() => {
-    const nextWeek = visibleWeeklyPlans.find((w) => w.progress < 100);
     const scheduleByWeek = new Map(schedules.map((s) => [s.weekNumber, s]));
+    const currentWeeklySchedules = schedules
+      .filter(
+        (schedule) =>
+          !schedule.isFinalReport &&
+          schedule.weekNumber >= 1 &&
+          schedule.weekNumber <= dynamicWeeks &&
+          schedule.isSubmissionOpen,
+      )
+      .sort((first, second) => first.weekNumber - second.weekNumber);
+    const currentWeeklySchedule =
+      currentWeeklySchedules.find((schedule) => {
+        const report = weeklyPlans.find((week) => week.week === schedule.weekNumber);
+        return report?.status !== "Đã hoàn thành" && report?.progress !== 100;
+      }) ??
+      currentWeeklySchedules[0] ??
+      scheduleByWeek.get(currentProgressWeek);
+    const currentWeeklyReport = currentWeeklySchedule
+      ? weeklyPlans.find((week) => week.week === currentWeeklySchedule.weekNumber)
+      : undefined;
+    const evidenceSubmission = submissions
+      .filter((submission) => submission.type.toLowerCase() === "evidence")
+      .sort(
+        (first, second) =>
+          new Date(second.submittedAt).getTime() - new Date(first.submittedAt).getTime(),
+      )[0];
+    const finalSubmission = submissions
+      .filter((submission) => submission.type.toLowerCase() === "finalreport")
+      .sort(
+        (first, second) =>
+          new Date(second.submittedAt).getTime() - new Date(first.submittedAt).getTime(),
+      )[0];
+    const finalSchedule = schedules
+      .filter((schedule) => schedule.isFinalReport || schedule.weekNumber > dynamicWeeks)
+      .sort((first, second) => Number(Boolean(second.isFinalReport)) - Number(Boolean(first.isFinalReport)))[0];
+    const getSubmissionStatus = (submission?: SubmissionDto) => {
+      if (!submission) return undefined;
+      switch (submission.status) {
+        case "Approved":
+          return "Đã hoàn thành";
+        case "Submitted":
+        case "Reviewed":
+          return "Đang chờ duyệt";
+        case "RevisionRequested":
+          return "Cần chỉnh sửa";
+        case "Rejected":
+          return "Không đạt yêu cầu";
+        default:
+          return "Đã nộp";
+      }
+    };
+    const getDeadlineStatus = (startDate?: string | null, endDate?: string | null) => {
+      const startTime = startDate ? new Date(startDate).getTime() : Number.NaN;
+      const endTime = endDate ? new Date(endDate).getTime() : Number.NaN;
+      if (Number.isFinite(startTime) && now < startTime) return "Chưa bắt đầu";
+      if (Number.isFinite(endTime) && now > endTime) return "Quá hạn";
+      return "Đang diễn ra";
+    };
     const items: {
       title: string;
       date: string;
@@ -349,46 +425,62 @@ export const InternshipView = ({
       status: string;
     }[] = [];
 
-    if (nextWeek) {
-      const nextSchedule = scheduleByWeek.get(nextWeek.week);
-      const deadlineStr = nextSchedule?.dueDate
-        ? formatDateTimeVi(nextSchedule.dueDate)
-        : "—";
+    items.push({
+      title: currentWeeklySchedule
+        ? `Báo cáo tuần hiện hành (Tuần ${currentWeeklySchedule.weekNumber})`
+        : "Báo cáo tuần hiện hành",
+      date: currentWeeklySchedule?.dueDate
+        ? formatDateTimeVi(currentWeeklySchedule.dueDate)
+        : "Chưa cấu hình",
+      nearest: true,
+      status:
+        currentWeeklyReport && currentWeeklyReport.status !== "Chưa bắt đầu"
+          ? currentWeeklyReport.status
+          : currentWeeklySchedule
+            ? currentWeeklySchedule.isSubmissionOpen
+              ? getScheduleStatus(currentWeeklySchedule, now)
+              : "Chưa bắt đầu"
+            : "Chưa mở",
+    });
 
-      items.push({
-        title: nextSchedule?.title || `Nộp báo cáo tuần ${nextWeek.week}`,
-        date: deadlineStr,
-        nearest: true,
-        status: nextWeek.status,
-      });
-    }
+    items.push({
+      title: "Đánh giá doanh nghiệp",
+      date: evidenceDeadline?.endDate
+        ? formatDateTimeVi(evidenceDeadline.endDate)
+        : "Chưa cấu hình",
+      nearest: false,
+      status:
+        getSubmissionStatus(evidenceSubmission) ??
+        (evidenceDeadline
+          ? getDeadlineStatus(evidenceDeadline.startDate, evidenceDeadline.endDate)
+          : "Chưa cấu hình"),
+    });
 
-    const midWeekNum = Math.ceil(dynamicWeeks / 2);
-    const midSchedule = scheduleByWeek.get(midWeekNum);
-    const midReport = visibleWeeklyPlans.find((w) => w.week === midWeekNum);
-    if (midSchedule?.isSubmissionOpen) {
-      items.push({
-        title: "Đánh giá giữa kỳ",
-        date: formatDateTimeVi(midSchedule.dueDate),
-        nearest: false,
-        status: midReport?.status ?? getScheduleStatus(midSchedule, now),
-      });
-    }
-
-    const finalSchedule =
-      schedules.find((s) => s.isFinalReport || s.weekNumber > dynamicWeeks) ??
-      scheduleByWeek.get(dynamicWeeks);
-    if (finalSchedule?.isSubmissionOpen) {
-      items.push({
-        title: finalSchedule.title || "Nộp báo cáo cuối kỳ",
-        date: formatDateTimeVi(finalSchedule.dueDate),
-        nearest: false,
-        status: getScheduleStatus(finalSchedule, now),
-      });
-    }
+    items.push({
+      title: "Báo cáo cuối kỳ",
+      date: finalSchedule?.dueDate
+        ? formatDateTimeVi(finalSchedule.dueDate)
+        : "Chưa cấu hình",
+      nearest: false,
+      status:
+        getSubmissionStatus(finalSubmission) ??
+        (finalSchedule
+          ? finalSchedule.isSubmissionOpen
+            ? getScheduleStatus(finalSchedule, now)
+            : "Chưa bắt đầu"
+          : "Chưa cấu hình"),
+    });
 
     return items;
-  }, [visibleWeeklyPlans, schedules, dynamicWeeks, now]);
+  }, [
+    schedules,
+    weeklyPlans,
+    currentProgressWeek,
+    dynamicWeeks,
+    submissions,
+    evidenceDeadline,
+    now,
+  ]);
 
   const goTo = (tab: string) => {
     if (onNavigate) onNavigate(tab);

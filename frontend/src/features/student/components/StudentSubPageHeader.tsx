@@ -30,7 +30,7 @@ export function StudentSubPageHeader({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {semesterName && (
-            <span className="rounded-full border border-white/20 bg-white/15 px-3 py-1 text-xs font-medium text-white">
+            <span className="rounded-md border border-white/20 bg-white/15 px-3 py-1 text-xs font-medium text-white">
               {semesterName}
             </span>
           )}
@@ -39,7 +39,7 @@ export function StudentSubPageHeader({
               type="button"
               disabled={isRefreshing}
               onClick={onRefresh}
-              className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-white/30 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-wait disabled:opacity-60"
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-white/30 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-wait disabled:opacity-60"
             >
               <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} aria-hidden="true" />
               {isRefreshing ? "Đang tải…" : "Làm mới"}

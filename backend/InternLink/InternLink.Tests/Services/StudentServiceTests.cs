@@ -49,6 +49,68 @@ public class StudentServiceTests
     }
 
     [Fact]
+    public async Task IsArchiveReadOnlyAsync_ShouldRequireAllAssignedSemestersToBeCompleted()
+    {
+        var db = GetInMemoryDbContext();
+        var service = CreateService(db);
+        var userId = Guid.NewGuid();
+        var student = new Student
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            StudentCode = "SV-ARCHIVE",
+            FullName = "Archive student",
+            CreatedAt = DateTime.UtcNow,
+        };
+        var completedSemester = new Semester
+        {
+            Id = Guid.NewGuid(),
+            Name = "Kỳ đã kết thúc",
+            Term = "Học kỳ I",
+            AcademicYear = "2025 - 2026",
+            Status = SemesterStatus.Completed,
+            CreatedAt = DateTime.UtcNow,
+        };
+        var completedInternship = new Internship
+        {
+            Id = Guid.NewGuid(),
+            StudentId = student.Id,
+            SemesterId = completedSemester.Id,
+            Status = InternshipStatus.Completed,
+            CreatedAt = DateTime.UtcNow,
+        };
+
+        db.Students.Add(student);
+        db.Semesters.Add(completedSemester);
+        db.Internships.Add(completedInternship);
+        await db.SaveChangesAsync();
+
+        (await service.IsArchiveReadOnlyAsync(userId)).Should().BeTrue();
+
+        var activeSemester = new Semester
+        {
+            Id = Guid.NewGuid(),
+            Name = "Kỳ đang diễn ra",
+            Term = "Học kỳ II",
+            AcademicYear = "2025 - 2026",
+            Status = SemesterStatus.Active,
+            CreatedAt = DateTime.UtcNow,
+        };
+        db.Semesters.Add(activeSemester);
+        db.Internships.Add(new Internship
+        {
+            Id = Guid.NewGuid(),
+            StudentId = student.Id,
+            SemesterId = activeSemester.Id,
+            Status = InternshipStatus.InProgress,
+            CreatedAt = DateTime.UtcNow,
+        });
+        await db.SaveChangesAsync();
+
+        (await service.IsArchiveReadOnlyAsync(userId)).Should().BeFalse();
+    }
+
+    [Fact]
     public async Task CreateStudentAsync_WithValidData_ShouldCreateStudent()
     {
         var db = GetInMemoryDbContext();

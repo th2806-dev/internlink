@@ -341,6 +341,8 @@ public class StudentService : IStudentService
             totalWeeks,
             requiredWeeks);
 
+        var isArchiveReadOnly = await IsArchiveReadOnlyAsync(userId);
+
         return new StudentPortalProfileDto
         {
             Student = _mapper.Map<StudentDto>(student),
@@ -350,7 +352,24 @@ public class StudentService : IStudentService
             LecturerPhone = internship?.Lecturer?.Phone,
             ProgressPercent = breakdown.TotalPercent,
             ProgressBreakdown = breakdown,
+            IsArchiveReadOnly = isArchiveReadOnly,
         };
+    }
+
+    public async Task<bool> IsArchiveReadOnlyAsync(Guid userId)
+    {
+        var semesterStatuses = await _db.Internships
+            .AsNoTracking()
+            .Where(i => !i.IsDeleted
+                && i.Student.UserId == userId
+                && !i.Student.IsDeleted
+                && !i.Semester!.IsDeleted)
+            .Select(i => i.Semester!.Status)
+            .Distinct()
+            .ToListAsync();
+
+        return semesterStatuses.Count > 0
+            && semesterStatuses.All(status => status == SemesterStatus.Completed);
     }
 
     public async Task<StudentDto> CreateStudentAsync(CreateStudentRequest request, Guid? departmentId = null)

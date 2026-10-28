@@ -39,6 +39,7 @@ import {
 import { useStudentPortal } from "../../../contexts/StudentPortalContext";
 import { useSemester } from "../../../contexts/SemesterContext";
 import { useWeeklyReports } from "../../../hooks/useWeeklyReports";
+import { calculateWeeklyReportProgress } from "../studentProgress";
 import { evaluationService } from "../../../services/evaluation.service";
 import { submissionApiService } from "../../../services/submissionApi.service";
 import {
@@ -278,17 +279,18 @@ export const DashboardView = ({
       });
   }, [evaluation, reportSchedules, weeklyQualityAverages]);
 
-  // Real progress counts from weekly reports & profile
-  const approvedReports = reports.filter((r) => r.status === "approved").length;
-  const submittedReports = reports.filter((r) => r.status === "submitted").length;
-  const draftOrRevisedReports = reports.filter(
-    (r) => r.status === "draft" || r.status === "revised",
-  ).length;
-
-  const totalRequiredWeeks = Math.max(
-    profile.progressBreakdown?.requiredWeeksCount ?? 0,
+  const weeklyReportProgress = calculateWeeklyReportProgress(
+    reports,
+    reportSchedules,
     selectedSemester?.totalWeeks ?? 0,
+    profile.progressBreakdown?.requiredWeeksCount ?? 0,
   );
+  const {
+    approvedCount: approvedReports,
+    submittedCount: submittedReports,
+    draftOrRevisedCount: draftOrRevisedReports,
+    requiredWeeksCount: totalRequiredWeeks,
+  } = weeklyReportProgress;
 
   const pendingOrUnsubmittedCount = Math.max(
     0,
@@ -401,7 +403,7 @@ export const DashboardView = ({
           <h2 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-white flex items-center gap-1.5">
             <GraduationCap className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> THÔNG TIN THỰC TẬP SINH VIÊN
           </h2>
-          <span className="text-[10.5px] font-medium bg-white/15 px-2 py-0.5 rounded-full border border-white/20">
+          <span className="text-[10.5px] font-medium bg-white/15 px-2 py-0.5 rounded-md border border-white/20">
             {selectedSemester?.name || "Kỳ thực tập hiện tại"}
           </span>
         </div>
@@ -451,7 +453,7 @@ export const DashboardView = ({
                 <select
                   value={programName}
                   disabled
-                  className="w-full appearance-none rounded-full border border-slate-300 bg-white px-3.5 py-1.5 text-xs font-medium text-slate-800 shadow-2xs focus:outline-hidden pr-8 cursor-default h-8.5"
+                  className="w-full appearance-none rounded-lg border border-slate-300 bg-white px-3.5 py-1.5 text-xs font-medium text-slate-800 shadow-2xs focus:outline-hidden pr-8 cursor-default h-8.5"
                 >
                   <option value={programName}>{programName}</option>
                 </select>
@@ -468,7 +470,7 @@ export const DashboardView = ({
                 <select
                   value={currentAcademicYear}
                   onChange={(e) => handleYearChange(e.target.value)}
-                  className="w-full appearance-none rounded-full border border-slate-300 bg-white px-3.5 py-1.5 text-xs font-medium text-slate-800 shadow-2xs hover:border-slate-400 focus:border-blue-600 focus:outline-hidden pr-8 h-8.5"
+                  className="w-full appearance-none rounded-lg border border-slate-300 bg-white px-3.5 py-1.5 text-xs font-medium text-slate-800 shadow-2xs hover:border-slate-400 focus:border-blue-600 focus:outline-hidden pr-8 h-8.5"
                 >
                   {academicYears.map((year) => (
                     <option key={year} value={year}>
@@ -489,7 +491,7 @@ export const DashboardView = ({
                 <select
                   value={currentTerm}
                   onChange={(e) => handleTermChange(e.target.value)}
-                  className="w-full appearance-none rounded-full border border-slate-300 bg-white px-3.5 py-1.5 text-xs font-medium text-slate-800 shadow-2xs hover:border-slate-400 focus:border-blue-600 focus:outline-hidden pr-8 h-8.5"
+                  className="w-full appearance-none rounded-lg border border-slate-300 bg-white px-3.5 py-1.5 text-xs font-medium text-slate-800 shadow-2xs hover:border-slate-400 focus:border-blue-600 focus:outline-hidden pr-8 h-8.5"
                 >
                   {terms.map((term) => (
                     <option key={term} value={term}>
@@ -701,7 +703,7 @@ export const DashboardView = ({
                     {chartMode === "line" && (
                       <Line
                         yAxisId="right"
-                        type="monotone"
+                        type="linear"
                         dataKey="userScore"
                         name="Điểm của bạn"
                         stroke="#4d74c9"
@@ -712,12 +714,12 @@ export const DashboardView = ({
                     )}
                     <Line
                       yAxisId="left"
-                      type="monotone"
+                      type="linear"
                       dataKey="groupAverageScore"
                       name="Điểm trung bình nhóm"
                       stroke="#7bc043"
                       strokeWidth={2}
-                      connectNulls={false}
+                      connectNulls={true}
                       dot={{
                         r: 3.5,
                         fill: "#ffffff",

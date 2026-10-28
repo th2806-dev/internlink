@@ -17,6 +17,9 @@ export interface Student {
   avatar: string;
   email?: string;
   phone?: string;
+  studentId?: string;
+  absentCount?: number;
+  hasFinalReport?: boolean;
   /** Internship period (ISO dates), when known. */
   startDate?: string;
   endDate?: string;

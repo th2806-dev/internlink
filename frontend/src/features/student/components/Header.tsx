@@ -24,7 +24,7 @@ export const Header = ({
   onMenuOpen,
   isMenuOpen = false,
 }: HeaderProps) => {
-  const { profile } = useStudentPortal();
+  const { profile, isArchiveReadOnly } = useStudentPortal();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
 
   const getTabLabel = (tab: string) => {
@@ -56,7 +56,7 @@ export const Header = ({
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 sm:h-15 items-center justify-between border-b border-slate-200/90 bg-white px-3.5 sm:px-5 lg:px-6">
+    <header className="sticky top-0 z-30 flex h-14 shrink-0 sm:h-15 items-center justify-between border-b border-slate-200/90 bg-white px-3.5 sm:px-5 lg:px-6">
       {/* Left: Mobile hamburger menu & Breadcrumbs */}
       <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
         <button
@@ -71,13 +71,19 @@ export const Header = ({
         </button>
 
         <nav aria-label="Điều hướng" className="flex min-w-0 items-center gap-1.5 text-xs text-slate-500">
-          <button
-            type="button"
-            onClick={() => onNavigate("student-dashboard")}
-            className="hidden whitespace-nowrap hover:text-[#026aa7] transition-colors font-medium sm:inline"
-          >
-            Cổng Sinh viên
-          </button>
+          {isArchiveReadOnly ? (
+            <span className="hidden whitespace-nowrap font-medium sm:inline">
+              Cổng Sinh viên
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => onNavigate("student-dashboard")}
+              className="hidden whitespace-nowrap hover:text-[#026aa7] transition-colors font-medium sm:inline"
+            >
+              Cổng Sinh viên
+            </button>
+          )}
           <span className="hidden text-slate-300 sm:inline">›</span>
           <span className="truncate font-bold text-slate-900 text-xs sm:text-[13px] tracking-tight">
             {getTabLabel(activeTab)}
@@ -89,7 +95,9 @@ export const Header = ({
       <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">
         <StudentSemesterBadge profile={profile} />
 
-        <NotificationDropdown role="student" onNavigate={onNavigate} />
+        {!isArchiveReadOnly && (
+          <NotificationDropdown role="student" onNavigate={onNavigate} />
+        )}
 
         <div className="relative">
           <button

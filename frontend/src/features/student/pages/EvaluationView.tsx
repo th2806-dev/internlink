@@ -20,6 +20,7 @@ import { useSemester } from "../../../contexts/SemesterContext";
 import { useStudentPortal } from "../../../contexts/StudentPortalContext";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { computeGrade } from "../../../lib/gradingRules";
+import { getOpenWeeklyReportWeeks } from "../studentProgress";
 import { evaluationService } from "../../../services/evaluation.service";
 import { semesterReportScheduleService, type SemesterReportScheduleDto } from "../../../services/semesterReportSchedule.service";
 import { submissionApiService } from "../../../services/submissionApi.service";
@@ -104,8 +105,9 @@ const EvidencePhoto = ({ submissionId, asset, onPreview }: EvidencePhotoProps) =
 };
 
 export const EvaluationView = ({ onShowToast }: { onShowToast: (msg: string) => void }) => {
-  const { profile, internshipId } = useStudentPortal();
+  const { profile, internship, internshipId } = useStudentPortal();
   const { selectedSemester, activeSemesterId } = useSemester();
+  const scheduleSemesterId = internship?.semesterId ?? selectedSemester?.id ?? activeSemesterId;
   const [evaluation, setEvaluation] = useState<EvaluationDetailDto | null>(null);
   const [weeklyReports, setWeeklyReports] = useState<WeeklyReportDto[]>([]);
   const [submissions, setSubmissions] = useState<SubmissionDto[]>([]);
@@ -131,8 +133,8 @@ export const EvaluationView = ({ onShowToast }: { onShowToast: (msg: string) => 
       evaluationService.getByInternship(internshipId),
       weeklyReportService.getMine(),
       submissionApiService.getMine(),
-      activeSemesterId
-        ? semesterReportScheduleService.getSchedules(activeSemesterId)
+      scheduleSemesterId
+        ? semesterReportScheduleService.getSchedules(scheduleSemesterId)
         : Promise.resolve([] as SemesterReportScheduleDto[]),
     ]);
 
@@ -163,7 +165,7 @@ export const EvaluationView = ({ onShowToast }: { onShowToast: (msg: string) => 
     }
     setLoadErrors(errors);
     setIsLoading(false);
-  }, [activeSemesterId, internshipId]);
+  }, [internshipId, scheduleSemesterId]);
 
   useEffect(() => {
     void loadEvaluation();
@@ -180,15 +182,10 @@ export const EvaluationView = ({ onShowToast }: { onShowToast: (msg: string) => 
   };
 
   const maxWeeks = selectedSemester?.totalWeeks;
-  const trackedWeeks = useMemo(() => {
-    const scheduled = schedules
-      .map((schedule) => schedule.weekNumber)
-      .filter((week) => week >= 1 && (!maxWeeks || week <= maxWeeks));
-    const reported = weeklyReports
-      .map((report) => report.weekNumber)
-      .filter((week) => week >= 1 && (!maxWeeks || week <= maxWeeks));
-    return [...new Set([...scheduled, ...reported])].sort((a, b) => a - b);
-  }, [maxWeeks, schedules, weeklyReports]);
+  const trackedWeeks = useMemo(
+    () => getOpenWeeklyReportWeeks(schedules, maxWeeks ?? 0),
+    [maxWeeks, schedules],
+  );
 
   const reportByWeek = useMemo(
     () => new Map(weeklyReports.map((report) => [report.weekNumber, report])),
@@ -316,7 +313,7 @@ export const EvaluationView = ({ onShowToast }: { onShowToast: (msg: string) => 
       ) : (
         <>
           {/* ─── HÀNG 1: Điểm tổng kết + Chi tiết đánh giá GV ─── */}
-          <section className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1.05fr)_minmax(0,1.5fr)]">
+          <section className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
             {/* Card Điểm tổng kết */}
             <div className="relative overflow-hidden rounded-xl border border-blue-700 bg-gradient-to-br from-blue-800 via-blue-700 to-blue-600 text-white shadow-md shadow-blue-900/15">
               {evaluation?.isFinalized && displayedGrade != null && (
@@ -383,8 +380,9 @@ export const EvaluationView = ({ onShowToast }: { onShowToast: (msg: string) => 
                     <p className="mt-1 text-xs text-slate-500">Các khoản điểm trong đánh giá thực tập.</p>
                   </div>
                   {evaluation?.evaluatedBy?.fullName && (
-                    <span className="inline-flex items-center gap-1.5 text-xs text-slate-600">
-                      <UserRound className="h-3.5 w-3.5" />{evaluation.evaluatedBy.fullName}
+                    <span className="inline-flex items-center gap-1.5 text-sm font-bold text-slate-800">
+                      <UserRound className="h-4 w-4" aria-hidden="true" />
+                      <span>GVHD: {evaluation.evaluatedBy.fullName}</span>
                     </span>
                   )}
                 </div>
@@ -421,7 +419,7 @@ export const EvaluationView = ({ onShowToast }: { onShowToast: (msg: string) => 
           </section>
 
           {/* ─── HÀNG 2: Đánh giá doanh nghiệp + Tiến độ báo cáo tuần ─── */}
-          <section className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+          <section className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
             {/* Card Đánh giá doanh nghiệp */}
             <div className="rounded-xl border border-slate-200/90 bg-white shadow-2xs">
               <div className="p-4">

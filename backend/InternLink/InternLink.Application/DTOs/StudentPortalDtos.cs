@@ -9,4 +9,5 @@ public sealed class StudentPortalProfileDto
     public string? LecturerPhone { get; set; }
     public int ProgressPercent { get; set; }
     public ProgressBreakdownDto? ProgressBreakdown { get; set; }
+    public bool IsArchiveReadOnly { get; set; }
 }

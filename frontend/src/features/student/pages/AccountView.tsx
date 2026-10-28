@@ -94,7 +94,7 @@ export const AccountView = ({
   onNavigate?: (tab: string) => void;
   onLogout?: () => void;
 }) => {
-  const { profile, portalData, refresh } = useStudentPortal();
+  const { profile, portalData, refresh, isArchiveReadOnly } = useStudentPortal();
   const { selectedSemester } = useSemester();
 
   const [personalInfo, setPersonalInfo] = useState<PersonalInfo>(() =>
@@ -135,6 +135,10 @@ export const AccountView = ({
       setTempPrefs(p);
     }
   }, [portalData, profile, isEditingProfile]);
+
+  useEffect(() => {
+    if (isArchiveReadOnly) setIsEditingProfile(false);
+  }, [isArchiveReadOnly]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -229,25 +233,27 @@ export const AccountView = ({
         <StudentSubPageHeader
           icon={User}
           title="Thông tin tài khoản & hồ sơ"
-          subtitle="Cập nhật thông tin cá nhân và tùy chọn thực tập."
+          subtitle={
+            isArchiveReadOnly
+              ? "Thông tin hồ sơ được lưu trữ ở chế độ chỉ xem."
+              : "Cập nhật thông tin cá nhân và tùy chọn thực tập."
+          }
           semesterName={selectedSemester?.name}
           onRefresh={() => void handleRefresh()}
           isRefreshing={isRefreshing}
-        >
-          <button
-            type="button"
-            onClick={() => {
-              if (onLogout) onLogout();
-              else onShowToast?.("Đã đăng xuất tài khoản!");
-            }}
-            className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-rose-200/70 bg-rose-500 px-3 text-xs font-semibold text-white transition-colors hover:bg-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+        />
+        {isArchiveReadOnly && (
+          <div
+            role="status"
+            className="flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900"
           >
-            <LogOut className="h-4 w-4" aria-hidden="true" />
-            <span>Đăng xuất</span>
-          </button>
-        </StudentSubPageHeader>
-
-
+            <Eye className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <p>
+              Học kỳ thực tập đã kết thúc. Tài khoản hiện ở chế độ chỉ xem;
+              thông tin hồ sơ và mật khẩu không thể chỉnh sửa.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════════
@@ -286,7 +292,7 @@ export const AccountView = ({
                 </div>
               </div>
 
-              {!isEditingProfile ? (
+              {!isArchiveReadOnly && !isEditingProfile ? (
                 <button
                   type="button"
                   onClick={() => {
@@ -299,11 +305,11 @@ export const AccountView = ({
                   <Edit3 className="w-3.5 h-3.5 text-blue-600" />
                   <span>Chỉnh sửa hồ sơ</span>
                 </button>
-              ) : (
+              ) : !isArchiveReadOnly ? (
                 <span className="inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700 self-start sm:self-center">
                   <Edit3 className="w-3.5 h-3.5" /> Đang ở chế độ chỉnh sửa
                 </span>
-              )}
+              ) : null}
             </div>
 
             {/* 2 Card thông tin thực tập hiện tại */}
@@ -783,6 +789,13 @@ export const AccountView = ({
               </h3>
             </div>
 
+            {isArchiveReadOnly ? (
+              <p className="rounded-md border border-slate-200 bg-slate-50 p-3 text-xs leading-relaxed text-slate-600">
+                Chức năng đổi mật khẩu đã tắt trong chế độ lưu trữ. Bạn vẫn có
+                thể đăng xuất khỏi hệ thống.
+              </p>
+            ) : (
+              <>
             {passwordSaved && (
               <div className="p-3 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
                 <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
@@ -918,6 +931,8 @@ export const AccountView = ({
                 )}
               </button>
             </form>
+              </>
+            )}
           </div>
 
           {/* Card Phiên đăng nhập & Đăng xuất */}

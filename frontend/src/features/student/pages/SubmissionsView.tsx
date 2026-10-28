@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   CalendarDays,
@@ -33,6 +33,7 @@ import {
   mapWeeklyReportStatusToUi,
 } from "../../../lib/portalMappers";
 import { submissionApiService } from "../../../services/submissionApi.service";
+import { studentPortalService } from "../../../services/studentPortal.service";
 import { weeklyReportService } from "../../../services/weeklyReport.service";
 import {
   semesterReportScheduleService,
@@ -170,7 +171,7 @@ export const SubmissionsView: React.FC<{
   onShowToast?: (msg: string, type?: "success" | "error" | "info" | string) => void;
 }> = ({ onShowToast }) => {
   const navigate = useNavigate();
-  const { profile, internshipId, refresh: refreshProfile } = useStudentPortal();
+  const { profile, internship, internshipId, refresh: refreshProfile } = useStudentPortal();
   const { selectedSemester, selectedSemesterId } = useSemester();
 
   const [evidenceDeadline, setEvidenceDeadline] = useState<SupplementalDeadline | null>(null);
@@ -255,14 +256,23 @@ export const SubmissionsView: React.FC<{
   const [uploadLinks, setUploadLinks] = useState<SubmissionLink[]>([
     { label: "", url: "" },
   ]);
+  const uploadFileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadDragging, setIsUploadDragging] = useState(false);
   const [replaceFile, setReplaceFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDownloadingCertificate, setIsDownloadingCertificate] = useState(false);
   const [cancellingSubmissionId, setCancellingSubmissionId] = useState<string | null>(null);
   const [contactMsg, setContactMsg] = useState("");
 
+  const hasAssignedCompany = Boolean(
+    internship?.companyId &&
+      internship.companyId !== "00000000-0000-0000-0000-000000000000",
+  );
+  const assignedCompanyName =
+    internship?.company?.companyName || profile.company || "Đơn vị thực tập";
+
   const evidenceWindowOpen = Boolean(
     evidenceDeadline &&
-      Date.now() >= new Date(evidenceDeadline.startDate).getTime() &&
       Date.now() <= new Date(evidenceDeadline.endDate).getTime(),
   );
 
@@ -352,11 +362,7 @@ export const SubmissionsView: React.FC<{
   };
 
   const evidenceWindowMessage = evidenceDeadline
-    ? Date.now() < new Date(evidenceDeadline.startDate).getTime()
-      ? `Mở nhận từ ${new Date(evidenceDeadline.startDate).toLocaleString("vi-VN", {
-          timeZone: "Asia/Ho_Chi_Minh",
-        })}`
-      : evidenceWindowOpen
+    ? evidenceWindowOpen
       ? `Đang nhận đến ${new Date(evidenceDeadline.endDate).toLocaleString("vi-VN", {
           timeZone: "Asia/Ho_Chi_Minh",
         })}`
@@ -369,8 +375,6 @@ export const SubmissionsView: React.FC<{
     ? "Chưa cấu hình"
     : evidenceWindowOpen
     ? "Đang nhận"
-    : Date.now() < new Date(evidenceDeadline.startDate).getTime()
-    ? "Chưa mở"
     : "Đã đóng";
 
   const requirements = useMemo(
@@ -397,6 +401,10 @@ export const SubmissionsView: React.FC<{
   );
 
   const openUploadFor = (category: "FinalReport" | "Product" | "Evidence") => {
+    if (!hasAssignedCompany) {
+      onShowToast?.("Bạn chưa được phân công đơn vị thực tập. Vui lòng liên hệ Văn phòng Khoa.", "error");
+      return;
+    }
     setUploadCategory(category);
     setUploadTitle(
       category === "FinalReport"
@@ -408,11 +416,92 @@ export const SubmissionsView: React.FC<{
     setEmployerScore("");
     setUploadFiles([]);
     setUploadLinks([{ label: "", url: "" }]);
+    setIsUploadDragging(false);
     setShowUploadModal(true);
+  };
+
+  const isUploadFileAllowed = (file: File, category = uploadCategory) => {
+    if (category === "Product") {
+      return /\.(pdf|docx?|zip|rar|pptx?|png|jpe?g)$/i.test(file.name);
+    }
+    if (category === "Evidence") {
+      return /\.(jpe?g|png|webp|gif)$/i.test(file.name);
+    }
+    return /\.(pdf|docx?)$/i.test(file.name);
+  };
+
+  const handleUploadFiles = (files: File[], append = false) => {
+    const maxSizeMb = uploadCategory === "Evidence" ? 15 : 50;
+    const validFiles: File[] = [];
+    let invalidFormatCount = 0;
+    let oversizedCount = 0;
+    for (const file of files) {
+      if (!isUploadFileAllowed(file)) {
+        invalidFormatCount += 1;
+      } else if (file.size > maxSizeMb * 1024 * 1024) {
+        oversizedCount += 1;
+      } else {
+        validFiles.push(file);
+      }
+    }
+    if (invalidFormatCount > 0) {
+      const format =
+        uploadCategory === "Evidence"
+          ? "JPG, PNG, WEBP hoặc GIF"
+          : uploadCategory === "FinalReport"
+            ? "PDF, DOC hoặc DOCX"
+            : "PDF, Word, ZIP, RAR, PowerPoint, PNG hoặc JPG";
+      onShowToast?.(
+        `${invalidFormatCount} tệp không đúng định dạng. Chỉ chấp nhận ${format}.`,
+        "error",
+      );
+    }
+    if (oversizedCount > 0) {
+      onShowToast?.(
+        `${oversizedCount} tệp vượt quá giới hạn ${maxSizeMb}MB. Vui lòng chọn tệp nhỏ hơn.`,
+        "error",
+      );
+    }
+    if (uploadFileInputRef.current) uploadFileInputRef.current.value = "";
+    if (validFiles.length === 0) return;
+
+    setUploadFiles((current) => {
+      const nextFiles = append ? [...current, ...validFiles] : validFiles;
+      return nextFiles.filter(
+        (file, index) =>
+          nextFiles.findIndex(
+            (candidate) =>
+              candidate.name === file.name &&
+              candidate.size === file.size &&
+              candidate.lastModified === file.lastModified,
+          ) === index,
+      );
+    });
+  };
+
+  const removeUploadFile = (fileToRemove: File) => {
+    setUploadFiles((current) =>
+      current.filter(
+        (file) =>
+          file.name !== fileToRemove.name ||
+          file.size !== fileToRemove.size ||
+          file.lastModified !== fileToRemove.lastModified,
+      ),
+    );
+    if (uploadFileInputRef.current) uploadFileInputRef.current.value = "";
   };
 
   const openRevisionUpload = (submission?: SubmissionDto) => {
     if (!submission) return;
+    if (!hasAssignedCompany) {
+      onShowToast?.("Bạn chưa được phân công đơn vị thực tập. Vui lòng liên hệ Văn phòng Khoa.", "error");
+      return;
+    }
+    setUploadCategory(
+      submission.type === "FinalReport" || submission.type === "Evidence"
+        ? submission.type
+        : "Product",
+    );
     const item = {
       ...mapStudentSubmissionToUpload(submission),
       sourceType: "submission" as const,
@@ -430,6 +519,10 @@ export const SubmissionsView: React.FC<{
 
   const handleAddUpload = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!hasAssignedCompany) {
+      onShowToast?.("Bạn chưa được phân công đơn vị thực tập. Vui lòng liên hệ Văn phòng Khoa.", "error");
+      return;
+    }
     const title =
       uploadTitle.trim() ||
       (uploadCategory === "FinalReport"
@@ -528,9 +621,28 @@ export const SubmissionsView: React.FC<{
   const handleReplaceFile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!replaceTarget) return;
+    if (!hasAssignedCompany) {
+      onShowToast?.("Bạn chưa được phân công đơn vị thực tập. Vui lòng liên hệ Văn phòng Khoa.", "error");
+      return;
+    }
 
     if (!replaceFile) {
       onShowToast?.("Vui lòng chọn tệp thay thế!", "error");
+      return;
+    }
+    const category: "FinalReport" | "Product" | "Evidence" =
+      replaceTarget.fileCategory === "Đánh giá DN"
+        ? "Evidence"
+        : replaceTarget.fileCategory === "Báo cáo cuối kỳ"
+          ? "FinalReport"
+          : "Product";
+    const maxSizeMb = category === "Evidence" ? 15 : 50;
+    if (!isUploadFileAllowed(replaceFile, category)) {
+      onShowToast?.("Định dạng tệp thay thế không được hỗ trợ cho hồ sơ này.", "error");
+      return;
+    }
+    if (replaceFile.size > maxSizeMb * 1024 * 1024) {
+      onShowToast?.(`Tệp thay thế vượt quá giới hạn ${maxSizeMb}MB.`, "error");
       return;
     }
 
@@ -556,6 +668,30 @@ export const SubmissionsView: React.FC<{
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleReplaceFileSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.currentTarget.value = "";
+    if (!file || !replaceTarget) return;
+    const category: "FinalReport" | "Product" | "Evidence" =
+      replaceTarget.fileCategory === "Đánh giá DN"
+        ? "Evidence"
+        : replaceTarget.fileCategory === "Báo cáo cuối kỳ"
+          ? "FinalReport"
+          : "Product";
+    const maxSizeMb = category === "Evidence" ? 15 : 50;
+    if (!isUploadFileAllowed(file, category)) {
+      setReplaceFile(null);
+      onShowToast?.("Định dạng tệp thay thế không được hỗ trợ cho hồ sơ này.", "error");
+      return;
+    }
+    if (file.size > maxSizeMb * 1024 * 1024) {
+      setReplaceFile(null);
+      onShowToast?.(`Tệp thay thế vượt quá giới hạn ${maxSizeMb}MB.`, "error");
+      return;
+    }
+    setReplaceFile(file);
   };
 
   const handleDownloadUpload = async (item: UploadItem) => {
@@ -624,6 +760,18 @@ export const SubmissionsView: React.FC<{
     onShowToast?.("Đã gửi tin nhắn đến Giảng viên hướng dẫn thành công!", "success");
   };
 
+  const handleDownloadCertificate = async () => {
+    if (!hasAssignedCompany || isDownloadingCertificate) return;
+    setIsDownloadingCertificate(true);
+    try {
+      await studentPortalService.downloadCertificate();
+    } catch (err) {
+      onShowToast?.(getApiErrorMessage(err), "error");
+    } finally {
+      setIsDownloadingCertificate(false);
+    }
+  };
+
   const getCategoryIcon = (category: string) => {
     switch (category) {
       case "Source Code":
@@ -657,18 +805,18 @@ export const SubmissionsView: React.FC<{
           semesterName={selectedSemester?.name}
           onRefresh={() => void handleRefresh()}
           isRefreshing={isRefreshing}
-        >
-          <button
-            type="button"
-            onClick={() => openUploadFor("Product")}
-            className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-white/30 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+        />
+        {!hasAssignedCompany && (
+          <div
+            role="alert"
+            className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-amber-950"
           >
-            <Plus className="h-4 w-4" aria-hidden="true" />
-            <span>Nộp sản phẩm mới</span>
-          </button>
-        </StudentSubPageHeader>
-
-
+            <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" aria-hidden="true" />
+            <p className="text-sm leading-relaxed">
+              Bạn chưa được phân công đơn vị thực tập. Vui lòng liên hệ Văn phòng Khoa để được hỗ trợ trước khi nộp hồ sơ.
+            </p>
+          </div>
+        )}
       </div>
       {/* 2. 4 THẺ THAO TÁC THEO DANH MỤC HỒ SƠ */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -725,7 +873,8 @@ export const SubmissionsView: React.FC<{
                 ? openRevisionUpload(finalReport)
                 : openUploadFor("FinalReport")
             }
-            disabled={!internshipId || Boolean(finalReport && !isRevisionRequested(finalReport))}
+            disabled={!hasAssignedCompany || !internshipId || Boolean(finalReport && !isRevisionRequested(finalReport))}
+            title={!hasAssignedCompany ? "Cần được phân công đơn vị thực tập trước khi nộp hồ sơ." : undefined}
             className="w-full py-2 px-3 bg-[#026aa7] hover:bg-[#025a8f] text-white font-bold text-xs rounded-lg transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-xs"
           >
             <Upload className="h-3.5 w-3.5" />
@@ -778,7 +927,8 @@ export const SubmissionsView: React.FC<{
           <button
             type="button"
             onClick={() => openUploadFor("Product")}
-            disabled={!internshipId}
+            disabled={!hasAssignedCompany || !internshipId}
+            title={!hasAssignedCompany ? "Cần được phân công đơn vị thực tập trước khi nộp hồ sơ." : undefined}
             className="w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-xs"
           >
             <Plus className="h-3.5 w-3.5" /> Thêm sản phẩm
@@ -830,10 +980,12 @@ export const SubmissionsView: React.FC<{
                 : openUploadFor("Evidence")
             }
             disabled={
+              !hasAssignedCompany ||
               !internshipId ||
               !evidenceWindowOpen ||
               Boolean(employerEvidence && !isRevisionRequested(employerEvidence))
             }
+            title={!hasAssignedCompany ? "Cần được phân công đơn vị thực tập trước khi nộp hồ sơ." : undefined}
             className="w-full py-2 px-3 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-lg transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-xs"
           >
             <Upload className="h-3.5 w-3.5" />
@@ -957,7 +1109,15 @@ export const SubmissionsView: React.FC<{
                   ) : filteredUploads.length === 0 ? (
                     <tr>
                       <td colSpan={4} className="py-12 text-center text-slate-400">
-                        Không có tài nguyên phù hợp với bộ lọc hiện tại.
+                        {uploads.length === 0 ? (
+                          <div className="mx-auto max-w-md space-y-2">
+                            <Upload className="mx-auto h-8 w-8 text-slate-400" aria-hidden="true" />
+                            <p className="text-sm font-semibold text-slate-700">Bạn chưa nộp hồ sơ nào.</p>
+                            <p className="text-xs leading-relaxed text-slate-500">
+                              Bấm “Tải lên hồ sơ” để nộp Báo cáo cuối kỳ hoặc Phiếu đánh giá của Doanh nghiệp.
+                            </p>
+                          </div>
+                        ) : "Không có tài nguyên phù hợp với bộ lọc hiện tại."}
                       </td>
                     </tr>
                   ) : (
@@ -1068,9 +1228,19 @@ export const SubmissionsView: React.FC<{
                   </button>
                 </div>
               ) : filteredUploads.length === 0 ? (
-                <p className="py-8 text-center text-xs text-slate-400">
-                  Không có tài nguyên phù hợp với bộ lọc hiện tại.
-                </p>
+                uploads.length === 0 ? (
+                  <div className="py-8 text-center">
+                    <Upload className="mx-auto mb-2 h-7 w-7 text-slate-400" aria-hidden="true" />
+                    <p className="text-xs font-semibold text-slate-700">Bạn chưa nộp hồ sơ nào.</p>
+                    <p className="mx-auto mt-1 max-w-xs text-[11px] leading-relaxed text-slate-500">
+                      Bấm “Tải lên hồ sơ” để nộp Báo cáo cuối kỳ hoặc Phiếu đánh giá của Doanh nghiệp.
+                    </p>
+                  </div>
+                ) : (
+                  <p className="py-8 text-center text-xs text-slate-400">
+                    Không có tài nguyên phù hợp với bộ lọc hiện tại.
+                  </p>
+                )
               ) : (
                 filteredUploads.map((item) => (
                   <div key={`${item.id}:${item.assetId ?? "root"}`} className="p-3 bg-white rounded-lg border border-slate-200 space-y-2">
@@ -1184,13 +1354,23 @@ export const SubmissionsView: React.FC<{
                   Doanh nghiệp tiếp nhận
                 </span>
                 <p className="font-bold text-slate-900">
-                  {profile.company && profile.company !== "—"
-                    ? profile.company
-                    : "Chưa phân công"}
+                  {hasAssignedCompany ? assignedCompanyName : "Chưa phân công"}
                 </p>
                 <p className="text-[11px] text-slate-500">
                   Vị trí: {profile.position && profile.position !== "—" ? profile.position : "Thực tập sinh"}
                 </p>
+                <button
+                  type="button"
+                  onClick={() => void handleDownloadCertificate()}
+                  disabled={!hasAssignedCompany || isDownloadingCertificate}
+                  title={!hasAssignedCompany ? "Cần được phân công đơn vị thực tập trước khi tải phiếu." : undefined}
+                  className="mt-2 inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isDownloadingCertificate
+                    ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    : <Download className="h-4 w-4" aria-hidden="true" />}
+                  {isDownloadingCertificate ? "Đang tạo phiếu..." : "Tải phiếu đánh giá PDF"}
+                </button>
               </div>
 
               <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-200/70 space-y-1">
@@ -1234,9 +1414,10 @@ export const SubmissionsView: React.FC<{
               <button
                 type="button"
                 onClick={() => setShowUploadModal(false)}
-                className="text-slate-400 hover:text-slate-600 font-bold text-sm cursor-pointer"
+                aria-label="Đóng cửa sổ nộp hồ sơ"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               >
-                <X className="w-4 h-4" />
+                <X className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
 
@@ -1285,12 +1466,8 @@ export const SubmissionsView: React.FC<{
                     }`}
                   >
                     {evidenceDeadline
-                      ? `Thời hạn: ${new Date(evidenceDeadline.startDate).toLocaleString(
-                          "vi-VN",
-                        )} – ${new Date(evidenceDeadline.endDate).toLocaleString("vi-VN")}${
-                          evidenceWindowOpen
-                            ? " • Đang mở"
-                            : " • Chưa mở hoặc đã kết thúc"
+                      ? `Có thể nộp từ sớm; hạn cuối: ${new Date(evidenceDeadline.endDate).toLocaleString("vi-VN")}${
+                          evidenceWindowOpen ? " • Đang nhận" : " • Đã đóng"
                         }`
                       : "Admin khoa chưa cấu hình deadline nộp minh chứng."}
                   </div>
@@ -1318,8 +1495,29 @@ export const SubmissionsView: React.FC<{
                 <label className="block font-bold text-slate-700 mb-1">
                   {uploadCategory === "Product" ? "Tệp đính kèm (không bắt buộc)" : "Chọn tệp đính kèm"}
                 </label>
-                <label className="border-2 border-dashed border-slate-300 bg-slate-50/60 p-4 text-center rounded-xl hover:border-blue-400 transition-colors cursor-pointer space-y-1 block">
+                <label
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    setIsUploadDragging(true);
+                  }}
+                  onDragLeave={(event) => {
+                    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                      setIsUploadDragging(false);
+                    }
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    setIsUploadDragging(false);
+                    handleUploadFiles(Array.from(event.dataTransfer.files), true);
+                  }}
+                  className={`block cursor-pointer space-y-1 rounded-xl border-2 border-dashed p-4 text-center transition-colors ${
+                    isUploadDragging
+                      ? "border-blue-500 bg-blue-50"
+                      : "border-slate-300 bg-slate-50/60 hover:border-blue-400"
+                  }`}
+                >
                   <input
+                    ref={uploadFileInputRef}
                     type="file"
                     multiple
                     accept={
@@ -1327,27 +1525,53 @@ export const SubmissionsView: React.FC<{
                         ? "image/jpeg,image/png,image/webp,image/gif"
                         : uploadCategory === "FinalReport"
                         ? ".pdf,.doc,.docx"
-                        : undefined
+                        : ".pdf,.doc,.docx,.zip,.rar,.ppt,.pptx,.png,.jpg,.jpeg"
                     }
                     className="hidden"
-                    onChange={(e) => setUploadFiles(Array.from(e.target.files ?? []))}
+                    onChange={(event) => {
+                      handleUploadFiles(Array.from(event.target.files ?? []));
+                      event.currentTarget.value = "";
+                    }}
                   />
                   <Upload className="w-5 h-5 text-blue-600 mx-auto" />
                   <p className="font-bold text-slate-800 text-xs">
-                    {uploadFiles.length > 0
-                      ? uploadFiles.map((file) => file.name).join(", ")
+                    {isUploadDragging
+                      ? "Thả tệp vào đây"
                       : uploadCategory === "Evidence"
-                      ? "Chọn ảnh phiếu xác nhận (JPG, PNG...)"
-                      : "Chọn tệp trên thiết bị"}
+                        ? "Chọn hoặc kéo thả ảnh phiếu xác nhận"
+                        : "Chọn hoặc kéo thả tệp trên thiết bị"}
                   </p>
                   <p className="break-words text-[11px] font-medium text-slate-500">
                     {uploadCategory === "FinalReport"
-                      ? "Tệp báo cáo PDF hoặc Word (bắt buộc)"
+                      ? "PDF, DOC, DOCX — tối đa 50MB (bắt buộc)"
                       : uploadCategory === "Evidence"
-                      ? "Ảnh phiếu đánh giá có chữ ký/mộc của doanh nghiệp (bắt buộc)"
-                      : "Không bắt buộc nếu đã thêm liên kết; có thể chọn nhiều tệp"}
+                      ? "Ảnh JPG, PNG, WEBP hoặc GIF — tối đa 15MB (bắt buộc)"
+                      : "PDF, Word, ZIP, RAR, PowerPoint, PNG hoặc JPG — tối đa 50MB mỗi tệp"}
                   </p>
                 </label>
+                {uploadFiles.length > 0 && (
+                  <ul className="mt-2 space-y-2">
+                    {uploadFiles.map((file) => (
+                      <li
+                        key={`${file.name}-${file.size}-${file.lastModified}`}
+                        className="flex min-w-0 items-center justify-between gap-2 rounded-lg border border-blue-200 bg-blue-50/60 px-3 py-2"
+                      >
+                        <span className="min-w-0 truncate font-medium text-slate-700">
+                          {file.name}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeUploadFile(file)}
+                          aria-label={`Bỏ tệp ${file.name}`}
+                          title="Bỏ tệp đã chọn"
+                          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+                        >
+                          <X className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
 
               {uploadCategory !== "Evidence" && (
@@ -1471,7 +1695,7 @@ export const SubmissionsView: React.FC<{
           >
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
-                <RefreshCw className="w-4 h-4 text-amber-600" /> Thay thế tệp sản phẩm
+                <RefreshCw className="w-4 h-4 text-amber-600" /> Thay thế tệp hồ sơ
               </h3>
               <button
                 type="button"
@@ -1494,8 +1718,15 @@ export const SubmissionsView: React.FC<{
                 <label className="border-2 border-dashed border-amber-300 bg-amber-50/40 p-4 text-center rounded-xl hover:bg-amber-50 transition-colors cursor-pointer space-y-1 block">
                   <input
                     type="file"
+                    accept={
+                      replaceTarget.fileCategory === "Đánh giá DN"
+                        ? "image/jpeg,image/png,image/webp,image/gif"
+                        : replaceTarget.fileCategory === "Báo cáo cuối kỳ"
+                          ? ".pdf,.doc,.docx"
+                          : ".pdf,.doc,.docx,.zip,.rar,.ppt,.pptx,.png,.jpg,.jpeg"
+                    }
                     className="hidden"
-                    onChange={(e) => setReplaceFile(e.target.files?.[0] ?? null)}
+                    onChange={handleReplaceFileSelection}
                   />
                   <Upload className="w-5 h-5 text-amber-600 mx-auto" />
                   <p className="font-bold text-amber-900 text-xs">

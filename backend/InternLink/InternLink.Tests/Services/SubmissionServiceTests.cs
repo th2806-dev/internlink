@@ -62,12 +62,15 @@ public class SubmissionServiceTests
 
         var student = new Student { Id = Guid.NewGuid(), UserId = studentUser.Id, StudentCode = "SV001", FullName = "Student 1", CreatedAt = DateTime.UtcNow };
         var lecturer = new Lecturer { Id = Guid.NewGuid(), UserId = lecturerUser.Id, StaffCode = "GV001", FullName = "Lecturer 1", CreatedAt = DateTime.UtcNow };
+        var company = new Company { Id = Guid.NewGuid(), CompanyName = "Company 1" };
 
         var internship = new Internship
         {
             Id = Guid.NewGuid(),
             StudentId = student.Id,
             Student = student,
+            CompanyId = company.Id,
+            Company = company,
             LecturerId = lecturer.Id,
             Lecturer = lecturer,
             Status = InternshipStatus.InProgress,
@@ -90,6 +93,7 @@ public class SubmissionServiceTests
         await db.Users.AddRangeAsync(studentUser, lecturerUser, strangerUser, adminUser);
         await db.Students.AddAsync(student);
         await db.Lecturers.AddAsync(lecturer);
+        await db.Companies.AddAsync(company);
         await db.Internships.AddAsync(internship);
         await db.Submissions.AddAsync(submission);
         await db.SaveChangesAsync();
@@ -216,6 +220,103 @@ public class SubmissionServiceTests
     }
 
     [Fact]
+    public async Task CreateAsync_WithoutCompany_ShouldRejectSubmission()
+    {
+        var db = GetDb();
+        var (studentUser, _, _, _, internship, _) = await SeedDataAsync(db);
+        internship.CompanyId = null;
+        internship.Company = null;
+        await db.SaveChangesAsync();
+        var service = CreateService(db);
+
+        var act = () => service.CreateAsync(studentUser.Id, new CreateSubmissionRequest
+        {
+            InternshipId = internship.Id,
+            Type = "FinalReport",
+            FileName = "final-report.pdf",
+            FileUrl = "uploads/submissions/final-report.pdf",
+        });
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("Sinh viên chưa được phân công đơn vị thực tập.");
+        (await db.Submissions.CountAsync(s => s.InternshipId == internship.Id)).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task CreateAsync_CompletedSemester_ShouldRejectSubmission()
+    {
+        var db = GetDb();
+        var (studentUser, _, _, _, internship, _) = await SeedDataAsync(db);
+        var semester = new Semester
+        {
+            Id = Guid.NewGuid(),
+            Name = "Học kỳ đã đóng",
+            Term = "HK1",
+            AcademicYear = "2025-2026",
+            Status = SemesterStatus.Completed,
+        };
+        internship.SemesterId = semester.Id;
+        internship.Semester = semester;
+        await db.Semesters.AddAsync(semester);
+        await db.SaveChangesAsync();
+        var service = CreateService(db);
+
+        var act = () => service.CreateAsync(studentUser.Id, new CreateSubmissionRequest
+        {
+            InternshipId = internship.Id,
+            Type = "Product",
+            FileName = "project.zip",
+            FileUrl = "uploads/submissions/project.zip",
+        });
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("Học kỳ thực tập đã kết thúc. Không thể nộp hoặc cập nhật hồ sơ.");
+    }
+
+    [Fact]
+    public async Task CreateAsync_FinalReportBeforeScheduleStart_ShouldAllowSubmission()
+    {
+        var db = GetDb();
+        var (studentUser, _, _, _, internship, _) = await SeedDataAsync(db);
+        var semester = new Semester
+        {
+            Id = Guid.NewGuid(),
+            Name = "Học kỳ demo",
+            Term = "HK1",
+            AcademicYear = "2026-2027",
+            Status = SemesterStatus.Active,
+            TotalWeeks = 6,
+        };
+        internship.SemesterId = semester.Id;
+        internship.Semester = semester;
+        await db.Semesters.AddAsync(semester);
+        await db.SemesterReportSchedules.AddAsync(new SemesterReportSchedule
+        {
+            Id = Guid.NewGuid(),
+            SemesterId = semester.Id,
+            Semester = semester,
+            WeekNumber = 7,
+            Title = "Báo cáo cuối kỳ",
+            StartDate = DateTime.UtcNow.AddDays(1),
+            DueDate = DateTime.UtcNow.AddDays(7),
+            IsSubmissionOpen = true,
+            AllowLateSubmission = false,
+        });
+        await db.SaveChangesAsync();
+        var service = CreateService(db);
+
+        var result = await service.CreateAsync(studentUser.Id, new CreateSubmissionRequest
+        {
+            InternshipId = internship.Id,
+            Type = "FinalReport",
+            FileName = "final-report.pdf",
+            FileUrl = "uploads/submissions/final-report.pdf",
+        });
+
+        result.Type.Should().Be("FinalReport");
+    }
+
+    [Fact]
     public async Task CreateAsync_StrangerStudent_ShouldThrowUnauthorizedAccessException()
     {
         var db = GetDb();
@@ -294,6 +395,103 @@ public class SubmissionServiceTests
         result.Assets.Should().OnlyContain(asset => asset.AssetType == "link");
         (await db.SubmissionAssets.CountAsync(asset => asset.SubmissionId == result.Id))
             .Should().Be(2);
+    }
+
+    [Fact]
+    public async Task CreateBundleAsync_WithoutCompany_ShouldRejectBeforeSavingFiles()
+    {
+        var db = GetDb();
+        var (studentUser, _, _, _, internship, _) = await SeedDataAsync(db);
+        internship.CompanyId = null;
+        internship.Company = null;
+        await db.SaveChangesAsync();
+        var contentRootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        var service = CreateService(db, contentRootPath: contentRootPath);
+
+        try
+        {
+            var act = () => service.CreateBundleAsync(
+                studentUser.Id,
+                new CreateSubmissionRequest
+                {
+                    InternshipId = internship.Id,
+                    Type = "Product",
+                    Title = "Sản phẩm demo",
+                },
+                new[]
+                {
+                    (Stream: (Stream)new MemoryStream(new byte[] { 1 }), FileName: "project.zip", Length: 1L, ContentType: (string?)"application/zip"),
+                },
+                Array.Empty<SubmissionAssetInput>());
+
+            await act.Should().ThrowAsync<InvalidOperationException>()
+                .WithMessage("Sinh viên chưa được phân công đơn vị thực tập.");
+            Directory.Exists(Path.Combine(contentRootPath, "uploads", "submissions", internship.Id.ToString()))
+                .Should().BeFalse();
+        }
+        finally
+        {
+            if (Directory.Exists(contentRootPath))
+                Directory.Delete(contentRootPath, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task CreateBundleAsync_FinalReportBeforeScheduleStart_ShouldAllowSubmission()
+    {
+        var db = GetDb();
+        var (studentUser, _, _, _, internship, _) = await SeedDataAsync(db);
+        var semester = new Semester
+        {
+            Id = Guid.NewGuid(),
+            Name = "Học kỳ demo",
+            Term = "HK1",
+            AcademicYear = "2026-2027",
+            Status = SemesterStatus.Active,
+            TotalWeeks = 6,
+        };
+        internship.SemesterId = semester.Id;
+        internship.Semester = semester;
+        await db.Semesters.AddAsync(semester);
+        await db.SemesterReportSchedules.AddAsync(new SemesterReportSchedule
+        {
+            Id = Guid.NewGuid(),
+            SemesterId = semester.Id,
+            Semester = semester,
+            WeekNumber = 7,
+            Title = "Báo cáo cuối kỳ",
+            StartDate = DateTime.UtcNow.AddDays(1),
+            DueDate = DateTime.UtcNow.AddDays(7),
+            IsSubmissionOpen = true,
+            AllowLateSubmission = false,
+        });
+        await db.SaveChangesAsync();
+        var contentRootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        var service = CreateService(db, contentRootPath: contentRootPath);
+
+        try
+        {
+            var result = await service.CreateBundleAsync(
+                studentUser.Id,
+                new CreateSubmissionRequest
+                {
+                    InternshipId = internship.Id,
+                    Type = "FinalReport",
+                    Title = "Báo cáo cuối kỳ",
+                },
+                new[]
+                {
+                    (Stream: (Stream)new MemoryStream(new byte[] { 1 }), FileName: "report.pdf", Length: 1L, ContentType: (string?)"application/pdf"),
+                },
+                Array.Empty<SubmissionAssetInput>());
+
+            result.Type.Should().Be("FinalReport");
+        }
+        finally
+        {
+            if (Directory.Exists(contentRootPath))
+                Directory.Delete(contentRootPath, recursive: true);
+        }
     }
 
     [Fact]

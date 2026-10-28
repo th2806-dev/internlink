@@ -385,6 +385,9 @@ public class WeeklyReportServiceTests
     {
         var db = GetDb();
         var (studentUser, _, _, _, internship, report) = await SeedDataAsync(db);
+        var company = new Company { Id = Guid.NewGuid(), CompanyName = "Assigned Company", CreatedAt = DateTime.UtcNow };
+        db.Companies.Add(company);
+        internship.CompanyId = company.Id;
         var service = CreateService(db);
 
         var semesterId = Guid.NewGuid();
@@ -413,7 +416,7 @@ public class WeeklyReportServiceTests
     }
 
     [Fact]
-    public async Task ReviewAsync_WhenWeekIsClosedBeforeDueDate_ShouldThrowInvalidOperationException()
+    public async Task ReviewAsync_WhenSubmissionWindowIsClosed_ShouldAllowLecturerToReview()
     {
         var db = GetDb();
         var (_, lecturerUser, _, _, internship, report) = await SeedDataAsync(db);
@@ -442,13 +445,81 @@ public class WeeklyReportServiceTests
         });
         await db.SaveChangesAsync();
 
+        var result = await CreateService(db).ReviewAsync(
+            report.Id,
+            lecturerUser.Id,
+            new ReviewWeeklyReportRequest { Status = "Approved" });
+
+        result.Should().NotBeNull();
+        result!.Status.Should().Be("Approved");
+    }
+
+    [Fact]
+    public async Task ReviewAsync_WhenPastDeadline_ShouldAllowLecturerToReview()
+    {
+        var db = GetDb();
+        var (_, lecturerUser, _, _, internship, report) = await SeedDataAsync(db);
+        var semester = new Semester
+        {
+            Id = Guid.NewGuid(),
+            Name = "Kỳ thực tập",
+            Term = "Học kỳ I",
+            AcademicYear = "2026 - 2027",
+            Status = SemesterStatus.Active,
+            TotalWeeks = 1,
+            CreatedAt = DateTime.UtcNow
+        };
+        internship.SemesterId = semester.Id;
+        report.Status = WeeklyReportStatus.Submitted;
+        db.Semesters.Add(semester);
+        db.SemesterReportSchedules.Add(new SemesterReportSchedule
+        {
+            Id = Guid.NewGuid(),
+            SemesterId = semester.Id,
+            WeekNumber = 1,
+            Title = "Báo cáo tuần 1",
+            DueDate = DateTime.UtcNow.AddDays(-1),
+            IsSubmissionOpen = true,
+            CreatedAt = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
+
+        var result = await CreateService(db).ReviewAsync(
+            report.Id,
+            lecturerUser.Id,
+            new ReviewWeeklyReportRequest { Status = "Approved" });
+
+        result.Should().NotBeNull();
+        result!.Status.Should().Be("Approved");
+    }
+
+    [Fact]
+    public async Task ReviewAsync_WhenSemesterIsCompleted_ShouldThrowInvalidOperationException()
+    {
+        var db = GetDb();
+        var (_, lecturerUser, _, _, internship, report) = await SeedDataAsync(db);
+        var semester = new Semester
+        {
+            Id = Guid.NewGuid(),
+            Name = "Kỳ thực tập",
+            Term = "Học kỳ I",
+            AcademicYear = "2026 - 2027",
+            Status = SemesterStatus.Completed,
+            TotalWeeks = 1,
+            CreatedAt = DateTime.UtcNow
+        };
+        internship.SemesterId = semester.Id;
+        report.Status = WeeklyReportStatus.Submitted;
+        db.Semesters.Add(semester);
+        await db.SaveChangesAsync();
+
         var act = () => CreateService(db).ReviewAsync(
             report.Id,
             lecturerUser.Id,
             new ReviewWeeklyReportRequest { Status = "Approved" });
 
         await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("Tuần thực tập đã đóng, nhật ký đang ở chế độ chỉ xem.");
+            .WithMessage("Kỳ thực tập đã đóng, nhật ký đang ở chế độ chỉ xem.");
     }
 
     [Fact]
@@ -456,6 +527,9 @@ public class WeeklyReportServiceTests
     {
         var db = GetDb();
         var (studentUser, _, _, _, internship, report) = await SeedDataAsync(db);
+        var company = new Company { Id = Guid.NewGuid(), CompanyName = "Assigned Company", CreatedAt = DateTime.UtcNow };
+        db.Companies.Add(company);
+        internship.CompanyId = company.Id;
         var service = CreateService(db);
 
         var semesterId = Guid.NewGuid();
@@ -481,6 +555,19 @@ public class WeeklyReportServiceTests
 
         result.Should().NotBeNull();
         result!.Status.Should().Be("Submitted");
+    }
+
+    [Fact]
+    public async Task SubmitAsync_WhenInternshipHasNoAssignedCompany_ShouldThrowInvalidOperationException()
+    {
+        var db = GetDb();
+        var (studentUser, _, _, _, _, report) = await SeedDataAsync(db);
+        var service = CreateService(db);
+
+        var act = () => service.SubmitAsync(report.Id, studentUser.Id);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*chưa được phân công đơn vị thực tập*");
     }
 
     [Fact]
