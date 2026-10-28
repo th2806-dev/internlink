@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using InternLink.Application.Interfaces;
 using InternLink.Application.DTOs;
+using InternLink.Application.Exceptions;
 using InternLink.API.Extensions;
 using InternLink.Shared.Responses;
 using Microsoft.AspNetCore.StaticFiles;
@@ -27,9 +28,20 @@ public class AuthController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
-        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
-        var token = await _auth.LoginAsync(request, ipAddress);
-        return Ok(ApiResponse<LoginResponse>.Ok(token));
+        try
+        {
+            var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+            var token = await _auth.LoginAsync(request, ipAddress);
+            return Ok(ApiResponse<LoginResponse>.Ok(token));
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError
+            {
+                Title = ex.Message,
+                Status = StatusCodes.Status401Unauthorized
+            }));
+        }
     }
 
     [HttpPost("refresh-token")]
@@ -179,6 +191,14 @@ public class AuthController : ControllerBase
         {
             return NotFound(ApiResponse<object>.Fail(new ApiError { Title = ex.Message }));
         }
+        catch (StudentArchiveReadOnlyException ex)
+        {
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message }));
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message }));
+        }
         catch (InvalidOperationException ex)
         {
             return StatusCode(502, ApiResponse<object>.Fail(new ApiError { Title = ex.Message }));
@@ -196,8 +216,19 @@ public class AuthController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.InvalidInput }));
 
-        await _auth.ResetPasswordAsync(request.Token, request.NewPassword);
-        return Ok(ApiResponse<object>.Ok(null));
+        try
+        {
+            await _auth.ResetPasswordAsync(request.Token, request.NewPassword);
+            return Ok(ApiResponse<object>.Ok(null));
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = ex.Message }));
+        }
+        catch (StudentArchiveReadOnlyException ex)
+        {
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message }));
+        }
     }
 
     [HttpPost("avatar")]

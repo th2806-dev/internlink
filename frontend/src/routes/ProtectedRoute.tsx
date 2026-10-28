@@ -6,7 +6,7 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
-  const { isLoggedIn, isBootstrapping, role, mustChangePassword } = useAuth();
+  const { isLoggedIn, isBootstrapping, role, user, mustChangePassword } = useAuth();
   const location = useLocation();
 
   if (isBootstrapping) {
@@ -22,7 +22,7 @@ export function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (mustChangePassword) {
+  if (mustChangePassword && !(role === "student" && user?.isArchiveReadOnly)) {
     return <Navigate to="/change-password" replace />;
   }
 

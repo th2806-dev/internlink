@@ -64,6 +64,58 @@ public class AuthServiceTests
     }
 
     [Fact]
+    public async Task GetCurrentUserAsync_ShouldExposeArchiveModeForFirstLoginStudents()
+    {
+        var db = GetDb();
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            Username = "archived-student",
+            PasswordHash = "hash",
+            Role = Role.Student,
+            IsActive = true,
+            MustChangePassword = true,
+            FullName = "Archived student",
+            CreatedAt = DateTime.UtcNow,
+        };
+        var student = new Student
+        {
+            Id = Guid.NewGuid(),
+            UserId = user.Id,
+            StudentCode = "SV-ARCHIVE",
+            FullName = user.FullName,
+            CreatedAt = DateTime.UtcNow,
+        };
+        var semester = new Semester
+        {
+            Id = Guid.NewGuid(),
+            Name = "Kỳ đã kết thúc",
+            Term = "Học kỳ I",
+            AcademicYear = "2025 - 2026",
+            Status = SemesterStatus.Completed,
+            CreatedAt = DateTime.UtcNow,
+        };
+        db.Users.Add(user);
+        db.Students.Add(student);
+        db.Semesters.Add(semester);
+        db.Internships.Add(new Internship
+        {
+            Id = Guid.NewGuid(),
+            StudentId = student.Id,
+            SemesterId = semester.Id,
+            Status = InternshipStatus.Completed,
+            CreatedAt = DateTime.UtcNow,
+        });
+        await db.SaveChangesAsync();
+
+        var currentUser = await CreateService(db).GetCurrentUserAsync(user.Id);
+
+        currentUser.Should().NotBeNull();
+        currentUser!.MustChangePassword.Should().BeTrue();
+        currentUser.IsArchiveReadOnly.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task ForgotPasswordAsync_WithValidEmail_ShouldCreateTokenAndSendEmail()
     {
         var db = GetDb();

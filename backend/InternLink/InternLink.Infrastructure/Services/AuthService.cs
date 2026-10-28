@@ -2,9 +2,11 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using AutoMapper;
 using InternLink.Application.DTOs;
+using InternLink.Application.Exceptions;
 using InternLink.Application.Interfaces;
 using InternLink.Infrastructure.Persistence;
 using InternLink.Domain.Entities;
+using InternLink.Domain.Enums;
 using InternLink.Shared.Interfaces;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
@@ -266,7 +268,9 @@ public class AuthService : IAuthService
     {
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId && !u.IsDeleted);
         if (user == null) return null;
-        return _mapper.Map<CurrentUserResponse>(user);
+        var response = _mapper.Map<CurrentUserResponse>(user);
+        response.IsArchiveReadOnly = await IsArchiveReadOnlyStudentAsync(userId);
+        return response;
     }
 
     public async Task ChangePasswordAsync(Guid userId, ChangePasswordRequest request)
@@ -306,6 +310,9 @@ public class AuthService : IAuthService
             _logger.LogInformation("ForgotPassword requested for unknown or inactive email {Email}", email);
             throw new KeyNotFoundException(InternLink.Shared.Responses.ErrorMessage.EmailNotFound);
         }
+
+        if (await IsArchiveReadOnlyStudentAsync(user.Id))
+            throw new StudentArchiveReadOnlyException();
 
         var rawToken = ResetTokenGenerator.GenerateToken();
         var tokenHash = ResetTokenGenerator.HashToken(rawToken);
@@ -380,6 +387,9 @@ public class AuthService : IAuthService
             throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.InvalidOrExpiredPasswordResetLink);
 
         var user = resetToken.User;
+        if (await IsArchiveReadOnlyStudentAsync(user.Id))
+            throw new StudentArchiveReadOnlyException();
+
         user.PasswordHash = _hasher.HashPassword(user, newPassword);
         user.MustChangePassword = false;
         user.UpdatedAt = DateTime.UtcNow;
@@ -412,6 +422,25 @@ public class AuthService : IAuthService
 
         await _db.SaveChangesAsync();
         _logger.LogInformation("User {UserId} reset password via email token", user.Id);
+    }
+
+    private async Task<bool> IsArchiveReadOnlyStudentAsync(Guid userId)
+    {
+        if (!await _db.Users.AnyAsync(user => user.Id == userId && user.Role == Role.Student))
+            return false;
+
+        var semesterStatuses = await _db.Internships
+            .AsNoTracking()
+            .Where(i => !i.IsDeleted
+                && i.Student.UserId == userId
+                && !i.Student.IsDeleted
+                && !i.Semester!.IsDeleted)
+            .Select(i => i.Semester!.Status)
+            .Distinct()
+            .ToListAsync();
+
+        return semesterStatuses.Count > 0
+            && semesterStatuses.All(status => status == SemesterStatus.Completed);
     }
 
     private string BuildResetLink(string rawToken)

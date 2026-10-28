@@ -23,6 +23,7 @@ export interface AuthUser {
   email?: string | null;
   avatarUrl?: string | null;
   departmentId?: string | null;
+  isArchiveReadOnly?: boolean;
 }
 
 export interface AuthSession {
@@ -66,6 +67,7 @@ function mapMeToAuthUser(me: CurrentUserDto): AuthUser {
     backendRole: me.role,
     email: me.email,
     departmentId: me.departmentId,
+    isArchiveReadOnly: me.isArchiveReadOnly,
   };
 }
 

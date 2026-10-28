@@ -22,6 +22,7 @@ interface LoginUser {
   name: string;
   email?: string | null;
   mustChangePassword?: boolean;
+  isArchiveReadOnly?: boolean;
   token?: string;
   id?: string;
 }
@@ -127,6 +128,7 @@ export function LoginPortal({ onLoginSuccess }: LoginPortalProps) {
         name: me.fullName?.trim() || me.username,
         email: me.email,
         mustChangePassword: loginRes.mustChangePassword,
+        isArchiveReadOnly: me.isArchiveReadOnly,
         token: loginRes.token,
       });
     } catch (err) {
