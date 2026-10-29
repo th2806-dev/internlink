@@ -1,4 +1,5 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAdminAssignmentMatrix } from "../hooks/useAdminAssignmentMatrix";
 import { adminAssignmentsService } from "../services/adminAssignments.service";
@@ -36,8 +37,14 @@ describe("useAdminAssignmentMatrix", () => {
       .mockRejectedValueOnce(new Error("Assignment service unavailable"))
       .mockResolvedValueOnce([]);
 
-    const { result } = renderHook(() =>
-      useAdminAssignmentMatrix(true, "semester-1", onError),
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: 0 } },
+    });
+    const { result } = renderHook(
+      () => useAdminAssignmentMatrix(true, "semester-1", onError),
+      { wrapper: ({ children }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      ) },
     );
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -48,7 +55,8 @@ describe("useAdminAssignmentMatrix", () => {
       await result.current.reload();
     });
 
-    expect(result.current.error).toBeNull();
+    await waitFor(() => expect(result.current.error).toBeNull());
     expect(result.current.isLoading).toBe(false);
+    expect(adminAssignmentsService.getAll).toHaveBeenCalledTimes(2);
   });
 });

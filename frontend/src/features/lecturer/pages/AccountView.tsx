@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Building2,
   Edit3,
@@ -22,6 +23,7 @@ import { PasswordStrengthMeter } from "../../../components/common/PasswordStreng
 import { LecturerSubPageHeader } from "../components/LecturerSubPageHeader";
 import { apiRequest, getApiErrorMessage } from "../../../lib/apiClient";
 import { authService } from "../../../services/auth.service";
+import { queryKeys } from "../../../lib/queryKeys";
 import { useAuth } from "../../../hooks/useAuth";
 import { useSemester } from "../../../contexts/SemesterContext";
 
@@ -57,12 +59,11 @@ const emptyProfile: Profile = {
 
 export const AccountView = () => {
   const { user, logout } = useAuth();
+  const queryClient = useQueryClient();
   const { selectedSemester } = useSemester();
   const [profile, setProfile] = useState<Profile>(emptyProfile);
-  const [overview, setOverview] = useState({ totalInternships: 0, statusCounts: {} as Record<string, number> });
   const [draft, setDraft] = useState<Profile>(emptyProfile);
   const [editing, setEditing] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -72,37 +73,34 @@ export const AccountView = () => {
   const [showPasswords, setShowPasswords] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
 
+  const profileQueryKey = queryKeys.auth.lecturerProfile(user?.id ?? user?.username);
+  const profileQuery = useQuery({
+    queryKey: profileQueryKey,
+    enabled: Boolean(user),
+    staleTime: 5 * 60 * 1000,
+    queryFn: () => apiRequest<LecturerOverview>("/api/Lecturer/me"),
+  });
+  const overview = {
+    totalInternships: profileQuery.data?.totalInternships ?? 0,
+    statusCounts: profileQuery.data?.statusCounts ?? {},
+  };
+  const loading = profileQuery.isPending;
+  const visibleError = error || (profileQuery.error ? getApiErrorMessage(profileQuery.error) : null);
+
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    apiRequest<LecturerOverview>("/api/Lecturer/me")
-      .then((data) => {
-        if (cancelled) return;
-        const loaded: Profile = {
-          fullName: data.lecturer.fullName || user?.name || "",
-          lecturerCode: data.lecturer.staffCode || "",
-          email: data.lecturer.email || user?.email || "",
-          phone: data.lecturer.phone || "",
-          department: data.lecturer.department || "",
-          office: "Chưa cập nhật",
-        };
-        setProfile(loaded);
-        setDraft(loaded);
-        setOverview({
-          totalInternships: data.totalInternships ?? 0,
-          statusCounts: data.statusCounts ?? {},
-        });
-      })
-      .catch((err) => {
-        if (!cancelled) setError(getApiErrorMessage(err));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
+    const data = profileQuery.data;
+    if (!data) return;
+    const loaded: Profile = {
+      fullName: data.lecturer.fullName || user?.name || "",
+      lecturerCode: data.lecturer.staffCode || "",
+      email: data.lecturer.email || user?.email || "",
+      phone: data.lecturer.phone || "",
+      department: data.lecturer.department || "",
+      office: "Chưa cập nhật",
     };
-  }, [user]);
+    setProfile(loaded);
+    if (!editing) setDraft(loaded);
+  }, [editing, profileQuery.data, user]);
 
   const saveProfile = async (event: FormEvent) => {
     event.preventDefault();
@@ -127,6 +125,7 @@ export const AccountView = () => {
       setProfile(next);
       setDraft(next);
       setEditing(false);
+      await queryClient.invalidateQueries({ queryKey: profileQueryKey });
       setMessage("Đã cập nhật thông tin hồ sơ.");
     } catch (err) {
       setError(getApiErrorMessage(err));
@@ -193,7 +192,7 @@ export const AccountView = () => {
       </LecturerSubPageHeader>
 
       {message && <p role="status" className="rounded-lg border border-[#7bc043]/30 bg-[#7bc043]/10 p-3 text-xs font-semibold text-[#446d20]">{message}</p>}
-      {error && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-700">{error}</p>}
+      {visibleError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-700">{visibleError}</p>}
 
       {loading ? (
         <Panel role="status" className="rounded-lg border border-slate-200/90 py-12 text-center text-xs text-slate-500 shadow-2xs">Đang tải thông tin tài khoản...</Panel>

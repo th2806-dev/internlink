@@ -1,4 +1,5 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Toast } from "../../../components/common/Toast";
 import {
   Download,
@@ -27,27 +28,62 @@ import { mapDocumentListItemToUi } from "../../../lib/documentMappers";
 import { documentService } from "../../../services/document.service";
 import { lecturerInternshipsService } from "../../../services/lecturerInternships.service";
 import type { DocumentItem } from "../../../types/document";
+import { queryKeys } from "../../../lib/queryKeys";
+import { useAuth } from "../../../hooks/useAuth";
+
+const EMPTY_DOCUMENTS: DocumentItem[] = [];
 
 export const TemplatesView = () => {
-  const [documents, setDocuments] = useState<DocumentItem[]>([]);
-  const [internships, setInternships] = useState<
-    Awaited<ReturnType<typeof lecturerInternshipsService.getAll>>
-  >([]);
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const { semesters, selectedSemester } = useSemester();
+  const semesterId = selectedSemester?.id && selectedSemester.id !== "all"
+    ? selectedSemester.id
+    : undefined;
+  const documentsKey = queryKeys.lecturer.templates({
+    userId: user?.id ?? user?.username ?? "anonymous",
+  });
+  const documentsQuery = useQuery({
+    queryKey: documentsKey,
+    enabled: Boolean(user),
+    queryFn: async () => {
+      const [documentsResult, templatesResult] = await Promise.all([
+        documentService.getAll(),
+        documentService.getTemplates(),
+      ]);
+      const documentMap = new Map(
+        [...templatesResult, ...documentsResult].map((document) => [document.id, document]),
+      );
+      return Array.from(documentMap.values()).map(mapDocumentListItemToUi);
+    },
+  });
+  const internshipsQuery = useQuery({
+    queryKey: queryKeys.lecturer.internships.list({
+      semesterId: semesterId ?? "all",
+      userId: user?.id ?? user?.username ?? "anonymous",
+    }),
+    enabled: Boolean(user),
+    queryFn: () => lecturerInternshipsService.getAll(semesterId),
+  });
+  const documents = documentsQuery.data ?? EMPTY_DOCUMENTS;
+  const internships = internshipsQuery.data ?? [];
+  const isLoadingDocs = documentsQuery.isPending;
+  const documentsError = documentsQuery.error
+    ? getApiErrorMessage(documentsQuery.error)
+    : null;
+  const isLoadingInternship = internshipsQuery.isPending;
+  const internshipError = internshipsQuery.error
+    ? getApiErrorMessage(internshipsQuery.error)
+    : null;
   const [selectedInternshipId, setSelectedInternshipId] = useState<string | null>(null);
-  const [isLoadingDocs, setIsLoadingDocs] = useState(true);
-  const [documentsError, setDocumentsError] = useState<string | null>(null);
-  const [isLoadingInternship, setIsLoadingInternship] = useState(true);
-  const [internshipError, setInternshipError] = useState<string | null>(null);
   const [subView, setSubView] = useState<"list" | "upload" | "detail" | "student_library">("list");
   const [activeTab, setActiveTab] = useState<"ALL" | "CIRCULATING" | "ARCHIVED">("CIRCULATING");
   const [selectedCategory, setSelectedCategory] = useState("Tất cả");
-  const { semesters, selectedSemester } = useSemester();
   const [semesterFilter, setSemesterFilter] = useState("Tất cả");
   const [departmentFilter, setDepartmentFilter] = useState("Tất cả");
   const [fileTypeFilter, setFileTypeFilter] = useState("Tất cả");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDoc, setSelectedDoc] = useState<DocumentItem | null>(null);
-  const [isLoadingVersions, setIsLoadingVersions] = useState(false);
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -63,33 +99,11 @@ export const TemplatesView = () => {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  const loadDocuments = useCallback(async () => {
-    setIsLoadingDocs(true);
-    setDocumentsError(null);
-    try {
-      const [documentsResult, templatesResult] = await Promise.all([
-        documentService.getAll(),
-        documentService.getTemplates(),
-      ]);
-      const documentMap = new Map(
-        [...templatesResult, ...documentsResult].map((document) => [
-          document.id,
-          document,
-        ]),
-      );
-      setDocuments(
-        Array.from(documentMap.values()).map(mapDocumentListItemToUi),
-      );
-    } catch (err) {
-      setDocumentsError(getApiErrorMessage(err));
-    } finally {
-      setIsLoadingDocs(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadDocuments();
-  }, [loadDocuments]);
+  const loadDocuments = () => Promise.all([
+    queryClient.invalidateQueries({ queryKey: documentsKey }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.admin.templates.all }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.student.templates.all }),
+  ]);
 
   useEffect(() => {
     setSemesterFilter(
@@ -99,66 +113,36 @@ export const TemplatesView = () => {
     );
   }, [selectedSemester?.id]);
 
-  // Gắn tài liệu vào internship của kỳ ĐANG CHỌN (không phải internship đầu tiên trả về)
   useEffect(() => {
-    let cancelled = false;
-    setIsLoadingInternship(true);
-    setInternships([]);
-    setSelectedInternshipId(null);
-    const semesterId = selectedSemester?.id && selectedSemester.id !== "all" ? selectedSemester.id : undefined;
-    lecturerInternshipsService
-      .getAll(semesterId)
-      .then((rows) => {
-        if (cancelled) return;
-        setInternshipError(null);
-        setInternships(rows);
-        setSelectedInternshipId(rows.length === 1 ? rows[0].id : null);
-      }).catch((err: unknown) => {
-        if (cancelled) return;
-        setInternships([]);
-        setSelectedInternshipId(null);
-        setInternshipError(getApiErrorMessage(err));
-      }).finally(() => {
-        if (!cancelled) setIsLoadingInternship(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedSemester?.id]);
+    if (!internshipsQuery.data) return;
+    setSelectedInternshipId(internshipsQuery.data.length === 1 ? internshipsQuery.data[0].id : null);
+  }, [semesterId, internshipsQuery.data]);
 
   const selectedDocId = selectedDoc?.id;
+  const versionsQuery = useQuery({
+    queryKey: selectedDocId
+      ? queryKeys.lecturer.templateVersions(selectedDocId, user?.id ?? user?.username)
+      : queryKeys.lecturer.templateVersions("none", user?.id ?? user?.username),
+    enabled: subView === "detail" && Boolean(selectedDocId),
+    queryFn: () => documentService.getVersions(selectedDocId!),
+  });
+  const isLoadingVersions = versionsQuery.isFetching;
   useEffect(() => {
-    if (subView !== "detail" || !selectedDocId) return;
-    let cancelled = false;
-    setIsLoadingVersions(true);
-    documentService
-      .getVersions(selectedDocId)
-      .then((versions) => {
-        if (cancelled) return;
-        setSelectedDoc((current) =>
-          current?.id === selectedDocId
-            ? {
-                ...current,
-                versionHistory: versions.map((version) => ({
-                  version: `v${version.versionNumber}`,
-                  date: new Date(version.uploadedAt).toLocaleDateString("vi-VN"),
-                  author: version.uploadedById || "Chưa cập nhật",
-                  note: version.changeNote || "Chưa có ghi chú phiên bản.",
-                })),
-              }
-            : current,
-        );
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) showToast(getApiErrorMessage(err));
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoadingVersions(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedDocId, subView]);
+    if (!selectedDocId || !versionsQuery.data) return;
+    setSelectedDoc((current) =>
+      current?.id === selectedDocId
+        ? {
+            ...current,
+            versionHistory: versionsQuery.data.map((version) => ({
+              version: `v${version.versionNumber}`,
+              date: new Date(version.uploadedAt).toLocaleDateString("vi-VN"),
+              author: version.uploadedById || "Chưa cập nhật",
+              note: version.changeNote || "Chưa có ghi chú phiên bản.",
+            })),
+          }
+        : current,
+    );
+  }, [selectedDocId, versionsQuery.data]);
 
   const categories = useMemo(
     () => [...new Set(documents.map((document) => document.category))].sort((a, b) => a.localeCompare(b, "vi")),
@@ -258,7 +242,10 @@ export const TemplatesView = () => {
     try {
       const updated = await documentService.update(archivingDoc.id, { isPublished: false, archiveReason: finalReason });
       const mapped = mapDocumentListItemToUi(updated);
-      setDocuments((prev) => prev.map((d) => d.id === mapped.id ? mapped : d));
+      queryClient.setQueryData<DocumentItem[]>(documentsKey, (previous) =>
+        (previous ?? []).map((document) => document.id === mapped.id ? mapped : document),
+      );
+      void loadDocuments();
       setSelectedDoc((prev) => prev?.id === mapped.id ? mapped : prev);
       showToast(`Đã ngưng lưu hành biểu mẫu "${archivingDoc.title}".`);
       setArchivingDoc(null);
@@ -272,7 +259,10 @@ export const TemplatesView = () => {
     if (!doc) return;
     try {
       await documentService.delete(doc.id);
-      setDocuments((prev) => prev.filter((d) => d.id !== doc.id));
+      queryClient.setQueryData<DocumentItem[]>(documentsKey, (previous) =>
+        (previous ?? []).filter((document) => document.id !== doc.id),
+      );
+      void loadDocuments();
       if (selectedDoc && selectedDoc.id === doc.id) {
         setSelectedDoc(null);
         setSubView("list");
@@ -287,7 +277,10 @@ export const TemplatesView = () => {
     try {
       const updated = await documentService.update(doc.id, { isPublished: true });
       const mapped = mapDocumentListItemToUi(updated);
-      setDocuments((prev) => prev.map((d) => d.id === mapped.id ? mapped : d));
+      queryClient.setQueryData<DocumentItem[]>(documentsKey, (previous) =>
+        (previous ?? []).map((document) => document.id === mapped.id ? mapped : document),
+      );
+      void loadDocuments();
       setSelectedDoc((prev) => prev?.id === mapped.id ? mapped : prev);
       showToast(`Đã mở lưu hành lại cho biểu mẫu "${doc.title}".`);
     } catch (err) { showToast(getApiErrorMessage(err)); }
@@ -306,13 +299,12 @@ export const TemplatesView = () => {
           description: payload.description,
           category: payload.category,
         });
-        setDocuments((prev) =>
-          prev.map((d) =>
-            d.id === editingDoc.id
-              ? mapDocumentListItemToUi(updated)
-              : d,
+        queryClient.setQueryData<DocumentItem[]>(documentsKey, (previous) =>
+          (previous ?? []).map((document) =>
+            document.id === editingDoc.id ? mapDocumentListItemToUi(updated) : document,
           ),
         );
+        void loadDocuments();
         showToast(`Đã cập nhật tài liệu "${payload.title}"`);
       } else {
         if (!payload.rawFiles || payload.rawFiles.length === 0) {
@@ -328,7 +320,11 @@ export const TemplatesView = () => {
           files: payload.rawFiles,
         });
         const newDocs = result.documents.map(mapDocumentListItemToUi);
-        setDocuments((prev) => [...newDocs, ...prev]);
+        queryClient.setQueryData<DocumentItem[]>(documentsKey, (previous) => [
+          ...newDocs,
+          ...(previous ?? []),
+        ]);
+        void loadDocuments();
         showToast(`Đã tải lên ${result.count} tệp${result.count > 1 ? "s" : ""}: ${result.documents.map((d) => d.title).join(", ")}`);
       }
       setEditingDoc(null);

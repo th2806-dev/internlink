@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { DashboardView } from "../features/admin/pages/DashboardView";
 
 vi.mock("../contexts/SemesterContext", () => ({
@@ -124,7 +125,14 @@ describe("Admin dashboard chart modes", () => {
 
   it("switches between bar, line, and table using the real semester values", async () => {
     const user = userEvent.setup();
-    render(<DashboardView onShowToast={vi.fn()} onNavigateTab={vi.fn()} />);
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <DashboardView onShowToast={vi.fn()} onNavigateTab={vi.fn()} />
+      </QueryClientProvider>,
+    );
 
     const barButton = screen.getByRole("button", { name: "Xem biểu đồ cột" });
     const lineButton = screen.getByRole("button", { name: "Xem biểu đồ đường" });

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useSemester, toApiSemesterId, toApiDepartmentId } from "../../../contexts/SemesterContext";
 import type { ToastType } from "../../../contexts/ToastContext";
 import {
@@ -41,6 +42,7 @@ import {
 import { useAdminDashboardStats } from "../../../hooks/useAdminDashboardStats";
 import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
 import { useAuth } from "../../../hooks/useAuth";
+import { queryKeys } from "../../../lib/queryKeys";
 import { internshipGradingService, type GradingSummaryResponse } from "../../../services/internshipGrading.service";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 
@@ -122,39 +124,21 @@ export const DashboardView = ({
       ) ?? semesters.find((semester) => semester.term === term);
     if (matchingSemester) selectSemester(matchingSemester.id);
   };
-  const [semesterReport, setSemesterReport] = useState<GradingSummaryResponse | null>(null);
-  const [semesterReportLoading, setSemesterReportLoading] = useState(false);
-  const [semesterReportError, setSemesterReportError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (isSuperAdmin || !reportSemesterId) {
-      setSemesterReport(null);
-      setSemesterReportError(null);
-      setSemesterReportLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-    setSemesterReportLoading(true);
-    setSemesterReportError(null);
-    internshipGradingService.getSummary(reportSemesterId)
-      .then((summary) => {
-        if (!cancelled) setSemesterReport(summary);
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          setSemesterReport(null);
-          setSemesterReportError(getApiErrorMessage(error));
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setSemesterReportLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isSuperAdmin, reportSemesterId]);
+  const semesterReportQuery = useQuery<GradingSummaryResponse>({
+    queryKey: queryKeys.admin.gradingSummary({
+      semesterId: reportSemesterId ?? "none",
+      departmentId: departmentIdFilter ?? "all",
+      userId: user?.id ?? user?.username ?? "",
+    }),
+    queryFn: () => internshipGradingService.getSummary(reportSemesterId!),
+    enabled: !isSuperAdmin && Boolean(reportSemesterId),
+    staleTime: 5 * 60 * 1000,
+  });
+  const semesterReport = semesterReportQuery.data ?? null;
+  const semesterReportLoading = semesterReportQuery.isLoading;
+  const semesterReportError = semesterReportQuery.error
+    ? getApiErrorMessage(semesterReportQuery.error)
+    : null;
 
   const semesterReportMetrics = useMemo(() => {
     const students = semesterReport?.students ?? [];
@@ -183,8 +167,16 @@ export const DashboardView = ({
 
   const handleRefresh = async () => {
     if (isLoading) return;
-    await reload();
-    onShowToast("Đã làm mới dữ liệu tổng quan!");
+    const [dashboardResult, reportResult] = await Promise.all([
+      reload(),
+      semesterReportQuery.refetch(),
+    ]);
+    onShowToast(
+      dashboardResult?.error || reportResult.error
+        ? "Không thể làm mới một số dữ liệu tổng quan. Hãy thử lại."
+        : "Đã làm mới dữ liệu tổng quan!",
+      dashboardResult?.error || reportResult.error ? "danger" : "success",
+    );
   };
 
   const handleDownloadSemesterChart = () => {

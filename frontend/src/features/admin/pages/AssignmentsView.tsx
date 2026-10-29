@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type { ToastType } from "../../../contexts/ToastContext";
 import {
   UserPlus,
@@ -30,6 +31,7 @@ import { EmptyState } from "../../../components/common/EmptyState";
 import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
 import { RequestErrorState } from "../../../components/common/RequestErrorState";
 import { getApiErrorMessage } from "../../../lib/apiClient";
+import { queryKeys } from "../../../lib/queryKeys";
 import { formatRelativeTimeVi } from "../../../lib/formatRelativeTimeVi";
 import { adminAssignmentsService } from "../../../services/adminAssignments.service";
 import { useAdminAssignmentMatrix } from "../../../hooks/useAdminAssignmentMatrix";
@@ -45,6 +47,11 @@ export const AssignmentsView = ({
   onShowToast: (msg: string, type?: ToastType) => void;
   onNavigateTab?: (tab: string) => void;
 }) => {
+  const queryClient = useQueryClient();
+  const invalidateAdminOverview = () => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.admin.dashboardAll });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.admin.navStatsAll });
+  };
   const { semesters, selectedSemesterId, selectedSemester: currentSemesterObj, selectSemester, selectedDepartmentId } = useSemester();
   const { canMutateOps } = useAdminCapabilities();
   const selectedSemester = selectedSemesterId;
@@ -229,6 +236,7 @@ export const AssignmentsView = ({
         studentId,
         semesterId: effectiveSemesterId,
       });
+      invalidateAdminOverview();
       onShowToast(
         `Đã hủy phân công hướng dẫn của sinh viên ${studentName}`,
       );
@@ -257,6 +265,7 @@ export const AssignmentsView = ({
           semesterId: effectiveSemesterId,
         });
       }
+      invalidateAdminOverview();
       onShowToast(
         `Đã hủy phân công ${count} sinh viên khỏi ${activeLecturerObj.fullName}!`,
       );
@@ -283,6 +292,7 @@ export const AssignmentsView = ({
         studentIds: selectedAssignedStudentIds,
         semesterId: effectiveSemesterId,
       });
+      invalidateAdminOverview();
       onShowToast(
         `Đã chuyển ${result.assignedCount} sinh viên sang giảng viên ${targetLecturer.fullName}!`,
       );
@@ -308,6 +318,7 @@ export const AssignmentsView = ({
         studentIds: selectedUnassignedIds,
         semesterId: effectiveSemesterId,
       });
+      invalidateAdminOverview();
       if (result.failedCount > 0) {
         onShowToast(
           `Phân công một phần: ${result.assignedCount} thành công, ${result.failedCount} lỗi`,
@@ -372,6 +383,7 @@ export const AssignmentsView = ({
         strategy: "random",
         semesterId: effectiveSemesterId,
       });
+      invalidateAdminOverview();
       onShowToast(
         `Đã phân bổ ngẫu nhiên ${result.totalAssigned} sinh viên cho ${result.lecturersUsed} giảng viên.`,
       );

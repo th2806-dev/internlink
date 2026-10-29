@@ -121,6 +121,12 @@ export function useStudentWeeklyReportsQuery({
       void queryClient.invalidateQueries({
         queryKey: queryKeys.student.weeklyReports.all,
       });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.student.submissions.all,
+      });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.student.dashboardExtrasAll,
+      });
       if (semesterId) {
         void queryClient.invalidateQueries({
           queryKey: queryKeys.student.dashboard(semesterId),
@@ -135,6 +141,12 @@ export function useStudentWeeklyReportsQuery({
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.student.weeklyReports.all,
+      });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.student.submissions.all,
+      });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.student.dashboardExtrasAll,
       });
       if (semesterId) {
         void queryClient.invalidateQueries({

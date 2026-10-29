@@ -1,23 +1,15 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { getApiErrorMessage } from "../lib/apiClient";
 import { adminCompaniesService } from "../services/adminCompanies.service";
 import { adminAssignmentsService } from "../services/adminAssignments.service";
 import { adminDashboardService } from "../services/adminDashboard.service";
 import { adminLecturersService } from "../services/adminLecturers.service";
+import { adminNotificationsService } from "../services/adminNotifications.service";
 import { adminStudentsService } from "../services/adminStudents.service";
 import { notificationService } from "../services/notification.service";
 import { useAuth } from "../contexts/AuthContext";
-
-const EMPTY_INTERNSHIP_STATS: InternshipStatsDto = {
-  total: 0,
-  notStarted: 0,
-  inProgress: 0,
-  behindSchedule: 0,
-  awaitingFeedback: 0,
-  requiresRevision: 0,
-  completed: 0,
-  graded: 0,
-};
+import { queryKeys } from "../lib/queryKeys";
 
 function formatRelativeTime(iso: string): string {
   const date = new Date(iso);
@@ -122,6 +114,8 @@ export interface AdminDashboardStats {
   activeStudents: number;
   pendingStudentAccounts: number;
   pendingLecturerAccounts: number;
+  notificationCampaignCount?: number;
+  unreadNotificationCount?: number;
   companyCount: number;
   activeCompanies: number;
   internshipTotal: number;
@@ -144,15 +138,17 @@ export function useAdminDashboardStats(
 ) {
   const { user } = useAuth();
   const backendRole = user?.backendRole;
-  const [stats, setStats] = useState<AdminDashboardStats | null>(null);
-  const [isLoading, setIsLoading] = useState(enabled);
-  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
-
-  const load = useCallback(async () => {
-    if (!enabled) return;
-
-    setIsLoading(true);
-    try {
+  const query = useQuery({
+    queryKey: queryKeys.admin.dashboard({
+      semesterId: semesterId ?? "all",
+      departmentId: departmentId ?? "all",
+      backendRole: backendRole ?? "",
+      userId: user?.id ?? user?.username ?? "",
+      platformOverview,
+    }),
+    enabled,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
       const effectiveDepartmentId = departmentId === "all" || !departmentId ? undefined : departmentId;
 
       if (platformOverview) {
@@ -162,26 +158,24 @@ export function useAdminDashboardStats(
             effectiveDepartmentId,
             backendRole,
           ),
-          notificationService.getMine().catch(() => []),
+          notificationService.getMine(),
         ]);
-
-        const recentActivities: AdminDashboardActivity[] = notifications
-          .slice(0, 5)
-          .map((n) => ({
-            id: n.id,
-            title: n.title,
-            desc: n.content,
-            time: formatRelativeTime(n.createdAt),
-            date: new Date(n.createdAt).toLocaleString("vi-VN"),
-            user: "Hệ thống",
-          }));
-
-        setStats({
+        const recentActivities = notifications.slice(0, 5).map((notification) => ({
+          id: notification.id,
+          title: notification.title,
+          desc: notification.content,
+          time: formatRelativeTime(notification.createdAt),
+          date: new Date(notification.createdAt).toLocaleString("vi-VN"),
+          user: "Hệ thống",
+        }));
+        return {
           lecturerCount: overview.lecturerCount,
           studentCount: overview.studentCount,
           activeStudents: overview.activeStudents,
           pendingStudentAccounts: 0,
           pendingLecturerAccounts: 0,
+          notificationCampaignCount: 0,
+          unreadNotificationCount: 0,
           companyCount: overview.companyCount,
           activeCompanies: overview.activeCompanies,
           internshipTotal: overview.internshipTotal,
@@ -193,9 +187,7 @@ export function useAdminDashboardStats(
           workloadBreakdown: [],
           actionItems: [],
           recentActivities,
-        });
-        setUpdatedAt(new Date());
-        return;
+        } satisfies AdminDashboardStats;
       }
 
       const [
@@ -205,24 +197,19 @@ export function useAdminDashboardStats(
         internshipStats,
         notifications,
         allAssignments,
-      ] = await Promise.all([
-        adminStudentsService
-          .getAll(0, 1000, semesterId ?? undefined, effectiveDepartmentId)
-          .catch(() => []),
-        adminLecturersService
-          .getAll(0, 1000, semesterId ?? undefined, effectiveDepartmentId)
-          .catch(() => []),
-        adminCompaniesService
-          .getAll(0, 1000, semesterId ?? undefined, effectiveDepartmentId)
-          .catch(() => []),
-        adminDashboardService
-          .getInternshipStats(semesterId ?? undefined, effectiveDepartmentId, backendRole)
-          .catch(() => ({ ...EMPTY_INTERNSHIP_STATS })),
-        notificationService.getMine().catch(() => []),
-        adminAssignmentsService
-          .getAll(semesterId ?? undefined, effectiveDepartmentId)
-          .catch(() => []),
-      ]);
+        campaigns,
+        unreadNotificationCount,
+      ] =
+        await Promise.all([
+          adminStudentsService.getAll(0, 1000, semesterId ?? undefined, effectiveDepartmentId),
+          adminLecturersService.getAll(0, 1000, semesterId ?? undefined, effectiveDepartmentId),
+          adminCompaniesService.getAll(0, 1000, semesterId ?? undefined, effectiveDepartmentId),
+          adminDashboardService.getInternshipStats(semesterId ?? undefined, effectiveDepartmentId, backendRole),
+          notificationService.getMine(),
+          adminAssignmentsService.getAll(semesterId ?? undefined, effectiveDepartmentId),
+          adminNotificationsService.getCampaigns(20),
+          notificationService.getUnreadCount(),
+        ]);
 
       const assignmentsByLecturer = new Map<string, number>();
       const assignedStudentIds = new Set<string>();
@@ -266,13 +253,15 @@ export function useAdminDashboardStats(
           user: "Hệ thống",
         }));
 
-      setStats({
+      return {
         lecturerCount: lecturers.length,
         lecturersWithStudents,
         studentCount: students.length,
         activeStudents,
         pendingStudentAccounts,
         pendingLecturerAccounts,
+        notificationCampaignCount: campaigns.length,
+        unreadNotificationCount,
         companyCount: companies.length,
         activeCompanies,
         internshipTotal: internshipStats.total,
@@ -288,18 +277,19 @@ export function useAdminDashboardStats(
           pendingLecturerAccounts,
         }),
         recentActivities,
-      });
-      setUpdatedAt(new Date());
-    } catch (err) {
-      onError?.(getApiErrorMessage(err));
-    } finally {
-      setIsLoading(false);
-    }
-  }, [enabled, semesterId, onError, departmentId, platformOverview, backendRole]);
+      } satisfies AdminDashboardStats;
+    },
+  });
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (query.error) onError?.(getApiErrorMessage(query.error));
+  }, [query.error, onError]);
 
-  return { stats, isLoading, updatedAt, reload: load };
+  return {
+    stats: query.data ?? null,
+    isLoading: query.isLoading,
+    error: query.error ? getApiErrorMessage(query.error) : null,
+    updatedAt: query.dataUpdatedAt ? new Date(query.dataUpdatedAt) : null,
+    reload: query.refetch,
+  };
 }

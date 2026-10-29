@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Download,
   Search,
@@ -11,68 +12,75 @@ import {
   X,
   RefreshCw,
 } from "lucide-react";
-import { useStudentPortal } from "../../../contexts/StudentPortalContext";
 import { useSemester } from "../../../contexts/SemesterContext";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { mapDocumentListItemToStudentTemplate } from "../../../lib/documentMappers";
 import { documentService } from "../../../services/document.service";
 import { StudentSubPageHeader } from "../components/StudentSubPageHeader";
+import { queryKeys } from "../../../lib/queryKeys";
+import { useAuth } from "../../../hooks/useAuth";
+import type { DocumentListItemDto } from "../../../types/api";
+
+type StudentTemplate = ReturnType<typeof mapDocumentListItemToStudentTemplate>;
+const EMPTY_TEMPLATES: StudentTemplate[] = [];
 
 export const TemplatesView: React.FC<{
   onShowToast?: (msg: string, type?: "success" | "error" | "info" | string) => void;
 }> = ({ onShowToast }) => {
-  const { refresh: refreshProfile } = useStudentPortal();
   const { selectedSemester } = useSemester();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const templatesKey = queryKeys.student.templates.list({
+    semesterId: selectedSemester?.id ?? "all",
+    userId: user?.id ?? user?.username ?? "anonymous",
+  });
 
   const [selectedCategory, setSelectedCategory] = useState("Tất cả");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFileType, setSelectedFileType] = useState("Tất cả");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(6);
-  const [selectedDoc, setSelectedDoc] = useState<any>(null);
-  const [templates, setTemplates] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [selectedDoc, setSelectedDoc] = useState<StudentTemplate | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Load templates from API
-  const loadTemplates = useCallback(async () => {
-    setIsLoading(true);
-    try {
+  const templatesQuery = useQuery({
+    queryKey: templatesKey,
+    enabled: Boolean(user),
+    queryFn: async () => {
       const [templatesResult, docsResult] = await Promise.allSettled([
         documentService.getTemplates({ isPublishedOnly: true }),
         documentService.getAll(),
       ]);
-      const docMap = new Map<string, any>();
+      if (templatesResult.status === "rejected" && docsResult.status === "rejected") {
+        throw templatesResult.reason;
+      }
+      const docMap = new Map<string, DocumentListItemDto>();
       if (templatesResult.status === "fulfilled") {
         templatesResult.value
-          .filter((d: any) => d.isPublished !== false)
+          .filter((d) => d.isPublished !== false)
           .forEach((d) => docMap.set(d.id, d));
       }
       if (docsResult.status === "fulfilled") {
         docsResult.value
-          .filter((d: any) => d.isPublished !== false)
+          .filter((d: DocumentListItemDto) => d.isPublished !== false)
           .forEach((d) => docMap.set(d.id, d));
       }
-      setTemplates(
-        Array.from(docMap.values()).map(mapDocumentListItemToStudentTemplate),
-      );
-    } catch (err) {
-      onShowToast?.(getApiErrorMessage(err), "error");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [onShowToast]);
-
-  useEffect(() => {
-    loadTemplates();
-  }, [loadTemplates]);
+      return Array.from(docMap.values()).map(mapDocumentListItemToStudentTemplate);
+    },
+  });
+  const templates = templatesQuery.data ?? EMPTY_TEMPLATES;
+  const isLoading = templatesQuery.isPending;
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
-      await refreshProfile();
-      await loadTemplates();
-      onShowToast?.("Đã làm mới danh mục biểu mẫu & tài liệu thành công", "success");
+      const result = await templatesQuery.refetch();
+      onShowToast?.(
+        result.error
+          ? `Không thể làm mới biểu mẫu: ${getApiErrorMessage(result.error)}`
+          : "Đã làm mới danh mục biểu mẫu & tài liệu thành công",
+        result.error ? "error" : "success",
+      );
     } finally {
       setIsRefreshing(false);
     }
@@ -88,14 +96,12 @@ export const TemplatesView: React.FC<{
     "Văn bản khoa",
   ];
 
-  const handleDownload = async (doc: any) => {
+  const handleDownload = async (doc: StudentTemplate) => {
     try {
       await documentService.download(doc.id, doc.fileName || `${doc.name}.bin`);
-      setTemplates((prev) =>
-        prev.map((t) =>
-          t.id === doc.id
-            ? { ...t, downloadCount: (t.downloadCount || 0) + 1 }
-            : t,
+      queryClient.setQueryData<typeof templates>(templatesKey, (previous) =>
+        previous?.map((t) =>
+          t.id === doc.id ? { ...t, downloadCount: (t.downloadCount || 0) + 1 } : t,
         ),
       );
       onShowToast?.(`Đã tải xuống biểu mẫu: ${doc.name}`, "success");
@@ -234,6 +240,13 @@ export const TemplatesView: React.FC<{
               <div className="p-12 text-center text-xs text-slate-500 font-medium space-y-2">
                 <RefreshCw className="w-6 h-6 animate-spin text-[#026aa7] mx-auto" />
                 <p>Đang tải danh mục biểu mẫu...</p>
+              </div>
+            ) : templatesQuery.isError ? (
+              <div role="alert" className="p-8 text-center text-sm text-rose-700">
+                <p>Không thể tải biểu mẫu: {getApiErrorMessage(templatesQuery.error)}</p>
+                <button type="button" onClick={() => void templatesQuery.refetch()} className="mt-3 rounded-md border border-rose-300 px-3 py-2 text-xs font-semibold hover:bg-rose-50">
+                  Thử tải lại
+                </button>
               </div>
             ) : filteredTemplates.length === 0 ? (
               <div className="p-12 text-center text-xs text-slate-400 font-medium">

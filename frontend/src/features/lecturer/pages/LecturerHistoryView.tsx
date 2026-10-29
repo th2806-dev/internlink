@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   Award,
@@ -19,7 +20,9 @@ import { LecturerSubPageHeader } from "../components/LecturerSubPageHeader";
 import { useSemester } from "../../../contexts/SemesterContext";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { lecturerHistoryService, type LecturerParticipationHistory } from "../../../services/lecturerHistory.service";
-import { lecturerInternshipsService, type LecturerSemesterOptionDto } from "../../../services/lecturerInternships.service";
+import { lecturerInternshipsService } from "../../../services/lecturerInternships.service";
+import { queryKeys } from "../../../lib/queryKeys";
+import { useAuth } from "../../../hooks/useAuth";
 
 const formatDateTime = (value?: string | null) => value
   ? new Date(value).toLocaleString("vi-VN", { dateStyle: "medium", timeStyle: "short" })
@@ -34,60 +37,39 @@ const activityIcon = (activityType: string) => {
 
 export const LecturerHistoryView = () => {
   const { selectedSemesterId } = useSemester();
-  const [semesters, setSemesters] = useState<LecturerSemesterOptionDto[]>([]);
-  const [semesterId, setSemesterId] = useState("");
-  const [history, setHistory] = useState<LecturerParticipationHistory | null>(null);
+  const { user, isLoggedIn } = useAuth();
+  const queryClient = useQueryClient();
+  const [selectedHistorySemesterId, setSelectedHistorySemesterId] = useState(selectedSemesterId);
   const [search, setSearch] = useState("");
   const [studentPage, setStudentPage] = useState(1);
   const [studentPageSize, setStudentPageSize] = useState(10);
   const [activityPage, setActivityPage] = useState(1);
   const [activityPageSize, setActivityPageSize] = useState(10);
-  const [isLoadingSemesters, setIsLoadingSemesters] = useState(true);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
-  const [error, setError] = useState("");
-  const [reloadToken, setReloadToken] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-    lecturerInternshipsService.getAssignedSemesters()
-      .then((options) => {
-        if (cancelled) return;
-        setSemesters(options);
-        setSemesterId((current) =>
-          options.some((option) => option.id === current)
-            ? current
-            : options.find((option) => option.id === selectedSemesterId)?.id ?? options[0]?.id ?? "",
-        );
-      })
-      .catch((requestError: unknown) => {
-        if (!cancelled) setError(getApiErrorMessage(requestError));
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoadingSemesters(false);
-      });
-    return () => { cancelled = true; };
-  }, [selectedSemesterId, reloadToken]);
-
-  useEffect(() => {
-    if (!semesterId) {
-      setHistory(null);
-      setIsLoadingHistory(false);
-      return;
-    }
-    let cancelled = false;
-    setIsLoadingHistory(true);
-    setError("");
-    lecturerHistoryService.getSemesterHistory(semesterId)
-      .then((result) => { if (!cancelled) setHistory(result); })
-      .catch((requestError: unknown) => {
-        if (!cancelled) {
-          setHistory(null);
-          setError(getApiErrorMessage(requestError));
-        }
-      })
-      .finally(() => { if (!cancelled) setIsLoadingHistory(false); });
-    return () => { cancelled = true; };
-  }, [semesterId, reloadToken]);
+  const semestersQuery = useQuery({
+    queryKey: queryKeys.lecturer.assignedSemesters(user?.id ?? user?.username),
+    enabled: isLoggedIn,
+    staleTime: 10 * 60 * 1000,
+    queryFn: () => lecturerInternshipsService.getAssignedSemesters(),
+  });
+  const semesters = semestersQuery.data ?? [];
+  const semesterId = semesters.some((semester) => semester.id === selectedHistorySemesterId)
+    ? selectedHistorySemesterId
+    : semesters.find((semester) => semester.id === selectedSemesterId)?.id
+      ?? semesters[0]?.id
+      ?? "";
+  const historyQuery = useQuery<LecturerParticipationHistory>({
+    queryKey: queryKeys.lecturer.history(semesterId, user?.id ?? user?.username),
+    enabled: isLoggedIn && Boolean(semesterId),
+    queryFn: () => lecturerHistoryService.getSemesterHistory(semesterId),
+  });
+  const history = historyQuery.data ?? null;
+  const isLoadingSemesters = semestersQuery.isLoading;
+  const isLoadingHistory = historyQuery.isLoading;
+  const error = semestersQuery.error
+    ? getApiErrorMessage(semestersQuery.error)
+    : historyQuery.error
+      ? getApiErrorMessage(historyQuery.error)
+      : "";
 
   const students = useMemo(() => {
     const query = search.trim().toLocaleLowerCase("vi");
@@ -117,8 +99,14 @@ export const LecturerHistoryView = () => {
   const finalizedCount = (history?.students ?? []).filter((student) => student.isFinalized).length;
 
   const handleRetry = () => {
-    setError("");
-    setReloadToken((token) => token + 1);
+    void Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.lecturer.assignedSemesters(user?.id ?? user?.username),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.lecturer.history(semesterId, user?.id ?? user?.username),
+      }),
+    ]);
   };
 
   return (
@@ -156,7 +144,7 @@ export const LecturerHistoryView = () => {
             id="history-semester"
             value={semesterId}
             onChange={(event) => {
-              setSemesterId(event.target.value);
+              setSelectedHistorySemesterId(event.target.value);
               setStudentPage(1);
               setActivityPage(1);
             }}

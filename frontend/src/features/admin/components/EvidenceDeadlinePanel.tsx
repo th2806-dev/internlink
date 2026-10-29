@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarClock, Save } from "lucide-react";
 import { Panel } from "../../../components/common/Panel";
 import { getApiErrorMessage } from "../../../lib/apiClient";
+import { queryKeys } from "../../../lib/queryKeys";
 import { semesterReportScheduleService } from "../../../services/semesterReportSchedule.service";
+import { useAuth } from "../../../hooks/useAuth";
 
 type Props = {
   semesterId: string;
@@ -24,39 +27,27 @@ function fromVietnamDateTimeLocal(value: string): string | null {
 }
 
 export function EvidenceDeadlinePanel({ semesterId, semesterName }: Props) {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const deadlineKey = queryKeys.admin.evidenceDeadline(
+    semesterId,
+    user?.id ?? user?.username,
+  );
+  const deadlineQuery = useQuery({
+    queryKey: deadlineKey,
+    enabled: Boolean(semesterId && user),
+    staleTime: 5 * 60 * 1000,
+    queryFn: () => semesterReportScheduleService.getEvidenceDeadline(semesterId),
+  });
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!semesterId) {
-      setStartDate("");
-      setEndDate("");
-      return;
-    }
-
-    let cancelled = false;
-    setIsLoading(true);
-    setError("");
-    semesterReportScheduleService.getEvidenceDeadline(semesterId)
-      .then((deadline) => {
-        if (cancelled) return;
-        setStartDate(toDateTimeLocal(deadline?.startDate));
-        setEndDate(toDateTimeLocal(deadline?.endDate));
-      })
-      .catch((loadError) => {
-        if (!cancelled) setError(getApiErrorMessage(loadError));
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [semesterId]);
+    setStartDate(toDateTimeLocal(deadlineQuery.data?.startDate));
+    setEndDate(toDateTimeLocal(deadlineQuery.data?.endDate));
+  }, [deadlineQuery.data, semesterId]);
 
   const save = async () => {
     if (!semesterId || !startDate || !endDate || endDate < startDate || isSaving) return;
@@ -67,12 +58,15 @@ export function EvidenceDeadlinePanel({ semesterId, semesterName }: Props) {
         startDate: fromVietnamDateTimeLocal(startDate) ?? "",
         endDate: fromVietnamDateTimeLocal(endDate) ?? "",
       });
+      await queryClient.invalidateQueries({ queryKey: deadlineKey });
     } catch (saveError) {
       setError(getApiErrorMessage(saveError));
     } finally {
       setIsSaving(false);
     }
   };
+  const isLoading = deadlineQuery.isPending;
+  const visibleError = error || (deadlineQuery.error ? getApiErrorMessage(deadlineQuery.error) : "");
 
   return (
     <Panel className="space-y-3 border-emerald-200 bg-emerald-50/20">
@@ -98,7 +92,7 @@ export function EvidenceDeadlinePanel({ semesterId, semesterName }: Props) {
           <Save className="h-3.5 w-3.5" /> {isSaving ? "Đang lưu…" : "Lưu deadline"}
         </button>
       </div>
-      {error && <p role="alert" className="text-xs text-rose-700">{error}</p>}
+      {visibleError && <p role="alert" className="text-xs text-rose-700">{visibleError}</p>}
     </Panel>
   );
 }

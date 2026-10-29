@@ -137,6 +137,8 @@ export function useAdminUsersQuery(options: UseAdminUsersQueryOptions = {}) {
   /** Invalidate mọi query con của admin.users (list + counts) sau mutation. */
   const invalidate = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.admin.users.all });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.admin.dashboardAll });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.admin.navStatsAll });
   }, [queryClient]);
 
   const createMutation = useMutation({

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CalendarDays,
   CheckCircle2,
@@ -29,6 +30,8 @@ import { useSemester } from "../../../contexts/SemesterContext";
 import { useEnsureSpecificSemester } from "../../../hooks/useEnsureSpecificSemester";
 import type { AttendanceSessionDto, LecturerStudentListItemDto } from "../../../types/api";
 import { buildWordReportPreviewData, formatWordDate } from "./summaryWordTemplate";
+import { queryKeys } from "../../../lib/queryKeys";
+import { useAuth } from "../../../hooks/useAuth";
 
 type ExportKind = "grades" | "report" | "schedule";
 
@@ -78,6 +81,7 @@ const generateSectionId = (): string => {
 };
 
 const REPORT_SECTIONS_PREFIX = "__INTERNLINK_REPORT_SECTIONS_V1__";
+const EMPTY_SUMMARY_STUDENTS: LecturerStudentListItemDto[] = [];
 const createDefaultReportSections = (): ReportSection[] => [
   { id: generateSectionId(), title: "II. BÁO CÁO CHUNG VỀ TÌNH HÌNH THỰC TẬP", content: "" },
   { id: generateSectionId(), title: "III. ĐIỂM NỔI BẬT VÀ HẠN CHẾ TRONG CÔNG TÁC THỰC TẬP", content: "" },
@@ -110,34 +114,133 @@ function loadReportSections(summary: { results?: string | null; difficulties?: s
 
 export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?: (msg: string) => void; scope?: SummaryScope }) => {
   const { selectedSemester, selectedDepartment } = useSemester();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const isAdminScope = scope === "admin";
 
   // Trang này cần HỌC KỲ CỤ THỂ (nội dung tổng kết lưu theo kỳ, Word xuất theo kỳ).
   // Hook chung: nếu cổng admin đang ở "Tất cả các kỳ" → tự chọn kỳ phù hợp nhất một lần
   // (kỳ active → kỳ có SV → kỳ đầu tiên); người dùng vẫn đổi tay được sau đó.
   const { semesterId, needsSemesterChoice } = useEnsureSpecificSemester();
-  const [students, setStudents] = useState<LecturerStudentListItemDto[]>([]);
+  const userId = user?.id ?? user?.username ?? "anonymous";
+  const studentsQueryKey = isAdminScope
+    ? queryKeys.admin.summary({
+        semesterId,
+        departmentId: selectedDepartment?.id ?? "all",
+        userId,
+      })
+    : queryKeys.lecturer.summary({ semesterId, userId });
+  const studentsQuery = useQuery({
+    queryKey: studentsQueryKey,
+    enabled: Boolean(semesterId),
+    queryFn: async () => {
+      if (!isAdminScope) {
+        return {
+          students: await lecturerInternshipsService.getStudents(semesterId),
+          grading: null as GradingSummaryResponse | null,
+        };
+      }
+
+      const grading = await internshipGradingService.getSummary(semesterId);
+      const students = grading.students.map((grade) => {
+        const openWeeks = grade.weeks ?? [];
+        const submittedOpenWeeks = openWeeks.filter((week) => week.submittedAt).length;
+        const requiredOpenWeeks = Math.max(openWeeks.length, 1);
+        const reportPercent = Math.round((submittedOpenWeeks / requiredOpenWeeks) * 80);
+        const evaluationPercent = grade.averageScore != null || grade.oralExamScore != null ? 20 : 0;
+        return {
+          studentId: grade.studentId,
+          internshipId: grade.studentId,
+          studentCode: grade.studentCode,
+          fullName: grade.fullName,
+          email: null,
+          phone: null,
+          class: grade.className || null,
+          major: null,
+          companyId: null,
+          companyName: grade.companyName ?? null,
+          position: grade.position ?? null,
+          internshipStatus: grade.internshipStatus ?? "NotStarted",
+          startDate: null,
+          endDate: null,
+          weeklyReportCount: submittedOpenWeeks,
+          pendingReportCount: grade.missingCount,
+          submissionCount: submittedOpenWeeks,
+          notes: grade.note || "",
+          finalGrade: grade.averageScore ?? null,
+          hasEvaluation: grade.processScore > 0 || grade.oralExamScore != null,
+          isEvaluationFinalized: grade.averageScore != null,
+          progressPercent: Math.min(100, reportPercent + evaluationPercent),
+          progressBreakdown: undefined,
+          classification: grade.classification || null,
+          isEligible: grade.isEligible,
+          ineligibleReasons: grade.ineligibleReasons ?? [],
+        } as LecturerStudentListItemDto;
+      });
+      return { students, grading };
+    },
+  });
+  const students: LecturerStudentListItemDto[] =
+    studentsQuery.data?.students ?? EMPTY_SUMMARY_STUDENTS;
+  const adminGradeSummary = studentsQuery.data?.grading ?? null;
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [notesDraft, setNotesDraft] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [studentsLoadError, setStudentsLoadError] = useState<string | null>(null);
-  const [studentsReloadKey, setStudentsReloadKey] = useState(0);
+  const isLoading = studentsQuery.isPending;
+  const studentsLoadError = studentsQuery.error ? getApiErrorMessage(studentsQuery.error) : null;
   const [isSaving, setIsSaving] = useState(false);
   const [exporting, setExporting] = useState<ExportKind | "exam" | "process" | null>(null);
   const [reportSections, setReportSections] = useState<ReportSection[]>(createDefaultReportSections);
-  const [isReportLoading, setIsReportLoading] = useState(false);
-  const [reportLoadError, setReportLoadError] = useState<string | null>(null);
-  const [reportReloadKey, setReportReloadKey] = useState(0);
+  const [reportDraftScope, setReportDraftScope] = useState("");
   const [isSavingReport, setIsSavingReport] = useState(false);
-  const [reportSavedAt, setReportSavedAt] = useState<string | null>(null);
+  const reportQueryKey = isAdminScope
+    ? queryKeys.admin.facultySummary({
+        semesterId,
+        departmentId: selectedDepartment?.id ?? "all",
+        userId,
+      })
+    : queryKeys.lecturer.reportSummary({ semesterId, userId });
+  const reportScope = `${isAdminScope ? "admin" : "lecturer"}:${semesterId}:${selectedDepartment?.id ?? "all"}:${userId}`;
+  const reportQuery = useQuery({
+    queryKey: reportQueryKey,
+    enabled: Boolean(semesterId),
+    queryFn: () => isAdminScope
+      ? adminSemestersService.getFacultySummary(semesterId)
+      : lecturerInternshipsService.getSemesterSummary(semesterId),
+  });
+  const isReportLoading = reportQuery.isPending;
+  const reportLoadError = reportQuery.error ? getApiErrorMessage(reportQuery.error) : null;
+  const reportSavedAt = reportQuery.data?.updatedAt ?? null;
   const [activeModule, setActiveModule] = useState<ExportKind>("grades");
-  const [adminGradeSummary, setAdminGradeSummary] = useState<GradingSummaryResponse | null>(null);
-  const [attendanceSessions, setAttendanceSessions] = useState<AttendanceSessionDto[]>([]);
+  const attendanceQuery = useQuery<AttendanceSessionDto[]>({
+    queryKey: queryKeys.lecturer.attendance({
+      semesterId,
+      userId,
+      scope: "summary",
+    }),
+    enabled: Boolean(semesterId) && !isAdminScope,
+    queryFn: () => attendanceService.getLecturerSessions(semesterId),
+  });
+  const attendanceSessions = attendanceQuery.data ?? [];
   // Phân trang client-side cho bảng rà soát (bảng có thể hàng trăm sinh viên ở scope admin)
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize, setPageSize] = useState(15);
+
+  useEffect(() => {
+    if (!studentsQuery.data) return;
+    setSelectedStudentId((current) =>
+      current && students.some((student) => student.studentId === current)
+        ? current
+        : students[0]?.studentId ?? null,
+    );
+  }, [students, studentsQuery.data]);
+
+  useEffect(() => {
+    if (!reportQuery.data || reportDraftScope === reportScope) return;
+    setReportSections(loadReportSections(reportQuery.data));
+    setReportDraftScope(reportScope);
+  }, [reportDraftScope, reportQuery.data, reportScope]);
 
   const exportOptions: ExportOption[] = [
     {
@@ -168,124 +271,6 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
 
   // Chỉ chặn module "Lịch hướng dẫn" ở cổng admin (option này không hiển thị cho GV).
   // Module "Báo cáo tổng kết công tác" dùng được cho CẢ giảng viên lẫn admin — không đá tab.
-
-  useEffect(() => {
-    let cancelled = false;
-    const loadStudents = async () => {
-      if (!semesterId) {
-        setStudents([]);
-        setAdminGradeSummary(null);
-        setStudentsLoadError(null);
-        return;
-      }
-      setIsLoading(true);
-      setStudentsLoadError(null);
-      if (isAdminScope) setAdminGradeSummary(null);
-      try {
-        const rows = isAdminScope
-          ? await (async () => {
-              // Nguồn sự thật: /InternshipGrading/summary — sinh viên CÓ internship trong kỳ,
-              // scoped theo khoa của admin, kèm điểm & trạng thái nộp bài thật từ backend.
-              // (Trước đây ghép adminStudentsService.getAll + grading nên thiếu công ty,
-              //  kèm sinh viên không có thực tập, và điểm tự suy không khớp bảng chấm.)
-              const grading = await internshipGradingService.getSummary(semesterId);
-              if (!cancelled) setAdminGradeSummary(grading);
-              return grading.students.map((grade) => {
-                const openWeeks = grade.weeks ?? [];
-                const submittedOpenWeeks = openWeeks.filter((week) => week.submittedAt).length;
-                const requiredOpenWeeks = Math.max(openWeeks.length, 1);
-                const reportPercent = Math.round((submittedOpenWeeks / requiredOpenWeeks) * 80);
-                const evaluationPercent = grade.averageScore != null || grade.oralExamScore != null ? 20 : 0;
-                  return {
-                  studentId: grade.studentId,
-                  internshipId: grade.studentId,
-                  studentCode: grade.studentCode,
-                  fullName: grade.fullName,
-                  email: null,
-                  phone: null,
-                  class: grade.className || null,
-                  major: null,
-              companyId: null,
-                  companyName: grade.companyName ?? null,
-                  position: grade.position ?? null,
-                  internshipStatus: grade.internshipStatus ?? "NotStarted",
-              startDate: null,
-              endDate: null,
-                  weeklyReportCount: submittedOpenWeeks,
-                  pendingReportCount: grade.missingCount,
-                  submissionCount: submittedOpenWeeks,
-                  notes: grade.note || "",
-                  finalGrade: grade.averageScore ?? null,
-                  hasEvaluation: grade.processScore > 0 || grade.oralExamScore != null,
-                  isEvaluationFinalized: grade.averageScore != null,
-                  progressPercent: Math.min(100, reportPercent + evaluationPercent),
-              progressBreakdown: undefined,
-                  classification: grade.classification || null,
-                  isEligible: grade.isEligible,
-                  ineligibleReasons: grade.ineligibleReasons ?? [],
-                } as LecturerStudentListItemDto;
-              });
-            })()
-            : await lecturerInternshipsService.getStudents(semesterId);
-          if (!isAdminScope && !cancelled) setAdminGradeSummary(null);
-        if (!cancelled) {
-          setStudents(rows);
-          setSelectedStudentId((current) => current && rows.some((row) => row.studentId === current) ? current : rows[0]?.studentId ?? null);
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setStudentsLoadError(getApiErrorMessage(error));
-          onShowToast?.(getApiErrorMessage(error));
-        }
-      } finally {
-        if (!cancelled) setIsLoading(false);
-      }
-    };
-    void loadStudents();
-    return () => { cancelled = true; };
-  }, [isAdminScope, onShowToast, semesterId, studentsReloadKey]);
-
-  useEffect(() => {
-    if (!semesterId) {
-      setAttendanceSessions([]);
-      return;
-    }
-    void attendanceService.getLecturerSessions(semesterId).then(setAttendanceSessions).catch(() => setAttendanceSessions([]));
-  }, [semesterId]);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (!semesterId) {
-      setReportSections(createDefaultReportSections());
-      setReportSavedAt(null);
-      setReportLoadError(null);
-      setIsReportLoading(false);
-      return;
-    }
-    setIsReportLoading(true);
-    setReportLoadError(null);
-    setReportSections(createDefaultReportSections());
-    setReportSavedAt(null);
-    // Admin khoa: nội dung tổng kết CẤP KHOA (lưu theo Kỳ + Khoa, inject vào Word khi admin xuất).
-    // Giảng viên: nội dung tổng kết của nhóm hướng dẫn (lưu theo Kỳ + Giảng viên).
-    const loadSummary = isAdminScope
-      ? adminSemestersService.getFacultySummary(semesterId)
-      : lecturerInternshipsService.getSemesterSummary(semesterId);
-    void loadSummary.then((summary) => {
-      if (!cancelled) {
-        setReportSections(loadReportSections(summary));
-        setReportSavedAt(summary.updatedAt ?? null);
-      }
-    }).catch((error) => {
-      if (!cancelled) {
-        setReportLoadError(getApiErrorMessage(error));
-        onShowToast?.(getApiErrorMessage(error));
-      }
-    }).finally(() => {
-      if (!cancelled) setIsReportLoading(false);
-    });
-    return () => { cancelled = true; };
-  }, [isAdminScope, onShowToast, semesterId, reportReloadKey]);
 
   const filteredStudents = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -429,7 +414,16 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
     try {
       const notes = notesDraft.trim();
       await lecturerInternshipsService.updateStudentNotes(selectedStudent.internshipId, notes);
-      setStudents((current) => current.map((student) => student.studentId === selectedStudent.studentId ? { ...student, notes } : student));
+      queryClient.setQueryData(studentsQueryKey, (current: typeof studentsQuery.data) =>
+        current
+          ? {
+              ...current,
+              students: current.students.map((student) =>
+                student.studentId === selectedStudent.studentId ? { ...student, notes } : student,
+              ),
+            }
+          : current,
+      );
       onShowToast?.("Đã lưu nội dung bổ sung cho sinh viên.");
     } catch (error) {
       onShowToast?.(getApiErrorMessage(error));
@@ -465,7 +459,7 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
       const saved = isAdminScope
         ? await adminSemestersService.saveFacultySummary(semesterId, summaryRequest)
         : await lecturerInternshipsService.saveSemesterSummary(semesterId, summaryRequest);
-      setReportSavedAt(saved.updatedAt ?? new Date().toISOString());
+      queryClient.setQueryData(reportQueryKey, saved);
       onShowToast?.(isAdminScope ? "Đã lưu báo cáo tổng kết công tác của khoa." : "Đã lưu nội dung tổng kết của nhóm hướng dẫn.");
     } catch (error) {
       onShowToast?.(getApiErrorMessage(error));
@@ -661,7 +655,7 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
                       <p role="alert" className="text-sm font-semibold text-rose-700">{studentsLoadError}</p>
                       <button
                         type="button"
-                        onClick={() => setStudentsReloadKey((key) => key + 1)}
+                        onClick={() => void studentsQuery.refetch()}
                         className="mt-3 inline-flex min-h-9 items-center gap-2 rounded-md bg-[#026aa7] px-3 text-xs font-semibold text-white transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/30"
                       >
                         <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
@@ -806,12 +800,12 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
               </div>
               {reportSavedAt && <span className="text-[11px] text-emerald-700 font-medium">Đã lưu lúc {new Date(reportSavedAt).toLocaleString("vi-VN")}</span>}
             </div>
-            {isAdminScope && reportLoadError && (
+            {reportLoadError && (
               <div role="alert" className="flex flex-col gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2.5 text-xs text-rose-800 sm:flex-row sm:items-center sm:justify-between">
                 <span>Không thể tải nội dung báo cáo: {reportLoadError}. Nội dung chưa được tải nên chưa thể lưu.</span>
                 <button
                   type="button"
-                  onClick={() => setReportReloadKey((key) => key + 1)}
+                  onClick={() => void reportQuery.refetch()}
                   className="inline-flex min-h-9 shrink-0 items-center justify-center gap-2 rounded-md border border-rose-300 bg-white px-3 font-semibold text-rose-800 transition-colors hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
                 >
                   <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />

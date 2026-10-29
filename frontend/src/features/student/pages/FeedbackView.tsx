@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   MessageSquare,
   Send,
@@ -30,6 +31,8 @@ import {
 import { submissionApiService } from "../../../services/submissionApi.service";
 import { weeklyReportService } from "../../../services/weeklyReport.service";
 import { StudentSubPageHeader } from "../components/StudentSubPageHeader";
+import { queryKeys } from "../../../lib/queryKeys";
+import { useAuth } from "../../../hooks/useAuth";
 
 const WORKFLOW_STEPS = [
   "Nộp bài",
@@ -48,13 +51,13 @@ export const FeedbackView = ({
 }) => {
   const { profile } = useStudentPortal();
   const { selectedSemester } = useSemester();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
 
   const [activeTab, setActiveTab] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(5);
-  const [feedbacks, setFeedbacks] = useState<StudentFeedbackUiItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedFeedbackId, setSelectedFeedbackId] = useState<string | null>(
@@ -66,9 +69,14 @@ export const FeedbackView = ({
   const [uploadDescription, setUploadDescription] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
-  const loadFeedbacks = useCallback(async () => {
-    setIsLoading(true);
-    try {
+  const feedbackQuery = useQuery({
+    queryKey: queryKeys.student.feedback.list({
+      semesterId: selectedSemester?.id ?? "all",
+      userId: user?.id ?? user?.username ?? "anonymous",
+      lecturerName: profile.lecturerName,
+    }),
+    enabled: Boolean(user),
+    queryFn: async () => {
       const [submissions, reports] = await Promise.all([
         submissionApiService.getMine(),
         weeklyReportService.getMine(),
@@ -97,34 +105,28 @@ export const FeedbackView = ({
           new Date(b.sortKey).getTime() - new Date(a.sortKey).getTime(),
       );
 
-      setFeedbacks(items);
-      setSelectedFeedbackId((prev) => {
-        if (prev && items.some((i) => i.id === prev)) return prev;
-        return items[0]?.id ?? null;
-      });
-    } catch (err) {
-      onShowToast?.(getApiErrorMessage(err));
-    } finally {
-      setIsLoading(false);
-    }
-  }, [onShowToast, profile.lecturerName]);
-
-  useEffect(() => {
-    loadFeedbacks();
-  }, [loadFeedbacks]);
+      return items;
+    },
+  });
+  const feedbacks = feedbackQuery.data ?? [];
+  const isLoading = feedbackQuery.isPending;
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
-      await loadFeedbacks();
-      onShowToast?.("Đã làm mới danh sách phản hồi thành công");
+      const result = await feedbackQuery.refetch();
+      onShowToast?.(
+        result.error
+          ? `Không thể làm mới phản hồi: ${getApiErrorMessage(result.error)}`
+          : "Đã làm mới danh sách phản hồi thành công",
+      );
     } finally {
       setIsRefreshing(false);
     }
   };
 
   const selectedFeedback =
-    feedbacks.find((f) => f.id === selectedFeedbackId) ?? null;
+    feedbacks.find((f) => f.id === selectedFeedbackId) ?? feedbacks[0] ?? null;
 
   const filteredFeedbacks = feedbacks.filter((fb) => {
     const matchSearch =
@@ -154,15 +156,16 @@ export const FeedbackView = ({
       onShowToast?.(getApiErrorMessage(err));
       return;
     }
-    setFeedbacks((prev) =>
-      prev.map((f) =>
-        f.id === id && f.status === "Chưa xem"
-          ? { ...f, status: "Đã xem" }
-          : f,
-      ),
-    );
+    await invalidateFeedbackData();
     onShowToast?.("Đã đánh dấu là Đã xem!");
   };
+
+  const invalidateFeedbackData = () => Promise.all([
+    queryClient.invalidateQueries({ queryKey: queryKeys.student.feedback.all }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.student.submissions.all }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.student.weeklyReports.all }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.student.dashboardExtrasAll }),
+  ]);
 
   const handleSendReply = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -179,7 +182,7 @@ export const FeedbackView = ({
       } else {
         throw new Error("Feedback target is missing");
       }
-      await loadFeedbacks();
+      await invalidateFeedbackData();
       setReplyText("");
       onShowToast?.("Đã gửi tin nhắn phản hồi tới giảng viên!");
     } catch {
@@ -221,7 +224,7 @@ export const FeedbackView = ({
           file: selectedFile,
         },
       );
-      await loadFeedbacks();
+      await invalidateFeedbackData();
       onShowToast?.(
         `Đã tải lên tệp chỉnh sửa ${uploadVersion || "mới"} thành công!`,
       );
@@ -314,6 +317,13 @@ export const FeedbackView = ({
          ═══════════════════════════════════════════════════════════════════ */}
       {isLoading ? (
         <TableSkeleton rows={4} columns={4} />
+      ) : feedbackQuery.isError ? (
+        <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+          <p>Không thể tải phản hồi: {getApiErrorMessage(feedbackQuery.error)}</p>
+          <button type="button" onClick={() => void feedbackQuery.refetch()} className="mt-3 rounded-md border border-rose-300 bg-white px-3 py-2 text-xs font-semibold hover:bg-rose-100">
+            Thử tải lại
+          </button>
+        </div>
       ) : feedbacks.length === 0 ? (
         <div className="rounded-xl border border-slate-200/90 bg-white p-6 shadow-2xs">
           <EmptyState

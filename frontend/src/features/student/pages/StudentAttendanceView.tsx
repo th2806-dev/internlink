@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Calendar,
   Clock,
@@ -22,6 +23,8 @@ import { useStudentPortal } from "../../../contexts/StudentPortalContext";
 import { StudentSubPageHeader } from "../components/StudentSubPageHeader";
 import { attendanceService } from "../../../services/attendance.service";
 import { getApiErrorMessage } from "../../../lib/apiClient";
+import { queryKeys } from "../../../lib/queryKeys";
+import { useAuth } from "../../../hooks/useAuth";
 import { parseBackendDate } from "../../../lib/formatDateTimeVi";
 import type { StudentAttendanceOverviewDto } from "../../../types/api";
 
@@ -32,6 +35,7 @@ export const StudentAttendanceView: React.FC<{
   onShowToast?: (msg: string, type?: "success" | "error" | "info" | string) => void;
 }> = ({ onShowToast }) => {
   const { refresh: refreshProfile } = useStudentPortal();
+  const { user, isLoggedIn } = useAuth();
   const { selectedSemester, activeSemesterId } = useSemester();
 
   const attendanceSemesterId =
@@ -39,40 +43,34 @@ export const StudentAttendanceView: React.FC<{
       ? selectedSemester.id
       : activeSemesterId;
 
-  const [data, setData] = useState<StudentAttendanceOverviewDto | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [copiedSessionId, setCopiedSessionId] = useState<string | null>(null);
 
-  const loadData = useCallback(async () => {
-    if (!attendanceSemesterId) return;
-    setIsLoading(true);
-    setError(null);
-    try {
-      const res = await attendanceService.getStudentAttendance(attendanceSemesterId);
-      setData(res);
-    } catch (err) {
-      const msg = getApiErrorMessage(err);
-      setError(msg);
-      onShowToast?.(msg, "error");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [attendanceSemesterId, onShowToast]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  const attendanceQuery = useQuery<StudentAttendanceOverviewDto>({
+    queryKey: queryKeys.student.attendance.list({
+      semesterId: attendanceSemesterId ?? "none",
+      userId: user?.id ?? user?.username ?? "anonymous",
+    }),
+    enabled: isLoggedIn && Boolean(attendanceSemesterId),
+    queryFn: () => attendanceService.getStudentAttendance(attendanceSemesterId!),
+  });
+  const data = attendanceQuery.data ?? null;
+  const isLoading = attendanceQuery.isLoading;
+  const error = attendanceQuery.error
+    ? getApiErrorMessage(attendanceQuery.error)
+    : null;
 
   const handleRefresh = async () => {
-    try {
-      await refreshProfile();
-      await loadData();
+    const [profileResult, attendanceResult] = await Promise.all([
+      refreshProfile(),
+      attendanceQuery.refetch(),
+    ]);
+    void profileResult;
+    if (attendanceResult.error) {
+      onShowToast?.(getApiErrorMessage(attendanceResult.error), "error");
+    } else {
       onShowToast?.("Đã làm mới dữ liệu chuyên cần thành công", "success");
-    } catch {
-      // error handled inside loadData
     }
   };
 
@@ -81,24 +79,25 @@ export const StudentAttendanceView: React.FC<{
   const absentCount = data?.absentCount ?? 0;
   const rate = data?.attendanceRate ?? null;
 
-  const now = new Date();
+  const [now] = useState(() => new Date());
+  const sessions = data?.sessions;
 
   // Next upcoming session
   const upcomingSession = useMemo(() => {
-    if (!data?.sessions) return null;
+    if (!sessions) return null;
     return (
-      data.sessions.find((s) => parseBackendDate(s.meetingDate) >= now) ?? null
+      sessions.find((s) => parseBackendDate(s.meetingDate) >= now) ?? null
     );
-  }, [data?.sessions, now]);
+  }, [sessions, now]);
 
   // Counts for filter pills
   const counts = useMemo(() => {
-    if (!data?.sessions) return { all: 0, present: 0, absent: 0, upcoming: 0 };
+    if (!sessions) return { all: 0, present: 0, absent: 0, upcoming: 0 };
     let present = 0;
     let absent = 0;
     let upcoming = 0;
 
-    data.sessions.forEach((s) => {
+    sessions.forEach((s) => {
       const isPast = parseBackendDate(s.meetingDate) < now;
       if (!isPast) {
         upcoming++;
@@ -110,24 +109,24 @@ export const StudentAttendanceView: React.FC<{
     });
 
     return {
-      all: data.sessions.length,
+      all: sessions.length,
       present,
       absent,
       upcoming,
     };
-  }, [data?.sessions, now]);
+  }, [sessions, now]);
 
   // Filtered session list
   const filteredSessions = useMemo(() => {
-    if (!data?.sessions) return [];
-    return data.sessions.filter((s) => {
+    if (!sessions) return [];
+    return sessions.filter((s) => {
       const isPast = parseBackendDate(s.meetingDate) < now;
       if (filterStatus === "upcoming") return !isPast;
       if (filterStatus === "present") return isPast && s.status === "Present";
       if (filterStatus === "absent") return isPast && s.status !== "Present";
       return true;
     });
-  }, [data?.sessions, filterStatus, now]);
+  }, [sessions, filterStatus, now]);
 
   const copyMeetingLink = (sessionId: string, url: string) => {
     if (!navigator?.clipboard) return;

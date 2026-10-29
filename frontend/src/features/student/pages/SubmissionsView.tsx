@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
   CalendarDays,
@@ -28,6 +29,7 @@ import {
 import { useStudentPortal } from "../../../contexts/StudentPortalContext";
 import { useSemester } from "../../../contexts/SemesterContext";
 import { getApiErrorMessage } from "../../../lib/apiClient";
+import { queryKeys } from "../../../lib/queryKeys";
 import {
   mapStudentSubmissionToUpload,
   mapWeeklyReportStatusToUi,
@@ -41,6 +43,7 @@ import {
 } from "../../../services/semesterReportSchedule.service";
 import type { SubmissionDto, WeeklyReportDto } from "../../../types/api";
 import { StudentSubPageHeader } from "../components/StudentSubPageHeader";
+import { useAuth } from "../../../hooks/useAuth";
 
 type UploadItem = {
   id: string;
@@ -60,6 +63,7 @@ type UploadItem = {
 };
 
 type SubmissionLink = { label: string; url: string };
+type SubmissionPageData = { uploads: UploadItem[]; rows: SubmissionDto[] };
 
 function mapSubmissionResources(submission: SubmissionDto): UploadItem[] {
   const base = mapStudentSubmissionToUpload(submission);
@@ -173,10 +177,12 @@ export const SubmissionsView: React.FC<{
   const navigate = useNavigate();
   const { profile, internship, internshipId, refresh: refreshProfile } = useStudentPortal();
   const { selectedSemester, selectedSemesterId } = useSemester();
+  const { user, isLoggedIn } = useAuth();
+  const queryClient = useQueryClient();
+  const submissionsQueryKey = queryKeys.student.submissions.list({
+    userId: user?.id ?? user?.username ?? "anonymous",
+  });
 
-  const [evidenceDeadline, setEvidenceDeadline] = useState<SupplementalDeadline | null>(null);
-  const [uploads, setUploads] = useState<UploadItem[]>([]);
-  const [rawSubmissions, setRawSubmissions] = useState<SubmissionDto[]>([]);
   const [statusFilter, setStatusFilter] = useState("Tất cả");
   const [fileCategoryFilter, setFileCategoryFilter] = useState("Tất cả");
   const [previewUpload, setPreviewUpload] = useState<{
@@ -185,13 +191,11 @@ export const SubmissionsView: React.FC<{
     mimeType: string;
   } | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
-
-  const loadSubmissions = useCallback(async (notifyOnError = true) => {
-    setLoadError(null);
-    try {
-      setIsLoading(true);
+  const submissionsQuery = useQuery({
+    queryKey: submissionsQueryKey,
+    enabled: isLoggedIn,
+    staleTime: 3 * 60 * 1000,
+    queryFn: async (): Promise<SubmissionPageData> => {
       const [rows, weeklyReports] = await Promise.all([
         submissionApiService.getMine(),
         weeklyReportService.getMine(),
@@ -199,51 +203,72 @@ export const SubmissionsView: React.FC<{
       const nonWeeklyRows = rows.filter((submission) =>
         ["FinalReport", "Product", "Evidence"].includes(submission.type),
       );
-      setRawSubmissions(rows);
-      setUploads([
-        ...nonWeeklyRows.flatMap(mapSubmissionResources),
-        ...weeklyReports.flatMap(mapWeeklyReportResources),
-      ]);
-      return true;
-    } catch (err) {
-      const message = getApiErrorMessage(err);
-      setLoadError(message);
-      if (notifyOnError) onShowToast?.(message, "error");
+      return {
+        rows,
+        uploads: [
+          ...nonWeeklyRows.flatMap(mapSubmissionResources),
+          ...weeklyReports.flatMap(mapWeeklyReportResources),
+        ],
+      };
+    },
+  });
+  const evidenceDeadlineQuery = useQuery({
+    queryKey: queryKeys.student.evidenceDeadline(
+      selectedSemesterId,
+      user?.id ?? user?.username,
+    ),
+    enabled: isLoggedIn && Boolean(selectedSemesterId && selectedSemesterId !== "all"),
+    staleTime: 5 * 60 * 1000,
+    queryFn: () => semesterReportScheduleService.getEvidenceDeadline(selectedSemesterId!),
+  });
+  const evidenceDeadline: SupplementalDeadline | null = evidenceDeadlineQuery.data ?? null;
+  const uploads = useMemo(
+    () => submissionsQuery.data?.uploads ?? [],
+    [submissionsQuery.data?.uploads],
+  );
+  const rawSubmissions = useMemo(
+    () => submissionsQuery.data?.rows ?? [],
+    [submissionsQuery.data?.rows],
+  );
+  const isLoading = submissionsQuery.isPending;
+  const loadError = submissionsQuery.error
+    ? getApiErrorMessage(submissionsQuery.error)
+    : null;
+
+  const refetchSubmissions = submissionsQuery.refetch;
+  const loadSubmissions = useCallback(async (notifyOnError = true) => {
+    const result = await refetchSubmissions();
+    if (result.error) {
+      if (notifyOnError) onShowToast?.(getApiErrorMessage(result.error), "error");
       return false;
-    } finally {
-      setIsLoading(false);
     }
-  }, [onShowToast]);
+    return true;
+  }, [onShowToast, refetchSubmissions]);
+  const invalidateStudentDashboard = useCallback(() => {
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.student.dashboardAll,
+    });
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.student.dashboardExtrasAll,
+    });
+  }, [queryClient]);
 
   useEffect(() => () => {
     if (previewUpload?.url) URL.revokeObjectURL(previewUpload.url);
   }, [previewUpload]);
 
-  useEffect(() => {
-    loadSubmissions();
-  }, [loadSubmissions]);
-
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
       await refreshProfile();
-      await loadSubmissions();
-      onShowToast?.("Đã làm mới danh sách hồ sơ & sản phẩm thực tập", "success");
+      const refreshed = await loadSubmissions();
+      if (refreshed) {
+        onShowToast?.("Đã làm mới danh sách hồ sơ & sản phẩm thực tập", "success");
+      }
     } finally {
       setIsRefreshing(false);
     }
   };
-
-  useEffect(() => {
-    if (!selectedSemesterId || selectedSemesterId === "all") {
-      setEvidenceDeadline(null);
-      return;
-    }
-    void semesterReportScheduleService
-      .getEvidenceDeadline(selectedSemesterId)
-      .then(setEvidenceDeadline)
-      .catch(() => setEvidenceDeadline(null));
-  }, [selectedSemesterId]);
 
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showContactModal, setShowContactModal] = useState(false);
@@ -327,8 +352,15 @@ export const SubmissionsView: React.FC<{
     setCancellingSubmissionId(submission.id);
     try {
       await submissionApiService.cancel(submission.id);
-      setRawSubmissions((current) => current.filter((item) => item.id !== submission.id));
-      setUploads((current) => current.filter((item) => item.id !== submission.id));
+      queryClient.setQueryData<SubmissionPageData>(submissionsQueryKey, (current) =>
+        current
+          ? {
+              rows: current.rows.filter((item) => item.id !== submission.id),
+              uploads: current.uploads.filter((item) => item.id !== submission.id),
+            }
+          : current,
+      );
+      invalidateStudentDashboard();
       onShowToast?.("Đã hủy nộp hồ sơ và xóa tệp tải lên.", "success");
     } catch (err) {
       onShowToast?.(getApiErrorMessage(err), "error");
@@ -586,14 +618,17 @@ export const SubmissionsView: React.FC<{
           url: link.url.trim(),
         })),
       });
-      setUploads((prev) => [
-        ...mapSubmissionResources(created),
-        ...prev.filter((item) => item.id !== created.id),
-      ]);
-      setRawSubmissions((prev) => [
-        created,
-        ...prev.filter((item) => item.id !== created.id),
-      ]);
+      queryClient.setQueryData<SubmissionPageData>(submissionsQueryKey, (current) => ({
+        rows: [
+          created,
+          ...(current?.rows ?? []).filter((item) => item.id !== created.id),
+        ],
+        uploads: [
+          ...mapSubmissionResources(created),
+          ...(current?.uploads ?? []).filter((item) => item.id !== created.id),
+        ],
+      }));
+      invalidateStudentDashboard();
       setShowUploadModal(false);
       setUploadTitle("");
       setUploadNotes("");
@@ -652,13 +687,16 @@ export const SubmissionsView: React.FC<{
         description: uploadNotes.trim() || replaceTarget.notes || undefined,
         file: replaceFile,
       });
-      setUploads((prev) => [
-        ...mapSubmissionResources(updated),
-        ...prev.filter((item) => item.id !== replaceTarget.id),
-      ]);
-      setRawSubmissions((prev) =>
-        prev.map((item) => (item.id === replaceTarget.id ? updated : item)),
-      );
+      queryClient.setQueryData<SubmissionPageData>(submissionsQueryKey, (current) => ({
+        rows: (current?.rows ?? []).map((item) =>
+          item.id === replaceTarget.id ? updated : item,
+        ),
+        uploads: [
+          ...mapSubmissionResources(updated),
+          ...(current?.uploads ?? []).filter((item) => item.id !== replaceTarget.id),
+        ],
+      }));
+      invalidateStudentDashboard();
       onShowToast?.(`Đã nộp lại tệp: ${replaceTarget.title} thành công`, "success");
       setReplaceTarget(null);
       setUploadNotes("");
@@ -1465,7 +1503,9 @@ export const SubmissionsView: React.FC<{
                         : "border-amber-200 bg-amber-50 text-amber-900"
                     }`}
                   >
-                    {evidenceDeadline
+                    {evidenceDeadlineQuery.error
+                      ? `Không thể tải deadline nộp minh chứng: ${getApiErrorMessage(evidenceDeadlineQuery.error)}`
+                      : evidenceDeadline
                       ? `Có thể nộp từ sớm; hạn cuối: ${new Date(evidenceDeadline.endDate).toLocaleString("vi-VN")}${
                           evidenceWindowOpen ? " • Đang nhận" : " • Đã đóng"
                         }`

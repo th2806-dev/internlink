@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import userEvent from "@testing-library/user-event";
 import { NotificationsView } from "../features/lecturer/pages/NotificationsView";
 import { notificationService } from "../services/notification.service";
@@ -11,6 +12,10 @@ vi.mock("../services/notification.service", () => ({
     markRead: vi.fn(),
     markAllRead: vi.fn(),
   },
+}));
+
+vi.mock("../hooks/useAuth", () => ({
+  useAuth: () => ({ user: { id: "lecturer-1" }, isLoggedIn: true }),
 }));
 
 const getMine = vi.mocked(notificationService.getMine);
@@ -26,6 +31,18 @@ const notification: NotificationDto = {
   isRead: false,
   createdAt: "2026-10-07T08:00:00Z",
 };
+
+function renderView() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <NotificationsView />
+    </QueryClientProvider>,
+  );
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   getMine.mockResolvedValue([notification]);
@@ -35,7 +52,7 @@ beforeEach(() => {
 
 describe("NotificationsView lecturer", () => {
   it("does not show a banner and renders notification data from API", async () => {
-    render(<NotificationsView />);
+    renderView();
 
     expect((await screen.findAllByText("Báo cáo tuần mới")).length).toBeGreaterThan(0);
     expect(screen.queryByText("CỔNG THÔNG TIN GIẢNG VIÊN HƯỚNG DẪN")).not.toBeInTheDocument();
@@ -46,7 +63,7 @@ describe("NotificationsView lecturer", () => {
   it("does not mark a notification read locally when the API fails", async () => {
     const user = userEvent.setup();
     markRead.mockRejectedValueOnce(new Error("Không thể cập nhật"));
-    render(<NotificationsView />);
+    renderView();
 
     const item = await screen.findByRole("button", { name: /Báo cáo tuần mới/ });
     await user.click(item);
@@ -57,7 +74,7 @@ describe("NotificationsView lecturer", () => {
 
   it("shows an explicit empty state for an empty API response", async () => {
     getMine.mockResolvedValue([]);
-    render(<NotificationsView />);
+    renderView();
 
     expect(await screen.findByText("Chưa có thông báo.")).toBeInTheDocument();
     expect(screen.getByText(/sẽ hiển thị tại đây/)).toBeInTheDocument();

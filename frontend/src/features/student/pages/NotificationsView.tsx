@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
   Bell,
@@ -25,6 +26,8 @@ import {
 } from "../../../lib/portalMappers";
 import { notificationService } from "../../../services/notification.service";
 import { StudentSubPageHeader } from "../components/StudentSubPageHeader";
+import { queryKeys } from "../../../lib/queryKeys";
+import { useAuth } from "../../../hooks/useAuth";
 
 type ViewFilter =
   | "all"
@@ -36,6 +39,7 @@ type ViewFilter =
   | "faculty";
 
 type NotificationItem = StudentNotificationItem;
+const EMPTY_NOTIFICATIONS: NotificationItem[] = [];
 
 const filterLabels: Record<ViewFilter, string> = {
   all: "Tất cả",
@@ -66,48 +70,43 @@ export const NotificationsView = ({
   onNavigate?: (tab: string) => void;
 }) => {
   const { selectedSemester } = useSemester();
-
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const notificationKey = queryKeys.student.notifications.list({
+    semesterId: selectedSemester?.id ?? "all",
+    userId: user?.id ?? user?.username ?? "anonymous",
+  });
+  const notificationsQuery = useQuery({
+    queryKey: notificationKey,
+    enabled: Boolean(user),
+    queryFn: async () => (await notificationService.getMine()).map(mapNotificationDtoToStudentUi),
+  });
+  const notifications = notificationsQuery.data ?? EMPTY_NOTIFICATIONS;
+  const isLoading = notificationsQuery.isPending;
+  const error = notificationsQuery.error
+    ? getApiErrorMessage(notificationsQuery.error)
+    : null;
   const [selected, setSelected] = useState<NotificationItem | null>(null);
   const [filter, setFilter] = useState<ViewFilter>("all");
   const [search, setSearch] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isMarkingAll, setIsMarkingAll] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const loadNotifications = useCallback(async () => {
-    try {
-      setError(null);
-      const rows = await notificationService.getMine();
-      const mapped = rows.map(mapNotificationDtoToStudentUi);
-      setNotifications(mapped);
-      setSelected((prev) => {
-        if (!prev) return mapped[0] ?? null;
-        const exists = mapped.find((m) => m.id === prev.id);
-        return exists ?? mapped[0] ?? null;
-      });
-    } catch (err) {
-      setError(getApiErrorMessage(err));
-    }
-  }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    setIsLoading(true);
-    loadNotifications().finally(() => {
-      if (!cancelled) setIsLoading(false);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [loadNotifications]);
+    setSelected((current) =>
+      current ? notifications.find((item) => item.id === current.id) ?? notifications[0] ?? null : notifications[0] ?? null,
+    );
+  }, [notifications]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await loadNotifications();
+    const result = await notificationsQuery.refetch();
     setIsRefreshing(false);
-    onShowToast?.("Đã làm mới danh sách thông báo.");
+    onShowToast?.(
+      result.error
+        ? `Không thể làm mới thông báo: ${getApiErrorMessage(result.error)}`
+        : "Đã làm mới danh sách thông báo.",
+    );
   };
 
   const unreadCount = useMemo(
@@ -131,8 +130,9 @@ export const NotificationsView = ({
     if (!item.isUnread) return;
     try {
       await notificationService.markRead(item.id);
-      setNotifications((current) =>
-        current.map((entry) =>
+      queryClient.setQueryData<NotificationItem[]>(
+        notificationKey,
+        (current) => current?.map((entry) =>
           entry.id === item.id ? { ...entry, isUnread: false } : entry,
         ),
       );
@@ -149,8 +149,9 @@ export const NotificationsView = ({
     setIsMarkingAll(true);
     try {
       await notificationService.markAllRead();
-      setNotifications((current) =>
-        current.map((item) => ({ ...item, isUnread: false })),
+      queryClient.setQueryData<NotificationItem[]>(
+        notificationKey,
+        (current) => current?.map((item) => ({ ...item, isUnread: false })),
       );
       setSelected((current) =>
         current ? { ...current, isUnread: false } : current,

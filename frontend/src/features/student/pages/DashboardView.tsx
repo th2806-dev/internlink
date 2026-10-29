@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   ChevronDown,
   Table as TableIcon,
@@ -39,17 +40,14 @@ import {
 import { useStudentPortal } from "../../../contexts/StudentPortalContext";
 import { useSemester } from "../../../contexts/SemesterContext";
 import { useWeeklyReports } from "../../../hooks/useWeeklyReports";
+import { useAuth } from "../../../hooks/useAuth";
+import { queryKeys } from "../../../lib/queryKeys";
 import { calculateWeeklyReportProgress } from "../studentProgress";
 import { evaluationService } from "../../../services/evaluation.service";
 import { submissionApiService } from "../../../services/submissionApi.service";
 import {
   semesterReportScheduleService,
-  type SemesterReportScheduleDto,
 } from "../../../services/semesterReportSchedule.service";
-import type {
-  EvaluationDetailDto,
-  WeeklyQualityAverageDto,
-} from "../../../types/api";
 
 type ChartMode = "bar" | "line" | "table";
 
@@ -62,17 +60,13 @@ export const DashboardView = ({
 }) => {
   const { profile, internship, internshipId, refresh } = useStudentPortal();
   const { semesters, selectedSemester, selectSemester, activeSemesterId } = useSemester();
-  const { reports, loading: reportsLoading } = useWeeklyReports();
+  const {
+    reports,
+    loading: reportsLoading,
+    refetch: refreshReports,
+  } = useWeeklyReports();
+  const { user, isLoggedIn } = useAuth();
 
-  const [evaluation, setEvaluation] = useState<EvaluationDetailDto | null>(null);
-  const [weeklyQualityAverages, setWeeklyQualityAverages] = useState<
-    WeeklyQualityAverageDto[]
-  >([]);
-  const [weeklyQualityAveragesError, setWeeklyQualityAveragesError] = useState(false);
-  const [reportSchedules, setReportSchedules] = useState<SemesterReportScheduleDto[]>([]);
-  const [submissionComments, setSubmissionComments] = useState<
-    { id: string; title: string; comment: string; date: string }[]
-  >([]);
   const [chartMode, setChartMode] = useState<ChartMode>("bar");
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showDrawer, setShowDrawer] = useState(false);
@@ -80,86 +74,82 @@ export const DashboardView = ({
   const scheduleSemesterId =
     internship?.semesterId ?? selectedSemester?.id ?? activeSemesterId;
 
-  // Load real evaluation & submission feedbacks from API
-  const loadExtra = useCallback(async () => {
-    let weeklyAveragesLoaded = true;
-    if (internshipId) {
-      setWeeklyQualityAveragesError(false);
-      try {
-        const ev = await evaluationService.getByInternship(internshipId);
-        setEvaluation(ev);
-      } catch {
-        setEvaluation(null);
-      }
+  const extrasQuery = useQuery({
+    queryKey: queryKeys.student.dashboardExtras({
+      semesterId: scheduleSemesterId ?? "all",
+      userId: user?.id ?? user?.username,
+      internshipId: internshipId ?? null,
+    }),
+    enabled: isLoggedIn,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const [evaluationResult, averagesResult, submissionsResult, schedulesResult] =
+        await Promise.allSettled([
+          internshipId ? evaluationService.getByInternship(internshipId) : Promise.resolve(null),
+          internshipId
+            ? evaluationService.getWeeklyQualityAverages(internshipId)
+            : Promise.resolve([]),
+          submissionApiService.getMine(),
+          scheduleSemesterId
+            ? semesterReportScheduleService.getSchedules(scheduleSemesterId)
+            : Promise.resolve([]),
+        ]);
+      const submissions =
+        submissionsResult.status === "fulfilled" ? submissionsResult.value : [];
 
-      try {
-        const averages = await evaluationService.getWeeklyQualityAverages(internshipId);
-        setWeeklyQualityAverages(averages);
-        setWeeklyQualityAveragesError(false);
-      } catch {
-        setWeeklyQualityAverages([]);
-        setWeeklyQualityAveragesError(true);
-        weeklyAveragesLoaded = false;
-      }
-    } else {
-      setEvaluation(null);
-      setWeeklyQualityAverages([]);
-      setWeeklyQualityAveragesError(false);
-    }
-
-    try {
-      const subs = await submissionApiService.getMine();
-      setSubmissionComments(
-        subs.flatMap((sub) =>
-          (sub.feedbacks ?? [])
-            .filter((f) => f.isPublic)
-            .map((f) => ({
-              id: f.id,
-              title: sub.title ?? sub.type,
-              comment: f.comment,
-              date: f.createdAt,
+      return {
+        evaluation:
+          evaluationResult.status === "fulfilled" ? evaluationResult.value : null,
+        weeklyQualityAverages:
+          averagesResult.status === "fulfilled" ? averagesResult.value : [],
+        weeklyQualityAveragesError: averagesResult.status === "rejected",
+        reportSchedules:
+          schedulesResult.status === "fulfilled" ? schedulesResult.value : [],
+        submissionComments: submissions.flatMap((submission) =>
+          (submission.feedbacks ?? [])
+            .filter((feedback) => feedback.isPublic)
+            .map((feedback) => ({
+              id: feedback.id,
+              title: submission.title ?? submission.type,
+              comment: feedback.comment,
+              date: feedback.createdAt,
             })),
         ),
-      );
-    } catch {
-      setSubmissionComments([]);
-    }
-    return weeklyAveragesLoaded;
-  }, [internshipId]);
-
-  useEffect(() => {
-    loadExtra();
-  }, [loadExtra]);
-
-  // Load real semester report schedules
-  useEffect(() => {
-    let cancelled = false;
-    if (!scheduleSemesterId) {
-      setReportSchedules([]);
-      return;
-    }
-    semesterReportScheduleService
-      .getSchedules(scheduleSemesterId)
-      .then((schedules) => {
-        if (!cancelled) setReportSchedules(schedules);
-      })
-      .catch(() => {
-        if (!cancelled) setReportSchedules([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [scheduleSemesterId]);
+      };
+    },
+  });
+  const evaluation = extrasQuery.data?.evaluation ?? null;
+  const weeklyQualityAverages = useMemo(
+    () => extrasQuery.data?.weeklyQualityAverages ?? [],
+    [extrasQuery.data?.weeklyQualityAverages],
+  );
+  const weeklyQualityAveragesError =
+    extrasQuery.data?.weeklyQualityAveragesError ?? false;
+  const reportSchedules = useMemo(
+    () => extrasQuery.data?.reportSchedules ?? [],
+    [extrasQuery.data?.reportSchedules],
+  );
+  const submissionComments = useMemo(
+    () => extrasQuery.data?.submissionComments ?? [],
+    [extrasQuery.data?.submissionComments],
+  );
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
-      await refresh();
-      const weeklyAveragesLoaded = await loadExtra();
+      const [, extrasResult, reportsResult] = await Promise.all([
+        refresh(),
+        extrasQuery.refetch(),
+        refreshReports(),
+      ]);
+      const weeklyAveragesLoaded =
+        !extrasResult.error &&
+        !extrasResult.data?.weeklyQualityAveragesError &&
+        !reportsResult.error;
       onShowToast?.(
         weeklyAveragesLoaded
           ? "Đã làm mới dữ liệu thực tập thành công"
-          : "Đã làm mới dữ liệu, nhưng không tải được điểm trung bình nhóm. Hãy thử lại.",
+          : "Đã làm mới dữ liệu, nhưng một số dữ liệu không tải được. Hãy thử lại.",
         weeklyAveragesLoaded ? "success" : "error",
       );
     } finally {

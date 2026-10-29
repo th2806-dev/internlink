@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   ArchiveRestore,
@@ -15,6 +16,8 @@ import { ConfirmDialog } from "../../../components/common/ConfirmDialog";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { adminBackupsService, type BackupFile } from "../../../services/adminBackups.service";
 import type { ToastType } from "../../../contexts/ToastContext";
+import { queryKeys } from "../../../lib/queryKeys";
+import { useAuth } from "../../../hooks/useAuth";
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -40,39 +43,35 @@ export function BackupsView({
 }: {
   onShowToast: (message: string, type?: ToastType) => void;
 }) {
-  const [backups, setBackups] = useState<BackupFile[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const backupsKey = queryKeys.admin.backups.list({
+    backendRole: user?.backendRole ?? "",
+    userId: user?.id ?? user?.username ?? "anonymous",
+  });
+  const backupsQuery = useQuery({
+    queryKey: backupsKey,
+    queryFn: adminBackupsService.getAll,
+  });
+  const backups: BackupFile[] = backupsQuery.data ?? [];
+  const isLoading = backupsQuery.isFetching;
+  const loadError = backupsQuery.error
+    ? getApiErrorMessage(backupsQuery.error)
+    : null;
   const [isCreating, setIsCreating] = useState(false);
   const [busyFile, setBusyFile] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<BackupFile | null>(null);
   const [restoreTarget, setRestoreTarget] = useState<BackupFile | null>(null);
   const [restoreConfirmation, setRestoreConfirmation] = useState("");
 
-  const refresh = useCallback(async () => {
-    setIsLoading(true);
-    setLoadError(null);
-    try {
-      setBackups(await adminBackupsService.getAll());
-    } catch (error) {
-      const message = getApiErrorMessage(error);
-      setLoadError(message);
-      onShowToast(`Không thể tải danh sách bản sao lưu: ${message}`, "danger");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [onShowToast]);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
+  const refresh = () => backupsQuery.refetch();
 
   const createBackup = async () => {
     setIsCreating(true);
     try {
       const backup = await adminBackupsService.create();
       onShowToast(`Đã tạo bản sao lưu ${backup.fileName}.`, "success");
-      await refresh();
+      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.backups.all });
     } catch (error) {
       onShowToast(`Tạo bản sao lưu thất bại: ${getApiErrorMessage(error)}`, "danger");
     } finally {
@@ -98,7 +97,7 @@ export function BackupsView({
       await adminBackupsService.delete(deleteTarget.fileName);
       onShowToast(`Đã xóa bản sao lưu ${deleteTarget.fileName}.`, "success");
       setDeleteTarget(null);
-      await refresh();
+      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.backups.all });
     } catch (error) {
       onShowToast(`Xóa bản sao lưu thất bại: ${getApiErrorMessage(error)}`, "danger");
     } finally {
@@ -117,7 +116,7 @@ export function BackupsView({
       );
       setRestoreTarget(null);
       setRestoreConfirmation("");
-      await refresh();
+      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.backups.all });
     } catch (error) {
       onShowToast(`Khôi phục thất bại: ${getApiErrorMessage(error)}`, "danger");
     } finally {

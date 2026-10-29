@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest, getApiErrorMessage } from "../lib/apiClient";
 import { mapLecturerCompanySummaryToEnterprise } from "../lib/adminMappers";
 import {
@@ -8,6 +9,8 @@ import {
   mapUiWeeklyReportReviewStatusToApi,
   formatViDate,
 } from "../lib/portalMappers";
+import { queryKeys } from "../lib/queryKeys";
+import { useAuth } from "../contexts/AuthContext";
 import { lecturerCompaniesService } from "../services/lecturerCompanies.service";
 import { lecturerInternshipsService } from "../services/lecturerInternships.service";
 import { submissionApiService } from "../services/submissionApi.service";
@@ -20,12 +23,8 @@ import {
 } from "../services/semesterReportSchedule.service";
 import type { Student } from "../types/student";
 import type { Submission } from "../types/submission";
-import type { Enterprise } from "../types/enterprise";
 import type {
-  LecturerDashboardStatsDto,
   LecturerStudentListItemDto,
-  LecturerWeeklyTrendDto,
-  WeeklyReportDto,
 } from "../types/api";
 
 export interface LecturerProfileData {
@@ -36,196 +35,190 @@ export interface LecturerProfileData {
   department: string;
 }
 
+const EMPTY_REPORT_TOTALS = { total: 0, pending: 0, revision: 0, approved: 0 };
+
 export function useLecturerPortalData(
   enabled: boolean,
   lecturerName: string,
   onError?: (msg: string) => void,
   semesterId?: string | null,
 ) {
-  const [profile, setProfile] = useState<LecturerProfileData | null>(null);
-  const [schedules, setSchedules] = useState<SemesterReportScheduleDto[]>([]);
-  const [students, setStudents] = useState<Student[]>([]);
-  const [submissions, setSubmissions] = useState<Submission[]>([]);
-  const [enterprises, setEnterprises] = useState<Enterprise[]>([]);
-  const [weeklyReports, setWeeklyReports] = useState<WeeklyReportDto[]>([]);
-  const [dashboardStats, setDashboardStats] = useState<LecturerDashboardStatsDto | null>(null);
-  const [weeklyTrend, setWeeklyTrend] = useState<LecturerWeeklyTrendDto[]>([]);
-  const [isLoading, setIsLoading] = useState(enabled);
-  const [error, setError] = useState<string | null>(null);
-  const [weeklyReportPage, setWeeklyReportPage] = useState({ total: 0, skip: 0, take: 100 });
-  const [weeklyReportQuery, setWeeklyReportQuery] = useState({ status: "", searchTerm: "", skip: 0 });
-  // Tổng theo trạng thái tính trên TOÀN BỘ kỳ (server-side), không phụ thuộc trang hiện tại.
-  const [weeklyReportTotals, setWeeklyReportTotals] = useState({ total: 0, pending: 0, revision: 0, approved: 0 });
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const [weeklyReportQuery, setWeeklyReportQuery] = useState({
+    status: "",
+    searchTerm: "",
+    skip: 0,
+  });
 
-  const loadWeeklyReports = useCallback(async (query = weeklyReportQuery) => {
-    const result = await weeklyReportService.getAllForLecturer({
-      semesterId: semesterId ?? undefined,
-      skip: query.skip,
-      take: 100,
-      status: query.status || undefined,
-      searchTerm: query.searchTerm || undefined,
-    });
-    setWeeklyReportPage({ total: result.total, skip: result.skip, take: result.take });
-    setWeeklyReports(result.items);
-    return result.items;
-  }, [semesterId, weeklyReportQuery]);
+  const portalQuery = useQuery({
+    queryKey: queryKeys.lecturerPortal.data({
+      semesterId: semesterId ?? "all",
+      lecturerId: user?.id ?? user?.username ?? "",
+    }),
+    enabled,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const [
+        internships,
+        assignedStudents,
+        companies,
+        allSubmissions,
+        stats,
+        trend,
+        meOverview,
+        schedulesData,
+        absenceSummary,
+      ] = await Promise.all([
+        lecturerInternshipsService.getAll(semesterId ?? undefined),
+        lecturerInternshipsService.getStudents(semesterId ?? undefined),
+        lecturerCompaniesService.getActive(semesterId ?? undefined),
+        lecturerInternshipsService.getAllSubmissions(semesterId ?? undefined),
+        lecturerDashboardService.getStats(semesterId ?? undefined),
+        lecturerDashboardService.getWeeklyTrend(semesterId ?? undefined),
+        apiRequest<{ lecturer?: { staffCode?: string; fullName?: string; email?: string; phone?: string; department?: string } }>("/api/Lecturer/me"),
+        semesterId && semesterId !== "all"
+          ? semesterReportScheduleService.getSchedules(semesterId)
+          : Promise.resolve([] as SemesterReportScheduleDto[]),
+        semesterId && semesterId !== "all"
+          ? attendanceService.getStudentAbsenceSummary(semesterId).catch((absenceError: unknown) => {
+              onError?.(getApiErrorMessage(absenceError));
+              return null;
+            })
+          : Promise.resolve(null),
+      ]);
 
-  // Đếm tổng theo trạng thái trên server (take=1 chỉ để lấy total) — dùng cho KPI của trang Báo cáo.
-  const loadWeeklyReportTotals = useCallback(async () => {
-    if (!semesterId) {
-      setWeeklyReportTotals({ total: 0, pending: 0, revision: 0, approved: 0 });
-      return;
-    }
-    const countBy = (status: string) =>
-      weeklyReportService
-        .getAllForLecturer({ semesterId: semesterId ?? undefined, skip: 0, take: 1, status })
-        .then((res) => res.total)
-        .catch(() => 0);
-    setWeeklyReportTotals({ total: 0, pending: 0, revision: 0, approved: 0 });
-    const [allTotal, pending, revision, approved] = await Promise.all([
-      weeklyReportService
-        .getAllForLecturer({ semesterId: semesterId ?? undefined, skip: 0, take: 1 })
-        .then((res) => res.total)
-        .catch(() => 0),
-      countBy("Submitted"),
-      countBy("RevisionRequested"),
-      countBy("Approved"),
-    ]);
-    setWeeklyReportTotals({ total: allTotal, pending, revision, approved });
-  }, [semesterId]);
-
-  const load = useCallback(async () => {
-    if (!enabled) return;
-    setIsLoading(true);
-    setError(null);
-    try {
-      const [internships, assignedStudents, companies, allSubmissions, allWeeklyReports, stats, trend, meOverview, schedulesData, absenceSummary] =
-        await Promise.all([
-          lecturerInternshipsService.getAll(semesterId ?? undefined),
-          lecturerInternshipsService.getStudents(semesterId ?? undefined),
-          lecturerCompaniesService.getActive(semesterId ?? undefined),
-          lecturerInternshipsService.getAllSubmissions(semesterId ?? undefined),
-          loadWeeklyReports(),
-          lecturerDashboardService.getStats(semesterId ?? undefined),
-          lecturerDashboardService.getWeeklyTrend(semesterId ?? undefined),
-          apiRequest<{ lecturer?: { staffCode?: string; fullName?: string; email?: string; phone?: string; department?: string } }>("/api/Lecturer/me").catch(() => null),
-          semesterId && semesterId !== "all"
-            ? semesterReportScheduleService.getSchedules(semesterId).catch(() => [])
-            : Promise.resolve([] as SemesterReportScheduleDto[]),
-          semesterId && semesterId !== "all"
-            ? attendanceService.getStudentAbsenceSummary(semesterId).catch((absenceError: unknown) => {
-                onError?.(getApiErrorMessage(absenceError));
-                return null;
-              })
-            : Promise.resolve(null),
-        ]);
-      // KPI tổng theo trạng thái (server-side) — chạy nền sau khi dữ liệu chính xong
-      void loadWeeklyReportTotals().catch(() => {});
-
-      if (meOverview?.lecturer) {
-        setProfile({
-          staffCode: meOverview.lecturer.staffCode || "",
-          fullName: meOverview.lecturer.fullName || lecturerName,
-          email: meOverview.lecturer.email || "",
-          phone: meOverview.lecturer.phone || "",
-          department: meOverview.lecturer.department || "",
-        });
-      }
-      setSchedules(schedulesData ?? []);
+      const profile: LecturerProfileData | null = meOverview?.lecturer
+        ? {
+            staffCode: meOverview.lecturer.staffCode || "",
+            fullName: meOverview.lecturer.fullName || lecturerName,
+            email: meOverview.lecturer.email || "",
+            phone: meOverview.lecturer.phone || "",
+            department: meOverview.lecturer.department || "",
+          }
+        : null;
 
       const finalReportInternshipIds = new Set(
         allSubmissions
           .filter((submission) => submission.type === "FinalReport")
           .map((submission) => submission.internshipId),
       );
-      const studentRows = assignedStudents.map((item: LecturerStudentListItemDto) => ({
+      const studentRows: Student[] = assignedStudents.map((item: LecturerStudentListItemDto) => ({
         ...mapLecturerStudentDtoToStudent(item, lecturerName),
         studentId: item.studentId,
-        absentCount:
-          absenceSummary === null ? undefined : absenceSummary[item.studentId] ?? 0,
+        absentCount: absenceSummary === null ? undefined : absenceSummary[item.studentId] ?? 0,
         hasFinalReport: finalReportInternshipIds.has(item.internshipId),
       }));
 
-      const internshipCtx = new Map(
-        internships.map((i) => [
-          i.id,
+      const internshipContext = Object.fromEntries(
+        internships.map((internship) => [
+          internship.id,
           {
-            studentName: i.student?.fullName,
-            mssv: i.student?.studentCode,
-            company: i.company?.companyName,
+            studentName: internship.student?.fullName,
+            mssv: internship.student?.studentCode,
+            company: internship.company?.companyName,
           },
         ]),
       );
-
-      const submissionRows = allSubmissions.map((s) => {
-        const ctx = s.internshipId ? internshipCtx.get(s.internshipId) : undefined;
-        return mapSubmissionDtoToRow(s, ctx ?? {
+      const submissionRows = allSubmissions.map((submission) => {
+        const ctx = submission.internshipId
+          ? internshipContext[submission.internshipId]
+          : undefined;
+        return mapSubmissionDtoToRow(submission, ctx ?? {
           studentName: "—",
           mssv: "—",
           company: "—",
         });
       });
 
-      const weeklyReportRows: Submission[] = allWeeklyReports.map((report) => {
-        const ctx = internshipCtx.get(report.internshipId);
-        const submittedAt = report.submittedAt ? formatViDate(report.submittedAt) : "—";
-        return {
-          id: `weekly:${report.id}`,
-          sourceId: report.id,
-          sourceType: "weeklyReport",
-          studentName: ctx?.studentName ?? "—",
-          mssv: ctx?.mssv ?? "—",
-          avatar: "",
-          company: ctx?.company ?? "—",
-          reportType: "Báo cáo tuần",
-          time: submittedAt !== "—" ? submittedAt.split(" ").slice(1).join(" ") : "—",
-          date: submittedAt !== "—" ? submittedAt.split(" ")[0] : "—",
-          submittedAt: report.submittedAt ?? undefined,
-          status: report.status === "Submitted"
-            ? "Chờ duyệt"
-            : report.status === "RevisionRequested"
-              ? "Yêu cầu sửa"
-              : report.status === "Approved"
-                ? "Đã duyệt"
-                : mapWeeklyReportStatusToUi(report.status),
-          fileName: report.fileName ?? "",
-          fileUrl: report.fileUrl ?? "",
-          fileSize: report.fileSize ? `${(report.fileSize / (1024 * 1024)).toFixed(1)} MB` : "—",
-          summary: report.title,
-          duplicateScore: 0,
-          lecturerNote: report.lecturerComment ?? "",
-          approvedAt: report.status === "Approved" ? report.updatedAt ?? undefined : undefined,
-        };
-      });
+      return {
+        profile,
+        schedules: schedulesData,
+        students: studentRows,
+        submissions: submissionRows,
+        enterprises: companies.map(mapLecturerCompanySummaryToEnterprise),
+        internshipContext,
+        dashboardStats: stats,
+        weeklyTrend: trend,
+      };
+    },
+  });
 
-      const combinedSubmissions = [...weeklyReportRows, ...submissionRows].sort((a, b) => {
-        const timeA = a.submittedAt ? new Date(a.submittedAt).getTime() : 0;
-        const timeB = b.submittedAt ? new Date(b.submittedAt).getTime() : 0;
-        return timeB - timeA;
-      });
+  const reportsQuery = useQuery({
+    queryKey: queryKeys.lecturerReports.list({
+      semesterId: semesterId ?? "all",
+      lecturerId: user?.id ?? user?.username ?? "",
+      status: weeklyReportQuery.status,
+      searchTerm: weeklyReportQuery.searchTerm,
+      skip: weeklyReportQuery.skip,
+      take: 100,
+    }),
+    enabled,
+    staleTime: 2 * 60 * 1000,
+    queryFn: () =>
+      weeklyReportService.getAllForLecturer({
+        semesterId: semesterId ?? undefined,
+        skip: weeklyReportQuery.skip,
+        take: 100,
+        status: weeklyReportQuery.status || undefined,
+        searchTerm: weeklyReportQuery.searchTerm || undefined,
+      }),
+  });
 
-      setStudents(studentRows);
-      setSubmissions(combinedSubmissions);
-      setWeeklyReports(allWeeklyReports);
-      setEnterprises(companies.map(mapLecturerCompanySummaryToEnterprise));
-      setDashboardStats(stats);
-      setWeeklyTrend(trend);
-    } catch (err) {
-      const message = getApiErrorMessage(err);
-      setError(message);
-      onError?.(message);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [enabled, lecturerName, semesterId, onError, loadWeeklyReports, loadWeeklyReportTotals]);
+  const totalsQuery = useQuery({
+    queryKey: queryKeys.lecturerReports.totals(
+      semesterId,
+      user?.id ?? user?.username,
+    ),
+    enabled,
+    staleTime: 2 * 60 * 1000,
+    queryFn: async () => {
+      if (!semesterId || semesterId === "all") return EMPTY_REPORT_TOTALS;
+      const countBy = (status?: string) =>
+        weeklyReportService.getAllForLecturer({
+          semesterId,
+          skip: 0,
+          take: 1,
+          status,
+        }).then((result) => result.total);
+      const [total, pending, revision, approved] = await Promise.all([
+        countBy(),
+        countBy("Submitted"),
+        countBy("RevisionRequested"),
+        countBy("Approved"),
+      ]);
+      return { total, pending, revision, approved };
+    },
+  });
+
+  useEffect(() => {
+    if (portalQuery.error) onError?.(getApiErrorMessage(portalQuery.error));
+  }, [portalQuery.error, onError]);
+  useEffect(() => {
+    if (reportsQuery.error) onError?.(getApiErrorMessage(reportsQuery.error));
+  }, [reportsQuery.error, onError]);
+  useEffect(() => {
+    if (totalsQuery.error) onError?.(getApiErrorMessage(totalsQuery.error));
+  }, [totalsQuery.error, onError]);
 
   const queryWeeklyReports = useCallback((query: { status: string; searchTerm: string; skip: number }) => {
     setWeeklyReportQuery(query);
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  const refresh = useCallback(async () => {
+    await Promise.all([
+      portalQuery.refetch(),
+      reportsQuery.refetch(),
+      totalsQuery.refetch(),
+    ]);
+  }, [portalQuery, reportsQuery, totalsQuery]);
+
+  const invalidateLecturerData = useCallback(async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.lecturerPortal.all }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.lecturerReports.all }),
+    ]);
+  }, [queryClient]);
 
   const updateSubmissionStatus = useCallback(
     async (id: string, uiStatus: string, note?: string) => {
@@ -239,12 +232,13 @@ export function useLecturerPortalData(
         } else {
           await submissionApiService.review(id, uiStatus, note);
         }
+        await invalidateLecturerData();
       } catch (err) {
         onError?.(getApiErrorMessage(err));
         throw err;
       }
     },
-    [enabled, onError],
+    [enabled, invalidateLecturerData, onError],
   );
 
   const reviewWeeklyReport = useCallback(
@@ -255,30 +249,76 @@ export function useLecturerPortalData(
           status: mapUiWeeklyReportReviewStatusToApi(uiStatus),
           lecturerComment: comment?.trim() || undefined,
         });
-        await load();
+        await invalidateLecturerData();
       } catch (err) {
         onError?.(getApiErrorMessage(err));
       }
     },
-    [enabled, load, onError],
+    [enabled, invalidateLecturerData, onError],
   );
 
+  const data = portalQuery.data;
+  const weeklyReports = reportsQuery.data?.items ?? [];
+  const weeklyReportRows: Submission[] = weeklyReports.map((report) => {
+    const ctx = data?.internshipContext[report.internshipId];
+    const submittedAt = report.submittedAt ? formatViDate(report.submittedAt) : "—";
+    return {
+      id: `weekly:${report.id}`,
+      sourceId: report.id,
+      sourceType: "weeklyReport",
+      studentName: ctx?.studentName ?? "—",
+      mssv: ctx?.mssv ?? "—",
+      avatar: "",
+      company: ctx?.company ?? "—",
+      reportType: "Báo cáo tuần",
+      time: submittedAt !== "—" ? submittedAt.split(" ").slice(1).join(" ") : "—",
+      date: submittedAt !== "—" ? submittedAt.split(" ")[0] : "—",
+      submittedAt: report.submittedAt ?? undefined,
+      status: report.status === "Submitted"
+        ? "Chờ duyệt"
+        : report.status === "RevisionRequested"
+          ? "Yêu cầu sửa"
+          : report.status === "Approved"
+            ? "Đã duyệt"
+            : mapWeeklyReportStatusToUi(report.status),
+      fileName: report.fileName ?? "",
+      fileUrl: report.fileUrl ?? "",
+      fileSize: report.fileSize ? `${(report.fileSize / (1024 * 1024)).toFixed(1)} MB` : "—",
+      summary: report.title,
+      duplicateScore: 0,
+      lecturerNote: report.lecturerComment ?? "",
+      approvedAt: report.status === "Approved" ? report.updatedAt ?? undefined : undefined,
+    };
+  });
+  const submissions = [...weeklyReportRows, ...(data?.submissions ?? [])].sort((a, b) => {
+    const timeA = a.submittedAt ? new Date(a.submittedAt).getTime() : 0;
+    const timeB = b.submittedAt ? new Date(b.submittedAt).getTime() : 0;
+    return timeB - timeA;
+  });
   return {
-    profile,
-    schedules,
-    students,
+    profile: data?.profile ?? null,
+    schedules: data?.schedules ?? [],
+    students: data?.students ?? [],
     submissions,
-    enterprises,
+    enterprises: data?.enterprises ?? [],
     weeklyReports,
-    weeklyReportPage,
+    weeklyReportPage: {
+      total: reportsQuery.data?.total ?? 0,
+      skip: reportsQuery.data?.skip ?? weeklyReportQuery.skip,
+      take: reportsQuery.data?.take ?? 100,
+    },
     weeklyReportQuery,
-    weeklyReportTotals,
+    weeklyReportTotals: totalsQuery.data ?? EMPTY_REPORT_TOTALS,
     queryWeeklyReports,
-    dashboardStats,
-    weeklyTrend,
-    isLoading,
-    error,
-    refresh: load,
+    dashboardStats: data?.dashboardStats ?? null,
+    weeklyTrend: data?.weeklyTrend ?? [],
+    isLoading: portalQuery.isLoading || reportsQuery.isLoading,
+    error: portalQuery.error
+      ? getApiErrorMessage(portalQuery.error)
+      : reportsQuery.error
+        ? getApiErrorMessage(reportsQuery.error)
+        : null,
+    refresh,
     updateSubmissionStatus,
     reviewWeeklyReport,
   };

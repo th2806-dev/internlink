@@ -155,6 +155,8 @@ export function useAdminLecturersQuery(options: UseAdminLecturersQueryOptions = 
 
   const invalidate = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.admin.lecturers.all });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.admin.dashboardAll });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.admin.navStatsAll });
   }, [queryClient]);
 
   const createMutation = useMutation({

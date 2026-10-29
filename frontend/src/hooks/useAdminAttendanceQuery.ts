@@ -46,6 +46,7 @@ export function useAdminAttendanceQuery({
   // 1. Fetch department sessions
   const sessionsQueryKey = queryKeys.admin.attendance.list({
     semesterId: semId ?? "all",
+    departmentId: deptId ?? "all",
     lecturerId: lecturerFilter !== "all" ? lecturerFilter : "all",
   });
 
@@ -164,13 +165,16 @@ export function useAdminAttendanceQuery({
   }, [allSessions]);
 
   // Mutations
+  const invalidateAttendance = () => Promise.all([
+    queryClient.invalidateQueries({ queryKey: queryKeys.admin.attendance.all }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.student.attendance.all }),
+  ]);
+
   const createMutation = useMutation({
     mutationFn: (dto: CreateAttendanceSessionDto) =>
       attendanceService.createSession(dto),
     onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.admin.attendance.all,
-      });
+      void invalidateAttendance();
     },
   });
 
@@ -183,18 +187,14 @@ export function useAdminAttendanceQuery({
       dto: UpdateAttendanceSessionDto;
     }) => attendanceService.updateSession(id, dto),
     onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.admin.attendance.all,
-      });
+      void invalidateAttendance();
     },
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => attendanceService.deleteSession(id),
     onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.admin.attendance.all,
-      });
+      void invalidateAttendance();
     },
   });
 
@@ -202,9 +202,7 @@ export function useAdminAttendanceQuery({
     mutationFn: ({ id, dto }: { id: string; dto: MarkAttendanceDto }) =>
       attendanceService.markAttendance(id, dto),
     onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.admin.attendance.all,
-      });
+      void invalidateAttendance();
     },
   });
 

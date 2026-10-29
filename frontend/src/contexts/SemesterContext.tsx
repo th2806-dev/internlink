@@ -1,8 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { adminSemestersService, semesterPortalService, type BackendSemesterDto } from "../services/adminSemesters.service";
-import { adminDepartmentsService, type DepartmentDto } from "../services/adminDepartments.service";
+import { adminDepartmentsService } from "../services/adminDepartments.service";
 import { lecturerInternshipsService } from "../services/lecturerInternships.service";
 import { ApiClientError, getStoredToken } from "../lib/apiClient";
+import { queryKeys } from "../lib/queryKeys";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "./AuthContext";
 
 export interface Semester {
@@ -123,6 +125,7 @@ export function toApiDepartmentId(id: string | undefined | null): string | undef
 
 export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { role, user } = useAuth();
+  const queryClient = useQueryClient();
   const [semesters, setSemesters] = useState<Semester[]>(DEFAULT_SEMESTERS);
   const [departments, setDepartments] = useState<DepartmentOption[]>([]);
 
@@ -134,61 +137,98 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // Wait for AuthProvider to resolve the token before choosing the portal endpoint.
     if (!getStoredToken() || !role) return;
     try {
-      if (role === "admin") {
-        // Sync the semester list with the header department filter:
-        // SuperAdmin picks a department -> only that department's terms show up.
-        const backendSemesters = await adminSemestersService.getAll(
-          selectedDepartmentId && selectedDepartmentId !== "all" ? selectedDepartmentId : undefined,
-          backendRole,
-        );
-        setSemesters(backendSemesters.map(mapBackendToFrontend));
-        return;
-      }
-
-      if (role === "lecturer" && backendRole === "Lecturer") {
-        try {
-          const assigned = await lecturerInternshipsService.getAssignedSemesters().catch(() => []);
-          if (assigned.length > 0) {
-            const mapped = assigned.map((dto) => ({
-              id: dto.id,
-              name: dto.name,
-              term: dto.term,
-              academicYear: dto.academicYear,
-              startDate: dto.startDate ? new Date(dto.startDate).toLocaleDateString("vi-VN") : "—",
-              endDate: dto.endDate ? new Date(dto.endDate).toLocaleDateString("vi-VN") : "—",
-              lecturersCount: 0,
-              studentsCount: 0,
-              placedStudents: 0,
-              companiesCount: 0,
-              status: "active" as const,
-              progressPercent: 0,
-              totalWeeks: 6,
-              internshipStartWeek: 1,
-              targetStudents: 0,
-              currentPhase: "",
-              description: "",
-            }));
-            setSemesters(mapped);
-            setSelectedSemesterId((prev) => (prev && mapped.some((m) => m.id === prev) ? prev : mapped[0].id));
-            return;
+      const result = await queryClient.fetchQuery({
+        queryKey: queryKeys.semesters.list({
+          role,
+          backendRole: backendRole ?? "",
+          userId: user?.id ?? user?.username ?? "anonymous",
+          departmentId: selectedDepartmentId ?? "all",
+        }),
+        staleTime: 10 * 60 * 1000,
+        queryFn: async () => {
+          if (role === "admin") {
+            const backendSemesters = await adminSemestersService.getAll(
+              selectedDepartmentId && selectedDepartmentId !== "all"
+                ? selectedDepartmentId
+                : undefined,
+              backendRole,
+            );
+            return {
+              semesters: backendSemesters.map(mapBackendToFrontend),
+              selectedSemesterId: null,
+            };
           }
-        } catch (e) {
-          console.warn("Failed to load assigned semesters for lecturer:", e);
-        }
-      }
 
-      const currentSemester = await semesterPortalService.getCurrent().catch(() => null);
-      const mappedSemester = currentSemester ? mapBackendToFrontend(currentSemester) : null;
-      setSemesters(mappedSemester ? [mappedSemester] : []);
-      setSelectedSemesterId(mappedSemester?.id ?? "");
+          if (role === "lecturer" && backendRole === "Lecturer") {
+            try {
+              const assigned = await lecturerInternshipsService.getAssignedSemesters();
+              if (assigned.length > 0) {
+                const mapped = assigned.map((dto) => ({
+                  id: dto.id,
+                  name: dto.name,
+                  term: dto.term,
+                  academicYear: dto.academicYear,
+                  startDate: dto.startDate
+                    ? new Date(dto.startDate).toLocaleDateString("vi-VN")
+                    : "—",
+                  endDate: dto.endDate
+                    ? new Date(dto.endDate).toLocaleDateString("vi-VN")
+                    : "—",
+                  lecturersCount: 0,
+                  studentsCount: 0,
+                  placedStudents: 0,
+                  companiesCount: 0,
+                  status: "active" as const,
+                  progressPercent: 0,
+                  totalWeeks: 6,
+                  internshipStartWeek: 1,
+                  targetStudents: 0,
+                  currentPhase: "",
+                  description: "",
+                }));
+                return {
+                  semesters: mapped,
+                  selectedSemesterId: mapped[0]?.id ?? "",
+                };
+              }
+            } catch (error) {
+              console.warn("Failed to load assigned semesters for lecturer:", error);
+            }
+          }
+
+          const currentSemester = await semesterPortalService.getCurrent().catch(() => null);
+          const mappedSemester = currentSemester
+            ? mapBackendToFrontend(currentSemester)
+            : null;
+          return {
+            semesters: mappedSemester ? [mappedSemester] : [],
+            selectedSemesterId: mappedSemester?.id ?? "",
+          };
+        },
+      });
+      setSemesters(result.semesters);
+      if (result.selectedSemesterId !== null) {
+        setSelectedSemesterId((previous) =>
+          role === "lecturer" && previous && result.semesters.some((item) => item.id === previous)
+            ? previous
+            : result.selectedSemesterId ?? "",
+        );
+      }
     } catch (err) {
       console.warn("Error refreshing semester API counts:", err);
     }
-  }, [role, selectedDepartmentId, backendRole]);
+  }, [role, selectedDepartmentId, backendRole, queryClient, user]);
 
   useEffect(() => {
     void refreshApiCounts();
   }, [refreshApiCounts]);
+
+  const refreshSemesterCache = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: queryKeys.semesters.all });
+    await queryClient.invalidateQueries({ queryKey: queryKeys.admin.dashboardAll });
+    await queryClient.invalidateQueries({ queryKey: queryKeys.admin.navStatsAll });
+    await refreshApiCounts();
+  }, [queryClient, refreshApiCounts]);
 
   useEffect(() => {
     try {
@@ -230,37 +270,52 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
 
       try {
-        if (user?.backendRole === "DepartmentAdmin" && user.departmentId) {
-          const dept = await adminDepartmentsService.getById(user.departmentId, user.backendRole);
-          if (!cancelled) {
-            setDepartments([
-              {
-                id: dept.id,
-                name: dept.name,
-                code: dept.code,
-                description: dept.description,
-                isActive: dept.isActive,
-              },
-            ]);
-            setSelectedDepartmentId(dept.id);
-          }
-          return;
-        }
+        const result = await queryClient.fetchQuery({
+          queryKey: queryKeys.departments.list({
+            backendRole: user?.backendRole ?? "",
+            userId: user?.id ?? user?.username ?? "anonymous",
+          }),
+          staleTime: 10 * 60 * 1000,
+          queryFn: async () => {
+            if (user?.backendRole === "DepartmentAdmin" && user.departmentId) {
+              const dept = await adminDepartmentsService.getById(
+                user.departmentId,
+                user.backendRole,
+              );
+              return {
+                departments: [{
+                  id: dept.id,
+                  name: dept.name,
+                  code: dept.code,
+                  description: dept.description,
+                  isActive: dept.isActive,
+                }],
+                departmentId: dept.id,
+              };
+            }
 
-        const backendDepartments = await adminDepartmentsService.getAll(user?.backendRole);
+            const backendDepartments = await adminDepartmentsService.getAll(
+              user?.backendRole,
+            );
+            return {
+              departments: backendDepartments
+                .filter((department) => department.isActive)
+                .map((department) => ({
+                  id: department.id,
+                  name: department.name,
+                  code: department.code,
+                  description: department.description,
+                  isActive: department.isActive,
+                })),
+              departmentId: null,
+            };
+          },
+        });
         if (!cancelled) {
-          const visibleDepartments = backendDepartments
-            .filter((d) => d.isActive)
-            .map((d) => ({
-              id: d.id,
-              name: d.name,
-              code: d.code,
-              description: d.description,
-              isActive: d.isActive,
-            }));
-
-          setDepartments(visibleDepartments);
-          setSelectedDepartmentId((prev) => (prev && prev !== "all" ? prev : "all"));
+          setDepartments(result.departments);
+          setSelectedDepartmentId((previous) =>
+            result.departmentId ?? (previous && previous !== "all" ? previous : "all"),
+          );
         }
       } catch (err) {
         console.warn("Error loading departments for admin header filter:", err);
@@ -275,7 +330,7 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return () => {
       cancelled = true;
     };
-  }, [role, user?.backendRole, user?.departmentId]);
+  }, [role, user?.backendRole, user?.departmentId, user?.id, user?.username, queryClient]);
 
   const activeSemesterId = semesters.find((s) => s.status === "active")?.id ?? "";
 
@@ -367,6 +422,7 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const mapped = mapBackendToFrontend(res);
       setSemesters((prev) => [mapped, ...prev]);
       setSelectedSemesterId(mapped.id);
+      await refreshSemesterCache();
       return;
     } catch (err) {
       console.warn("Backend create semester failed:", err);
@@ -393,6 +449,7 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       });
       const mapped = mapBackendToFrontend(updated);
       setSemesters((prev) => prev.map((semester) => (semester.id === id ? mapped : semester)));
+      await refreshSemesterCache();
       onShowToast?.(`Đã cập nhật kỳ thực tập: "${mapped.name}".`);
       return true;
     } catch (err) {
@@ -425,6 +482,7 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     });
 
     setSemesters(updated);
+    await refreshSemesterCache();
 
     // Auto-switch to next active or upcoming semester
     const next =
@@ -449,6 +507,7 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const mapped = mapBackendToFrontend(started);
       setSemesters((prev) => prev.map((semester) => semester.id === id ? mapped : semester));
       setSelectedSemesterId(id);
+      await refreshSemesterCache();
       onShowToast?.(`Đã bắt đầu kỳ thực tập: "${mapped.name}".`);
     } catch (err) {
       if (err instanceof ApiClientError && err.status === 409) {
@@ -466,6 +525,7 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const mapped = mapBackendToFrontend(reopened);
       setSemesters((prev) => prev.map((semester) => semester.id === id ? mapped : semester));
       setSelectedSemesterId(id);
+      await refreshSemesterCache();
       onShowToast?.(`Đã mở lại kỳ thực tập: "${mapped.name}". Tài khoản sinh viên và giảng viên thuộc kỳ đã được kích hoạt.`);
     } catch (err) {
       if (err instanceof ApiClientError && err.status === 409) {

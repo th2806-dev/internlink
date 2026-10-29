@@ -116,16 +116,12 @@ export function useLecturerReportsQuery(options: UseLecturerReportsQueryOptions 
     // Giữ dữ liệu trang cũ (mờ nhẹ) cho đến khi trang mới về → không giật màn hình trắng.
     placeholderData: keepPreviousData,
     enabled,
-    refetchInterval: 10_000,
-    refetchIntervalInBackground: false,
   });
 
   const totalsQuery = useQuery({
     queryKey: queryKeys.lecturerReports.totals(semesterId),
     queryFn: ({ signal }) => fetchTotals(semesterId, signal),
     enabled,
-    refetchInterval: 10_000,
-    refetchIntervalInBackground: false,
   });
 
   const reviewMutation = useMutation({
@@ -138,6 +134,7 @@ export function useLecturerReportsQuery(options: UseLecturerReportsQueryOptions 
     onSuccess: () => {
       // Auto sync: làm mới toàn bộ namespace báo cáo và điểm thực tập → bảng cập nhật ngay, không cần F5.
       void queryClient.invalidateQueries({ queryKey: queryKeys.lecturerReports.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.lecturer.analyticsAll });
       void queryClient.invalidateQueries({ queryKey: ["internship-grading"] });
       onReviewed?.();
     },

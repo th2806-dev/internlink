@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ClipboardCheck,
   RefreshCw,
@@ -27,6 +28,27 @@ import {
   CircleHelp,
 } from "lucide-react";
 import { useSemester } from "../../../contexts/SemesterContext";
+import { queryKeys } from "../../../lib/queryKeys";
+import { useAuth } from "../../../hooks/useAuth";
+
+async function invalidateGradeQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  semesterId?: string | null,
+) {
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: queryKeys.lecturer.analyticsAll }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.lecturer.evaluations.all }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.lecturer.summary({}) }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.admin.summary({}) }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.admin.gradingSummary() }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.student.evaluation.all }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.student.dashboardAll }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.student.dashboardExtrasAll }),
+    ...(semesterId
+      ? [queryClient.invalidateQueries({ queryKey: queryKeys.lecturerPortal.stats(semesterId) })]
+      : []),
+  ]);
+}
 import {
   semesterReportScheduleService,
   type SemesterReportScheduleDto,
@@ -104,6 +126,8 @@ interface DraftRow {
   isSubmissionOpen: boolean;
   allowLateSubmission: boolean;
 }
+const EMPTY_REPORT_SCHEDULES: SemesterReportScheduleDto[] = [];
+const EMPTY_STUDENTS: StudentGrade[] = [];
 
 export function ScheduleConfigTab({
   onShowToast,
@@ -120,56 +144,65 @@ export function ScheduleConfigTab({
       : activeSemesterId
   );
 
-  const [schedules, setSchedules] = useState<SemesterReportScheduleDto[]>([]);
+  const queryClient = useQueryClient();
+  const schedulesKey = queryKeys.lecturer.schedules.list({ semesterId });
+  const [mutationError, setMutationError] = useState<string | null>(null);
+  const defaultsGenerationAttemptedFor = useRef<string | null>(null);
+  const {
+    mutate: generateDefaults,
+    isPending: isGeneratingDefaults,
+    reset: resetDefaultsGeneration,
+  } = useMutation({
+    mutationFn: (id: string) => semesterReportScheduleService.generateDefaults(id),
+    onSuccess: (generatedSchedules) => {
+      queryClient.setQueryData(schedulesKey, generatedSchedules);
+    },
+    onError: (err: unknown) => setMutationError(getApiErrorMessage(err)),
+  });
+  const schedulesQuery = useQuery({
+    queryKey: schedulesKey,
+    enabled: Boolean(semesterId),
+    queryFn: () => semesterReportScheduleService.getSchedules(semesterId),
+  });
+  const schedules: SemesterReportScheduleDto[] = schedulesQuery.data ?? EMPTY_REPORT_SCHEDULES;
   const [drafts, setDrafts] = useState<Record<number, DraftRow>>({});
-  const [isLoading, setIsLoading] = useState(true);
+  const isLoading = schedulesQuery.isPending || isGeneratingDefaults;
   const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const error = mutationError ?? (schedulesQuery.error ? getApiErrorMessage(schedulesQuery.error) : null);
   const [dirtyWeeks, setDirtyWeeks] = useState<Set<number>>(new Set());
   const [now] = useState(() => new Date());
 
-  const load = useCallback(async () => {
-    if (!semesterId) {
-      setSchedules([]);
-      setDrafts({});
-      setError(null);
-      setIsLoading(false);
-      return;
-    }
-    setIsLoading(true);
-    setError(null);
-    try {
-      let data = await semesterReportScheduleService.getSchedules(semesterId);
-      if (data.length === 0 && !isSemesterClosed) {
-        data = await semesterReportScheduleService.generateDefaults(semesterId);
-      }
-      setSchedules(data);
-      setDrafts(
-        Object.fromEntries(
-          data.map((s) => [
-            s.weekNumber,
-            {
-              startDate: toDateTimeLocalValue(s.startDate),
-              dueDate: toDateTimeLocalValue(s.dueDate),
-              isSubmissionOpen: s.isSubmissionOpen,
-              allowLateSubmission: s.allowLateSubmission,
-            } satisfies DraftRow,
-          ])
-        )
-      );
-      setDirtyWeeks(new Set());
-    } catch (err) {
-      const msg = getApiErrorMessage(err);
-      setError(msg);
-      onShowToast?.(msg, "error");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [isSemesterClosed, semesterId, onShowToast]);
+  useEffect(() => {
+    if (
+      !semesterId ||
+      isSemesterClosed ||
+      schedulesQuery.data?.length !== 0 ||
+      defaultsGenerationAttemptedFor.current === semesterId
+    ) return;
+
+    defaultsGenerationAttemptedFor.current = semesterId;
+    generateDefaults(semesterId);
+  }, [
+    generateDefaults,
+    isSemesterClosed,
+    schedulesQuery.data,
+    semesterId,
+  ]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (!schedulesQuery.data || dirtyWeeks.size > 0) return;
+    setDrafts(Object.fromEntries(schedulesQuery.data.map((schedule) => [
+      schedule.weekNumber,
+      {
+        startDate: toDateTimeLocalValue(schedule.startDate),
+        dueDate: toDateTimeLocalValue(schedule.dueDate),
+        isSubmissionOpen: schedule.isSubmissionOpen,
+        allowLateSubmission: schedule.allowLateSubmission,
+      } satisfies DraftRow,
+    ])));
+    setDirtyWeeks(new Set());
+    setMutationError(null);
+  }, [dirtyWeeks.size, schedulesQuery.data]);
 
   const updateDraft = (weekNumber: number, patch: Partial<DraftRow>) => {
     setDrafts((prev) => ({ ...prev, [weekNumber]: { ...prev[weekNumber], ...patch } }));
@@ -195,10 +228,11 @@ export function ScheduleConfigTab({
         ok++;
       }
       onShowToast?.(`Đã lưu cấu hình cho ${ok} báo cáo.`, "success");
-      await load();
+      setDirtyWeeks(new Set());
+      await queryClient.invalidateQueries({ queryKey: schedulesKey });
     } catch (err) {
       const msg = getApiErrorMessage(err);
-      setError(msg);
+      setMutationError(msg);
       onShowToast?.(msg, "error");
     } finally {
       setIsSaving(false);
@@ -242,8 +276,13 @@ export function ScheduleConfigTab({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => void load()}
-              disabled={isLoading}
+              onClick={() => {
+                defaultsGenerationAttemptedFor.current = null;
+                resetDefaultsGeneration();
+                setMutationError(null);
+                void schedulesQuery.refetch();
+              }}
+                disabled={schedulesQuery.isFetching || isGeneratingDefaults}
               className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-slate-300 px-4 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:opacity-50"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} /> Tải lại
@@ -395,14 +434,25 @@ function GradingTab({
   onShowToast?: (msg: string, type?: string) => void;
 }) {
   const { activeSemesterId, selectedSemester } = useSemester();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const isSemesterClosed = selectedSemester?.status === "completed";
   const semesterId = selectedSemester?.id && selectedSemester.id !== "all"
     ? selectedSemester.id
     : activeSemesterId;
 
-  const [students, setStudents] = useState<StudentGrade[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const summaryKey = queryKeys.lecturer.evaluations.summary({
+    semesterId,
+    userId: user?.id ?? user?.username ?? "anonymous",
+  });
+  const summaryQuery = useQuery({
+    queryKey: summaryKey,
+    enabled: Boolean(semesterId),
+    queryFn: () => internshipGradingService.getSummary(semesterId),
+  });
+  const students: StudentGrade[] = summaryQuery.data?.students ?? EMPTY_STUDENTS;
+  const isLoading = summaryQuery.isPending;
+  const error = summaryQuery.error ? getApiErrorMessage(summaryQuery.error) : null;
   const [search, setSearch] = useState("");
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -438,32 +488,14 @@ function GradingTab({
     };
   }, [employerProofPreview?.url]);
 
-  const load = useCallback(async () => {
-    if (!semesterId) {
-      setStudents([]);
-      setError(null);
-      setIsLoading(false);
-      return;
-    }
-    setIsLoading(true);
-    setError(null);
-    setStudents([]);
-    setSelectedId(null);
-    try {
-      const data = await internshipGradingService.getSummary(semesterId);
-      setStudents(data.students);
-    } catch (err) {
-      const msg = getApiErrorMessage(err);
-      setError(msg);
-      onShowToast?.(msg, "error");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [semesterId, onShowToast]);
-
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (!summaryQuery.data) return;
+    setSelectedId((current) =>
+      current && summaryQuery.data.students.some((student) => student.studentId === current)
+        ? current
+        : summaryQuery.data.students[0]?.studentId ?? null,
+    );
+  }, [summaryQuery.data]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -536,7 +568,17 @@ function GradingTab({
         hasCreativeProduct: selected.hasCreativeProduct,
         oralExamScore: eligibleOral,
       });
-      setStudents((prev) => prev.map((s) => (s.studentId === updated.studentId ? updated : s)));
+      queryClient.setQueryData<GradingSummaryResponse>(summaryKey, (current) =>
+        current
+          ? {
+              ...current,
+              students: current.students.map((student) =>
+                student.studentId === updated.studentId ? updated : student,
+              ),
+            }
+          : current,
+      );
+      await invalidateGradeQueries(queryClient, semesterId);
       onShowToast?.(`Đã lưu điểm cho ${updated.fullName}.`, "success");
     } catch (err) {
       const msg = getApiErrorMessage(err);
@@ -633,8 +675,8 @@ function GradingTab({
               </div>
               <button
                 type="button"
-                onClick={() => void load()}
-                disabled={isLoading}
+                onClick={() => void summaryQuery.refetch()}
+                disabled={summaryQuery.isFetching}
                 aria-label="Làm mới danh sách sinh viên"
                 className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-slate-300 text-slate-600 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:opacity-50"
               >
@@ -650,7 +692,7 @@ function GradingTab({
           ) : error ? (
             <div className="space-y-3 py-10 text-center text-xs text-rose-700" role="alert">
               <p>Không thể tải danh sách sinh viên: {error}</p>
-              <button type="button" onClick={() => void load()} className="min-h-11 rounded-lg bg-[#026aa7] px-4 font-semibold text-white hover:bg-[#025a8e]">Thử lại</button>
+              <button type="button" onClick={() => void summaryQuery.refetch()} className="min-h-11 rounded-lg bg-[#026aa7] px-4 font-semibold text-white hover:bg-[#025a8e]">Thử lại</button>
             </div>
           ) : !semesterId ? (
             <div className="space-y-2 py-10 text-center text-xs text-slate-500">
@@ -1094,62 +1136,44 @@ function SummaryTab({
   onShowToast?: (msg: string, type?: string) => void;
 }) {
   const { activeSemesterId, selectedSemester } = useSemester();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const isSemesterClosed = selectedSemester?.status === "completed";
   const semesterId = selectedSemester?.id && selectedSemester.id !== "all"
     ? selectedSemester.id
     : activeSemesterId;
 
-  const [students, setStudents] = useState<StudentGrade[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const summaryKey = queryKeys.lecturer.evaluations.summary({
+    semesterId,
+    userId: user?.id ?? user?.username ?? "anonymous",
+  });
+  const summaryQuery = useQuery({
+    queryKey: summaryKey,
+    enabled: Boolean(semesterId),
+    queryFn: () => internshipGradingService.getSummary(semesterId),
+  });
+  const data = summaryQuery.data ?? null;
+  const students: StudentGrade[] = data?.students ?? EMPTY_STUDENTS;
+  const isLoading = summaryQuery.isPending;
   const [isExporting, setIsExporting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const error = summaryQuery.error ? getApiErrorMessage(summaryQuery.error) : null;
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "finalized" | "pending">("all");
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize, setPageSize] = useState(15);
   const [oralDrafts, setOralDrafts] = useState<Record<string, string>>({});
   const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
+  const [draftSemesterId, setDraftSemesterId] = useState("");
   // Lịch tuần của kỳ (từ API summary) — nguồn cho header cột T1..TN đúng số tuần
-  const [data, setData] = useState<GradingSummaryResponse | null>(null);
-
-  const load = useCallback(async () => {
-    if (!semesterId) {
-      setData(null);
-      setStudents([]);
-      setOralDrafts({});
-      setError(null);
-      setIsLoading(false);
-      return;
-    }
-    setIsLoading(true);
-    setError(null);
-    setData(null);
-    setStudents([]);
-    setOralDrafts({});
-    try {
-      const data = await internshipGradingService.getSummary(semesterId);
-      setData(data);
-      setStudents(data.students);
-      setOralDrafts(
-        Object.fromEntries(
-          data.students.map((s) => [
-            s.studentId,
-            s.oralExamScore != null ? String(s.oralExamScore) : "",
-          ])
-        )
-      );
-    } catch (err) {
-      const msg = getApiErrorMessage(err);
-      setError(msg);
-      onShowToast?.(msg, "error");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [semesterId, onShowToast]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (!data || draftSemesterId === semesterId) return;
+    setOralDrafts(Object.fromEntries(data.students.map((student) => [
+      student.studentId,
+      student.oralExamScore != null ? String(student.oralExamScore) : "",
+    ])));
+    setDraftSemesterId(semesterId);
+  }, [data, draftSemesterId, semesterId]);
 
   const schedule = useMemo(() => data?.schedule ?? [], [data]);
   const rowPreview = useMemo(() => {
@@ -1230,7 +1254,17 @@ function SummaryTab({
         hasCreativeProduct: students.find((s) => s.studentId === studentId)?.hasCreativeProduct ?? false,
         oralExamScore: num,
       });
-      setStudents((prev) => prev.map((s) => (s.studentId === updated.studentId ? updated : s)));
+      queryClient.setQueryData<GradingSummaryResponse>(summaryKey, (current) =>
+        current
+          ? {
+              ...current,
+              students: current.students.map((student) =>
+                student.studentId === updated.studentId ? updated : student,
+              ),
+            }
+          : current,
+      );
+      await invalidateGradeQueries(queryClient, semesterId);
     } catch (err) {
       onShowToast?.(getApiErrorMessage(err), "error");
     } finally {
@@ -1308,7 +1342,7 @@ function SummaryTab({
             </select>
             <button
               type="button"
-              onClick={() => void load()}
+              onClick={() => void summaryQuery.refetch()}
               disabled={isLoading}
               aria-label="Làm mới bảng điểm"
               title="Làm mới"
@@ -1517,48 +1551,48 @@ type SemesterComparisonRow = {
 
 function SemesterComparisonTab() {
   const { activeSemesterId } = useSemester();
-  const [semesters, setSemesters] = useState<LecturerSemesterOptionDto[]>([]);
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const userId = user?.id ?? user?.username ?? "anonymous";
+  const semestersQuery = useQuery({
+    queryKey: queryKeys.lecturer.assignedSemesters(userId),
+    enabled: Boolean(user),
+    staleTime: 10 * 60 * 1000,
+    queryFn: () => lecturerInternshipsService.getAssignedSemesters(),
+  });
+  const semesters: LecturerSemesterOptionDto[] = semestersQuery.data ?? [];
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [rows, setRows] = useState<SemesterComparisonRow[]>([]);
-  const [isLoadingSemesters, setIsLoadingSemesters] = useState(true);
-  const [isLoadingResults, setIsLoadingResults] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const isLoadingSemesters = semestersQuery.isPending;
+  const loadError = semestersQuery.error ? getApiErrorMessage(semestersQuery.error) : null;
 
   useEffect(() => {
-    let cancelled = false;
-    void lecturerInternshipsService.getAssignedSemesters()
-      .then((items) => {
-        if (cancelled) return;
-        setSemesters(items);
-        const activeIndex = items.findIndex((item) => item.id === activeSemesterId);
-        const ordered = activeIndex < 0
-          ? items
-          : [items[activeIndex], ...items.filter((item) => item.id !== activeSemesterId)];
-        setSelectedIds(ordered.slice(0, 3).map((item) => item.id));
-        setLoadError(null);
-      })
-      .catch((error) => {
-        if (!cancelled) setLoadError(getApiErrorMessage(error));
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoadingSemesters(false);
-      });
-    return () => { cancelled = true; };
-  }, [activeSemesterId]);
+    if (!semestersQuery.data) return;
+    const activeIndex = semestersQuery.data.findIndex((item) => item.id === activeSemesterId);
+    const ordered = activeIndex < 0
+      ? semestersQuery.data
+      : [semestersQuery.data[activeIndex], ...semestersQuery.data.filter((item) => item.id !== activeSemesterId)];
+    setSelectedIds((current) => current.length > 0
+      ? current.filter((id) => semestersQuery.data.some((semester) => semester.id === id))
+      : ordered.slice(0, 3).map((item) => item.id));
+  }, [activeSemesterId, semestersQuery.data]);
 
-  useEffect(() => {
-    let cancelled = false;
-    const selected = semesters.filter((semester) => selectedIds.includes(semester.id));
-    if (selected.length === 0) {
-      setRows([]);
-      setIsLoadingResults(false);
-      return;
-    }
-
-    setIsLoadingResults(true);
-    void Promise.all(selected.map(async (semester): Promise<SemesterComparisonRow> => {
+  const selected = semesters.filter((semester) => selectedIds.includes(semester.id));
+  const comparisonQuery = useQuery({
+    queryKey: queryKeys.lecturer.summary({
+      semesterIds: [...selectedIds].sort(),
+      userId,
+      scope: "semester-comparison",
+    }),
+    enabled: selected.length > 0,
+    queryFn: () => Promise.all(selected.map(async (semester): Promise<SemesterComparisonRow> => {
       try {
-        const summary = await internshipGradingService.getSummary(semester.id);
+        const summary = await queryClient.fetchQuery({
+          queryKey: queryKeys.lecturer.evaluations.summary({
+            semesterId: semester.id,
+            userId,
+          }),
+          queryFn: () => internshipGradingService.getSummary(semester.id),
+        });
         const graded = summary.students
           .map((student) => student.averageScore)
           .filter((score): score is number => score != null && Number.isFinite(score));
@@ -1588,14 +1622,10 @@ function SemesterComparisonTab() {
           error: getApiErrorMessage(error),
         };
       }
-    })).then((results) => {
-      if (!cancelled) setRows(results);
-    }).finally(() => {
-      if (!cancelled) setIsLoadingResults(false);
-    });
-
-    return () => { cancelled = true; };
-  }, [semesters, selectedIds]);
+    })),
+  });
+  const rows = comparisonQuery.data ?? [];
+  const isLoadingResults = comparisonQuery.isFetching;
 
   const toggleSemester = (semesterId: string) => {
     setSelectedIds((current) => {

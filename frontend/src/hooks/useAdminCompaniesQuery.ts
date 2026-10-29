@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import {
   useQuery,
   useMutation,
@@ -31,6 +31,11 @@ export function useAdminCompaniesQuery({
   debounceMs = COMPANIES_SEARCH_DEBOUNCE_MS,
 }: UseAdminCompaniesQueryOptions = {}) {
   const queryClient = useQueryClient();
+  const invalidateCompanies = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.admin.companies.all });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.admin.dashboardAll });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.admin.navStatsAll });
+  }, [queryClient]);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [page, setPage] = useState(initialPage);
@@ -91,11 +96,7 @@ export function useAdminCompaniesQuery({
   const createMutation = useMutation({
     mutationFn: (body: Parameters<typeof adminCompaniesService.create>[0]) =>
       adminCompaniesService.create(body),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.admin.companies.all,
-      });
-    },
+    onSuccess: invalidateCompanies,
   });
 
   const updateMutation = useMutation({
@@ -106,20 +107,12 @@ export function useAdminCompaniesQuery({
       id: string;
       body: Parameters<typeof adminCompaniesService.update>[1];
     }) => adminCompaniesService.update(id, body),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.admin.companies.all,
-      });
-    },
+    onSuccess: invalidateCompanies,
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => adminCompaniesService.delete(id),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.admin.companies.all,
-      });
-    },
+    onSuccess: invalidateCompanies,
   });
 
   const setSemesterLinkMutation = useMutation({
@@ -132,11 +125,7 @@ export function useAdminCompaniesQuery({
       semId: string;
       isLinked: boolean;
     }) => adminCompaniesService.setSemesterLink(id, semId, isLinked),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.admin.companies.all,
-      });
-    },
+    onSuccess: invalidateCompanies,
   });
 
   const handleSetSearch = (val: string) => {

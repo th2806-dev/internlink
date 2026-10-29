@@ -15,17 +15,20 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useSemester } from "../../../contexts/SemesterContext";
 import { useStudentPortal } from "../../../contexts/StudentPortalContext";
 import { getApiErrorMessage } from "../../../lib/apiClient";
+import { queryKeys } from "../../../lib/queryKeys";
+import { useAuth } from "../../../hooks/useAuth";
 import { computeGrade } from "../../../lib/gradingRules";
 import { getOpenWeeklyReportWeeks } from "../studentProgress";
 import { evaluationService } from "../../../services/evaluation.service";
 import { semesterReportScheduleService, type SemesterReportScheduleDto } from "../../../services/semesterReportSchedule.service";
 import { submissionApiService } from "../../../services/submissionApi.service";
 import { weeklyReportService } from "../../../services/weeklyReport.service";
-import type { EvaluationDetailDto, SubmissionAssetDto, SubmissionDto, WeeklyReportDto } from "../../../types/api";
+import type { SubmissionAssetDto, SubmissionDto, WeeklyReportDto } from "../../../types/api";
 import { StudentSubPageHeader } from "../components/StudentSubPageHeader";
 
 type EvidencePhotoProps = {
@@ -33,48 +36,56 @@ type EvidencePhotoProps = {
   asset: SubmissionAssetDto;
   onPreview: (photo: { url: string; fileName: string }) => void;
 };
+const EMPTY_WEEKLY_REPORTS: WeeklyReportDto[] = [];
+const EMPTY_SUBMISSIONS: SubmissionDto[] = [];
+const EMPTY_SCHEDULES: SemesterReportScheduleDto[] = [];
+const EMPTY_LOAD_ERRORS: string[] = [];
 
 const EvidencePhoto = ({ submissionId, asset, onPreview }: EvidencePhotoProps) => {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
   const fileName = asset.fileName || asset.label || "Ảnh minh chứng";
+  const assetQuery = useQuery({
+    queryKey: queryKeys.student.evidenceAsset(
+      submissionId,
+      asset.id,
+      user?.id ?? user?.username,
+    ),
+    enabled: Boolean(user),
+    staleTime: 20 * 60 * 1000,
+    queryFn: async () => {
+      const { blob } = await submissionApiService.downloadAsset(
+        submissionId,
+        asset.id,
+        fileName,
+        false,
+      );
+      return blob;
+    },
+  });
 
   useEffect(() => {
-    let cancelled = false;
-    let objectUrl: string | null = null;
-    setImageUrl(null);
-    setError(null);
-
-    void submissionApiService
-      .downloadAsset(submissionId, asset.id, fileName, false)
-      .then(({ blob }) => {
-        objectUrl = URL.createObjectURL(blob);
-        if (cancelled) {
-          URL.revokeObjectURL(objectUrl);
-        } else {
-          setImageUrl(objectUrl);
-        }
-      })
-      .catch((downloadError: unknown) => {
-        if (!cancelled) setError(getApiErrorMessage(downloadError));
-      });
-
+    if (!assetQuery.data) {
+      setImageUrl(null);
+      return;
+    }
+    const objectUrl = URL.createObjectURL(assetQuery.data);
+    setImageUrl(objectUrl);
     return () => {
-      cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      URL.revokeObjectURL(objectUrl);
     };
-  }, [asset.id, fileName, submissionId]);
+  }, [assetQuery.data]);
 
-  if (error) {
+  if (assetQuery.error) {
     return (
       <div className="flex min-h-28 items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
         <AlertTriangle className="h-4 w-4 shrink-0" />
-        <span className="min-w-0 break-words">{fileName}: {error}</span>
+        <span className="min-w-0 break-words">{fileName}: {getApiErrorMessage(assetQuery.error)}</span>
       </div>
     );
   }
 
-  if (!imageUrl) {
+  if (assetQuery.isPending || !imageUrl) {
     return <div className="flex min-h-28 items-center justify-center rounded-md border border-slate-200 bg-slate-50 text-xs text-slate-500">Đang tải ảnh minh chứng…</div>;
   }
 
@@ -106,79 +117,61 @@ const EvidencePhoto = ({ submissionId, asset, onPreview }: EvidencePhotoProps) =
 
 export const EvaluationView = ({ onShowToast }: { onShowToast: (msg: string) => void }) => {
   const { profile, internship, internshipId } = useStudentPortal();
+  const { user, isLoggedIn } = useAuth();
   const { selectedSemester, activeSemesterId } = useSemester();
   const scheduleSemesterId = internship?.semesterId ?? selectedSemester?.id ?? activeSemesterId;
-  const [evaluation, setEvaluation] = useState<EvaluationDetailDto | null>(null);
-  const [weeklyReports, setWeeklyReports] = useState<WeeklyReportDto[]>([]);
-  const [submissions, setSubmissions] = useState<SubmissionDto[]>([]);
-  const [schedules, setSchedules] = useState<SemesterReportScheduleDto[]>([]);
-  const [loadErrors, setLoadErrors] = useState<string[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [previewPhoto, setPreviewPhoto] = useState<{ url: string; fileName: string } | null>(null);
-
-  const loadEvaluation = useCallback(async () => {
-    if (!internshipId) {
-      setEvaluation(null);
-      setWeeklyReports([]);
-      setSubmissions([]);
-      setSchedules([]);
-      setLoadErrors([]);
-      setIsLoading(false);
-      return;
-    }
-
-    setIsLoading(true);
-    const [evaluationResult, reportsResult, submissionsResult, schedulesResult] = await Promise.allSettled([
-      evaluationService.getByInternship(internshipId),
-      weeklyReportService.getMine(),
-      submissionApiService.getMine(),
-      scheduleSemesterId
-        ? semesterReportScheduleService.getSchedules(scheduleSemesterId)
-        : Promise.resolve([] as SemesterReportScheduleDto[]),
-    ]);
-
-    const errors: string[] = [];
-    if (evaluationResult.status === "fulfilled") {
-      setEvaluation(evaluationResult.value);
-    } else {
-      setEvaluation(null);
-      errors.push("Không tải được kết quả đánh giá.");
-    }
-    if (reportsResult.status === "fulfilled") {
-      setWeeklyReports(reportsResult.value.filter((report) => report.internshipId === internshipId));
-    } else {
-      setWeeklyReports([]);
-      errors.push("Không tải được dữ liệu báo cáo tuần.");
-    }
-    if (submissionsResult.status === "fulfilled") {
-      setSubmissions(submissionsResult.value.filter((submission) => submission.internshipId === internshipId));
-    } else {
-      setSubmissions([]);
-      errors.push("Không tải được điểm doanh nghiệp và minh chứng.");
-    }
-    if (schedulesResult.status === "fulfilled") {
-      setSchedules(schedulesResult.value);
-    } else {
-      setSchedules([]);
-      errors.push("Không tải được lịch báo cáo tuần.");
-    }
-    setLoadErrors(errors);
-    setIsLoading(false);
-  }, [internshipId, scheduleSemesterId]);
-
-  useEffect(() => {
-    void loadEvaluation();
-  }, [loadEvaluation]);
+  const evaluationQuery = useQuery({
+    queryKey: queryKeys.student.evaluation.detail({
+      semesterId: scheduleSemesterId ?? "none",
+      internshipId: internshipId ?? "none",
+      userId: user?.id ?? user?.username ?? "anonymous",
+    }),
+    enabled: isLoggedIn && Boolean(internshipId),
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const results = await Promise.allSettled([
+        evaluationService.getByInternship(internshipId!),
+        weeklyReportService.getMine(),
+        submissionApiService.getMine(),
+        scheduleSemesterId
+          ? semesterReportScheduleService.getSchedules(scheduleSemesterId)
+          : Promise.resolve([] as SemesterReportScheduleDto[]),
+      ]);
+      const [evaluationResult, reportsResult, submissionsResult, schedulesResult] = results;
+      const errors: string[] = [];
+      if (evaluationResult.status === "rejected") errors.push("Không tải được kết quả đánh giá.");
+      if (reportsResult.status === "rejected") errors.push("Không tải được dữ liệu báo cáo tuần.");
+      if (submissionsResult.status === "rejected") errors.push("Không tải được điểm doanh nghiệp và minh chứng.");
+      if (schedulesResult.status === "rejected") errors.push("Không tải được lịch báo cáo tuần.");
+      return {
+        evaluation: evaluationResult.status === "fulfilled" ? evaluationResult.value : null,
+        weeklyReports: reportsResult.status === "fulfilled"
+          ? reportsResult.value.filter((report) => report.internshipId === internshipId)
+          : EMPTY_WEEKLY_REPORTS,
+        submissions: submissionsResult.status === "fulfilled"
+          ? submissionsResult.value.filter((submission) => submission.internshipId === internshipId)
+          : EMPTY_SUBMISSIONS,
+        schedules: schedulesResult.status === "fulfilled" ? schedulesResult.value : EMPTY_SCHEDULES,
+        errors,
+      };
+    },
+  });
+  const evaluation = evaluationQuery.data?.evaluation ?? null;
+  const weeklyReports = evaluationQuery.data?.weeklyReports ?? EMPTY_WEEKLY_REPORTS;
+  const submissions = evaluationQuery.data?.submissions ?? EMPTY_SUBMISSIONS;
+  const schedules = evaluationQuery.data?.schedules ?? EMPTY_SCHEDULES;
+  const loadErrors = useMemo(() => evaluationQuery.data?.errors ?? (
+    evaluationQuery.error ? [getApiErrorMessage(evaluationQuery.error)] : EMPTY_LOAD_ERRORS
+  ), [evaluationQuery.data?.errors, evaluationQuery.error]);
+  const isLoading = evaluationQuery.isLoading;
+  const isRefreshing = evaluationQuery.isFetching && !evaluationQuery.isLoading;
 
   const handleRefresh = async () => {
-    setIsRefreshing(true);
-    try {
-      await loadEvaluation();
-      onShowToast("Đã làm mới kết quả đánh giá thành công");
-    } finally {
-      setIsRefreshing(false);
-    }
+    const result = await evaluationQuery.refetch();
+    onShowToast(result.error
+      ? getApiErrorMessage(result.error)
+      : "Đã làm mới kết quả đánh giá thành công");
   };
 
   const maxWeeks = selectedSemester?.totalWeeks;
@@ -255,7 +248,9 @@ export const EvaluationView = ({ onShowToast }: { onShowToast: (msg: string) => 
     : finalGrade;
 
   const retryLoading = () => {
-    void loadEvaluation().catch((error: unknown) => onShowToast(getApiErrorMessage(error)));
+    void evaluationQuery.refetch().then((result) => {
+      if (result.error) onShowToast(getApiErrorMessage(result.error));
+    });
   };
 
   return (

@@ -1,4 +1,5 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ToastType } from "../../../contexts/ToastContext";
 import { accountRequestService, type AccountRequestDto } from "../../../services/accountRequest.service";
 import { adminUsersService } from "../../../services/adminUsers.service";
@@ -41,6 +42,7 @@ import { CompanyAvatar } from "../../../components/common/CompanyAvatar";
 import { KpiCard, KpiGrid } from "../../../components/common/KpiCard";
 import { Panel } from "../../../components/common/Panel";
 import { useAuth } from "../../../hooks/useAuth";
+import { queryKeys } from "../../../lib/queryKeys";
 export const AccountRequestsView = ({
   onShowToast,
   onNavigateTab,
@@ -49,15 +51,12 @@ export const AccountRequestsView = ({
   onNavigateTab?: (tab: string) => void;
 }) => {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const backendRole = user?.backendRole;
   const [activeMainTab, setActiveMainTab] = useState("requests");
-  const [requests, setRequests] = useState<any[]>([]);
-  const [userAccounts, setUserAccounts] = useState<any[]>([]);
-  const [activityLogs, setActivityLogs] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
 
   // Map API DTO to local UI format
-  const mapDtoToRequest = useCallback((dto: AccountRequestDto) => ({
+  const mapDtoToRequest = (dto: AccountRequestDto) => ({
     id: dto.id,
     requesterName: dto.requesterName,
     requesterCode: dto.requesterCode,
@@ -71,23 +70,20 @@ export const AccountRequestsView = ({
     processedAt: dto.processedAt,
     adminNote: dto.adminNote,
     createdAt: dto.createdAt,
-  }), []);
+  });
 
-  const loadRequests = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const dtos = await accountRequestService.getAll();
-      setRequests(dtos.map(mapDtoToRequest));
-    } catch {
-      onShowToast("Không thể tải danh sách yêu cầu tài khoản");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [mapDtoToRequest, onShowToast]);
-
-  useEffect(() => {
-    loadRequests();
-  }, [loadRequests]);
+  const requestsQuery = useQuery({
+    queryKey: queryKeys.admin.accountRequests.list({
+      backendRole: backendRole ?? "",
+      userId: user?.id ?? user?.username ?? "anonymous",
+    }),
+    queryFn: async () => (await accountRequestService.getAll()).map(mapDtoToRequest),
+  });
+  const requests = requestsQuery.data ?? [];
+  const [isProcessing, setIsProcessing] = useState(false);
+  const isLoading = requestsQuery.isFetching || isProcessing;
+  const [userAccounts, setUserAccounts] = useState<any[]>([]);
+  const [activityLogs, setActivityLogs] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
@@ -269,7 +265,7 @@ export const AccountRequestsView = ({
   };
   const handleExecuteProcess = async () => {
     if (!selectedRequest || !processActionType) return;
-    setIsLoading(true);
+    setIsProcessing(true);
     try {
       let updatedStatus = "approved";
       let actionText = "";
@@ -296,7 +292,7 @@ export const AccountRequestsView = ({
         status: updatedStatus,
         adminNote: adminNoteInput || (processActionType === "reset_pass" ? `M\u1EADt kh\u1EA9u m\u1EDBi: ${generatedTempPass}` : undefined),
       });
-      await loadRequests();
+      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.accountRequests.all });
       onShowToast(
         `\u0110\xE3 x\u1EED l\xFD y\xEAu c\u1EA7u ${selectedRequest.id} th\xE0nh c\xF4ng!`,
       );
@@ -304,7 +300,7 @@ export const AccountRequestsView = ({
     } catch {
       onShowToast("Lỗi khi xử lý yêu cầu");
     } finally {
-      setIsLoading(false);
+      setIsProcessing(false);
       setShowProcessModal(false);
     }
   };
@@ -316,7 +312,7 @@ export const AccountRequestsView = ({
       );
       return;
     }
-    setIsLoading(true);
+    setIsProcessing(true);
     try {
       const usersPrefix = backendRole === "SuperAdmin"
         ? "/api/SuperAdmin/users"
@@ -375,14 +371,14 @@ export const AccountRequestsView = ({
     } catch {
       onShowToast("Lỗi khi tạo tài khoản mới");
     } finally {
-      setIsLoading(false);
+      setIsProcessing(false);
     }
   };
   const handleToggleAccountLock = async (account) => {
     const isLocking = account.status === "active";
     const newIsActive = !isLocking;
     try {
-      setIsLoading(true);
+      setIsProcessing(true);
       await adminUsersService.update(account.id, {
         fullName: account.fullName,
         email: account.email,
@@ -401,7 +397,7 @@ export const AccountRequestsView = ({
     } catch {
       onShowToast("L\x1ED7i khi thay \x0111\x1ED5i tr\x1EA1ng th\xE1i t\xE0i kho\u1EA3n");
     } finally {
-      setIsLoading(false);
+      setIsProcessing(false);
     }
   };
   const handleBatchApprove = async () => {
@@ -411,7 +407,7 @@ export const AccountRequestsView = ({
       );
       return;
     }
-    setIsLoading(true);
+    setIsProcessing(true);
     try {
       await Promise.all(
         selectedIds.map((id) =>
@@ -421,7 +417,7 @@ export const AccountRequestsView = ({
           })
         )
       );
-      await loadRequests();
+      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.accountRequests.all });
       onShowToast(
         `\u0110\xE3 ph\xEA duy\u1EC7t h\xE0ng lo\u1EA1t ${selectedIds.length} y\xEAu c\u1EA7u t\xE0i kho\u1EA3n!`,
       );
@@ -429,7 +425,7 @@ export const AccountRequestsView = ({
     } catch {
       onShowToast("Lỗi khi phê duyệt hàng loạt");
     } finally {
-      setIsLoading(false);
+      setIsProcessing(false);
     }
   };
   const handleExportExcel = () => {
@@ -443,7 +439,7 @@ export const AccountRequestsView = ({
     );
   };
   const handleRefresh = () => {
-    loadRequests();
+    void queryClient.invalidateQueries({ queryKey: queryKeys.admin.accountRequests.all });
   };
   return (
     <div className="space-y-5 max-w-[1500px] mx-auto min-w-0 max-w-full overflow-hidden">
@@ -487,6 +483,20 @@ export const AccountRequestsView = ({
           />
         </button>
       </PageHeader>
+
+      {requestsQuery.isError && (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+          <span>Không thể tải danh sách yêu cầu tài khoản.</span>
+          <button
+            type="button"
+            onClick={() => void requestsQuery.refetch()}
+            disabled={isLoading}
+            className="rounded-md border border-rose-300 bg-white px-3 py-2 text-xs font-semibold hover:bg-rose-100 disabled:opacity-50"
+          >
+            Thử tải lại
+          </button>
+        </div>
+      )}
 
       {/* MAIN VIEW MODE NAV TABS */}
       <div className="flex items-center gap-1.5 p-1.5 bg-slate-100/90 rounded-lg border border-slate-200 text-xs font-bold max-w-full overflow-x-auto shrink-0">

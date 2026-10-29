@@ -1,8 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Edit2, Trash2, Building2, AlertTriangle, RefreshCw } from 'lucide-react';
 import { adminDepartmentsService, type DepartmentDto, type CreateDepartmentRequest, type UpdateDepartmentRequest } from '../../../services/adminDepartments.service';
 import { Panel } from "../../../components/common/Panel";
 import type { ToastType } from '../../../contexts/ToastContext';
+import { queryKeys } from '../../../lib/queryKeys';
+import { getApiErrorMessage } from '../../../lib/apiClient';
+import { useAuth } from '../../../hooks/useAuth';
 
 function formatDate(iso: string) {
   const date = new Date(iso);
@@ -166,35 +170,30 @@ function DepartmentModal({ department, onClose, onSave }: { department?: Departm
 }
 
 export function DepartmentsView({ onShowToast }: { onShowToast?: (msg: string, type?: ToastType) => void }) {
-  const [departments, setDepartments] = useState<DepartmentDto[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const departmentsQuery = useQuery<DepartmentDto[]>({
+    queryKey: queryKeys.admin.departments.list({
+      backendRole: user?.backendRole ?? "",
+      userId: user?.id ?? user?.username ?? "anonymous",
+    }),
+    queryFn: () => adminDepartmentsService.getAll(user?.backendRole),
+  });
+  const departments = departmentsQuery.data ?? [];
+  const loading = departmentsQuery.isFetching;
+  const loadError = departmentsQuery.error
+    ? getApiErrorMessage(departmentsQuery.error)
+    : null;
   const [modalDepartment, setModalDepartment] = useState<DepartmentDto | null>(null);
   const [isCreatingDepartment, setIsCreatingDepartment] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await adminDepartmentsService.getAll();
-      setDepartments(data);
-      setLoadError(null);
-    } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Không tải được danh sách khoa.');
-      onShowToast?.('Không tải được danh sách khoa.', 'danger');
-    } finally {
-      setLoading(false);
-    }
-  }, [onShowToast]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const load = () => departmentsQuery.refetch();
 
   const handleCreate = async (body: CreateDepartmentRequest) => {
     await adminDepartmentsService.create(body);
     onShowToast?.('Đã thêm khoa mới.', 'success');
-    load();
+    await queryClient.invalidateQueries({ queryKey: queryKeys.admin.departments.all });
   };
 
   const handleCreateFromUnion = async (body: CreateDepartmentRequest | UpdateDepartmentRequest) => {
@@ -204,7 +203,7 @@ export function DepartmentsView({ onShowToast }: { onShowToast?: (msg: string, t
   const handleUpdate = async (id: string, body: UpdateDepartmentRequest) => {
     await adminDepartmentsService.update(id, body);
     onShowToast?.('Đã cập nhật khoa.', 'success');
-    load();
+    await queryClient.invalidateQueries({ queryKey: queryKeys.admin.departments.all });
   };
 
   const handleDelete = async (department: DepartmentDto) => {
@@ -217,7 +216,7 @@ export function DepartmentsView({ onShowToast }: { onShowToast?: (msg: string, t
       setDeleting(department.id);
       await adminDepartmentsService.delete(department.id);
       onShowToast?.('Đã xóa khoa.', 'success');
-      load();
+      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.departments.all });
     } catch (err: unknown) {
       const message = err && typeof err === 'object' && 'message' in err ? String((err as { message: string }).message) : 'Không thể xóa khoa.';
       onShowToast?.(message, 'danger');

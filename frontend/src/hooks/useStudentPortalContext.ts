@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { INTERNSHIP_WEEKS } from "../config/internship";
 import { getApiErrorMessage } from "../lib/apiClient";
-import {
-  mapInternshipStatusToUi,
-  mapWeeklyReportStatusToUi,
-} from "../lib/portalMappers";
+import { mapInternshipStatusToUi, mapWeeklyReportStatusToUi } from "../lib/portalMappers";
+import { queryKeys } from "../lib/queryKeys";
 import { studentPortalService } from "../services/studentPortal.service";
 import { weeklyReportService } from "../services/weeklyReport.service";
 import type { StudentProfile } from "../types/common";
@@ -57,20 +56,20 @@ export function buildStudentProfileFromPortal(
   totalWeeks = INTERNSHIP_WEEKS,
   semesterName?: string,
 ): StudentProfile {
-  const s = portal.student;
-  const i = portal.internship;
-  const company = i?.company;
+  const student = portal.student;
+  const internship = portal.internship;
+  const company = internship?.company;
 
   return {
-    name: s.fullName,
-    mssv: s.studentCode,
-    class: s.class ?? "—",
+    name: student.fullName,
+    mssv: student.studentCode,
+    class: student.class ?? "—",
     semester: semesterName?.trim() || "Học kỳ hiện tại",
-    major: s.major ?? "—",
+    major: student.major ?? "—",
     company: company?.companyName ?? "Chưa có doanh nghiệp",
     companyLogo: DEFAULT_LOGO,
-    position: i?.position ?? "—",
-    statusBadge: internshipStatusToBadge(i?.status ?? "NotStarted"),
+    position: internship?.position ?? "—",
+    statusBadge: internshipStatusToBadge(internship?.status ?? "NotStarted"),
     overallProgress: portal.progressPercent ?? 0,
     progressBreakdown: portal.progressBreakdown ?? null,
     currentGrade: 0,
@@ -79,16 +78,15 @@ export function buildStudentProfileFromPortal(
     lecturerName: portal.lecturerName ?? "—",
     lecturerEmail: portal.lecturerEmail ?? "—",
     lecturerPhone: portal.lecturerPhone ?? "—",
-    // Mentor / Người hướng dẫn từ Doanh nghiệp
     supervisorName:
       company?.contactPerson?.trim() ||
-      i?.supervisorName?.trim() ||
+      internship?.supervisorName?.trim() ||
       "Chưa có mentor",
     supervisorEmail: company?.contactEmail?.trim() || "—",
     supervisorPhone: company?.contactPhone?.trim() || "—",
     companyAddress: company?.address?.trim() || company?.industry?.trim() || "—",
-    currentPhase: i
-      ? `${internshipStatusToBadge(i.status)}${weeklyReportCount > 0 ? ` • ${weeklyReportCount} báo cáo tuần` : ""}`
+    currentPhase: internship
+      ? `${internshipStatusToBadge(internship.status)}${weeklyReportCount > 0 ? ` • ${weeklyReportCount} báo cáo tuần` : ""}`
       : "Chưa bắt đầu thực tập",
   };
 }
@@ -98,51 +96,42 @@ export function useStudentPortalContext() {
   const { selectedSemester } = useSemester();
   const semesterWeeks = selectedSemester?.totalWeeks || INTERNSHIP_WEEKS;
   const semesterName = selectedSemester?.name?.trim();
-  const [portalData, setPortalData] = useState<StudentPortalProfileDto | null>(
-    null,
-  );
-  const [weeklyCount, setWeeklyCount] = useState(0);
-  const [approvedWeeklyCount, setApprovedWeeklyCount] = useState(0);
-  const [isLoading, setIsLoading] = useState(isLoggedIn);
-  const [error, setError] = useState<string | null>(null);
-  const [internshipId, setInternshipId] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    if (!isLoggedIn) return;
-    setIsLoading(true);
-    setError(null);
-    try {
-      const [portal, weekly] = await Promise.all([
+  const portalQuery = useQuery({
+    queryKey: queryKeys.student.profile(user?.id ?? user?.username),
+    enabled: isLoggedIn,
+    staleTime: 10 * 60 * 1000,
+    queryFn: async () => {
+      const [portal, weeklyReports] = await Promise.all([
         studentPortalService.getMe(),
-        weeklyReportService.getMine().catch(() => []),
+        weeklyReportService.getMine()
+          .then((rows) => ({ rows, error: null }))
+          .catch((error: unknown) => ({
+            rows: [],
+            error: getApiErrorMessage(error),
+          })),
       ]);
-      setPortalData(portal);
-      setInternshipId(portal.internship?.id ?? weekly[0]?.internshipId ?? null);
-      setWeeklyCount(weekly.length);
-      setApprovedWeeklyCount(
-        weekly.filter(
-          (r) =>
-            r.status === "Approved" ||
-            mapWeeklyReportStatusToUi(r.status) === "Đã hoàn thành",
-        ).length,
-      );
-    } catch (err) {
-      setError(getApiErrorMessage(err));
-    } finally {
-      setIsLoading(false);
-    }
-  }, [isLoggedIn]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+      const approvedWeeklyCount = weeklyReports.rows.filter(
+        (report) =>
+          report.status === "Approved" ||
+          mapWeeklyReportStatusToUi(report.status) === "Đã hoàn thành",
+      ).length;
+      return {
+        portal,
+        weeklyReportCount: weeklyReports.rows.length,
+        approvedWeeklyCount,
+        weeklyError: weeklyReports.error,
+        internshipId: portal.internship?.id ?? weeklyReports.rows[0]?.internshipId ?? null,
+      };
+    },
+  });
+  const portalData = portalQuery.data?.portal ?? null;
 
   const profile: StudentProfile = useMemo(() => {
-    if (portalData) {
+    if (portalData && portalQuery.data) {
       return buildStudentProfileFromPortal(
         portalData,
-        weeklyCount,
-        approvedWeeklyCount,
+        portalQuery.data.weeklyReportCount,
+        portalQuery.data.approvedWeeklyCount,
         semesterWeeks,
         semesterName,
       );
@@ -153,19 +142,24 @@ export function useStudentPortalContext() {
       mssv: user?.username ?? "—",
       totalReports: semesterWeeks,
     };
-  }, [portalData, weeklyCount, approvedWeeklyCount, user, semesterWeeks, semesterName]);
+  }, [portalData, portalQuery.data, user, semesterWeeks, semesterName]);
 
   const internship: InternshipDto | null = portalData?.internship ?? null;
+  const refresh = async () => {
+    await portalQuery.refetch();
+  };
 
   return {
     profile,
     internship,
-    internshipId,
+    internshipId: portalQuery.data?.internshipId ?? null,
     portalData,
     isArchiveReadOnly:
       portalData?.isArchiveReadOnly ?? user?.isArchiveReadOnly ?? false,
-    isLoading,
-    error,
-    refresh: load,
+    isLoading: portalQuery.isLoading,
+    error: portalQuery.error
+      ? getApiErrorMessage(portalQuery.error)
+      : portalQuery.data?.weeklyError ?? null,
+    refresh,
   };
 }

@@ -172,6 +172,8 @@ describe("ReportsView (lát dọc tiên phong /lecturer/reports)", () => {
     renderReportsView();
 
     const weekFilter = await screen.findByRole("combobox", { name: "Lọc theo tuần báo cáo" });
+    await screen.findByText(/Tuần 1 — Báo cáo week-all/);
+    await waitFor(() => expect(within(weekFilter).getByRole("option", { name: "Tuần 1" })).toBeInTheDocument());
     await user.selectOptions(weekFilter, "1");
 
     await waitFor(() => {

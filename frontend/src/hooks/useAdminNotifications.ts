@@ -1,6 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getApiErrorMessage } from "../lib/apiClient";
 import { mapCampaignToAdminRow } from "../lib/adminNotificationMappers";
+import { queryKeys } from "../lib/queryKeys";
+import { useAuth } from "./useAuth";
 import {
   adminNotificationsService,
   type AdminBroadcastResultDto,
@@ -24,27 +27,16 @@ export interface AdminNotificationItem {
   campaignSentAt?: string;
 }
 
-
 const CAMPAIGNS_STORAGE_KEY = "internlink_admin_campaigns_cache";
-
-function getCachedCampaigns(): AdminNotificationItem[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(CAMPAIGNS_STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-    }
-  } catch {}
-  return [];
-}
 
 function saveCachedCampaigns(items: AdminNotificationItem[]) {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(CAMPAIGNS_STORAGE_KEY, JSON.stringify(items));
     window.dispatchEvent(new CustomEvent("internlink_notification_updated"));
-  } catch {}
+  } catch {
+    // The local cache is optional; the query cache remains authoritative.
+  }
 }
 
 export interface UseAdminNotificationsState {
@@ -66,75 +58,86 @@ export interface UseAdminNotificationsState {
 }
 
 export const useAdminNotifications = (): UseAdminNotificationsState => {
-  const [notifications, setNotifications] = useState<AdminNotificationItem[]>(
-    () => getCachedCampaigns(),
-  );
-  const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<Error | null>(null);
-
-  const fetchCampaigns = useCallback(async () => {
-
-    setLoading(true);
-    setError(null);
-    try {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const queryKey = queryKeys.admin.notifications.list({
+    userId: user?.id ?? user?.username ?? "anonymous",
+  });
+  const query = useQuery({
+    queryKey,
+    enabled: Boolean(user),
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
       const campaigns = await adminNotificationsService.getCampaigns(100);
-      const mapped = campaigns.map(mapCampaignToAdminRow);
-      setNotifications(mapped);
-    } catch (err) {
-      setError(err instanceof Error ? err : new Error(getApiErrorMessage(err)));
-      setNotifications([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      return campaigns.map(mapCampaignToAdminRow);
+    },
+  });
+  const { data, error: queryError, isPending, isFetching, refetch: refetchQuery } = query;
 
-  useEffect(() => {
-    fetchCampaigns();
-  }, [fetchCampaigns]);
+  const broadcastMutation = useMutation({
+    mutationFn: (payload: {
+      title: string;
+      content: string;
+      audience: "all" | "student" | "lecturer";
+      link?: string;
+    }) => adminNotificationsService.broadcast(payload),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.notifications.all });
+    },
+  });
+  const broadcastCampaign = broadcastMutation.mutateAsync;
+  const deleteMutation = useMutation({
+    mutationFn: (target: { title: string; content: string; sentAt: string }) =>
+      adminNotificationsService.deleteCampaign(target),
+    onSuccess: async (_result, target) => {
+      const updated = (queryClient.getQueryData<AdminNotificationItem[]>(queryKey) ?? [])
+        .filter((notification) =>
+          !(
+            notification.title === target.title &&
+            notification.content === target.content &&
+            (notification.campaignSentAt === target.sentAt || notification.sentAt === target.sentAt)
+          ),
+        );
+      queryClient.setQueryData(queryKey, updated);
+      saveCachedCampaigns(updated);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.notifications.all });
+    },
+  });
+  const deleteCampaignMutation = deleteMutation.mutateAsync;
 
-  const broadcast = async (payload: {
+  const refetch = useCallback(async () => {
+    const result = await refetchQuery({ throwOnError: true });
+    if (result.data) saveCachedCampaigns(result.data);
+  }, [refetchQuery]);
+  const broadcast = useCallback(async (payload: {
     title: string;
     content: string;
     audience: "all" | "student" | "lecturer";
     link?: string;
-  }): Promise<AdminBroadcastResultDto> => {
-
-
-    const res = await adminNotificationsService.broadcast(payload);
-    await fetchCampaigns();
+  }) => {
+    const result = await broadcastCampaign(payload);
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("internlink_notification_updated"));
     }
-    return res;
-  };
-
-  const deleteCampaign = async (target: {
+    return result;
+  }, [broadcastCampaign]);
+  const deleteCampaign = useCallback(async (target: {
     title: string;
     content: string;
     sentAt: string;
-  }): Promise<void> => {
-
-    await adminNotificationsService.deleteCampaign(target);
-
-    setNotifications((prev) => {
-      const updated = prev.filter(
-        (n) =>
-          !(
-            n.title === target.title &&
-            n.content === target.content &&
-            (n.campaignSentAt === target.sentAt || n.sentAt === target.sentAt)
-          ),
-      );
-      saveCachedCampaigns(updated);
-      return updated;
-    });
-  };
+  }) => {
+    await deleteCampaignMutation(target);
+  }, [deleteCampaignMutation]);
 
   return {
-    notifications,
-    loading,
-    error,
-    refetch: fetchCampaigns,
+    notifications: data ?? [],
+    loading: isPending || (isFetching && !data),
+    error: queryError
+      ? queryError instanceof Error
+        ? queryError
+        : new Error(getApiErrorMessage(queryError))
+      : null,
+    refetch,
     broadcast,
     deleteCampaign,
   };

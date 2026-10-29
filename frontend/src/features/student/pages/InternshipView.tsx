@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Building2,
   Mail,
@@ -23,13 +24,15 @@ import { CompanyAvatar } from "../../../components/common/CompanyAvatar";
 import { StudentSubPageHeader } from "../components/StudentSubPageHeader";
 import { INTERNSHIP_WEEKS } from "../../../config/internship";
 import { mapWeeklyReportStatusToUi } from "../../../lib/portalMappers";
+import { getApiErrorMessage } from "../../../lib/apiClient";
+import { queryKeys } from "../../../lib/queryKeys";
 import { weeklyReportService } from "../../../services/weeklyReport.service";
 import {
   semesterReportScheduleService,
-  type SupplementalDeadline,
   type SemesterReportScheduleDto,
 } from "../../../services/semesterReportSchedule.service";
 import { submissionApiService } from "../../../services/submissionApi.service";
+import { useAuth } from "../../../hooks/useAuth";
 import type { SubmissionDto } from "../../../types/api";
 
 function formatDateVi(value?: string | null, style: "short" | "full" = "full") {
@@ -97,6 +100,7 @@ export const InternshipView = ({
   onNavigate?: (tab: string) => void;
 }) => {
   const { profile, internship, internshipId, refresh } = useStudentPortal();
+  const { user, isLoggedIn } = useAuth();
   const { selectedSemester } = useSemester();
   const dynamicWeeks = selectedSemester?.totalWeeks || INTERNSHIP_WEEKS;
   const currentSemesterId = internship?.semesterId || selectedSemester?.id;
@@ -105,18 +109,6 @@ export const InternshipView = ({
   const [activeContactModal, setActiveContactModal] = useState<"lecturer" | "mentor" | null>(null);
   const [selectedWeekDetail, setSelectedWeekDetail] = useState<WeeklyPlanItem | null>(null);
   const [now, setNow] = useState(() => Date.now());
-  const [apiWeeklyPlans, setApiWeeklyPlans] = useState<{
-    week: number;
-    title: string;
-    goal: string;
-    status: string;
-    progress: number;
-    deliverable: string;
-    submittedAt?: string | null;
-  }[]>([]);
-  const [schedules, setSchedules] = useState<SemesterReportScheduleDto[]>([]);
-  const [evidenceDeadline, setEvidenceDeadline] = useState<SupplementalDeadline | null>(null);
-  const [submissions, setSubmissions] = useState<SubmissionDto[]>([]);
   const [contactTopic, setContactTopic] = useState("Hỏi về Báo cáo thực tập tuần");
   const [contactMessage, setContactMessage] = useState("");
 
@@ -132,77 +124,54 @@ export const InternshipView = ({
       profile.company !== "—",
   );
 
-  useEffect(() => {
-    if (!internshipId) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const [reports, fetchedSchedules, fetchedEvidenceDeadline, fetchedSubmissions] = await Promise.all([
-          weeklyReportService.getMine().catch(() => []),
-          currentSemesterId
-            ? semesterReportScheduleService.getSchedules(currentSemesterId).catch(() => [] as SemesterReportScheduleDto[])
-            : Promise.resolve([] as SemesterReportScheduleDto[]),
-          currentSemesterId
-            ? semesterReportScheduleService.getEvidenceDeadline(currentSemesterId).catch(() => null)
-            : Promise.resolve(null),
-          submissionApiService.getMine().catch(() => []),
-        ]);
-        if (cancelled) return;
-        setSchedules(fetchedSchedules);
-        setEvidenceDeadline(fetchedEvidenceDeadline);
-        setSubmissions(fetchedSubmissions);
-        setApiWeeklyPlans(
-          reports.map((r) => ({
-            week: r.weekNumber,
-            title: r.title,
-            goal: r.content.slice(0, 120) + (r.content.length > 120 ? "…" : ""),
-            status: mapWeeklyReportStatusToUi(r.status),
-            // Tiến độ thật: tuần hoàn thành khi báo cáo được duyệt
-            progress: r.status === "Approved" ? 100 : 0,
-            deliverable: r.title,
-            submittedAt: r.submittedAt,
-          })),
-        );
-      } catch {
-        // Fallback gracefully
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [internshipId, currentSemesterId]);
+  const internshipDataQuery = useQuery({
+    queryKey: queryKeys.student.internship.detail(
+      user?.id ?? user?.username,
+      currentSemesterId,
+    ),
+    enabled: isLoggedIn && Boolean(internshipId),
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const [reports, schedules, evidenceDeadline, submissions] = await Promise.all([
+        weeklyReportService.getMine(),
+        currentSemesterId
+          ? semesterReportScheduleService.getSchedules(currentSemesterId)
+          : Promise.resolve([] as SemesterReportScheduleDto[]),
+        currentSemesterId
+          ? semesterReportScheduleService.getEvidenceDeadline(currentSemesterId)
+          : Promise.resolve(null),
+        submissionApiService.getMine(),
+      ]);
+      return { reports, schedules, evidenceDeadline, submissions };
+    },
+  });
+  const reports = internshipDataQuery.data?.reports ?? [];
+  const schedules = internshipDataQuery.data?.schedules ?? [];
+  const evidenceDeadline = internshipDataQuery.data?.evidenceDeadline ?? null;
+  const submissions = internshipDataQuery.data?.submissions ?? [];
+  const apiWeeklyPlans = useMemo(
+    () => reports.map((report) => ({
+      week: report.weekNumber,
+      title: report.title,
+      goal: report.content.slice(0, 120) + (report.content.length > 120 ? "…" : ""),
+      status: mapWeeklyReportStatusToUi(report.status),
+      progress: report.status === "Approved" ? 100 : 0,
+      deliverable: report.title,
+      submittedAt: report.submittedAt,
+    })),
+    [reports],
+  );
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
-      await refresh();
-      if (internshipId) {
-        const [reports, fetchedSchedules, fetchedEvidenceDeadline, fetchedSubmissions] = await Promise.all([
-          weeklyReportService.getMine().catch(() => []),
-          currentSemesterId
-            ? semesterReportScheduleService.getSchedules(currentSemesterId).catch(() => [] as SemesterReportScheduleDto[])
-            : Promise.resolve([] as SemesterReportScheduleDto[]),
-          currentSemesterId
-            ? semesterReportScheduleService.getEvidenceDeadline(currentSemesterId).catch(() => null)
-            : Promise.resolve(null),
-          submissionApiService.getMine().catch(() => []),
-        ]);
-        setSchedules(fetchedSchedules);
-        setEvidenceDeadline(fetchedEvidenceDeadline);
-        setSubmissions(fetchedSubmissions);
-        setApiWeeklyPlans(
-          reports.map((r) => ({
-            week: r.weekNumber,
-            title: r.title,
-            goal: r.content.slice(0, 120) + (r.content.length > 120 ? "…" : ""),
-            status: mapWeeklyReportStatusToUi(r.status),
-            progress: r.status === "Approved" ? 100 : 0,
-            deliverable: r.title,
-            submittedAt: r.submittedAt,
-          })),
-        );
-      }
-      onShowToast("Đã làm mới dữ liệu thực tập thành công", "success");
+      const [, result] = await Promise.all([refresh(), internshipDataQuery.refetch()]);
+      onShowToast(
+        result.error
+          ? `Không thể làm mới dữ liệu thực tập: ${getApiErrorMessage(result.error)}`
+          : "Đã làm mới dữ liệu thực tập thành công",
+        result.error ? "danger" : "success",
+      );
     } finally {
       setIsRefreshing(false);
     }

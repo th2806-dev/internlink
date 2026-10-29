@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Calendar,
   Clock,
@@ -25,6 +26,8 @@ import { Panel } from "../../../components/common/Panel";
 import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
 import { LecturerSubPageHeader } from "../components/LecturerSubPageHeader";
 import { getApiErrorMessage } from "../../../lib/apiClient";
+import { queryKeys } from "../../../lib/queryKeys";
+import { useAuth } from "../../../hooks/useAuth";
 import { parseBackendDate } from "../../../lib/formatDateTimeVi";
 import {
   MAX_PREP_WEEKS,
@@ -53,6 +56,8 @@ export const AttendanceManagementView: React.FC<{
   onShowToast?: (msg: string, type?: string) => void;
 }> = ({ onShowToast }) => {
   const { activeSemesterId, selectedSemester, semesters } = useSemester();
+  const { user, isLoggedIn } = useAuth();
+  const queryClient = useQueryClient();
   const attendanceSemesterId = selectedSemester?.id && selectedSemester.id !== "all"
     ? selectedSemester.id
     : activeSemesterId;
@@ -70,14 +75,34 @@ export const AttendanceManagementView: React.FC<{
     const internshipLabel = week > 0 ? `Tuần thực tập ${week}` : `Tuần chuẩn bị ${week}`;
     return `${internshipLabel} — Tuần ${toSemesterWeek(week, internshipStartWeek)} học kỳ`;
   };
-  const [sessions, setSessions] = useState<AttendanceSessionDto[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  // Assigned students for creating sessions
-  const [assignedStudents, setAssignedStudents] = useState<LecturerStudentListItemDto[]>([]);
-  const [isLoadingAssignedStudents, setIsLoadingAssignedStudents] = useState(true);
-  const [assignedStudentsError, setAssignedStudentsError] = useState<string | null>(null);
+  const sessionsQuery = useQuery({
+    queryKey: queryKeys.lecturer.attendance({
+      semesterId: attendanceSemesterId ?? "none",
+      lecturerId: user?.id ?? user?.username ?? "mine",
+    }),
+    enabled: isLoggedIn && Boolean(attendanceSemesterId),
+    queryFn: () => attendanceService.getLecturerSessions(attendanceSemesterId!),
+  });
+  const studentsQuery = useQuery<LecturerStudentListItemDto[]>({
+    queryKey: queryKeys.lecturer.students.list({
+      semesterId: attendanceSemesterId ?? "none",
+      lecturerId: user?.id ?? user?.username ?? "mine",
+      scope: "attendance",
+    }),
+    enabled: isLoggedIn && Boolean(attendanceSemesterId),
+    staleTime: 5 * 60 * 1000,
+    queryFn: () => lecturerInternshipsService.getStudents(attendanceSemesterId!),
+  });
+  const sessions = sessionsQuery.data ?? [];
+  const assignedStudents = studentsQuery.data ?? [];
+  const isLoading = sessionsQuery.isLoading;
+  const error = sessionsQuery.error
+    ? getApiErrorMessage(sessionsQuery.error)
+    : null;
+  const isLoadingAssignedStudents = studentsQuery.isLoading;
+  const assignedStudentsError = studentsQuery.error
+    ? getApiErrorMessage(studentsQuery.error)
+    : null;
 
   // Modals state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -136,7 +161,18 @@ export const AttendanceManagementView: React.FC<{
   const [markSearchQuery, setMarkSearchQuery] = useState("");
 
   // Tổng số buổi vắng theo sinh viên trong kỳ — highlight đỏ khi >= 2
-  const [absenceSummary, setAbsenceSummary] = useState<Record<string, number>>({});
+  const absenceSummaryQuery = useQuery({
+    queryKey: queryKeys.lecturer.attendance({
+      semesterId: attendanceSemesterId ?? "none",
+      lecturerId: user?.id ?? user?.username ?? "mine",
+      data: "absence-summary",
+    }),
+    enabled: isLoggedIn && Boolean(attendanceSemesterId),
+    staleTime: 5 * 60 * 1000,
+    queryFn: () =>
+      attendanceService.getStudentAbsenceSummary(attendanceSemesterId!),
+  });
+  const absenceSummary = absenceSummaryQuery.data ?? {};
 
   // Xuất file Excel lịch hướng dẫn/công tác (template Lich huong dan TTTN) của giảng viên trong kỳ đang chọn
   const [isExportingSchedule, setIsExportingSchedule] = useState(false);
@@ -154,58 +190,25 @@ export const AttendanceManagementView: React.FC<{
   };
 
   const loadSessions = useCallback(async () => {
-    if (!attendanceSemesterId) {
-      setSessions([]);
-      setError(null);
-      setIsLoading(false);
-      return;
-    }
-    setIsLoading(true);
-    setError(null);
-    try {
-      const data = await attendanceService.getLecturerSessions(attendanceSemesterId);
-      setSessions(data);
-    } catch (err) {
-      const msg = getApiErrorMessage(err);
-      setError(msg);
-      onShowToast?.(msg, "error");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [attendanceSemesterId, onShowToast]);
+    const result = await sessionsQuery.refetch();
+    if (result.error) onShowToast?.(getApiErrorMessage(result.error), "error");
+  }, [onShowToast, sessionsQuery.refetch]);
 
-  const loadAssignedStudents = useCallback(async (): Promise<LecturerStudentListItemDto[]> => {
-    if (!attendanceSemesterId) {
-      setAssignedStudents([]);
-      setAssignedStudentsError(null);
-      setIsLoadingAssignedStudents(false);
-      return [];
-    }
-    setIsLoadingAssignedStudents(true);
-    setAssignedStudentsError(null);
-    try {
-      const students = await lecturerInternshipsService.getStudents(attendanceSemesterId);
-      setAssignedStudents(students);
-      return students;
-    } catch (err) {
-      setAssignedStudents([]);
-      const message = getApiErrorMessage(err);
-      setAssignedStudentsError(message);
-      onShowToast?.(message, "error");
-      return [];
-    } finally {
-      setIsLoadingAssignedStudents(false);
-    }
-  }, [attendanceSemesterId, onShowToast]);
-
-  useEffect(() => {
-    loadSessions();
-    loadAssignedStudents();
-  }, [loadSessions, loadAssignedStudents]);
+  const invalidateAttendance = useCallback(async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.lecturer.attendance({
+          semesterId: attendanceSemesterId ?? "none",
+          lecturerId: user?.id ?? user?.username ?? "mine",
+        }),
+      }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.student.attendance.all }),
+    ]);
+  }, [queryClient, attendanceSemesterId, user?.id, user?.username]);
 
   // Handle open create modal
-  const handleOpenCreateModal = async () => {
-    const students = await loadAssignedStudents();
+  const handleOpenCreateModal = () => {
+    const students = assignedStudents;
     // Ưu tiên tuần thực tập chính còn trống; nếu đã kín hết thì mở sẵn tuần chuẩn bị 0.
     const nextWeek = Array.from({ length: totalWeeks }, (_, index) => index + 1)
       .find((week) => !sessions.some((session) => session.weekNumber === week && !session.isLecturerOnly));
@@ -278,7 +281,7 @@ export const AttendanceManagementView: React.FC<{
       await attendanceService.createSession(dto);
       onShowToast?.("Đã tạo buổi gặp mới thành công!", "success");
       setIsCreateModalOpen(false);
-      await loadSessions();
+      await invalidateAttendance();
     } catch (err) {
       onShowToast?.(getApiErrorMessage(err), "error");
     } finally {
@@ -290,16 +293,6 @@ export const AttendanceManagementView: React.FC<{
   const handleOpenMarkModal = async (session: AttendanceSessionDto) => {
     try {
       const detail = await attendanceService.getSessionDetail(session.id);
-      // Tải song song tổng vắng trong kỳ để cảnh báo (không chặn modal nếu lỗi)
-      if (attendanceSemesterId) {
-        attendanceService
-          .getStudentAbsenceSummary(attendanceSemesterId)
-          .then(setAbsenceSummary)
-          .catch((err: unknown) => {
-            setAbsenceSummary({});
-            onShowToast?.(getApiErrorMessage(err), "error");
-          });
-      }
       setActiveMarkSession(detail);
       const initialRecordMap: Record<string, { status: AttendanceStatus; notes: string }> = {};
       detail.records.forEach((r) => {
@@ -330,7 +323,7 @@ export const AttendanceManagementView: React.FC<{
       await attendanceService.markAttendance(activeMarkSession.id, { records: recordsToSave });
       onShowToast?.("Đã lưu kết quả điểm danh thành công!", "success");
       setIsMarkModalOpen(false);
-      await loadSessions();
+      await invalidateAttendance();
     } catch (err) {
       onShowToast?.(getApiErrorMessage(err), "error");
     } finally {
@@ -401,7 +394,7 @@ export const AttendanceManagementView: React.FC<{
       await attendanceService.updateSession(editingSession.id, dto);
       onShowToast?.("Cập nhật thông tin buổi gặp thành công!", "success");
       setIsEditModalOpen(false);
-      await loadSessions();
+      await invalidateAttendance();
     } catch (err) {
       onShowToast?.(getApiErrorMessage(err), "error");
     } finally {
@@ -418,7 +411,7 @@ export const AttendanceManagementView: React.FC<{
     try {
       await attendanceService.deleteSession(session.id);
       onShowToast?.("Đã xóa buổi gặp thành công.", "success");
-      await loadSessions();
+      await invalidateAttendance();
     } catch (err) {
       onShowToast?.(getApiErrorMessage(err), "error");
     }

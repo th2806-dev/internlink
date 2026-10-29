@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { LecturerHistoryView } from "../features/lecturer/pages/LecturerHistoryView";
@@ -23,7 +24,10 @@ vi.mock("../services/lecturerHistory.service", () => ({
 }));
 
 vi.mock("../hooks/useAuth", () => ({
-  useAuth: () => ({ user: { name: "Trần Văn Giảng Viên", email: "gv@dn.edu.vn" } }),
+  useAuth: () => ({
+    user: { id: "lecturer-1", name: "Trần Văn Giảng Viên", email: "gv@dn.edu.vn" },
+    isLoggedIn: true,
+  }),
 }));
 
 vi.mock("../contexts/SemesterContext", () => ({
@@ -98,10 +102,15 @@ function makeHistory(
 }
 
 function renderView() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return render(
-    <MemoryRouter>
-      <LecturerHistoryView />
-    </MemoryRouter>,
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter>
+        <LecturerHistoryView />
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 

@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   FileText,
   Plus,
@@ -18,8 +19,8 @@ import {
   Upload,
 } from "lucide-react";
 import { documentService } from "../../../services/document.service";
-import { adminSemestersService, type BackendSemesterDto } from "../../../services/adminSemesters.service";
-import { adminDepartmentsService, type DepartmentDto } from "../../../services/adminDepartments.service";
+import { adminSemestersService } from "../../../services/adminSemesters.service";
+import { adminDepartmentsService } from "../../../services/adminDepartments.service";
 import { useAuth } from "../../../contexts/AuthContext";
 import type { DocumentListItemDto } from "../../../types/api";
 import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
@@ -28,6 +29,8 @@ import { Panel } from "../../../components/common/Panel";
 import { RequestErrorState } from "../../../components/common/RequestErrorState";
 
 import type { ToastType } from "../../../contexts/ToastContext";
+import { queryKeys } from "../../../lib/queryKeys";
+import { getApiErrorMessage } from "../../../lib/apiClient";
 
 interface TemplatesViewProps {
   onShowToast?: (message: string, type?: ToastType) => void;
@@ -42,16 +45,42 @@ const CATEGORIES = [
   { value: "GuidanceSchedule", label: "Lịch hướng dẫn thực tập" },
   { value: "Other", label: "Biểu mẫu khác" },
 ];
+const EMPTY_TEMPLATES: DocumentListItemDto[] = [];
 
 export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => {
   const { canMutateOps } = useAdminCapabilities();
   const { user } = useAuth();
-  const [templates, setTemplates] = useState<DocumentListItemDto[]>([]);
-  const [semesters, setSemesters] = useState<BackendSemesterDto[]>([]);
-  const [departments, setDepartments] = useState<DepartmentDto[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [loadError, setLoadError] = useState("");
+  const queryClient = useQueryClient();
+  const userScope = {
+    backendRole: user?.backendRole ?? "",
+    userId: user?.id ?? user?.username ?? "anonymous",
+  };
+  const templatesKey = queryKeys.admin.templates.list(userScope);
+  const semestersKey = queryKeys.semesters.list(userScope);
+  const departmentsKey = queryKeys.admin.departments.list(userScope);
+  const templatesQuery = useQuery({
+    queryKey: templatesKey,
+    enabled: Boolean(user),
+    queryFn: () => documentService.getTemplates(),
+  });
+  const semestersQuery = useQuery({
+    queryKey: semestersKey,
+    enabled: Boolean(user),
+    queryFn: () => adminSemestersService.getAll(undefined, user?.backendRole),
+  });
+  const departmentsQuery = useQuery({
+    queryKey: departmentsKey,
+    enabled: Boolean(user),
+    queryFn: () => adminDepartmentsService.getAll(user?.backendRole),
+  });
+  const templates = templatesQuery.data ?? EMPTY_TEMPLATES;
+  const semesters = semestersQuery.data ?? [];
+  const departments = (departmentsQuery.data ?? []).filter((department) => department.isActive);
+  const queries = [templatesQuery, semestersQuery, departmentsQuery];
+  const loading = queries.some((query) => query.isPending);
+  const refreshing = queries.some((query) => query.isFetching);
+  const failedQuery = queries.find((query) => query.error);
+  const loadError = failedQuery?.error ? getApiErrorMessage(failedQuery.error) : "";
 
   // Filters
   const [searchTerm, setSearchTerm] = useState("");
@@ -93,28 +122,13 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
   });
   const [editFile, setEditFile] = useState<File | null>(null);
 
-  const loadData = async () => {
-    try {
-      setRefreshing(true);
-      if (templates.length === 0) setLoading(true);
-      setLoadError("");
-      const [tpls, sems, depts] = await Promise.all([
-        documentService.getTemplates(),
-        adminSemestersService.getAll().catch(() => []),
-        adminDepartmentsService.getAll(user?.backendRole).catch(() => []),
-      ]);
-      setTemplates(tpls);
-      setSemesters(sems);
-      setDepartments(depts.filter((department) => department.isActive));
-    } catch (err: any) {
-      const message = err?.message || "Không thể tải danh sách biểu mẫu.";
-      setLoadError(message);
-      onShowToast?.(message, "danger");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
+  const loadData = () => Promise.all([
+    queryClient.invalidateQueries({ queryKey: templatesKey }),
+    queryClient.invalidateQueries({ queryKey: semestersKey }),
+    queryClient.invalidateQueries({ queryKey: departmentsKey }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.lecturer.templatesAll }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.student.templates.all }),
+  ]);
 
   const departmentOptions = [
     { value: "", label: "Tất cả Khoa / Bộ môn" },
@@ -123,10 +137,6 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
       label: `${department.name} (${department.code})`,
     })),
   ];
-
-  useEffect(() => {
-    loadData();
-  }, []);
 
   const handleSeedDefaults = async () => {
     if (!window.confirm("Hệ thống sẽ nạp các biểu mẫu chuẩn mặc định của trường vào thư viện. Bạn có muốn tiếp tục?")) {

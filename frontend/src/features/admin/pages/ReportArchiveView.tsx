@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { createPortal } from "react-dom";
 import {
   Archive,
@@ -19,6 +20,8 @@ import { RequestErrorState } from "../../../components/common/RequestErrorState"
 import { TableSkeleton } from "../../../components/common/SkeletonLoader";
 import { useSemester } from "../../../contexts/SemesterContext";
 import { getApiErrorMessage } from "../../../lib/apiClient";
+import { queryKeys } from "../../../lib/queryKeys";
+import { useAuth } from "../../../hooks/useAuth";
 import {
   adminReportArchiveService,
   type ArchiveDocumentType,
@@ -36,6 +39,7 @@ const DOCUMENT_TYPES: { value: ArchiveDocumentType; label: string }[] = [
   { value: "product", label: "Sản phẩm thực tế" },
   { value: "other", label: "Nhật ký thực tập" },
 ];
+const EMPTY_ARCHIVE_STUDENTS: WeeklyReportArchiveStudentDto[] = [];
 
 const dateLabel = (value?: string | null) => value
   ? new Date(value).toLocaleString("vi-VN", {
@@ -67,40 +71,34 @@ const matchesDocumentType = (document: StudentArchiveDocumentItemDto, type: Arch
 };
 
 export const ReportArchiveView = ({ onShowToast }: { onShowToast: (message: string) => void }) => {
-  const { semesters, selectedSemesterId, selectSemester } = useSemester();
-  const [students, setStudents] = useState<WeeklyReportArchiveStudentDto[]>([]);
+  const { semesters, selectedSemesterId, selectSemester, selectedDepartmentId } = useSemester();
+  const { user } = useAuth();
   const [search, setSearch] = useState("");
   const [documentType, setDocumentType] = useState<ArchiveDocumentType>("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [isLoading, setIsLoading] = useState(false);
   const [loadingKey, setLoadingKey] = useState<string | null>(null);
-  const [error, setError] = useState("");
   const [preview, setPreview] = useState<{ url: string; fileName: string } | null>(null);
   const semesterId = selectedSemesterId && selectedSemesterId !== "all" ? selectedSemesterId : "";
   const selectedSemester = semesters.find((semester) => semester.id === semesterId);
 
-  const loadStudents = useCallback(async () => {
-    if (!semesterId) {
-      setStudents([]);
-      return;
-    }
-    setIsLoading(true);
-    setError("");
-    try {
-      setStudents(await adminReportArchiveService.getStudents(semesterId));
-    } catch (requestError) {
-      setStudents([]);
-      setError(getApiErrorMessage(requestError));
-    } finally {
-      setIsLoading(false);
-    }
-  }, [semesterId]);
+  const archiveQuery = useQuery({
+    queryKey: queryKeys.admin.reportArchive.list({
+      semesterId,
+      departmentId: selectedDepartmentId ?? "all",
+      userId: user?.id ?? user?.username ?? "anonymous",
+      backendRole: user?.backendRole ?? "",
+    }),
+    queryFn: () => adminReportArchiveService.getStudents(semesterId),
+    enabled: Boolean(semesterId && user),
+  });
+  const students: WeeklyReportArchiveStudentDto[] = archiveQuery.data ?? EMPTY_ARCHIVE_STUDENTS;
+  const isLoading = archiveQuery.isFetching;
+  const error = archiveQuery.error ? getApiErrorMessage(archiveQuery.error) : "";
 
   useEffect(() => {
-    void loadStudents();
     setCurrentPage(1);
-  }, [loadStudents]);
+  }, [semesterId]);
 
   useEffect(() => () => {
     if (preview?.url) URL.revokeObjectURL(preview.url);
@@ -151,7 +149,7 @@ export const ReportArchiveView = ({ onShowToast }: { onShowToast: (message: stri
       {semesterId && (
         <button
           type="button"
-          onClick={() => void loadStudents()}
+          onClick={() => void archiveQuery.refetch()}
           disabled={isLoading}
           className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 text-slate-600 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] disabled:cursor-not-allowed disabled:opacity-50"
           aria-label="Làm mới danh sách"
@@ -271,7 +269,7 @@ export const ReportArchiveView = ({ onShowToast }: { onShowToast: (message: stri
           <RequestErrorState
             title="Không thể tải kho hồ sơ"
             message={error}
-            onRetry={() => void loadStudents()}
+            onRetry={() => void archiveQuery.refetch()}
             retrying={isLoading}
           />
         </Panel>

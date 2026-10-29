@@ -3,10 +3,10 @@ import { ApiClientError } from "./apiClient";
 
 /** Global defaults cho toàn bộ server-state (Section III — Giai đoạn 0). */
 export const QUERY_DEFAULTS = {
-  /** 2 phút: dữ liệu còn "tươi" → chuyển tab/quay lại thấy ngay, không spinner. */
-  staleTime: 1000 * 60 * 2,
-  /** 10 phút: giữ cache trong RAM rồi mới garbage-collect. */
-  gcTime: 1000 * 60 * 10,
+  /** 5 phút: dữ liệu được dùng lại khi điều hướng trong cùng phiên. */
+  staleTime: 1000 * 60 * 5,
+  /** 20 phút: giữ cache trong RAM sau lần truy cập cuối. */
+  gcTime: 1000 * 60 * 20,
   /** Chỉ retry đúng 1 lần (xem shouldRetry). */
   retries: 1,
 } as const;
@@ -40,6 +40,10 @@ export function createQueryClient(): QueryClient {
         staleTime: QUERY_DEFAULTS.staleTime,
         gcTime: QUERY_DEFAULTS.gcTime,
         retry: shouldRetry,
+        refetchOnWindowFocus: false,
+        // Fresh cache entries won't fetch; stale invalidated entries must refresh on return.
+        refetchOnMount: true,
+        refetchOnReconnect: true,
       },
     },
   });

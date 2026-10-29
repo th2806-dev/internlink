@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Archive, CalendarClock, ChevronDown, ClipboardCheck, SearchX } from "lucide-react";
 import { EmptyState } from "../../../components/common/EmptyState";
 import { Panel } from "../../../components/common/Panel";
@@ -14,7 +15,8 @@ import type { ToastType } from "../../../contexts/ToastContext";
 import type { Submission } from "../../../types/submission";
 import { mapWeeklyReportStatusToUi } from "../../../lib/portalMappers";
 import { useSemester } from "../../../contexts/SemesterContext";
-import { semesterReportScheduleService, type SemesterReportScheduleDto } from "../../../services/semesterReportSchedule.service";
+import { queryKeys } from "../../../lib/queryKeys";
+import { semesterReportScheduleService } from "../../../services/semesterReportSchedule.service";
 import { ScheduleConfigTab } from "./InternshipEvaluationView";
 import { submissionApiService } from "../../../services/submissionApi.service";
 
@@ -44,6 +46,7 @@ const EMPTY_STUDENT_CONTEXT: Record<
   string,
   { studentName: string; mssv: string; company: string }
 > = {};
+const EMPTY_SCHEDULES = [];
 
 /**
  * Trang Duyệt báo cáo thực tập (lát dọc tiên phong — Gold Standard).
@@ -61,22 +64,22 @@ export const ReportsView = ({
   const [reportType, setReportType] = useState("Tất cả");
   const [isDownloadingZip, setIsDownloadingZip] = useState(false);
   const { semesters } = useSemester();
-  const [schedules, setSchedules] = useState<SemesterReportScheduleDto[]>([]);
+  const schedulesQuery = useQuery({
+    queryKey: queryKeys.lecturer.schedules.list({ semesterId: semesterId ?? "all" }),
+    enabled: Boolean(semesterId),
+    staleTime: 10 * 60 * 1000,
+    queryFn: ({ signal }) =>
+      semesterReportScheduleService.getSchedules(semesterId!, { signal }),
+  });
+  const schedules = schedulesQuery.data ?? EMPTY_SCHEDULES;
   const selectedSemester = semesters.find((semester) => semester.id === semesterId);
   const isSemesterClosed = selectedSemester?.status === "completed";
 
   useEffect(() => {
-    if (!semesterId) {
-      setSchedules([]);
-      return;
+    if (schedulesQuery.error) {
+      showToast?.(getApiErrorMessage(schedulesQuery.error), "danger");
     }
-    void semesterReportScheduleService.getSchedules(semesterId)
-      .then(setSchedules)
-      .catch((error: unknown) => {
-        setSchedules([]);
-        showToast?.(getApiErrorMessage(error), "danger");
-      });
-  }, [semesterId, showToast]);
+  }, [schedulesQuery.error, showToast]);
 
   const closedWeekNumbers = schedules
     .filter((schedule) => !schedule.isSubmissionOpen || new Date(schedule.dueDate).getTime() < Date.now())

@@ -189,6 +189,8 @@ export function useAdminStudentsQuery(options: UseAdminStudentsQueryOptions = {}
 
   const invalidate = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.admin.students.all });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.admin.dashboardAll });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.admin.navStatsAll });
   }, [queryClient]);
 
   const invalidateAfterGrant = useCallback(() => {

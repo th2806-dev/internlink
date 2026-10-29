@@ -1,13 +1,14 @@
 import { useState, useEffect, FormEvent } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { formatDateTimeVi } from "../../../lib/formatDateTimeVi";
 import { authService } from "../../../services/auth.service";
-import type { AuthActivityDto, AuthSessionDto } from "../../../types/api";
 import { useAuth } from "../../../hooks/useAuth";
 import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
 import { useAdminNavStats } from "../../../hooks/useAdminNavStats";
 import { useSemester } from "../../../contexts/SemesterContext";
+import { queryKeys } from "../../../lib/queryKeys";
 import {
   User,
   Building2,
@@ -124,8 +125,21 @@ export const AccountView = ({
   const [prefReportDeadlines, setPrefReportDeadlines] = useState(true);
   const [prefWeeklyDigest, setPrefWeeklyDigest] = useState(false);
 
-  const [activeSessions, setActiveSessions] = useState<AuthSessionDto[]>([]);
-  const [activityLogs, setActivityLogs] = useState<AuthActivityDto[]>([]);
+  const accountUserId = user?.id ?? user?.username;
+  const sessionsQuery = useQuery({
+    queryKey: queryKeys.auth.sessions(accountUserId),
+    enabled: Boolean(user),
+    staleTime: 5 * 60 * 1000,
+    queryFn: () => authService.getSessions(),
+  });
+  const activityQuery = useQuery({
+    queryKey: queryKeys.auth.activity(accountUserId),
+    enabled: Boolean(user),
+    staleTime: 5 * 60 * 1000,
+    queryFn: () => authService.getActivity(30),
+  });
+  const activeSessions = sessionsQuery.data ?? [];
+  const activityLogs = activityQuery.data ?? [];
 
   // Sync with user auth if available
   useEffect(() => {
@@ -169,25 +183,6 @@ export const AccountView = ({
     localStorage.setItem(PREFERENCES_KEY, JSON.stringify(next));
     onShowToast("Đã lưu tùy chọn thông báo trên thiết bị này.");
   };
-
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all([authService.getSessions(), authService.getActivity(30)])
-      .then(([sessions, activity]) => {
-        if (cancelled) return;
-        setActiveSessions(sessions);
-        setActivityLogs(activity);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setActiveSessions([]);
-          setActivityLogs([]);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   // Save Profile Handler
   const handleSaveProfile = (e: FormEvent) => {
@@ -845,8 +840,14 @@ export const AccountView = ({
                   {activeSessions.length === 0 ? (
                     <div className="py-6 text-center border border-dashed border-slate-200 rounded-md text-slate-500">
                       <Laptop className="w-5 h-5 mx-auto mb-2 text-slate-400" />
-                      <p className="font-semibold">Chưa có dữ liệu phiên đăng nhập.</p>
-                      <p className="text-[11px] mt-1">Tính năng quản lý phiên sẽ khả dụng khi hệ thống cung cấp dữ liệu thiết bị.</p>
+                      <p className="font-semibold">
+                        {sessionsQuery.error ? "Không thể tải phiên đăng nhập." : "Chưa có dữ liệu phiên đăng nhập."}
+                      </p>
+                      <p className="text-[11px] mt-1">
+                        {sessionsQuery.error
+                          ? getApiErrorMessage(sessionsQuery.error)
+                          : "Tính năng quản lý phiên sẽ khả dụng khi hệ thống cung cấp dữ liệu thiết bị."}
+                      </p>
                     </div>
                   ) : activeSessions.map((sess) => (
                     <div
@@ -1006,8 +1007,14 @@ export const AccountView = ({
                   {activityLogs.length === 0 ? (
                     <div className="py-8 text-center border border-dashed border-slate-200 rounded-md text-slate-500">
                       <History className="w-5 h-5 mx-auto mb-2 text-slate-400" />
-                      <p className="font-semibold">Chưa có nhật ký hoạt động.</p>
-                      <p className="text-[11px] mt-1">Audit log sẽ hiển thị khi backend cung cấp dữ liệu cho tài khoản này.</p>
+                      <p className="font-semibold">
+                        {activityQuery.error ? "Không thể tải nhật ký hoạt động." : "Chưa có nhật ký hoạt động."}
+                      </p>
+                      <p className="text-[11px] mt-1">
+                        {activityQuery.error
+                          ? getApiErrorMessage(activityQuery.error)
+                          : "Audit log sẽ hiển thị khi backend cung cấp dữ liệu cho tài khoản này."}
+                      </p>
                     </div>
                   ) : activityLogs.map((log) => (
                   <div

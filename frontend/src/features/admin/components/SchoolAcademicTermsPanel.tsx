@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarPlus, CalendarRange, PencilLine, Save, X, RefreshCw } from "lucide-react";
 import { Panel } from "../../../components/common/Panel";
 import { getApiErrorMessage } from "../../../lib/apiClient";
+import { queryKeys } from "../../../lib/queryKeys";
 import {
   schoolAcademicTermsService,
   type SchoolAcademicTermDto,
@@ -36,31 +38,28 @@ function nextDate(value: string): string {
 const WEEK_CHIP = "rounded bg-white px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200";
 
 export function SchoolAcademicTermsPanel({ onShowToast }: { onShowToast: (message: string) => void }) {
-  const [terms, setTerms] = useState<SchoolAcademicTermDto[]>([]);
+  const queryClient = useQueryClient();
+  const termsQuery = useQuery({
+    queryKey: queryKeys.admin.schoolTerms.list(),
+    staleTime: 10 * 60 * 1000,
+    queryFn: () => schoolAcademicTermsService.getAll(),
+  });
+  const terms = termsQuery.data ?? [];
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [yearForm, setYearForm] = useState(EMPTY_YEAR_FORM);
   const [showYearForm, setShowYearForm] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isSavingYear, setIsSavingYear] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
   const refresh = async () => {
-    setIsLoading(true);
-    try {
-      setTerms(await schoolAcademicTermsService.getAll());
-      setError("");
-    } catch (loadError) {
-      setError(getApiErrorMessage(loadError));
-    } finally {
-      setIsLoading(false);
-    }
+    const result = await termsQuery.refetch();
+    setError(result.error ? getApiErrorMessage(result.error) : "");
   };
 
-  useEffect(() => {
-    void refresh();
-  }, []);
+  const isLoading = termsQuery.isPending;
+  const visibleError = error || (termsQuery.error ? getApiErrorMessage(termsQuery.error) : "");
 
   const resetForm = () => {
     setEditingId(null);
@@ -84,7 +83,11 @@ export function SchoolAcademicTermsPanel({ onShowToast }: { onShowToast: (messag
       const saved = editingId
         ? await schoolAcademicTermsService.update(editingId, form)
         : await schoolAcademicTermsService.create(form);
-      setTerms((current) => [saved, ...current.filter((term) => term.id !== saved.id)]);
+      queryClient.setQueryData<SchoolAcademicTermDto[]>(
+        queryKeys.admin.schoolTerms.list(),
+        (current = []) => [saved, ...current.filter((term) => term.id !== saved.id)],
+      );
+      void queryClient.invalidateQueries({ queryKey: queryKeys.admin.schoolTerms.all });
       resetForm();
       onShowToast(editingId ? "Đã cập nhật khung học kỳ." : "Đã tạo khung học kỳ.");
     } catch (saveError) {
@@ -108,7 +111,11 @@ export function SchoolAcademicTermsPanel({ onShowToast }: { onShowToast: (messag
         summerStart: yearForm.summerStart,
         summerEnd: yearForm.summerEnd,
       });
-      setTerms((current) => [...result.terms.slice().reverse(), ...current]);
+      queryClient.setQueryData<SchoolAcademicTermDto[]>(
+        queryKeys.admin.schoolTerms.list(),
+        (current = []) => [...result.terms.slice().reverse(), ...current],
+      );
+      void queryClient.invalidateQueries({ queryKey: queryKeys.admin.schoolTerms.all });
       setYearForm(EMPTY_YEAR_FORM);
       setShowYearForm(false);
       onShowToast(
@@ -299,9 +306,9 @@ export function SchoolAcademicTermsPanel({ onShowToast }: { onShowToast: (messag
         </div>
       </form>
 
-      {error && (
+      {visibleError && (
         <div role="alert" className="flex flex-col gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800 sm:flex-row sm:items-center sm:justify-between">
-          <span>{error}</span>
+          <span>{visibleError}</span>
           <button type="button" onClick={() => void refresh()} disabled={isLoading} className="inline-flex items-center gap-1.5 self-start font-semibold underline disabled:opacity-50 sm:self-auto">
             <RefreshCw className={`h-3 w-3 ${isLoading ? "animate-spin" : ""}`} />
             Thử tải lại

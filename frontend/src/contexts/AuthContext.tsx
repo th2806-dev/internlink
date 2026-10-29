@@ -78,6 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [mustChangePassword, setMustChangePassword] = useState(false);
 
   const login = useCallback((session: AuthSession) => {
+    queryClient.clear();
     if (session.token) setStoredToken(session.token);
     setIsLoggedIn(true);
     setUser(session.user);

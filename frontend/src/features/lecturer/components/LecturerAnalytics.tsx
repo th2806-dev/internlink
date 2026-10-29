@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Toast } from "../../../components/common/Toast";
 import {
   BarChart2,
@@ -10,38 +11,65 @@ import {
 import { Panel } from "../../../components/common/Panel";
 import { LecturerSubPageHeader } from "./LecturerSubPageHeader";
 import { lecturerAnalyticsService } from "../../../services/lecturerAnalytics.service";
-import { lecturerInternshipsService, type LecturerSemesterOptionDto } from "../../../services/lecturerInternships.service";
+import { lecturerInternshipsService } from "../../../services/lecturerInternships.service";
 import { useSemester, toApiSemesterId } from "../../../contexts/SemesterContext";
 import { getApiErrorMessage } from "../../../lib/apiClient";
+import { queryKeys } from "../../../lib/queryKeys";
+import { useAuth } from "../../../hooks/useAuth";
 import type {
-  LecturerActivityStatsDto,
-  LecturerDashboardStatsDto,
   LecturerWeeklyTrendDto,
-  LecturerGradeDistributionDto,
-  LecturerCompanyStatDto,
 } from "../../../types/api";
 
-interface LecturerSemesterComparisonRow {
-  semester: LecturerSemesterOptionDto;
-  stats: LecturerDashboardStatsDto;
-  activity: LecturerActivityStatsDto;
-}
+const EMPTY_WEEKLY_TREND: LecturerWeeklyTrendDto[] = [];
 
 export const LecturerAnalytics = () => {
   const { selectedSemester } = useSemester();
+  const { user } = useAuth();
   const [selectedCompanyFilter, setSelectedCompanyFilter] = useState("Tất cả doanh nghiệp");
   const [toastMsg, setToastMsg] = useState<string | null>(null);
-  const [statsData, setStatsData] = useState<LecturerDashboardStatsDto | null>(null);
-  const [weeklyTrend, setWeeklyTrend] = useState<LecturerWeeklyTrendDto[]>([]);
-  const [gradeDist, setGradeDist] = useState<LecturerGradeDistributionDto | null>(null);
-  const [companyStats, setCompanyStats] = useState<LecturerCompanyStatDto[]>([]);
-  const [semesterComparison, setSemesterComparison] = useState<LecturerSemesterComparisonRow[]>([]);
-  const [isComparisonLoading, setIsComparisonLoading] = useState(true);
-  const [isStatsLoading, setIsStatsLoading] = useState(true);
-  const [statsError, setStatsError] = useState<string | null>(null);
-  const [comparisonError, setComparisonError] = useState<string | null>(null);
 
   const semesterId = toApiSemesterId(selectedSemester?.id);
+  const userId = user?.id ?? user?.username ?? "anonymous";
+  const statsQuery = useQuery({
+    queryKey: queryKeys.lecturer.analytics(semesterId, userId),
+    enabled: Boolean(user),
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const [stats, trend, grade, company] = await Promise.all([
+        lecturerAnalyticsService.getStats(semesterId),
+        lecturerAnalyticsService.getWeeklyTrend(semesterId),
+        lecturerAnalyticsService.getGradeDistribution(semesterId),
+        lecturerAnalyticsService.getCompanyStats(semesterId),
+      ]);
+      return { stats, trend, grade, company };
+    },
+  });
+  const comparisonQuery = useQuery({
+    queryKey: queryKeys.lecturer.analyticsComparison(userId),
+    enabled: Boolean(user),
+    staleTime: 10 * 60 * 1000,
+    queryFn: async () => {
+      const assignedSemesters = await lecturerInternshipsService.getAssignedSemesters();
+      return Promise.all(
+        assignedSemesters.map(async (semester) => {
+          const [stats, activity] = await Promise.all([
+            lecturerAnalyticsService.getStats(semester.id),
+            lecturerAnalyticsService.getActivityStats(semester.id),
+          ]);
+          return { semester, stats, activity };
+        }),
+      );
+    },
+  });
+  const statsData = statsQuery.data?.stats ?? null;
+  const weeklyTrend = statsQuery.data?.trend ?? EMPTY_WEEKLY_TREND;
+  const gradeDist = statsQuery.data?.grade ?? null;
+  const companyStats = statsQuery.data?.company ?? [];
+  const semesterComparison = comparisonQuery.data ?? [];
+  const isStatsLoading = statsQuery.isPending;
+  const isComparisonLoading = comparisonQuery.isPending;
+  const statsError = statsQuery.error ? getApiErrorMessage(statsQuery.error) : null;
+  const comparisonError = comparisonQuery.error ? getApiErrorMessage(comparisonQuery.error) : null;
   const hasStatsData = statsData !== null;
 
   const showToast = useCallback((msg: string) => {
@@ -54,68 +82,13 @@ export const LecturerAnalytics = () => {
       ? companyStats
       : companyStats.filter((c) => c.companyName === selectedCompanyFilter);
 
-  const fetchData = useCallback(async () => {
-    setIsStatsLoading(true);
-    setStatsError(null);
-    setStatsData(null);
-    setWeeklyTrend([]);
-    setGradeDist(null);
-    setCompanyStats([]);
-    try {
-      const [stats, trend, grade, company] = await Promise.all([
-        lecturerAnalyticsService.getStats(semesterId),
-        lecturerAnalyticsService.getWeeklyTrend(semesterId),
-        lecturerAnalyticsService.getGradeDistribution(semesterId),
-        lecturerAnalyticsService.getCompanyStats(semesterId),
-      ]);
-      setStatsData(stats);
-      setWeeklyTrend(trend);
-      setGradeDist(grade);
-      setCompanyStats(company);
-    } catch (err) {
-      const message = getApiErrorMessage(err);
-      setStatsError(message);
-      showToast(message);
-    } finally {
-      setIsStatsLoading(false);
-    }
-  }, [semesterId, showToast]);
+  useEffect(() => {
+    if (statsError) showToast(statsError);
+  }, [showToast, statsError]);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  useEffect(() => {
-    let cancelled = false;
-    setIsComparisonLoading(true);
-    setComparisonError(null);
-    setSemesterComparison([]);
-    lecturerInternshipsService.getAssignedSemesters()
-      .then((assignedSemesters) => Promise.all(
-        assignedSemesters.map(async (semester) => ({
-          semester,
-          stats: await lecturerAnalyticsService.getStats(semester.id),
-          activity: await lecturerAnalyticsService.getActivityStats(semester.id),
-        })),
-      ))
-      .then((rows) => {
-        if (!cancelled) setSemesterComparison(rows);
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          const message = getApiErrorMessage(error);
-          setComparisonError(message);
-          showToast(message);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setIsComparisonLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [showToast]);
+    if (comparisonError) showToast(comparisonError);
+  }, [comparisonError, showToast]);
 
   // Đổi kỳ → reset lọc doanh nghiệp (DN của kỳ cũ không còn trong danh sách → bảng rỗng ảo).
   useEffect(() => {

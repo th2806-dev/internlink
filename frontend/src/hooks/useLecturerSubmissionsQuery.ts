@@ -74,8 +74,6 @@ export function useLecturerSubmissionsQuery({
     },
     enabled,
     placeholderData: keepPreviousData,
-    refetchInterval: 10_000,
-    refetchIntervalInBackground: false,
   });
 
   useEffect(() => {
@@ -132,6 +130,9 @@ export function useLecturerSubmissionsQuery({
       });
       void queryClient.invalidateQueries({
         queryKey: queryKeys.lecturerReports.all,
+      });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.lecturer.analyticsAll,
       });
       onUpdated?.();
     },

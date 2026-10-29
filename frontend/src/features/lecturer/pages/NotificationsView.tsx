@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Bell, CheckCheck, Clock, Info, RefreshCw, Search, ShieldCheck, User, X } from "lucide-react";
 import { Panel } from "../../../components/common/Panel";
 import { LecturerSubPageHeader } from "../components/LecturerSubPageHeader";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { mapNotificationDtoToLecturerUi } from "../../../lib/portalMappers";
 import { notificationService } from "../../../services/notification.service";
+import { queryKeys } from "../../../lib/queryKeys";
+import { useAuth } from "../../../hooks/useAuth";
 
 export type SystemNotificationItem = ReturnType<typeof mapNotificationDtoToLecturerUi> & {
   student?: string;
@@ -12,6 +15,7 @@ export type SystemNotificationItem = ReturnType<typeof mapNotificationDtoToLectu
 };
 type NotificationItem = SystemNotificationItem;
 type ViewFilter = "all" | "system" | "deadline" | "feedback";
+const EMPTY_NOTIFICATIONS: NotificationItem[] = [];
 
 const filterLabels: Record<ViewFilter, string> = {
   all: "Tất cả",
@@ -28,38 +32,35 @@ function matchesFilter(item: NotificationItem, filter: ViewFilter) {
 }
 
 export const NotificationsView = () => {
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const notificationsQuery = useQuery({
+    queryKey: queryKeys.lecturer.notifications.list({
+      userId: user?.id ?? user?.username ?? "anonymous",
+    }),
+    enabled: Boolean(user),
+    queryFn: async () => (await notificationService.getMine()).map(mapNotificationDtoToLecturerUi),
+  });
+  const notifications = notificationsQuery.data ?? EMPTY_NOTIFICATIONS;
+  const isLoading = notificationsQuery.isPending;
+  const error = notificationsQuery.error
+    ? getApiErrorMessage(notificationsQuery.error)
+    : null;
   const [selected, setSelected] = useState<NotificationItem | null>(null);
   const [filter, setFilter] = useState<ViewFilter>("all");
   const [search, setSearch] = useState("");
   const [unreadOnly, setUnreadOnly] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [reloadToken, setReloadToken] = useState(0);
   const [isMarkingAll, setIsMarkingAll] = useState(false);
   const [markingIds, setMarkingIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    let cancelled = false;
-    setIsLoading(true);
-    setError(null);
-    notificationService.getMine()
-      .then((rows) => {
-        if (cancelled) return;
-        const mapped = rows.map(mapNotificationDtoToLecturerUi);
-        setNotifications(mapped);
-        setSelected(mapped[0] ?? null);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setNotifications([]);
-        setSelected(null);
-        setError(getApiErrorMessage(err));
-      })
-      .finally(() => { if (!cancelled) setIsLoading(false); });
-    return () => { cancelled = true; };
-  }, [reloadToken]);
+    setSelected((current) =>
+      current
+        ? notifications.find((item) => item.id === current.id) ?? notifications[0] ?? null
+        : notifications[0] ?? null,
+    );
+  }, [notifications]);
 
   const unreadCount = notifications.filter((item) => item.isUnread).length;
   const visible = useMemo(() => {
@@ -83,7 +84,12 @@ export const NotificationsView = () => {
     setMarkingIds((current) => new Set(current).add(item.id));
     try {
       await notificationService.markRead(item.id);
-      setNotifications((current) => current.map((entry) => entry.id === item.id ? { ...entry, isUnread: false } : entry));
+      queryClient.setQueryData<NotificationItem[]>(
+        queryKeys.lecturer.notifications.list({
+          userId: user?.id ?? user?.username ?? "anonymous",
+        }),
+        (current) => current?.map((entry) => entry.id === item.id ? { ...entry, isUnread: false } : entry),
+      );
       setSelected((current) => current?.id === item.id ? { ...current, isUnread: false } : current);
     } catch (err) {
       setActionError(getApiErrorMessage(err));
@@ -102,7 +108,12 @@ export const NotificationsView = () => {
     setIsMarkingAll(true);
     try {
       await notificationService.markAllRead();
-      setNotifications((current) => current.map((item) => ({ ...item, isUnread: false })));
+      queryClient.setQueryData<NotificationItem[]>(
+        queryKeys.lecturer.notifications.list({
+          userId: user?.id ?? user?.username ?? "anonymous",
+        }),
+        (current) => current?.map((item) => ({ ...item, isUnread: false })),
+      );
       setSelected((current) => current ? { ...current, isUnread: false } : current);
     } catch (err) {
       setActionError(getApiErrorMessage(err));
@@ -146,7 +157,7 @@ export const NotificationsView = () => {
           </div>
           <button
             type="button"
-            onClick={() => setReloadToken((token) => token + 1)}
+            onClick={() => void notificationsQuery.refetch()}
             className="il-btn il-btn-primary"
           >
             <RefreshCw className="h-3.5 w-3.5" /> Thử lại

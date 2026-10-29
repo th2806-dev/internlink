@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Sliders,
   Building2,
@@ -21,6 +22,8 @@ import {
   adminSettingsService,
   type AdminFacultySettings,
 } from "../../../services/adminSettings.service";
+import { queryKeys } from "../../../lib/queryKeys";
+import { useAuth } from "../../../hooks/useAuth";
 
 type FacultySettings = AdminFacultySettings;
 
@@ -43,33 +46,32 @@ export const SettingsView = ({
   onShowToast: (msg: string, type?: ToastType) => void;
   onNavigateTab?: (tab: string) => void;
 }) => {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const settingsKey = queryKeys.admin.settings.data({
+    backendRole: user?.backendRole ?? "",
+    userId: user?.id ?? user?.username ?? "anonymous",
+  });
+  const settingsQuery = useQuery({
+    queryKey: settingsKey,
+    queryFn: adminSettingsService.getSettings,
+  });
   const [settings, setSettings] = useState<FacultySettings>(EMPTY_FACULTY_SETTINGS);
 
   const [isSaving, setIsSaving] = useState(false);
   const [isTestingEmail, setIsTestingEmail] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
-  const [isLoadingSettings, setIsLoadingSettings] = useState(true);
-  const [settingsLoadError, setSettingsLoadError] = useState(false);
   const [savedSettings, setSavedSettings] = useState<FacultySettings>(EMPTY_FACULTY_SETTINGS);
+  const isLoadingSettings = settingsQuery.isPending;
+  const settingsLoadError = settingsQuery.isError;
   const hasUnsavedChanges = JSON.stringify(settings) !== JSON.stringify(savedSettings);
 
-  const loadSettings = useCallback(async () => {
-    setIsLoadingSettings(true);
-    setSettingsLoadError(false);
-    try {
-      const data = await adminSettingsService.getSettings();
-      setSettings(data);
-      setSavedSettings(data);
-    } catch {
-      setSettingsLoadError(true);
-    } finally {
-      setIsLoadingSettings(false);
-    }
-  }, []);
-
   useEffect(() => {
-    void loadSettings();
-  }, [loadSettings]);
+    if (settingsQuery.data) {
+      setSettings(settingsQuery.data);
+      setSavedSettings(settingsQuery.data);
+    }
+  }, [settingsQuery.data]);
 
   const handleSave = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -102,6 +104,7 @@ export const SettingsView = ({
       const updated = await adminSettingsService.updateSettings(payload);
       setSettings(updated);
       setSavedSettings(updated);
+      queryClient.setQueryData(settingsKey, updated);
       onShowToast("Đã lưu các thiết lập cài đặt thành công!");
     } catch (err) {
       onShowToast(`Không thể lưu cài đặt lên hệ thống. ${getApiErrorMessage(err)}`, "danger");
@@ -117,6 +120,7 @@ export const SettingsView = ({
         const res = await adminSettingsService.resetSettings();
         setSettings(res);
         setSavedSettings(res);
+        queryClient.setQueryData(settingsKey, res);
       onShowToast("Đã khôi phục tất cả cài đặt về giá trị mặc định của Khoa.");
     } catch (err) {
       onShowToast(`Không thể khôi phục cài đặt mặc định. ${getApiErrorMessage(err)}`, "danger");
@@ -177,11 +181,11 @@ export const SettingsView = ({
           </div>
           <button
             type="button"
-            onClick={() => void loadSettings()}
-            disabled={isLoadingSettings}
+            onClick={() => void settingsQuery.refetch()}
+            disabled={settingsQuery.isFetching}
             className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-rose-300 bg-white px-3 font-semibold text-rose-800 transition-colors hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <RotateCcw className={`h-3.5 w-3.5 ${isLoadingSettings ? "animate-spin" : ""}`} aria-hidden="true" />
+            <RotateCcw className={`h-3.5 w-3.5 ${settingsQuery.isFetching ? "animate-spin" : ""}`} aria-hidden="true" />
             Thử tải lại
           </button>
         </div>
