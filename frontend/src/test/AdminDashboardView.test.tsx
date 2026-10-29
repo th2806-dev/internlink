@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DashboardView } from "../features/admin/pages/DashboardView";
 
@@ -133,6 +133,21 @@ describe("Admin dashboard chart modes", () => {
     expect(screen.getByRole("combobox", { name: "Khoa" })).toBeDisabled();
     expect(screen.getByRole("combobox", { name: "Năm học" })).toBeEnabled();
     expect(screen.getByRole("combobox", { name: "Học kỳ" })).toBeEnabled();
+    expect(screen.getByLabelText("Khoa")).toHaveClass("h-9", "rounded-lg", "bg-white");
+    expect(screen.getByLabelText("Năm học")).toHaveClass("h-9", "rounded-lg", "bg-white");
+    expect(screen.getByLabelText("Học kỳ")).toHaveClass("h-9", "rounded-lg", "bg-white");
+    expect(screen.getByText("67%")).toBeInTheDocument();
+    expect(screen.getAllByText("Đã phân công").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Đã chấm")).not.toBeInTheDocument();
+    const assignmentChart = screen.getByRole("img", {
+      name: "Biểu đồ phân bổ sinh viên được phân công hướng dẫn",
+    });
+    expect(within(assignmentChart).queryByText("Đã phân công")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole("img", {
+        name: "Tiến độ báo cáo: 0 đúng hạn, 0 trễ, 0 còn thiếu",
+      })).toBeInTheDocument();
+    });
     expect(barButton).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("img", {
       name: "So sánh số sinh viên, đã phân công và doanh nghiệp giữa các học kỳ",

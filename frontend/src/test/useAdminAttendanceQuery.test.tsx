@@ -52,6 +52,26 @@ const mockSessions: AttendanceSessionDto[] = [
     attendanceRate: 95.8,
     createdAt: "2026-01-20T00:00:00Z",
   },
+  {
+    id: "session-2",
+    semesterId: "sem-1",
+    lecturerId: "lec-1",
+    weekNumber: 2,
+    title: "Buổi tổng kết giữa kỳ",
+    description: "Đánh giá tiến độ thực tập",
+    meetingDate: "2026-03-01T09:00:00Z",
+    durationMinutes: 90,
+    location: "Phòng B",
+    semesterName: "Học kỳ I",
+    lecturerName: "TS. Nguyễn Văn A",
+    status: "Completed",
+    isLecturerOnly: false,
+    totalStudents: 120,
+    presentCount: 118,
+    absentCount: 2,
+    attendanceRate: 98.3,
+    createdAt: "2026-02-20T00:00:00Z",
+  },
 ];
 
 describe("useAdminAttendanceQuery", () => {
@@ -103,8 +123,29 @@ describe("useAdminAttendanceQuery", () => {
       undefined,
       expect.objectContaining({ signal: expect.any(AbortSignal) })
     );
-    expect(result.current.sessions).toHaveLength(1);
+    expect(result.current.sessions).toHaveLength(2);
     expect(result.current.sessions[0].title).toBe("Buổi sinh hoạt khoa đầu kỳ");
+  });
+
+  it("keeps all sessions available for totals while filters change the visible list", async () => {
+    vi.mocked(attendanceService.getLecturerSessions).mockResolvedValue(mockSessions);
+    vi.mocked(adminLecturersService.getAll).mockResolvedValue([]);
+    vi.mocked(adminStudentsService.getAll).mockResolvedValue([]);
+
+    const { result } = renderHook(
+      () => useAdminAttendanceQuery({ semesterId: "sem-1" }),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.allSessions).toHaveLength(2);
+    expect(result.current.sessions).toHaveLength(2);
+
+    act(() => result.current.setStatusFilter("Completed"));
+
+    expect(result.current.allSessions).toHaveLength(2);
+    expect(result.current.sessions).toHaveLength(1);
+    expect(result.current.sessions[0].title).toBe("Buổi tổng kết giữa kỳ");
   });
 
   it("creates a department meeting session and invalidates sessions cache", async () => {

@@ -22,6 +22,7 @@ interface AdminKpiCardProps {
   icon: LucideIcon;
   iconClassName: string;
   valueClassName: string;
+  hoverClassName: string;
   onClick?: () => void;
 }
 
@@ -33,37 +34,38 @@ function AdminKpiCard({
   icon: Icon,
   iconClassName,
   valueClassName,
+  hoverClassName,
   onClick,
 }: AdminKpiCardProps) {
   const content = (
     <>
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-          {title}
-        </span>
-        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${iconClassName}`}>
-          <Icon className="h-4 w-4" aria-hidden="true" />
-        </span>
-      </div>
       <div>
-        <div className="flex items-baseline gap-2">
-          <span className={`text-3xl font-extrabold ${valueClassName}`}>{value}</span>
-          <span className="text-xs font-medium text-slate-600">{unit}</span>
+        <div className="mb-2 flex items-center justify-between gap-2 text-xs">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+            {title}
+          </span>
+          <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${iconClassName}`}>
+            <Icon className="h-4 w-4" aria-hidden="true" />
+          </span>
         </div>
-        <div className="mt-2 text-[11px] font-medium text-slate-400">{footer}</div>
+        <div className="flex items-baseline gap-2">
+          <span className={`text-2xl font-extrabold ${valueClassName}`}>{value}</span>
+          <span className="text-xs font-medium text-slate-500">{unit}</span>
+        </div>
       </div>
+      <p className="mt-2 text-[11px] font-medium text-slate-400">{footer}</p>
     </>
   );
 
   const className =
-    "flex min-h-[158px] flex-col justify-between rounded-xl border border-slate-200/90 bg-white p-4 text-left shadow-2xs transition-colors";
+    "flex flex-col justify-between rounded-lg border border-slate-200/90 bg-white p-4 text-left shadow-2xs transition-all";
 
   if (onClick) {
     return (
       <button
         type="button"
         onClick={onClick}
-        className={`${className} cursor-pointer hover:border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]`}
+        className={`${className} cursor-pointer ${hoverClassName} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]`}
       >
         {content}
       </button>
@@ -99,6 +101,7 @@ export const AdminKpiSection = ({
       icon={UserCheck}
       iconClassName="bg-sky-50 text-[#026aa7]"
       valueClassName="text-[#026aa7]"
+      hoverClassName="hover:border-blue-300"
       onClick={onCardClick ? () => onCardClick("lecturers") : undefined}
     />
     <AdminKpiCard
@@ -109,6 +112,7 @@ export const AdminKpiSection = ({
       icon={Users}
       iconClassName="bg-lime-50 text-[#4f7f25]"
       valueClassName="text-[#4f7f25]"
+      hoverClassName="hover:border-emerald-300"
       onClick={onCardClick ? () => onCardClick("students") : undefined}
     />
     <AdminKpiCard
@@ -119,6 +123,7 @@ export const AdminKpiSection = ({
       icon={CalendarDays}
       iconClassName="bg-amber-50 text-amber-700"
       valueClassName="text-slate-900"
+      hoverClassName="hover:border-amber-300"
       onClick={onCardClick ? () => onCardClick("semesters") : undefined}
     />
     <AdminKpiCard
@@ -129,6 +134,7 @@ export const AdminKpiSection = ({
       icon={Building2}
       iconClassName="bg-violet-50 text-violet-700"
       valueClassName="text-violet-700"
+      hoverClassName="hover:border-violet-300"
       onClick={onCardClick ? () => onCardClick("companies") : undefined}
     />
   </section>

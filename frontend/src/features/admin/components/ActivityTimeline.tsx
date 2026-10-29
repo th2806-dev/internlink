@@ -56,11 +56,12 @@ export const AdminActivityTimeline = ({
       </div>
 
       {isLoading ? (
-        <p className="text-xs text-slate-500 py-6 text-center">Đang tải…</p>
+        <p className="py-4 text-center text-xs text-slate-500">Đang tải…</p>
       ) : activities.length === 0 ? (
-        <p className="text-xs text-slate-500 py-6 text-center">
-          Chưa có hoạt động gần đây
-        </p>
+        <div className="flex min-h-[72px] flex-col items-center justify-center gap-1.5 text-center">
+          <Bell className="h-5 w-5 text-slate-300" aria-hidden="true" />
+          <p className="text-xs text-slate-500">Chưa có hoạt động gần đây</p>
+        </div>
       ) : (
         <ul className="space-y-3">
           {activities.map((act) => {

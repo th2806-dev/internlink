@@ -14,7 +14,6 @@ import {
   X,
 } from "lucide-react";
 import { Panel } from "../../../components/common/Panel";
-import { Toolbar } from "../../../components/common/Toolbar";
 import { EmptyState } from "../../../components/common/EmptyState";
 import { RequestErrorState } from "../../../components/common/RequestErrorState";
 import { TableSkeleton } from "../../../components/common/SkeletonLoader";
@@ -133,6 +132,42 @@ export const ReportArchiveView = ({ onShowToast }: { onShowToast: (message: stri
   const totalFinalReports = students.filter((student) => student.hasFinalReport).length;
   const totalEvidence = students.filter((student) => student.hasEvidence).length;
   const totalDocuments = students.reduce((total, student) => total + student.totalFilesCount, 0);
+  const semesterControls = (
+    <div className="flex flex-wrap items-center gap-2">
+      <label htmlFor="archive-semester" className="text-xs font-semibold text-slate-700">Học kỳ</label>
+      <select
+        id="archive-semester"
+        value={selectedSemesterId}
+        onChange={(event) => selectSemester(event.target.value)}
+        className="h-9 min-w-52 rounded-md border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-800 outline-none transition-colors focus-visible:border-[#026aa7] focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+      >
+        <option value="all">Chọn học kỳ</option>
+        {semesters.map((semester) => (
+          <option key={semester.id} value={semester.id}>
+            {semester.name || `${semester.term} · ${semester.academicYear}`}
+          </option>
+        ))}
+      </select>
+      {semesterId && (
+        <button
+          type="button"
+          onClick={() => void loadStudents()}
+          disabled={isLoading}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 text-slate-600 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] disabled:cursor-not-allowed disabled:opacity-50"
+          aria-label="Làm mới danh sách"
+          title="Làm mới"
+        >
+          <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} aria-hidden="true" />
+        </button>
+      )}
+      {isLoading && (
+        <span role="status" className="inline-flex items-center gap-1.5 text-xs font-medium text-[#026aa7]">
+          <RefreshCw className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+          Đang tải kho hồ sơ…
+        </span>
+      )}
+    </div>
+  );
 
   const downloadZip = async (student?: WeeklyReportArchiveStudentDto) => {
     if (!semesterId) return;
@@ -209,54 +244,15 @@ export const ReportArchiveView = ({ onShowToast }: { onShowToast: (message: stri
         </div>
       </section>
 
-      <Toolbar
-        left={(
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600">
-            <span>
-              Học kỳ: <strong className="font-semibold text-slate-800">{selectedSemester?.name || "—"}</strong>
-            </span>
-            {isLoading && (
-              <span role="status" className="inline-flex items-center gap-1.5 font-medium text-[#026aa7]">
-                <RefreshCw className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                Đang tải kho hồ sơ…
-              </span>
-            )}
-          </div>
-        )}
-        right={(
-          <>
-            <label htmlFor="archive-semester" className="text-xs font-semibold text-slate-700">Học kỳ</label>
-            <select
-              id="archive-semester"
-              value={selectedSemesterId}
-              onChange={(event) => selectSemester(event.target.value)}
-              className="min-h-9 min-w-60 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus-visible:border-[#026aa7] focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
-            >
-              <option value="all">Chọn học kỳ</option>
-              {semesters.map((semester) => (
-                <option key={semester.id} value={semester.id}>
-                  {semester.name || `${semester.term} · ${semester.academicYear}`}
-                </option>
-              ))}
-            </select>
-            {semesterId && (
-              <button
-                type="button"
-                onClick={() => void loadStudents()}
-                disabled={isLoading}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 text-slate-600 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] disabled:cursor-not-allowed disabled:opacity-50"
-                aria-label="Làm mới danh sách"
-                title="Làm mới"
-              >
-                <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} aria-hidden="true" />
-              </button>
-            )}
-          </>
-        )}
-      />
-
       {!semesterId ? (
         <Panel className="rounded-xl border-slate-200/90 shadow-2xs">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+            <div>
+              <h2 className="text-base font-bold tracking-tight text-slate-900">Hồ sơ theo sinh viên</h2>
+              <p className="mt-0.5 text-xs text-slate-500">Chọn học kỳ để tra cứu tài liệu đã nộp.</p>
+            </div>
+            {semesterControls}
+          </div>
           <EmptyState
             icon={Archive}
             title="Chọn học kỳ để xem kho hồ sơ"
@@ -265,6 +261,13 @@ export const ReportArchiveView = ({ onShowToast }: { onShowToast: (message: stri
         </Panel>
       ) : error ? (
         <Panel className="rounded-xl border-slate-200/90 shadow-2xs">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+            <div>
+              <h2 className="text-base font-bold tracking-tight text-slate-900">Hồ sơ theo sinh viên</h2>
+              <p className="mt-0.5 text-xs text-slate-500">{selectedSemester?.name || "Học kỳ đang chọn"}</p>
+            </div>
+            {semesterControls}
+          </div>
           <RequestErrorState
             title="Không thể tải kho hồ sơ"
             message={error}
@@ -289,16 +292,17 @@ export const ReportArchiveView = ({ onShowToast }: { onShowToast: (message: stri
           </div>
 
           <Panel className="space-y-4 rounded-xl border-slate-200/90 shadow-2xs">
-            <div className="flex flex-col gap-3 border-b border-slate-100 pb-3 sm:flex-row sm:items-end sm:justify-between">
+            <div className="flex flex-col gap-3 border-b border-slate-100 pb-3.5">
               <div>
                 <h2 className="text-base font-bold tracking-tight text-slate-900">Hồ sơ theo sinh viên</h2>
                 <p className="mt-0.5 text-xs text-slate-500">
                   {selectedSemester?.name || "Học kỳ đang chọn"} · {totalDocuments} tài liệu
                 </p>
               </div>
+              {semesterControls}
               <div className="grid gap-2 sm:grid-cols-[minmax(230px,1fr)_220px]">
                 <label className="relative block">
-                  <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
                   <input
                     value={search}
                     onChange={(event) => {
@@ -306,7 +310,7 @@ export const ReportArchiveView = ({ onShowToast }: { onShowToast: (message: stri
                       setCurrentPage(1);
                     }}
                     placeholder="Tìm MSSV, họ tên, lớp, doanh nghiệp"
-                    className="min-h-10 w-full rounded-md border border-slate-200 bg-slate-50 py-2 pl-8 pr-3 text-xs outline-none focus:border-[#026aa7] focus:bg-white"
+                    className="h-9 w-full rounded-md border border-slate-200 bg-slate-50 py-1.5 pl-9 pr-3 text-xs outline-none transition-colors focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
                     aria-label="Tìm sinh viên hoặc tài liệu trong kho"
                   />
                 </label>
@@ -318,7 +322,7 @@ export const ReportArchiveView = ({ onShowToast }: { onShowToast: (message: stri
                       setDocumentType(event.target.value as ArchiveDocumentType);
                       setCurrentPage(1);
                     }}
-                    className="min-h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 outline-none focus-visible:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+                    className="h-9 w-full rounded-md border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700 outline-none focus-visible:border-[#026aa7] focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
                   >
                     {DOCUMENT_TYPES.map((option) => (
                       <option key={option.value} value={option.value}>{option.label}</option>

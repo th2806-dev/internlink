@@ -44,7 +44,8 @@ describe("Admin KPI cards", () => {
     );
     const cards = screen.getAllByRole("button");
     expect(cards).toHaveLength(4);
-    expect(cards[0]).toHaveClass("rounded-xl", "border", "bg-white");
+    expect(cards[0]).toHaveClass("rounded-lg", "border", "bg-white", "p-4");
+    expect(screen.getByText("14")).toHaveClass("text-2xl");
     expect(screen.getByText("14")).toBeInTheDocument();
     expect(screen.getByText("260")).toBeInTheDocument();
 

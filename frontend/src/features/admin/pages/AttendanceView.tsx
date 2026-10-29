@@ -8,7 +8,9 @@ import {
   Pencil,
   Trash2,
   Search,
+  ChevronDown,
   Check,
+  CheckCircle2,
   X,
   RefreshCw,
   Video,
@@ -16,7 +18,6 @@ import {
 import { useSemester } from "../../../contexts/SemesterContext";
 import type { ToastType } from "../../../contexts/ToastContext";
 import { Panel } from "../../../components/common/Panel";
-import { Toolbar } from "../../../components/common/Toolbar";
 import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
 import { ConfirmDialog } from "../../../components/common/ConfirmDialog";
 import { EmptyState } from "../../../components/common/EmptyState";
@@ -82,6 +83,7 @@ export const AttendanceView: React.FC<{
 
   const {
     sessions,
+    allSessions,
     lecturers,
     students,
     searchTerm,
@@ -480,112 +482,135 @@ export const AttendanceView: React.FC<{
         </div>
       </section>
 
-      <Toolbar
-        left={
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600">
-            <span>
-              Học kỳ: <strong className="font-semibold text-slate-800">{currentSemester?.name || "—"}</strong>
-            </span>
-            {isFetching && (
-              <span role="status" className="inline-flex items-center gap-1.5 font-medium text-[#026aa7]">
-                <RefreshCw className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                Đang cập nhật…
-              </span>
-            )}
-          </div>
-        }
-      />
-
       {/* SESSIONS PANEL */}
       <Panel className="space-y-4 rounded-xl border-slate-200/90 shadow-2xs">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-base font-bold text-slate-900 tracking-tight">
-                Lịch buổi gặp
+        <div className="flex flex-col gap-3 border-b border-slate-100 pb-3.5">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-base font-bold tracking-tight text-slate-900">
+                Lịch sinh hoạt &amp; Điểm danh
               </h2>
-              {currentSemester?.name && (
-                <span className="px-2 py-0.5 bg-[#026aa7]/5 text-[#026aa7] font-bold text-[10px] rounded-md border border-[#026aa7]/12">
-                  {currentSemester.name}
+              <p className="mt-0.5 text-xs font-medium text-slate-500">
+                Theo dõi lịch gặp định kỳ, trạng thái tổ chức và chuyên cần sinh viên
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-2.5 py-1 font-semibold text-slate-700">
+                <CalendarCheck className="h-3.5 w-3.5 text-slate-500" aria-hidden="true" />
+                Tổng {allSessions.length} buổi
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-md border border-emerald-100 bg-emerald-50 px-2.5 py-1 font-semibold text-emerald-800">
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" aria-hidden="true" />
+                {allSessions.filter((session) => session.status === "Completed").length} hoàn thành
+              </span>
+              {allSessions.some((session) => session.status === "Scheduled") && (
+                <span className="inline-flex items-center gap-1.5 rounded-md border border-sky-100 bg-sky-50 px-2.5 py-1 font-semibold text-[#026aa7]">
+                  <Clock className="h-3.5 w-3.5 text-[#026aa7]" aria-hidden="true" />
+                  {allSessions.filter((session) => session.status === "Scheduled").length} sắp diễn ra
                 </span>
               )}
             </div>
           </div>
 
-          {/* FILTERS */}
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                aria-label="Tìm buổi gặp"
-                placeholder="Tìm tiêu đề, GV chủ trì, địa điểm…"
-                className="min-h-9 w-52 rounded-md border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-3 text-xs outline-none focus-visible:border-[#026aa7] focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
-              />
+          <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2.5">
+              <div className="relative min-w-[240px] flex-1 sm:max-w-xs">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  aria-label="Tìm buổi gặp"
+                  placeholder="Tìm tiêu đề, giảng viên, phòng học…"
+                  className="h-9 w-full rounded-md border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-3 text-xs font-medium outline-none transition-colors placeholder:text-slate-400 focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+                />
+              </div>
+
+              <div className="relative">
+                <select
+                  value={weekFilter}
+                  onChange={(event) => setWeekFilter(event.target.value)}
+                  aria-label="Lọc theo tuần"
+                  className="h-9 w-[155px] cursor-pointer appearance-none rounded-md border border-slate-200 bg-slate-50 pl-3 pr-8 text-xs font-semibold text-slate-700 outline-none transition-colors hover:border-slate-300 focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+                >
+                  <option value="all">Tất cả tuần</option>
+                  {PREP_WEEKS.map((week) => (
+                    <option key={week} value={String(week)}>{weekOptionLabel(week)}</option>
+                  ))}
+                  {Array.from({ length: totalWeeks }, (_, index) => index + 1).map((week) => (
+                    <option key={week} value={String(week)}>{weekOptionLabel(week)}</option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+              </div>
+
+              <div className="relative">
+                <select
+                  value={lecturerFilter}
+                  onChange={(event) => setLecturerFilter(event.target.value)}
+                  aria-label="Lọc theo giảng viên"
+                  className="h-9 w-[190px] cursor-pointer appearance-none truncate rounded-md border border-slate-200 bg-slate-50 pl-3 pr-8 text-xs font-semibold text-slate-700 outline-none transition-colors hover:border-slate-300 focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+                >
+                  <option value="all">Tất cả giảng viên</option>
+                  {lecturers.map((lecturer) => (
+                    <option key={lecturer.id} value={lecturer.id}>{lecturer.fullName}</option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+              </div>
+
+              <div className="relative">
+                <select
+                  value={statusFilter}
+                  onChange={(event) => setStatusFilter(event.target.value)}
+                  aria-label="Lọc theo trạng thái"
+                  className="h-9 w-[155px] cursor-pointer appearance-none rounded-md border border-slate-200 bg-slate-50 pl-3 pr-8 text-xs font-semibold text-slate-700 outline-none transition-colors hover:border-slate-300 focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+                >
+                  <option value="all">Tất cả trạng thái</option>
+                  <option value="Scheduled">Sắp diễn ra</option>
+                  <option value="Completed">Đã hoàn thành</option>
+                  <option value="Cancelled">Đã hủy</option>
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+              </div>
+
+              {(searchTerm || weekFilter !== "all" || lecturerFilter !== "all" || statusFilter !== "all") && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchTerm("");
+                    setWeekFilter("all");
+                    setLecturerFilter("all");
+                    setStatusFilter("all");
+                  }}
+                  className="h-9 rounded-md px-2.5 text-xs font-semibold text-[#026aa7] transition-colors hover:bg-[#026aa7]/5 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
+                >
+                  Xóa lọc
+                </button>
+              )}
             </div>
 
-            {/* Week filter */}
-            <select
-              value={weekFilter}
-              onChange={(e) => setWeekFilter(e.target.value)}
-              aria-label="Lọc theo tuần"
-              className="min-h-9 cursor-pointer rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium outline-none focus-visible:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
-            >
-              <option value="all">Tất cả tuần</option>
-              {PREP_WEEKS.map((w) => (
-                <option key={w} value={String(w)}>
-                  {weekOptionLabel(w)}
-                </option>
-              ))}
-              {Array.from({ length: totalWeeks }, (_, i) => i + 1).map((w) => (
-                <option key={w} value={String(w)}>
-                  {weekOptionLabel(w)}
-                </option>
-              ))}
-            </select>
-
-            {/* Lecturer filter */}
-            <select
-              value={lecturerFilter}
-              onChange={(e) => setLecturerFilter(e.target.value)}
-              aria-label="Lọc theo giảng viên"
-              className="min-h-9 max-w-[180px] cursor-pointer truncate rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium outline-none focus-visible:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
-            >
-              <option value="all">Tất cả giảng viên</option>
-              {lecturers.map((lec) => (
-                <option key={lec.id} value={lec.id}>
-                  {lec.fullName}
-                </option>
-              ))}
-            </select>
-
-            {/* Status filter */}
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              aria-label="Lọc theo trạng thái"
-              className="min-h-9 cursor-pointer rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium outline-none focus-visible:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
-            >
-              <option value="all">Tất cả trạng thái</option>
-              <option value="Scheduled">Sắp diễn ra</option>
-              <option value="Completed">Đã hoàn thành</option>
-              <option value="Cancelled">Đã hủy</option>
-            </select>
-
-            <button
-              type="button"
-              onClick={() => void refetch()}
-              disabled={isFetching}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 text-slate-600 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] disabled:cursor-not-allowed disabled:opacity-60"
-              title="Làm mới dữ liệu (AJAX)"
-              aria-label="Làm mới danh sách buổi gặp"
-            >
-              <RefreshCw
-                aria-hidden="true"
-                className={`h-3.5 w-3.5 ${isFetching ? "animate-spin text-[#026aa7]" : ""}`}
-              />
-            </button>
+            <div className="flex shrink-0 items-center gap-2">
+              <span className="whitespace-nowrap text-xs font-medium text-slate-500">
+                Hiển thị <strong className="text-slate-800">{sessions.length}</strong>/{allSessions.length} buổi gặp
+              </span>
+              {isFetching && (
+                <span role="status" className="sr-only">Đang cập nhật danh sách buổi gặp</span>
+              )}
+              <button
+                type="button"
+                onClick={() => void refetch()}
+                disabled={isFetching}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] disabled:cursor-not-allowed disabled:opacity-50"
+                title="Làm mới danh sách"
+                aria-label="Làm mới danh sách buổi gặp"
+              >
+                <RefreshCw
+                  aria-hidden="true"
+                  className={`h-3.5 w-3.5 ${isFetching ? "animate-spin text-[#026aa7]" : ""}`}
+                />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -613,7 +638,7 @@ export const AttendanceView: React.FC<{
             retrying={isFetching}
             className="p-4 sm:p-5"
           />
-        ) : sessions.length === 0 ? (
+        ) : allSessions.length === 0 ? (
           <EmptyState
             title="Chưa có buổi sinh hoạt nào"
             description="Hãy nhấn 'Tạo buổi sinh hoạt' để lên lịch gặp mặt, phân công giảng viên và điểm danh toàn khoa."
@@ -622,6 +647,24 @@ export const AttendanceView: React.FC<{
               onClick: openCreateModal,
             }}
           />
+        ) : sessions.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 py-10 text-center">
+            <Search className="h-7 w-7 text-slate-300" aria-hidden="true" />
+            <p className="text-sm font-semibold text-slate-700">Không tìm thấy buổi gặp phù hợp</p>
+            <p className="text-xs text-slate-500">Thử thay đổi điều kiện tìm kiếm hoặc xóa bộ lọc.</p>
+            <button
+              type="button"
+              onClick={() => {
+                setSearchTerm("");
+                setWeekFilter("all");
+                setLecturerFilter("all");
+                setStatusFilter("all");
+              }}
+              className="mt-1 rounded-md px-3 py-1.5 text-xs font-semibold text-[#026aa7] hover:bg-[#026aa7]/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
+            >
+              Xóa bộ lọc
+            </button>
+          </div>
         ) : (
           <div
             className={`overflow-x-auto transition-opacity duration-150 ${

@@ -21,7 +21,6 @@ import {
 } from "lucide-react";
 import { ConfirmDialog } from "../../../components/common/ConfirmDialog";
 import { Panel } from "../../../components/common/Panel";
-import { Toolbar } from "../../../components/common/Toolbar";
 import { CompanyAvatar } from "../../../components/common/CompanyAvatar";
 import type { Enterprise } from "../../../types/enterprise";
 import { getApiErrorMessage } from "../../../lib/apiClient";
@@ -257,28 +256,6 @@ export const CompaniesView = ({
         </div>
       </section>
 
-      <Toolbar
-        left={
-          <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500">
-            {selectedSemester?.name && selectedSemester.id !== "all" && (
-              <span className="rounded-full border border-[#026aa7]/20 bg-[#026aa7]/5 px-2.5 py-1 text-[11px] font-bold text-[#025a8e]">
-                {selectedSemester.name}
-              </span>
-            )}
-            <span>
-              {isLoadingApi
-                ? "Đang tải danh sách…"
-                : `${filtered.length.toLocaleString("vi-VN")} doanh nghiệp đang hiển thị`}
-            </span>
-            {isFetching && !isLoadingApi && (
-              <span className="font-semibold text-[#026aa7]" role="status">
-                Đang cập nhật…
-              </span>
-            )}
-          </div>
-        }
-      />
-
       <Panel className="space-y-4 rounded-xl border border-slate-200/90 shadow-2xs">
         {isError && paginatedCompanies.length > 0 && (
           <div
@@ -299,40 +276,52 @@ export const CompaniesView = ({
             </button>
           </div>
         )}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-base font-bold text-slate-900 tracking-tight">
+        <div className="flex flex-col gap-3 border-b border-slate-100 pb-3.5">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-base font-bold tracking-tight text-slate-900">
                 Danh sách doanh nghiệp
               </h2>
-              {selectedSemester?.id && selectedSemester.id !== "all" && (
-                <span className="rounded-full border border-[#026aa7]/20 bg-[#026aa7]/5 px-2.5 py-1 text-[11px] font-bold text-[#025a8e]">
-                  Học kỳ: {selectedSemester.name}
+              <p className="mt-0.5 text-xs font-medium text-slate-500">
+                {canLink
+                  ? "Doanh nghiệp liên kết mặc định với mọi học kỳ — dùng 'Ngưng liên kết' để ẩn khỏi phân bổ mới của kỳ này."
+                  : "Chọn một học kỳ cụ thể để quản lý liên kết doanh nghiệp của kỳ đó."}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              {selectedSemester?.name && selectedSemester.id !== "all" && (
+                <span className="inline-flex items-center rounded-md bg-slate-100 px-2.5 py-1 font-semibold text-slate-700">
+                  {selectedSemester.name}
+                </span>
+              )}
+              <span className="inline-flex items-center rounded-md border border-sky-100 bg-sky-50 px-2.5 py-1 font-semibold text-[#025a8e]">
+                {isLoadingApi
+                  ? "Đang tải danh sách…"
+                  : `${filtered.length.toLocaleString("vi-VN")} doanh nghiệp đang hiển thị`}
+              </span>
+              {isFetching && !isLoadingApi && (
+                <span className="font-semibold text-[#026aa7]" role="status">
+                  Đang cập nhật…
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-500 font-medium">
-              {canLink
-                ? "Doanh nghiệp liên kết mặc định với mọi học kỳ — dùng 'Ngưng liên kết' để ẩn khỏi phân bổ mới của kỳ này."
-                : "Chọn một học kỳ cụ thể để quản lý liên kết doanh nghiệp của kỳ đó."}
-            </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+          <div className="flex flex-wrap items-center gap-2.5 pt-1">
+            <div className="relative min-w-[220px] flex-1 sm:max-w-xs">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" aria-hidden="true" />
               <input
                 value={search}
                 onChange={(e) => updateSearch(e.target.value)}
                 placeholder="Tìm tên, mã, lĩnh vực…"
                 aria-label="Tìm doanh nghiệp theo tên, mã hoặc lĩnh vực"
-                className="w-56 rounded-md border border-slate-200 bg-slate-50 py-2 pl-8 pr-3 text-xs outline-none transition-colors focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+                className="h-9 w-full rounded-md border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-3 text-xs outline-none transition-colors focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
               />
             </div>
             <select
               value={statusFilter}
               onChange={(e) => updateStatusFilter(e.target.value)}
               aria-label="Lọc doanh nghiệp theo trạng thái"
-              className="cursor-pointer rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium outline-none transition-colors focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+              className="h-9 cursor-pointer rounded-md border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700 outline-none transition-colors focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
             >
               <option value="all">Tất cả trạng thái</option>
               {statuses.map((s) => (
@@ -341,6 +330,19 @@ export const CompaniesView = ({
                 </option>
               ))}
             </select>
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={() => {
+                  updateSearch("");
+                  updateStatusFilter("all");
+                }}
+                className="inline-flex h-9 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+              >
+                <X className="h-3.5 w-3.5" aria-hidden="true" />
+                Xóa bộ lọc
+              </button>
+            )}
           </div>
         </div>
 

@@ -413,17 +413,24 @@ export const TemplatesView = () => {
 
       {/* TAB SELECTOR & FILTERS */}
       <Panel className="space-y-4 rounded-xl border border-slate-200/90 shadow-2xs">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
-          <h2 className="text-sm font-bold text-slate-900">Biểu mẫu & tài liệu</h2>
-          <p className="text-xs font-medium text-slate-500">
-            {filteredDocuments.length} / {documents.length} tài liệu
-          </p>
-        </div>
-        {/* TOP ROW: TABS & ACTION BUTTONS */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-          {/* Main Circulation Status Tabs */}
-          <div className="flex items-center gap-1.5 flex-wrap">
+        <div className="flex flex-col gap-3 border-b border-slate-100 pb-3.5">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-base font-bold tracking-tight text-slate-900">Biểu mẫu &amp; tài liệu</h2>
+              <p className="mt-0.5 text-xs font-medium text-slate-500">
+                Tìm kiếm và lọc tài liệu theo kỳ thực tập, đơn vị, danh mục và định dạng.
+              </p>
+            </div>
+            <span className="inline-flex w-fit items-center rounded-md bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+              {filteredDocuments.length.toLocaleString("vi-VN")} / {documents.length.toLocaleString("vi-VN")} tài liệu
+            </span>
+          </div>
+
+          <div className="flex flex-col gap-2.5 pt-1">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex flex-wrap items-center gap-1.5">
             <button
+              type="button"
               onClick={() => setActiveTab("CIRCULATING")}
               className={`min-h-11 rounded-lg px-4 text-xs font-semibold transition-colors flex items-center gap-1.5 ${
                 activeTab === "CIRCULATING"
@@ -443,6 +450,7 @@ export const TemplatesView = () => {
             </button>
 
             <button
+              type="button"
               onClick={() => setActiveTab("ARCHIVED")}
               className={`min-h-11 rounded-lg px-4 text-xs font-semibold transition-colors flex items-center gap-1.5 ${
                 activeTab === "ARCHIVED"
@@ -462,6 +470,7 @@ export const TemplatesView = () => {
             </button>
 
             <button
+              type="button"
               onClick={() => setActiveTab("ALL")}
               className={`min-h-11 rounded-lg px-4 text-xs font-semibold transition-colors ${
                 activeTab === "ALL"
@@ -469,130 +478,126 @@ export const TemplatesView = () => {
                   : "bg-slate-100 text-slate-700 hover:bg-slate-200"
               }`}
             >
-              Tất cả ({documents.length})
+            Tất cả ({documents.length})
             </button>
-          </div>
 
-          <div className="flex items-center gap-3">
-            {Boolean(
-              selectedCategory !== "Tất cả" ||
-              semesterFilter !== "Tất cả" ||
-              departmentFilter !== "Tất cả" ||
-              fileTypeFilter !== "Tất cả" ||
-              searchQuery,
-            ) && (
-              <button
-                onClick={() => {
-                  setSearchQuery("");
-                  setSelectedCategory("Tất cả");
-                  // Reset về "Tất cả" — không gán tên kỳ đang chọn (gây latch bộ lọc).
-                  setSemesterFilter("Tất cả");
-                  setDepartmentFilter("Tất cả");
-                  setFileTypeFilter("Tất cả");
-                }}
-                className="min-h-11 rounded-lg px-3 text-xs font-semibold text-[#026aa7] hover:bg-[#026aa7]/5 hover:text-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/30"
-              >
-                Xóa bộ lọc
-              </button>
-            )}
-
-            {/* Toggle View Mode */}
-            <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-100 p-1 shrink-0">
-              <button
-                onClick={() => setViewMode("table")}
-                className={`p-1.5 rounded-lg transition-colors ${
-                  viewMode === "table" ? "bg-white text-[#026aa7] shadow-2xs" : "text-slate-500 hover:text-slate-800"
-                }`}
-                title="Chế độ Bảng"
-                aria-label="Chế độ bảng"
-                aria-pressed={viewMode === "table"}
-              >
-                <List className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={() => setViewMode("cards")}
-                className={`p-1.5 rounded-lg transition-colors ${
-                  viewMode === "cards" ? "bg-white text-[#026aa7] shadow-2xs" : "text-slate-500 hover:text-slate-800"
-                }`}
-                title="Chế độ Thẻ"
-                aria-label="Chế độ thẻ"
-                aria-pressed={viewMode === "cards"}
-              >
-                <LayoutGrid className="w-3.5 h-3.5" />
-              </button>
             </div>
-          </div>
-        </div>
 
-        {/* BOTTOM ROW: FILTER INPUTS */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-2 text-xs">
-          {/* Search input */}
-          <div className="md:col-span-2 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Tìm tên tài liệu, người đăng, nội dung..."
-              aria-label="Tìm tài liệu"
-              className="min-h-11 w-full rounded-lg border border-slate-300 bg-white pl-10 pr-4 text-base font-medium text-slate-800 outline-none transition-colors placeholder:font-normal placeholder:text-slate-500 hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20 sm:text-xs"
-            />
-          </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {Boolean(
+                selectedCategory !== "Tất cả" ||
+                semesterFilter !== "Tất cả" ||
+                departmentFilter !== "Tất cả" ||
+                fileTypeFilter !== "Tất cả" ||
+                searchQuery,
+              ) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setSelectedCategory("Tất cả");
+                    // Reset về "Tất cả" — không gán tên kỳ đang chọn (gây latch bộ lọc).
+                    setSemesterFilter("Tất cả");
+                    setDepartmentFilter("Tất cả");
+                    setFileTypeFilter("Tất cả");
+                  }}
+                  className="inline-flex h-9 items-center rounded-md border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+                >
+                  <X className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                  Xóa bộ lọc
+                </button>
+              )}
 
-          <div>
+              <div className="flex h-9 items-center gap-1 rounded-md border border-slate-200 bg-slate-100 p-1">
+                <button
+                  type="button"
+                  onClick={() => setViewMode("table")}
+                  className={`inline-flex h-7 w-8 items-center justify-center rounded transition-colors ${
+                    viewMode === "table" ? "bg-white text-[#026aa7] shadow-2xs" : "text-slate-500 hover:text-slate-800"
+                  }`}
+                  title="Chế độ Bảng"
+                  aria-label="Chế độ bảng"
+                  aria-pressed={viewMode === "table"}
+                >
+                  <List className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("cards")}
+                  className={`inline-flex h-7 w-8 items-center justify-center rounded transition-colors ${
+                    viewMode === "cards" ? "bg-white text-[#026aa7] shadow-2xs" : "text-slate-500 hover:text-slate-800"
+                  }`}
+                  title="Chế độ Thẻ"
+                  aria-label="Chế độ thẻ"
+                  aria-pressed={viewMode === "cards"}
+                >
+                  <LayoutGrid className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              </div>
+            </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-6">
+            <div className="relative min-w-0 lg:col-span-2">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Tìm tên tài liệu, người đăng, nội dung..."
+                aria-label="Tìm tài liệu"
+                className="h-9 w-full rounded-md border border-slate-200 bg-slate-50 pl-9 pr-3 text-xs font-medium text-slate-800 outline-none transition-colors placeholder:font-normal placeholder:text-slate-400 hover:border-slate-300 focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+              />
+            </div>
+
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
               aria-label="Lọc theo danh mục"
-              className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+              className="h-9 w-full min-w-0 rounded-md border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700 outline-none transition-colors hover:border-slate-300 focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
             >
               <option value="Tất cả">Tất cả Danh mục</option>
               {categories.map((category) => (
                 <option key={category} value={category}>{category}</option>
               ))}
             </select>
-          </div>
 
-          <div>
             <select
               value={semesterFilter}
               onChange={(e) => setSemesterFilter(e.target.value)}
               aria-label="Lọc theo đợt thực tập"
-              className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+              className="h-9 w-full min-w-0 rounded-md border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700 outline-none transition-colors hover:border-slate-300 focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
             >
               <option value="Tất cả">Tất cả Đợt thực tập</option>
               {semesters.map((s) => (
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
-          </div>
 
-          <div>
             <select
               value={departmentFilter}
               onChange={(e) => setDepartmentFilter(e.target.value)}
               aria-label="Lọc theo đơn vị"
-              className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+              className="h-9 w-full min-w-0 rounded-md border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700 outline-none transition-colors hover:border-slate-300 focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
             >
               <option value="Tất cả">Tất cả đơn vị</option>
               {departments.map((department) => (
                 <option key={department} value={department}>{department}</option>
               ))}
             </select>
-          </div>
 
-          <div>
             <select
               value={fileTypeFilter}
               onChange={(e) => setFileTypeFilter(e.target.value)}
               aria-label="Lọc theo định dạng tệp"
-              className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+              className="h-9 w-full min-w-0 rounded-md border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700 outline-none transition-colors hover:border-slate-300 focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
             >
               <option value="Tất cả">Tất cả Định dạng</option>
               {fileTypes.map((fileType) => (
                 <option key={fileType} value={fileType}>{fileType}</option>
               ))}
             </select>
+            </div>
           </div>
         </div>
       </Panel>

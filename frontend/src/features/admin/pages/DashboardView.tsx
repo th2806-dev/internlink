@@ -37,7 +37,6 @@ import { AdminActivityTimeline } from "../components/ActivityTimeline";
 import {
   buildAssignmentStatusSlices,
   buildInternshipStatusTrend,
-  DashboardTrendChart,
 } from "../../../components/common/DashboardCharts";
 import { useAdminDashboardStats } from "../../../hooks/useAdminDashboardStats";
 import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
@@ -47,7 +46,25 @@ import { getApiErrorMessage } from "../../../lib/apiClient";
 
 type SemesterChartMode = "table" | "line" | "bar";
 
-const ASSIGNMENT_CHART_COLORS = ["#4d74c9", "#38bdf8"];
+const formatSemesterShortLabel = (label: string, academicYear?: string, term?: string) => {
+  if (term && academicYear) {
+    const termNumber = term.match(/\d+/)?.[0];
+    const yearMatch = academicYear.match(/(\d{4})\s*-\s*(\d{4})/);
+    const shortYear = yearMatch
+      ? `${yearMatch[1].slice(-2)}-${yearMatch[2].slice(-2)}`
+      : academicYear;
+    return termNumber ? `HK${termNumber} ${shortYear}` : `${shortYear}`;
+  }
+  return label.length > 14 ? `${label.slice(0, 14)}…` : label;
+};
+
+const getInternshipStatusColor = (label: string) => {
+  if (label === "Đã chấm" || label === "Hoàn thành") return "bg-emerald-500";
+  if (label === "Đang TT") return "bg-[#026aa7]";
+  if (label === "Chậm tiến độ" || label === "Cần sửa") return "bg-amber-500";
+  if (label === "Chờ duyệt") return "bg-sky-500";
+  return "bg-slate-400";
+};
 
 export const DashboardView = ({
   onShowToast,
@@ -197,17 +214,35 @@ export const DashboardView = ({
   const assignmentSlices = stats
     ? buildAssignmentStatusSlices(stats.assignedStudents, stats.unassignedStudents)
     : [];
-  const internshipTrend = stats
-    ? buildInternshipStatusTrend(stats.internshipStats)
+  const internshipStatusValues = stats
+    ? [
+      { label: "Chưa bắt đầu", value: stats.internshipStats.notStarted },
+      { label: "Đang TT", value: stats.internshipStats.inProgress },
+      { label: "Chậm tiến độ", value: stats.internshipStats.behindSchedule },
+      { label: "Chờ duyệt", value: stats.internshipStats.awaitingFeedback },
+      { label: "Cần sửa", value: stats.internshipStats.requiresRevision },
+      { label: "Hoàn thành", value: stats.internshipStats.completed },
+      { label: "Đã chấm", value: stats.internshipStats.graded },
+    ]
     : [];
+  const internshipTrend = stats && internshipStatusValues.some((status) => status.value > 0)
+    ? internshipStatusValues.filter((status) => status.value > 0)
+    : stats
+      ? buildInternshipStatusTrend(stats.internshipStats)
+      : [];
+  const internshipStatusTotal = internshipTrend.reduce((total, status) => total + status.value, 0);
   const actionItems = stats?.actionItems ?? [];
   const semesterComparison = semesters.map((semester) => ({
     id: semester.id,
     label: semester.name,
+    academicYear: semester.academicYear,
+    term: semester.term,
     students: semester.studentsCount,
     placed: semester.placedStudents,
     companies: semester.companiesCount,
+    shortLabel: formatSemesterShortLabel(semester.name, semester.academicYear, semester.term),
   }));
+  const semesterChartUsesBars = semesterChartMode === "bar" || semesterComparison.length === 1;
   const outcomeSlices = stats
     ? [
       { name: "Hoàn thành", value: stats.internshipStats.completed, tone: "emerald" as const },
@@ -216,6 +251,12 @@ export const DashboardView = ({
     ].filter((item) => item.value > 0)
     : [];
   const dashboardSlices = isSuperAdmin ? outcomeSlices : assignmentSlices;
+  const assignedRate = stats && stats.studentCount > 0
+    ? Math.round((stats.assignedStudents / stats.studentCount) * 100)
+    : 0;
+  const assignmentChartData = assignmentSlices.length > 0
+    ? assignmentSlices
+    : [{ name: "Chưa có dữ liệu", value: 1, tone: "slate" as const }];
   const toneClass = {
     amber: "text-[#f59e0b]",
     blue: "text-[#4d74c9]",
@@ -227,7 +268,7 @@ export const DashboardView = ({
       <section className="overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-2xs">
         <div className="flex flex-wrap items-center justify-between gap-2 bg-[#026aa7] px-4 py-2.5 text-white">
           <div className="flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-white/90" />
+            <ShieldCheck className="h-4 w-4 text-white/90" aria-hidden="true" />
             <h1 className="text-xs font-bold tracking-wider sm:text-sm">
               {isSuperAdmin
                 ? "CỔNG THÔNG TIN QUẢN TRỊ HỆ THỐNG"
@@ -235,7 +276,7 @@ export const DashboardView = ({
             </h1>
           </div>
           <div className="flex items-center gap-2">
-            <span className="rounded-full border border-white/20 bg-white/15 px-2 py-0.5 text-[10.5px] font-medium">
+            <span className="rounded-md border border-white/20 bg-white/15 px-2 py-0.5 text-[10.5px] font-medium">
               {selectedSemester?.id ? selectedSemester.name : "Chưa có học kỳ"}
             </span>
             <button
@@ -244,30 +285,30 @@ export const DashboardView = ({
               onClick={() => void handleRefresh()}
               className="inline-flex min-h-8 items-center gap-1.5 rounded-md bg-white/15 px-2.5 text-[11px] font-medium transition-colors hover:bg-white/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-wait disabled:opacity-60"
             >
-              <RefreshCw className={`w-3 h-3 ${isLoading ? "animate-spin" : ""}`} />
+              <RefreshCw className={`h-3 w-3 ${isLoading ? "animate-spin" : ""}`} aria-hidden="true" />
               Làm mới
             </button>
           </div>
         </div>
 
         <div className="space-y-3 p-3.5 sm:p-4">
-          <dl className="flex flex-wrap items-center justify-between gap-x-5 gap-y-2 text-xs text-slate-700">
-            <div className="flex min-w-0 items-center gap-1">
-              <dt className="shrink-0 text-slate-500">Quản trị viên :</dt>
+          <dl className="grid grid-cols-1 gap-x-5 gap-y-2 text-xs text-slate-700 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="min-w-0">
+              <dt className="text-slate-500">Quản trị viên :</dt>
               <dd className="truncate font-semibold text-slate-800" title={displayName}>{displayName}</dd>
             </div>
-            <div className="flex min-w-0 items-center gap-1">
-              <dt className="shrink-0 text-slate-500">Phân quyền :</dt>
+            <div className="min-w-0">
+              <dt className="text-slate-500">Phân quyền :</dt>
               <dd className="truncate font-semibold text-slate-800">{roleDisplayLabel}</dd>
             </div>
-            <div className="flex min-w-0 items-center gap-1">
-              <dt className="shrink-0 text-slate-500">Đơn vị quản lý :</dt>
+            <div className="min-w-0">
+              <dt className="text-slate-500">Đơn vị quản lý :</dt>
               <dd className="truncate font-semibold text-slate-800">
                 {isSuperAdmin && !departmentIdFilter ? "Toàn trường" : selectedDepartment.name}
               </dd>
             </div>
-            <div className="flex min-w-0 items-center gap-1">
-              <dt className="shrink-0 text-slate-500">Cập nhật lúc :</dt>
+            <div className="min-w-0">
+              <dt className="text-slate-500">Cập nhật lúc :</dt>
               <dd className="truncate font-semibold text-slate-800">
                 {updatedAt ? updatedAt.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "Chưa cập nhật"}
               </dd>
@@ -276,14 +317,15 @@ export const DashboardView = ({
 
           <div className="grid grid-cols-1 gap-3 border-t border-slate-100 pt-3 sm:grid-cols-3">
             <label className="relative block text-[10px] font-medium text-slate-500">
-              <span className="absolute -top-2 left-3.5 z-10 bg-white px-1">Khoa</span>
+              <span className="absolute -top-2 left-3.5 z-10 bg-white px-1">Đơn vị quản lý</span>
               <span className="relative block">
                 <select
+                  id="dashboard-dept-select"
                   aria-label="Khoa"
                   value={selectedDepartmentId}
                   onChange={(event) => selectDepartment(event.target.value)}
                   disabled={!isSuperAdmin || departments.length === 0}
-                  className="h-9 w-full appearance-none rounded-full border border-slate-300 bg-white px-3.5 pr-8 text-xs font-medium text-slate-800 shadow-2xs hover:border-slate-400 focus:border-[#026aa7] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/20 disabled:cursor-default disabled:text-slate-500"
+                  className="h-9 w-full appearance-none rounded-lg border border-slate-300 bg-white px-3.5 pr-8 text-xs font-medium text-slate-800 shadow-2xs hover:border-slate-400 focus:border-[#026aa7] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/20 disabled:cursor-default disabled:text-slate-500"
                 >
                   {isSuperAdmin && <option value="all">Tất cả các khoa</option>}
                   {departments.map((department) => (
@@ -300,11 +342,12 @@ export const DashboardView = ({
               <span className="absolute -top-2 left-3.5 z-10 bg-white px-1">Năm học</span>
               <span className="relative block">
                 <select
+                  id="dashboard-year-select"
                   aria-label="Năm học"
                   value={selectedSemester.id === "all" ? "" : selectedSemester.academicYear}
                   onChange={(event) => handleAcademicYearChange(event.target.value)}
                   disabled={academicYears.length === 0}
-                  className="h-9 w-full appearance-none rounded-full border border-slate-300 bg-white px-3.5 pr-8 text-xs font-medium text-slate-800 shadow-2xs hover:border-slate-400 focus:border-[#026aa7] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/20 disabled:cursor-default disabled:text-slate-500"
+                  className="h-9 w-full appearance-none rounded-lg border border-slate-300 bg-white px-3.5 pr-8 text-xs font-medium text-slate-800 shadow-2xs hover:border-slate-400 focus:border-[#026aa7] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/20 disabled:cursor-default disabled:text-slate-500"
                 >
                   <option value="">{academicYears.length === 0 ? "Chưa cập nhật" : "Chọn năm học"}</option>
                   {academicYears.map((year) => <option key={year} value={year}>{year}</option>)}
@@ -316,11 +359,12 @@ export const DashboardView = ({
               <span className="absolute -top-2 left-3.5 z-10 bg-white px-1">Học kỳ</span>
               <span className="relative block">
                 <select
+                  id="dashboard-term-select"
                   aria-label="Học kỳ"
                   value={selectedSemester.id === "all" ? "" : selectedSemester.term}
                   onChange={(event) => handleTermChange(event.target.value)}
                   disabled={terms.length === 0}
-                  className="h-9 w-full appearance-none rounded-full border border-slate-300 bg-white px-3.5 pr-8 text-xs font-medium text-slate-800 shadow-2xs hover:border-slate-400 focus:border-[#026aa7] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/20 disabled:cursor-default disabled:text-slate-500"
+                  className="h-9 w-full appearance-none rounded-lg border border-slate-300 bg-white px-3.5 pr-8 text-xs font-medium text-slate-800 shadow-2xs hover:border-slate-400 focus:border-[#026aa7] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/20 disabled:cursor-default disabled:text-slate-500"
                 >
                   <option value="">{terms.length === 0 ? "Chưa cập nhật" : "Chọn học kỳ"}</option>
                   {terms.map((term) => <option key={term} value={term}>{term}</option>)}
@@ -359,7 +403,7 @@ export const DashboardView = ({
       />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <Panel className="flex min-h-[380px] flex-col rounded-xl border border-slate-200/90 shadow-2xs">
+          <Panel className="flex min-h-[360px] flex-col rounded-xl border border-slate-200/90 shadow-2xs">
             <div className="grid gap-3 border-b border-slate-100 pb-3 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
               <div className="text-center sm:col-start-2 sm:row-start-1">
                 <h2 className="text-sm font-bold text-slate-900">
@@ -419,9 +463,9 @@ export const DashboardView = ({
               </div>
             </div>
             {isLoading ? (
-              <div className="flex h-[280px] items-center justify-center text-xs text-slate-500">Đang tải dữ liệu học kỳ…</div>
+              <div className="flex h-[220px] items-center justify-center text-xs text-slate-500">Đang tải dữ liệu học kỳ…</div>
             ) : semesterComparison.length === 0 ? (
-              <div className="flex h-[280px] flex-col items-center justify-center gap-2 text-center">
+              <div className="flex h-[220px] flex-col items-center justify-center gap-2 text-center">
                 <ClipboardCheck className="h-8 w-8 text-slate-300" aria-hidden="true" />
                 <p className="text-xs font-semibold text-slate-700">Chưa có dữ liệu học kỳ</p>
                 <p className="text-[11px] text-slate-500">Dữ liệu so sánh sẽ xuất hiện khi có thông tin học kỳ từ hệ thống.</p>
@@ -450,34 +494,36 @@ export const DashboardView = ({
                 </table>
               </div>
             ) : (
-              <div className="my-3 h-[280px]" role="img" aria-label="So sánh số sinh viên, đã phân công và doanh nghiệp giữa các học kỳ">
+              <div className="my-3 h-[220px]" role="img" aria-label="So sánh số sinh viên, đã phân công và doanh nghiệp giữa các học kỳ">
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={semesterComparison} margin={{ top: 12, right: 12, left: 4, bottom: 8 }}>
                     <CartesianGrid stroke="#dbeafe" vertical={false} />
                     <XAxis
-                      dataKey="label"
+                      dataKey="shortLabel"
                       axisLine={{ stroke: "#94a3b8" }}
                       tickLine={false}
                       tick={{ fill: "#64748b", fontSize: 10 }}
-                      tickFormatter={(label: string) => label.length > 16 ? `${label.slice(0, 16)}…` : label}
+                      tickFormatter={(label: string) => label}
                     />
                     <YAxis yAxisId="count" axisLine={false} tickLine={false} allowDecimals={false} tick={{ fill: "#64748b", fontSize: 10 }} />
-                    <YAxis yAxisId="companies" orientation="right" axisLine={false} tickLine={false} allowDecimals={false} tick={{ fill: "#64748b", fontSize: 10 }} />
                     <Tooltip
                       formatter={(value: number, name: string) => [value, name]}
+                      labelFormatter={(shortLabel) => semesterComparison.find((semester) => semester.shortLabel === shortLabel)?.label ?? String(shortLabel)}
                       contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12 }}
                     />
-                    {semesterChartMode === "bar" ? (
+                    {semesterChartUsesBars ? (
                       <>
-                        <Bar yAxisId="count" dataKey="students" name="Sinh viên" fill="#4d74c9" radius={[2, 2, 0, 0]} />
-                        <Line yAxisId="count" type="monotone" dataKey="placed" name="Đã phân công" stroke="#7bc043" strokeWidth={2} dot={{ r: 3.5, fill: "#ffffff", stroke: "#7bc043", strokeWidth: 2 }} />
-                        <Line yAxisId="companies" type="monotone" dataKey="companies" name="Doanh nghiệp" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3, fill: "#f59e0b" }} />
+                        <Bar yAxisId="count" dataKey="students" name="Sinh viên" fill="#4d74c9" radius={[2, 2, 0, 0]} barSize={32} />
+                        <Bar yAxisId="count" dataKey="companies" name="Doanh nghiệp" fill="#f59e0b" radius={[2, 2, 0, 0]} barSize={32} />
+                        {semesterComparison.length > 1 && (
+                          <Line yAxisId="count" type="monotone" dataKey="placed" name="Đã phân công" stroke="#7bc043" strokeWidth={2} dot={{ r: 3.5, fill: "#ffffff", stroke: "#7bc043", strokeWidth: 2 }} />
+                        )}
                       </>
                     ) : (
                       <>
                         <Line yAxisId="count" type="monotone" dataKey="students" name="Sinh viên" stroke="#4d74c9" strokeWidth={2} dot={{ r: 3.5 }} />
                         <Line yAxisId="count" type="monotone" dataKey="placed" name="Đã phân công" stroke="#7bc043" strokeWidth={2} dot={{ r: 3.5, fill: "#ffffff", stroke: "#7bc043", strokeWidth: 2 }} />
-                        <Line yAxisId="companies" type="monotone" dataKey="companies" name="Doanh nghiệp" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3, fill: "#f59e0b" }} />
+                        <Line yAxisId="count" type="monotone" dataKey="companies" name="Doanh nghiệp" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3, fill: "#f59e0b" }} />
                       </>
                     )}
                   </ComposedChart>
@@ -487,21 +533,23 @@ export const DashboardView = ({
             {semesterComparison.length > 0 && semesterChartMode !== "table" && (
               <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 border-t border-slate-100 pt-3 text-[11px] text-slate-600">
                 <span className="inline-flex items-center gap-2">
-                  <span className="h-3.5 w-3.5 rounded-sm bg-[#4d74c9]" aria-hidden="true" />
+                  <span className={`${semesterChartUsesBars ? "h-3.5 w-3.5 rounded-sm bg-[#4d74c9]" : "h-0.5 w-4 bg-[#4d74c9]"}`} aria-hidden="true" />
                   Sinh viên
                 </span>
                 <span className="inline-flex items-center gap-2">
-                  <span className="h-0.5 w-4 bg-[#7bc043]" aria-hidden="true" />
-                  Đã phân công
-                </span>
-                <span className="inline-flex items-center gap-2">
-                  <span className="h-0.5 w-4 bg-[#f59e0b]" aria-hidden="true" />
+                  <span className={semesterChartUsesBars ? "h-3.5 w-3.5 rounded-sm bg-[#f59e0b]" : "h-0.5 w-4 bg-[#f59e0b]"} aria-hidden="true" />
                   Doanh nghiệp
                 </span>
+                {semesterComparison.length > 1 && (
+                  <span className="inline-flex items-center gap-2">
+                    <span className="h-0.5 w-4 bg-[#7bc043]" aria-hidden="true" />
+                    Đã phân công
+                  </span>
+                )}
               </div>
             )}
           </Panel>
-          <Panel className="flex min-h-[380px] flex-col rounded-xl border border-slate-200/90 shadow-2xs">
+          <Panel className="flex min-h-[360px] flex-col rounded-xl border border-slate-200/90 shadow-2xs">
             <div className="border-b border-slate-100 pb-3 text-center">
                 <h2 className="text-sm font-bold text-slate-900">
                   {isSuperAdmin ? "Kết quả thực tập" : "Phân bổ phân công hướng dẫn"}
@@ -513,9 +561,9 @@ export const DashboardView = ({
                 </p>
               </div>
               {isLoading ? (
-                <div className="flex h-[280px] items-center justify-center text-xs text-slate-500">Đang tải dữ liệu phân công…</div>
-              ) : dashboardSlices.length === 0 ? (
-                <div className="flex h-[280px] flex-col items-center justify-center gap-2 text-center">
+                <div className="flex h-[220px] items-center justify-center text-xs text-slate-500">Đang tải dữ liệu phân công…</div>
+              ) : isSuperAdmin && dashboardSlices.length === 0 ? (
+                <div className="flex h-[220px] flex-col items-center justify-center gap-2 text-center">
                   <Users className="h-8 w-8 text-slate-300" aria-hidden="true" />
                   <p className="text-xs font-semibold text-slate-700">
                     {isSuperAdmin ? "Chưa có dữ liệu đánh giá trong kỳ này" : "Chưa có dữ liệu phân công trong kỳ này"}
@@ -529,124 +577,213 @@ export const DashboardView = ({
               ) : (
                 <>
                   <div
-                    className="relative my-3 h-[240px] flex-1"
-                    role="img"
-                    aria-label={isSuperAdmin ? "Biểu đồ kết quả đánh giá thực tập" : "Biểu đồ phân bổ sinh viên được phân công hướng dẫn"}
+                    className="my-3"
                   >
-                    <ul className="absolute left-0 top-3 z-10 flex flex-col gap-2 text-[11px] text-slate-700">
-                      {dashboardSlices.map((slice, index) => (
-                        <li key={slice.name} className="flex items-center gap-2">
-                          <span
-                            className="h-3 w-3 shrink-0 rounded-sm"
-                            style={{
-                              backgroundColor: isSuperAdmin
-                                ? slice.tone === "emerald" ? "#7bc043" : slice.tone === "blue" ? "#4d74c9" : "#f59e0b"
-                                : ASSIGNMENT_CHART_COLORS[index],
-                            }}
-                          />
-                          <span>{slice.name}</span>
-                        </li>
-                      ))}
-                  </ul>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={dashboardSlices}
-                        dataKey="value"
-                        nameKey="name"
-                        cx="66%"
-                        cy="52%"
-                        outerRadius={78}
-                        startAngle={90}
-                        endAngle={-270}
-                        label={({ name }) => name}
-                        labelLine={{ stroke: "#7bc043", strokeWidth: 1 }}
-                      >
-                        {dashboardSlices.map((slice, index) => (
-                          <Cell
-                            key={slice.name}
-                            fill={isSuperAdmin
-                              ? slice.tone === "emerald" ? "#7bc043" : slice.tone === "blue" ? "#4d74c9" : "#f59e0b"
-                              : ASSIGNMENT_CHART_COLORS[index]}
-                            stroke="#ffffff"
-                            strokeWidth={1}
-                          />
+                    <div
+                      className="relative h-[180px]"
+                      role="img"
+                      aria-label={isSuperAdmin ? "Biểu đồ kết quả đánh giá thực tập" : "Biểu đồ phân bổ sinh viên được phân công hướng dẫn"}
+                    >
+                      <ul className={`${isSuperAdmin ? "" : "hidden"} absolute left-0 top-3 z-10 flex flex-col gap-2 text-[11px] text-slate-700`}>
+                        {dashboardSlices.map((slice) => (
+                          <li key={slice.name} className="flex items-center gap-2">
+                            <span
+                              className="h-3 w-3 shrink-0 rounded-sm"
+                              style={{
+                                backgroundColor: slice.tone === "emerald" ? "#7bc043" : slice.tone === "blue" ? "#4d74c9" : "#f59e0b",
+                              }}
+                            />
+                            <span>{slice.name}</span>
+                          </li>
                         ))}
-                      </Pie>
-                      <Tooltip
-                        formatter={(value: number, name: string) => [isSuperAdmin ? value : `${value} sinh viên`, name]}
-                        contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12 }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
+                      </ul>
+                      {!isSuperAdmin && (
+                        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+                          <div className="text-center">
+                            <p className="text-2xl font-bold tabular-nums text-slate-900">{assignedRate}%</p>
+                            <p className="mt-0.5 text-[10px] font-medium text-slate-500">Đã ghép GV</p>
+                            <p className="text-[10px] text-slate-500">{stats?.assignedStudents ?? 0}/{stats?.studentCount ?? 0} SV</p>
+                          </div>
+                        </div>
+                      )}
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={isSuperAdmin ? dashboardSlices : assignmentChartData}
+                            dataKey="value"
+                            nameKey="name"
+                            cx={isSuperAdmin ? "66%" : "50%"}
+                            cy="50%"
+                            innerRadius={isSuperAdmin ? 0 : 55}
+                            outerRadius={78}
+                            startAngle={90}
+                            endAngle={-270}
+                            label={isSuperAdmin ? ({ name }) => name : false}
+                            labelLine={isSuperAdmin ? { stroke: "#7bc043", strokeWidth: 1 } : false}
+                          >
+                            {(isSuperAdmin ? dashboardSlices : assignmentChartData).map((slice) => (
+                              <Cell
+                                key={slice.name}
+                                fill={isSuperAdmin
+                                  ? slice.tone === "emerald" ? "#7bc043" : slice.tone === "blue" ? "#4d74c9" : "#f59e0b"
+                                  : slice.tone === "slate" ? "#e2e8f0" : slice.tone === "blue" ? "#026aa7" : "#f59e0b"}
+                                stroke="#ffffff"
+                                strokeWidth={1}
+                              />
+                            ))}
+                          </Pie>
+                          {(isSuperAdmin || assignmentSlices.length > 0) && (
+                            <Tooltip
+                              formatter={(value: number, name: string) => [isSuperAdmin ? value : `${value} sinh viên`, name]}
+                              contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12 }}
+                            />
+                          )}
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                  {!isSuperAdmin && (
+                    <div className="mt-1 grid grid-cols-2 gap-2">
+                      <div className="rounded-lg border border-slate-100 bg-slate-50 p-2.5">
+                        <div className="mb-1 h-1 w-8 rounded-full bg-[#026aa7]" />
+                        <p className="text-[11px] font-medium text-slate-600">Đã phân công</p>
+                        <p className="mt-0.5 text-sm font-bold text-slate-900">
+                          {stats?.assignedStudents ?? 0} SV
+                          <span className="ml-1 text-[10px] font-medium text-slate-500">({assignedRate}%)</span>
+                        </p>
+                      </div>
+                      <div className="rounded-lg border border-slate-100 bg-slate-50 p-2.5">
+                        <div className="mb-1 h-1 w-8 rounded-full bg-amber-500" />
+                        <p className="text-[11px] font-medium text-slate-600">Chưa phân công</p>
+                        <p className="mt-0.5 text-sm font-bold text-slate-900">
+                          {stats?.unassignedStudents ?? 0} SV
+                          <span className="ml-1 text-[10px] font-medium text-slate-500">
+                            ({stats?.studentCount ? Math.round((stats.unassignedStudents / stats.studentCount) * 100) : 0}%)
+                          </span>
+                        </p>
+                      </div>
+                      {assignedRate === 100 && (
+                        <p className="col-span-2 rounded-md bg-emerald-50 px-3 py-2 text-center text-[11px] font-semibold text-emerald-800">
+                          <ShieldCheck className="mr-1 inline h-3.5 w-3.5" aria-hidden="true" />
+                          Hoàn tất phân công hướng dẫn
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <p className="border-t border-slate-100 pt-3 text-center text-xs text-slate-600">
                   {isSuperAdmin ? "Tổng kết quả: " : "Tổng số sinh viên: "}
-                  <strong className="font-bold text-slate-900">{dashboardSlices.reduce((sum, slice) => sum + slice.value, 0)}</strong>
+                  <strong className="font-bold text-slate-900">
+                    {isSuperAdmin
+                      ? dashboardSlices.reduce((sum, slice) => sum + slice.value, 0)
+                      : stats?.studentCount ?? 0}
+                  </strong>
                 </p>
               </>
             )}
           </Panel>
         </div>
 
-      <Panel className="rounded-xl border border-slate-200/90 shadow-2xs">
-        {isLoading ? (
-          <div className="flex h-[280px] items-center justify-center text-xs text-slate-500">Đang tải dữ liệu biểu đồ…</div>
-        ) : !stats || internshipTrend.length === 0 ? (
-          <div className="flex h-[280px] flex-col items-center justify-center gap-2 text-center">
-            <ClipboardCheck className="h-8 w-8 text-slate-300" aria-hidden="true" />
-            <p className="text-xs font-semibold text-slate-700">Chưa có dữ liệu tình trạng thực tập</p>
-            <p className="text-[11px] text-slate-500">Dữ liệu sẽ hiển thị khi có sinh viên trong kỳ.</p>
-          </div>
-        ) : (
-          <DashboardTrendChart
-            title="Sinh viên theo tình trạng thực tập"
-            subtitle="Kỳ đang chọn"
-            data={internshipTrend}
-            valueLabel="Số sinh viên"
-            variant="bar"
-          />
-        )}
-      </Panel>
-
       {!isSuperAdmin && (
-        <Panel className="space-y-4 rounded-xl border border-slate-200/90 shadow-2xs">
-          <div className="flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 pb-3">
-            <div>
-              <h2 className="text-sm font-bold text-slate-900">Tiến độ nộp hồ sơ thực tập</h2>
-              <p className="mt-1 text-xs text-slate-500">{reportSemesterName} · Chỉ tính báo cáo đã đến hạn</p>
+        <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-2">
+          <Panel className="flex h-full flex-col space-y-4 rounded-xl border border-slate-200/90 shadow-2xs">
+            <div className="flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 pb-3">
+              <div>
+                <h2 className="text-sm font-bold text-slate-900">Tiến độ nộp hồ sơ thực tập</h2>
+                <p className="mt-1 text-xs text-slate-500">{reportSemesterName} · Chỉ tính báo cáo đã đến hạn</p>
+              </div>
+              <ClipboardCheck className="h-4 w-4 text-[#026aa7]" aria-hidden="true" />
             </div>
-            <ClipboardCheck className="h-4 w-4 text-[#026aa7]" aria-hidden="true" />
-          </div>
-          {semesterReportLoading ? (
-            <p className="py-4 text-center text-xs text-slate-500">Đang tổng hợp dữ liệu kỳ…</p>
-          ) : semesterReportError ? (
-            <p role="alert" className="py-3 text-center text-xs text-rose-700">{semesterReportError}</p>
-          ) : !semesterReport ? (
-            <p className="py-3 text-center text-xs text-slate-500">Chưa có kỳ thực tập đang hoạt động.</p>
-          ) : (
-            <div className="grid grid-cols-2 gap-4 divide-x divide-slate-100 sm:grid-cols-4">
-              <div className="px-2">
-                <p className="flex items-center gap-1.5 text-xs text-slate-500"><Users className="h-3.5 w-3.5" aria-hidden="true" /> Sinh viên tham gia</p>
-                <p className="mt-1 text-2xl font-bold text-slate-900">{semesterReportMetrics.studentCount}</p>
+            {semesterReportLoading ? (
+              <p className="flex flex-1 items-center justify-center py-4 text-center text-xs text-slate-500">Đang tổng hợp dữ liệu kỳ…</p>
+            ) : semesterReportError ? (
+              <p role="alert" className="flex flex-1 items-center justify-center py-3 text-center text-xs text-rose-700">{semesterReportError}</p>
+            ) : !semesterReport ? (
+              <p className="flex flex-1 items-center justify-center py-3 text-center text-xs text-slate-500">Chưa có kỳ thực tập đang hoạt động.</p>
+            ) : (
+              <>
+                <div className="grid flex-1 grid-cols-2 gap-3 xl:grid-cols-4">
+                  <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+                    <p className="flex items-center gap-1.5 text-xs text-slate-500"><Users className="h-3.5 w-3.5" aria-hidden="true" /> Sinh viên</p>
+                    <p className="mt-2 text-2xl font-bold text-slate-900">{semesterReportMetrics.studentCount}</p>
+                  </div>
+                  <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+                    <p className="flex items-center gap-1.5 text-xs text-slate-500"><Building2 className="h-3.5 w-3.5" aria-hidden="true" /> Doanh nghiệp</p>
+                    <p className="mt-2 text-2xl font-bold text-slate-900">{semesterReportMetrics.companyCount}</p>
+                  </div>
+                  <div className="rounded-lg border border-slate-100 bg-emerald-50/60 p-3">
+                    <p className="flex items-center gap-1.5 text-xs text-slate-600"><CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" /> Đúng hạn</p>
+                    <p className="mt-2 text-2xl font-bold text-emerald-800">{semesterReportMetrics.onTimeRate == null ? "—" : `${semesterReportMetrics.onTimeRate}%`}</p>
+                    <p className="mt-0.5 text-[10px] text-slate-500">{semesterReportMetrics.onTime}/{semesterReportMetrics.dueCount} báo cáo</p>
+                  </div>
+                  <div className="rounded-lg border border-slate-100 bg-amber-50/60 p-3">
+                    <p className="flex items-center gap-1.5 text-xs text-slate-600"><Clock3 className="h-3.5 w-3.5" aria-hidden="true" /> Trễ / thiếu</p>
+                    <p className="mt-2 text-2xl font-bold text-amber-800">{semesterReportMetrics.late + semesterReportMetrics.missing}</p>
+                    <p className="mt-0.5 text-[10px] text-slate-500">{semesterReportMetrics.late} trễ · {semesterReportMetrics.missing} thiếu</p>
+                  </div>
+                </div>
+                <div>
+                  <div
+                    className="flex h-3 overflow-hidden rounded-full bg-slate-100"
+                    role="img"
+                    aria-label={`Tiến độ báo cáo: ${semesterReportMetrics.onTime} đúng hạn, ${semesterReportMetrics.late} trễ, ${semesterReportMetrics.missing} còn thiếu`}
+                  >
+                    {semesterReportMetrics.dueCount > 0 && (
+                      <>
+                        <div className="bg-emerald-500" style={{ width: `${(semesterReportMetrics.onTime / semesterReportMetrics.dueCount) * 100}%` }} />
+                        <div className="bg-amber-400" style={{ width: `${(semesterReportMetrics.late / semesterReportMetrics.dueCount) * 100}%` }} />
+                        <div className="bg-slate-300" style={{ width: `${(semesterReportMetrics.missing / semesterReportMetrics.dueCount) * 100}%` }} />
+                      </>
+                    )}
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-slate-600">
+                    <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-emerald-500" />Đúng hạn ({semesterReportMetrics.onTime})</span>
+                    <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-amber-400" />Trễ ({semesterReportMetrics.late})</span>
+                    <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-slate-300" />Thiếu ({semesterReportMetrics.missing})</span>
+                  </div>
+                </div>
+              </>
+            )}
+          </Panel>
+          <Panel className="flex h-full flex-col rounded-xl border border-slate-200/90 shadow-2xs">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h2 className="text-sm font-bold text-slate-900">Sinh viên theo tình trạng thực tập</h2>
+                <p className="mt-1 text-xs text-slate-500">Kỳ đang chọn</p>
               </div>
-              <div className="px-2">
-                <p className="flex items-center gap-1.5 text-xs text-slate-500"><Building2 className="h-3.5 w-3.5" aria-hidden="true" /> Doanh nghiệp tiếp nhận</p>
-                <p className="mt-1 text-2xl font-bold text-slate-900">{semesterReportMetrics.companyCount}</p>
-              </div>
-              <div className="px-2">
-                <p className="flex items-center gap-1.5 text-xs text-slate-500"><CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" /> Nộp đúng hạn</p>
-                <p className="mt-1 text-2xl font-bold text-slate-900">{semesterReportMetrics.onTimeRate == null ? "—" : `${semesterReportMetrics.onTimeRate}%`}</p>
-                <p className="text-[10px] text-slate-500">{semesterReportMetrics.onTime}/{semesterReportMetrics.dueCount} báo cáo đến hạn</p>
-              </div>
-              <div className="px-2">
-                <p className="flex items-center gap-1.5 text-xs text-slate-500"><Clock3 className="h-3.5 w-3.5" aria-hidden="true" /> Trễ / còn thiếu</p>
-                <p className="mt-1 text-2xl font-bold text-slate-900">{semesterReportMetrics.late + semesterReportMetrics.missing}</p>
-                <p className="text-[10px] text-slate-500">{semesterReportMetrics.late} trễ · {semesterReportMetrics.missing} thiếu</p>
-              </div>
+              <ClipboardCheck className="h-4 w-4 text-[#026aa7]" aria-hidden="true" />
             </div>
-          )}
-        </Panel>
+            {isLoading ? (
+              <div className="flex flex-1 items-center justify-center py-6 text-xs text-slate-500">Đang tải dữ liệu…</div>
+            ) : !stats || internshipTrend.length === 0 ? (
+              <div className="flex flex-1 flex-col items-center justify-center gap-2 py-6 text-center">
+                <ClipboardCheck className="h-8 w-8 text-slate-300" aria-hidden="true" />
+                <p className="text-xs font-semibold text-slate-700">Chưa có dữ liệu tình trạng thực tập</p>
+                <p className="text-[11px] text-slate-500">Dữ liệu sẽ hiển thị khi có sinh viên trong kỳ.</p>
+              </div>
+            ) : (
+              <ul className="mt-4 space-y-3">
+                {internshipTrend.map((item) => {
+                  const percentage = internshipStatusTotal > 0
+                    ? Math.round((item.value / internshipStatusTotal) * 100)
+                    : 0;
+                  return (
+                    <li key={item.label}>
+                      <div className="mb-1 flex items-center justify-between gap-3 text-xs">
+                        <span className="font-medium text-slate-700">{item.label}</span>
+                        <span className="shrink-0 font-semibold tabular-nums text-slate-700">
+                          {item.value} <span className="font-normal text-slate-500">({percentage}%)</span>
+                        </span>
+                      </div>
+                      <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
+                        <div className={`h-full rounded-full ${getInternshipStatusColor(item.label)}`} style={{ width: `${percentage}%` }} />
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </Panel>
+        </div>
       )}
 
       {!isSuperAdmin && (
@@ -666,11 +803,12 @@ export const DashboardView = ({
             </span>
           </div>
           {isLoading ? (
-            <p className="text-xs text-slate-500 py-4">Đang tải dữ liệu API…</p>
+            <p className="py-3 text-xs text-slate-500">Đang tải dữ liệu API…</p>
           ) : actionItems.length === 0 ? (
-            <p className="text-xs text-[#7bc043] py-4 font-medium">
-              Không có mục cần xử lý
-            </p>
+            <div className="flex items-center gap-2 py-3">
+              <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-600" aria-hidden="true" />
+              <p className="text-xs font-semibold text-emerald-800">Dữ liệu kỳ hiện tại đã đồng bộ và tối ưu</p>
+            </div>
           ) : (
             <ul className="divide-y divide-slate-100">
               {actionItems.map((item) => (
@@ -696,11 +834,11 @@ export const DashboardView = ({
       )}
 
       {!isSuperAdmin && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-          <Panel className="lg:col-span-7">
+        <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-12">
+          <Panel className="lg:col-span-7 rounded-xl border border-slate-200/90 shadow-2xs">
             <WorkloadOverviewCard stats={stats} isLoading={isLoading} />
           </Panel>
-          <Panel className="lg:col-span-5">
+          <Panel className="lg:col-span-5 rounded-xl border border-slate-200/90 shadow-2xs">
             <AdminActivityTimeline
               activities={stats?.recentActivities}
               isLoading={isLoading}
