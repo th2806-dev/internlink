@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   FileCheck2,
@@ -12,6 +12,7 @@ import {
   Sparkles,
   CheckCircle2,
   Lock,
+  ChevronDown,
 } from "lucide-react";
 import { Panel } from "../../../components/common/Panel";
 import { mapWeeklyReportStatusToUi } from "../../../lib/portalMappers";
@@ -22,6 +23,10 @@ import { GR_QUALITY_RUBRIC_LEVELS } from "../../../lib/gradingRules";
 
 type WeeklyReportsReviewPanelProps = {
   reports: WeeklyReportDto[];
+  studentByInternship?: Record<
+    string,
+    { studentName?: string; mssv?: string; company?: string }
+  >;
   onReview: (
     id: string,
     uiStatus: string,
@@ -41,6 +46,7 @@ type WeeklyReportsReviewPanelProps = {
 
 export function WeeklyReportsReviewPanel({
   reports,
+  studentByInternship = {},
   onReview,
   onShowToast,
   isReviewing = false,
@@ -74,6 +80,19 @@ export function WeeklyReportsReviewPanel({
   }, [evalModalReport, preview]);
 
   const pending = reports.filter((r) => r.status === "Submitted");
+  const groupedReports = useMemo(() => {
+    const groups = new Map<string, WeeklyReportDto[]>();
+    for (const report of reports) {
+      const group = groups.get(report.internshipId) ?? [];
+      group.push(report);
+      groups.set(report.internshipId, group);
+    }
+    return Array.from(groups, ([internshipId, groupReports]) => ({
+      internshipId,
+      student: studentByInternship[internshipId],
+      reports: groupReports,
+    }));
+  }, [reports, studentByInternship]);
 
   if (reports.length === 0) {
     return (
@@ -181,8 +200,42 @@ export function WeeklyReportsReviewPanel({
         </div>
       </div>}
 
-      <ul className="divide-y divide-slate-100">
-        {reports.map((r) => {
+      <div className="space-y-3">
+        {groupedReports.map((group) => (
+          <details
+            key={group.internshipId}
+            open={group.reports.some((report) => report.status === "Submitted")}
+            className="group overflow-hidden rounded-lg border border-slate-200"
+          >
+            <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 bg-slate-50 px-4 py-3 outline-none transition-colors hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#026aa7] [&::-webkit-details-marker]:hidden">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sm font-bold text-sky-800" aria-hidden="true">
+                {(group.student?.studentName || "S").trim().charAt(0).toLocaleUpperCase("vi")}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-bold text-slate-900">
+                  {group.student?.studentName || "Sinh viên"}
+                </span>
+                <span className="mt-0.5 block truncate text-xs text-slate-500">
+                  {group.student?.mssv || "—"}
+                  {group.student?.company ? ` · ${group.student.company}` : ""}
+                </span>
+              </span>
+              <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                group.reports.some((report) => report.status === "Submitted")
+                  ? "border-amber-200 bg-amber-50 text-amber-800"
+                  : "border-slate-200 bg-white text-slate-600"
+              }`}>
+                {group.reports.some((report) => report.status === "Submitted")
+                  ? `${group.reports.filter((report) => report.status === "Submitted").length} bài chờ duyệt`
+                  : `${group.reports.length} bài trong lịch sử`}
+              </span>
+              <span className="hidden shrink-0 text-xs text-slate-500 sm:inline">
+                {group.reports.length} bài
+              </span>
+              <ChevronDown className="h-4 w-4 shrink-0 text-slate-500 transition-transform group-open:rotate-180" aria-hidden="true" />
+            </summary>
+            <ul className="divide-y divide-slate-100 px-4">
+        {group.reports.map((r) => {
           const isPendingItem = r.status === "Submitted";
           const isApprovedItem = r.status === "Approved";
           const isReadOnly = isSemesterClosed;
@@ -318,7 +371,10 @@ export function WeeklyReportsReviewPanel({
             </li>
           );
         })}
-      </ul>
+            </ul>
+          </details>
+        ))}
+      </div>
 
       {/* Modal xem trước file */}
       {preview &&

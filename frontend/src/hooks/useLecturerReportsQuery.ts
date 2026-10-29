@@ -27,6 +27,7 @@ export interface WeeklyReportTotals {
 export interface ReportsQueryState {
   status: string;
   searchTerm: string;
+  weekNumber: number | null;
   page: number;
 }
 
@@ -82,6 +83,7 @@ export function useLecturerReportsQuery(options: UseLecturerReportsQueryOptions 
   const [query, setQuery] = useState<ReportsQueryState>({
     status: "",
     searchTerm: "",
+    weekNumber: null,
     page: 1,
   });
 
@@ -97,6 +99,7 @@ export function useLecturerReportsQuery(options: UseLecturerReportsQueryOptions 
       semesterId: semesterId ?? "all",
       status: query.status,
       search: query.searchTerm,
+      weekNumber: query.weekNumber,
       page: query.page,
       pageSize,
     }),
@@ -107,6 +110,7 @@ export function useLecturerReportsQuery(options: UseLecturerReportsQueryOptions 
         take: pageSize,
         status: query.status || undefined,
         searchTerm: query.searchTerm || undefined,
+        weekNumber: query.weekNumber,
         signal,
       }),
     // Giữ dữ liệu trang cũ (mờ nhẹ) cho đến khi trang mới về → không giật màn hình trắng.
@@ -158,10 +162,14 @@ export function useLecturerReportsQuery(options: UseLecturerReportsQueryOptions 
   const clearFilters = useCallback(() => {
     setSearchInput("");
     setQuery((prev) =>
-      prev.status === "" && prev.searchTerm === "" && prev.page === 1
+      prev.status === "" && prev.searchTerm === "" && prev.weekNumber === null && prev.page === 1
         ? prev
-        : { status: "", searchTerm: "", page: 1 },
+        : { status: "", searchTerm: "", weekNumber: null, page: 1 },
     );
+  }, []);
+
+  const setWeekNumber = useCallback((weekNumber: number | null) => {
+    setQuery((prev) => ({ ...prev, weekNumber, page: 1 }));
   }, []);
 
   const goToPage = useCallback((page: number) => {
@@ -188,7 +196,12 @@ export function useLecturerReportsQuery(options: UseLecturerReportsQueryOptions 
     isPlaceholderData: listQuery.isPlaceholderData,
     refetch: listQuery.refetch,
     // Bộ lọc & phân trang
-    filter: { status: query.status, searchTerm: searchInput, appliedSearchTerm: query.searchTerm },
+    filter: {
+      status: query.status,
+      searchTerm: searchInput,
+      appliedSearchTerm: query.searchTerm,
+      weekNumber: query.weekNumber,
+    },
     page: query.page,
     pageSize,
     pagination: {
@@ -202,6 +215,7 @@ export function useLecturerReportsQuery(options: UseLecturerReportsQueryOptions 
       hasNext: query.page * pageSize < total,
     },
     setStatus,
+    setWeekNumber,
     setSearchTerm,
     applySearch,
     clearFilters,

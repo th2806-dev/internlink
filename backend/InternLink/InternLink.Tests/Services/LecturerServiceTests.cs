@@ -26,6 +26,7 @@ public class LecturerServiceTests
             cfg.AddProfile<StudentProfile>();
             cfg.AddProfile<CompanyProfile>();
             cfg.AddProfile<SubmissionProfile>();
+            cfg.AddProfile<WeeklyReportProfile>();
         });
         _mapper = config.CreateMapper();
     }
@@ -174,6 +175,36 @@ public class LecturerServiceTests
         await db.SaveChangesAsync();
 
         return (lecturerUser, lecturer, internship1, internship2);
+    }
+
+    [Fact]
+    public async Task GetAssignedWeeklyReportsAsync_FiltersByWeekNumber()
+    {
+        await using var db = GetDb();
+        var (lecturerUser, _, internship, _) = await SeedLecturerDataAsync(db);
+        db.WeeklyReports.Add(new WeeklyReport
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = internship.Id,
+            WeekNumber = 2,
+            Status = WeeklyReportStatus.Submitted,
+            Title = "Báo cáo tuần 2",
+            Content = "Nội dung báo cáo tiến độ tuần 2",
+            CreatedAt = DateTime.UtcNow,
+        });
+        await db.SaveChangesAsync();
+
+        var service = new LecturerService(db, _mapper, Mock.Of<INotificationService>());
+        var result = await service.GetAssignedWeeklyReportsAsync(lecturerUser.Id, new WeeklyReportFilterRequest
+        {
+            SemesterId = internship.SemesterId,
+            WeekNumber = 2,
+            Skip = 0,
+            Take = 20,
+        });
+
+        result.Total.Should().Be(1);
+        result.Items.Should().ContainSingle().Which.WeekNumber.Should().Be(2);
     }
 
     [Fact]

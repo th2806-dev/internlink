@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Archive, CalendarClock, ClipboardCheck, SearchX } from "lucide-react";
+import { Archive, CalendarClock, ChevronDown, ClipboardCheck, SearchX } from "lucide-react";
 import { EmptyState } from "../../../components/common/EmptyState";
 import { Panel } from "../../../components/common/Panel";
 import { TableSkeleton } from "../../../components/common/SkeletonLoader";
@@ -59,7 +59,6 @@ export const ReportsView = ({
   const [activeTab, setActiveTab] = useState<"review" | "schedule">("review");
   const [reviewArea, setReviewArea] = useState<"pending" | "approved">("pending");
   const [reportType, setReportType] = useState("Tất cả");
-  const [zipCategory, setZipCategory] = useState("weekly");
   const [isDownloadingZip, setIsDownloadingZip] = useState(false);
   const { semesters } = useSemester();
   const [schedules, setSchedules] = useState<SemesterReportScheduleDto[]>([]);
@@ -119,6 +118,7 @@ export const ReportsView = ({
     filter,
     pagination,
     setSearchTerm,
+    setWeekNumber,
     goToPage,
   } = reports;
 
@@ -126,11 +126,11 @@ export const ReportsView = ({
     void reports.refetch();
   };
 
-  const handleDownloadSemesterZip = async () => {
+  const handleDownloadSemesterZip = async (category: string) => {
     if (!semesterId || isDownloadingZip) return;
     setIsDownloadingZip(true);
     try {
-      await submissionApiService.downloadLecturerSemesterZip(semesterId, zipCategory);
+      await submissionApiService.downloadLecturerSemesterZip(semesterId, category);
       showToast?.("Đã tạo và tải tệp ZIP.", "success");
     } catch (downloadError) {
       showToast?.(getApiErrorMessage(downloadError), "danger");
@@ -145,6 +145,10 @@ export const ReportsView = ({
 
   const searchTerm = filter.searchTerm.trim().toLocaleLowerCase("vi");
   const studentByInternship = submissionsQuery.studentByInternship ?? EMPTY_STUDENT_CONTEXT;
+  const availableWeekNumbers = Array.from(new Set([
+    ...schedules.map((schedule) => schedule.weekNumber),
+    ...items.map((report) => report.weekNumber),
+  ])).sort((left, right) => left - right);
   const visibleWeeklyReports = useMemo(
     () => items.filter((report) => {
       return reviewArea === "pending"
@@ -308,7 +312,7 @@ export const ReportsView = ({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_250px]">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_220px_180px]">
           <label className="sr-only" htmlFor="report-search">Tìm hồ sơ</label>
           <input
             id="report-search"
@@ -332,6 +336,19 @@ export const ReportsView = ({
             <option>Sản phẩm thực tế</option>
             <option>Đánh giá doanh nghiệp</option>
           </select>
+          <label className="sr-only" htmlFor="report-week-filter">Lọc theo tuần</label>
+          <select
+            id="report-week-filter"
+            value={filter.weekNumber?.toString() ?? "all"}
+            onChange={(event) => setWeekNumber(event.target.value === "all" ? null : Number(event.target.value))}
+            aria-label="Lọc theo tuần báo cáo"
+            className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-4 text-xs font-medium text-slate-700 outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+          >
+            <option value="all">Tất cả các tuần</option>
+            {availableWeekNumbers.map((weekNumber) => (
+              <option key={weekNumber} value={weekNumber}>Tuần {weekNumber}</option>
+            ))}
+          </select>
         </div>
 
         <div className="flex flex-col gap-2 border-t border-slate-100 pt-3 sm:flex-row sm:items-center sm:justify-between">
@@ -339,29 +356,40 @@ export const ReportsView = ({
             <h3 className="text-xs font-semibold text-slate-800">Tải hồ sơ học kỳ</h3>
             <p className="text-[11px] text-slate-500">Xuất các tệp đã nộp theo loại hồ sơ.</p>
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <label className="sr-only" htmlFor="semester-report-zip-category">Loại hồ sơ cần tải ZIP</label>
-            <select
-              id="semester-report-zip-category"
-              value={zipCategory}
-              onChange={(event) => setZipCategory(event.target.value)}
-              className="min-h-11 rounded-lg border border-slate-300 bg-white px-4 text-xs font-medium text-slate-700 outline-none transition-colors hover:border-slate-400 focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
-            >
-              <option value="weekly">Tất cả file báo cáo tuần</option>
-              <option value="final">Tất cả file báo cáo cuối kỳ</option>
-              <option value="product">Tất cả file sản phẩm</option>
-              <option value="evidence">Tất cả file minh chứng đánh giá doanh nghiệp</option>
-              <option value="student">Nhóm theo sinh viên</option>
-            </select>
-            <button
-              type="button"
-              onClick={() => void handleDownloadSemesterZip()}
-              disabled={!semesterId || isDownloadingZip}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[#026aa7] px-4 text-xs font-semibold text-white transition-colors hover:bg-[#025987] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Archive className="h-4 w-4" aria-hidden="true" />
-              {isDownloadingZip ? "Đang tạo ZIP…" : "Tải ZIP"}
-            </button>
+          <div className="relative">
+            <details className="group relative">
+              <summary
+                aria-disabled={!semesterId || isDownloadingZip}
+                className={`inline-flex min-h-11 list-none cursor-pointer items-center justify-center gap-2 rounded-lg bg-[#026aa7] px-4 text-xs font-semibold text-white transition-colors hover:bg-[#025987] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 [&::-webkit-details-marker]:hidden ${!semesterId || isDownloadingZip ? "pointer-events-none opacity-50" : ""}`}
+              >
+                <Archive className="h-4 w-4" aria-hidden="true" />
+                {isDownloadingZip ? "Đang tạo ZIP…" : "Tải gói ZIP hồ sơ"}
+                <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" aria-hidden="true" />
+              </summary>
+              <div className="absolute right-0 z-20 mt-2 w-72 overflow-hidden rounded-lg border border-slate-200 bg-white p-1.5 shadow-lg">
+                {[
+                  ["weekly", "Tải tất cả báo cáo tuần"],
+                  ["final", "Tải tất cả báo cáo cuối kỳ"],
+                  ["evidence", "Tải tất cả phiếu đánh giá doanh nghiệp"],
+                  ["product", "Tải tất cả sản phẩm thực tế"],
+                  ["student", "Gói ZIP phân thư mục theo sinh viên"],
+                ].map(([category, label]) => (
+                  <button
+                    key={category}
+                    type="button"
+                    disabled={!semesterId || isDownloadingZip}
+                    onClick={(event) => {
+                      const details = event.currentTarget.closest("details");
+                      if (details) details.open = false;
+                      void handleDownloadSemesterZip(category);
+                    }}
+                    className="flex min-h-10 w-full items-center rounded-md px-3 text-left text-xs font-medium text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </details>
           </div>
         </div>
       </Panel>
@@ -429,6 +457,7 @@ export const ReportsView = ({
                 >
                   <WeeklyReportsReviewPanel
                     reports={visibleWeeklyReports}
+                    studentByInternship={studentByInternship}
                     onReview={handleReview}
                     onShowToast={(msg, type) =>
                       showToast?.(msg, type === "error" ? "danger" : type)

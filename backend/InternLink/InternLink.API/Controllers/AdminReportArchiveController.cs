@@ -39,7 +39,10 @@ public sealed class AdminReportArchiveController : ControllerBase
     }
 
     [HttpGet("{semesterId:guid}/download")]
-    public async Task<IActionResult> Download(Guid semesterId, [FromQuery] Guid? studentId = null)
+    public async Task<IActionResult> Download(
+        Guid semesterId,
+        [FromQuery] Guid? studentId = null,
+        [FromQuery] string documentType = "all")
     {
         var departmentId = _departmentScope.GetCurrentDepartmentId(User);
         var userId = User.GetUserId();
@@ -47,12 +50,19 @@ public sealed class AdminReportArchiveController : ControllerBase
             return Forbid();
         if (!userId.HasValue)
             return Unauthorized();
+        if (documentType.Trim().ToLowerInvariant() is not ("all" or "weekly" or "final" or "evidence" or "product" or "other"))
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Loại tài liệu cần tải không hợp lệ." }));
 
         try
         {
-            var zip = await _archiveService.CreateZipAsync(semesterId, departmentId.Value, userId.Value, studentId);
+            var zip = await _archiveService.CreateZipAsync(
+                semesterId,
+                departmentId.Value,
+                userId.Value,
+                studentId,
+                documentType);
             if (zip == null)
-                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Không có báo cáo tuần để tải trong phạm vi đã chọn." }));
+                return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Không có tài liệu phù hợp để tải trong phạm vi đã chọn." }));
             return File(zip.Content, "application/zip", zip.FileName);
         }
         catch (UnauthorizedAccessException)

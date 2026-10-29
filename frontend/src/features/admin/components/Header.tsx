@@ -72,7 +72,7 @@ export const Header = ({
       case "admin-attendance":
         return "Điểm danh & Buổi gặp";
       case "admin-report-archive":
-        return "Kho báo cáo tuần";
+        return "Kho hồ sơ lưu trữ";
       case "admin-notifications":
         return "Thông báo";
       case "admin-summary":

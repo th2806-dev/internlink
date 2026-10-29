@@ -500,7 +500,8 @@ public class LecturerController : ControllerBase
         [FromQuery] int skip = 0,
         [FromQuery] int take = 20,
         [FromQuery] string? status = null,
-        [FromQuery] string? searchTerm = null)
+        [FromQuery] string? searchTerm = null,
+        [FromQuery] int? weekNumber = null)
     {
         var userId = User.GetUserId();
         if (userId == null)
@@ -526,6 +527,7 @@ public class LecturerController : ControllerBase
             Take = Math.Clamp(take, 1, 100),
             Status = status,
             SearchTerm = searchTerm,
+            WeekNumber = weekNumber,
         });
         return Ok(ApiResponse<PaginatedResponse<WeeklyReportDto>>.Ok(allReports));
     }

@@ -122,6 +122,7 @@ public class WeeklyReportFilterRequest : PaginationRequest
     public Guid? SemesterId { get; set; }
     public string? Status { get; set; }
     public string? SearchTerm { get; set; }
+    public int? WeekNumber { get; set; }
 }
 
 /// <summary>

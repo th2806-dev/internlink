@@ -498,6 +498,9 @@ public class LecturerService : ILecturerService
         if (!string.IsNullOrWhiteSpace(filter.Status))
             reportQuery = reportQuery.Where(r => r.Status.ToString() == filter.Status);
 
+        if (filter.WeekNumber.HasValue)
+            reportQuery = reportQuery.Where(r => r.WeekNumber == filter.WeekNumber.Value);
+
         if (!string.IsNullOrWhiteSpace(filter.SearchTerm))
         {
             var term = filter.SearchTerm.Trim().ToLower();

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
@@ -49,6 +49,9 @@ vi.mock("../hooks/useLecturerSubmissionsQuery", () => ({
     refetch: vi.fn(),
     updateSubmissionStatus: vi.fn(),
     isUpdating: false,
+    studentByInternship: {
+      "int-shared": { studentName: "Nguyễn An", mssv: "SV001", company: "Công ty A" },
+    },
   }),
 }));
 
@@ -56,10 +59,10 @@ const getAllForLecturer = vi.mocked(weeklyReportService.getAllForLecturer);
 const downloadLecturerSemesterZip = vi.mocked(submissionApiService.downloadLecturerSemesterZip);
 const getSchedules = vi.mocked(semesterReportScheduleService.getSchedules);
 
-function makeReport(id: string, status = "Submitted"): WeeklyReportDto {
+function makeReport(id: string, status = "Submitted", internshipId = `int-${id}`): WeeklyReportDto {
   return {
     id,
-    internshipId: `int-${id}`,
+    internshipId,
     weekNumber: 1,
     version: 1,
     title: `Báo cáo ${id}`,
@@ -138,6 +141,44 @@ describe("ReportsView (lát dọc tiên phong /lecturer/reports)", () => {
     expect(screen.queryByTestId("submissions-hub")).not.toBeInTheDocument();
     expect(screen.queryByTestId("request-error-state")).not.toBeInTheDocument();
     expect(screen.queryByTestId("reports-loading")).not.toBeInTheDocument();
+  });
+
+  it("groups pending weekly reports under the assigned student", async () => {
+    getAllForLecturer.mockImplementation(async (params) => {
+      if ((params?.take ?? 0) === 1) return totalsResponse(params?.status);
+      return makePage([
+        makeReport("r1", "Submitted", "int-shared"),
+        makeReport("r2", "Submitted", "int-shared"),
+      ], 2);
+    });
+
+    renderReportsView();
+
+    const studentName = await screen.findByText("Nguyễn An");
+    const studentGroup = studentName.closest("details");
+    if (!studentGroup) throw new Error("Missing student report group");
+    expect(within(studentGroup).getByText("2 bài chờ duyệt")).toBeInTheDocument();
+    expect(within(studentGroup).getByText(/Tuần 1 — Báo cáo r1/)).toBeInTheDocument();
+    expect(within(studentGroup).getByText(/Tuần 1 — Báo cáo r2/)).toBeInTheDocument();
+  });
+
+  it("applies the selected week on the paged reports API query", async () => {
+    const user = userEvent.setup();
+    getAllForLecturer.mockImplementation(async (params) => {
+      if ((params?.take ?? 0) === 1) return totalsResponse(params?.status);
+      return makePage([makeReport(`week-${params?.weekNumber ?? "all"}`)], 1);
+    });
+
+    renderReportsView();
+
+    const weekFilter = await screen.findByRole("combobox", { name: "Lọc theo tuần báo cáo" });
+    await user.selectOptions(weekFilter, "1");
+
+    await waitFor(() => {
+      expect(getAllForLecturer).toHaveBeenCalledWith(
+        expect.objectContaining({ semesterId: "sem-1", weekNumber: 1 }),
+      );
+    });
   });
 
   it("Test 3 — lỗi 500 → RequestErrorState + nút Thử lại → phục hồi thành công", async () => {
@@ -250,11 +291,8 @@ describe("ReportsView (lát dọc tiên phong /lecturer/reports)", () => {
 
     renderReportsView();
 
-    await user.selectOptions(
-      screen.getByRole("combobox", { name: "Loại hồ sơ cần tải ZIP" }),
-      "student",
-    );
-    await user.click(screen.getByRole("button", { name: "Tải ZIP" }));
+    await user.click(screen.getByText("Tải gói ZIP hồ sơ"));
+    await user.click(screen.getByRole("button", { name: "Gói ZIP phân thư mục theo sinh viên" }));
 
     await waitFor(() => {
       expect(downloadLecturerSemesterZip).toHaveBeenCalledWith("sem-1", "student");

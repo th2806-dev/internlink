@@ -10,5 +10,6 @@ public interface IWeeklyReportArchiveService
         Guid semesterId,
         Guid departmentId,
         Guid userId,
-        Guid? studentId = null);
+        Guid? studentId = null,
+        string documentType = "all");
 }

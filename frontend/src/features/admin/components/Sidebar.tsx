@@ -120,7 +120,7 @@ export const Sidebar = ({
         },
         {
           id: "admin-report-archive",
-          label: "Kho báo cáo tuần",
+          label: "Kho hồ sơ lưu trữ",
           icon: Archive,
         },
         {
