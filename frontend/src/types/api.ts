@@ -1022,6 +1022,7 @@ export interface StudentAttendanceOverviewDto {
   totalSessions: number;
   presentCount: number;
   absentCount: number;
+  requiredAbsentCount: number;
   attendanceRate: number;
   sessions: StudentAttendanceItemDto[];
 }

@@ -71,7 +71,7 @@ public class InternshipReportService : IInternshipReportService
             .GroupBy(e => e.InternshipId)
             .ToDictionary(g => g.Key, g => g.First());
 
-        var (absentWeeksByInternship, weeklyQualityLevelsByInternship) = await LoadGradingContextAsync(internships, semesterId, evaluations);
+        var (absentSessionsByInternship, weeklyQualityLevelsByInternship) = await LoadGradingContextAsync(internships, semesterId, evaluations);
 
         // Mốc thống kê theo KHÓA THỰC TẬP CỦA KỲ (đề xuất P1) — không tính toàn bộ SV mọi khóa của khoa.
         var (totalStudents, _) = await ComputeCohortStatsAsync(internships, department, departmentId);
@@ -87,7 +87,7 @@ public class InternshipReportService : IInternshipReportService
             .DefaultIfEmpty(0)
             .Max();
         var reportScheduleByWeek = await LoadReportScheduleByWeekAsync(semesterId, totalWeeks);
-        BuildC22ASummarySheet(ws, internships, evaluations, totalStudents, totalCompanies, absentWeeksByInternship, weeklyQualityLevelsByInternship, reportScheduleByWeek, DateTime.UtcNow);
+        BuildC22ASummarySheet(ws, internships, evaluations, totalStudents, totalCompanies, absentSessionsByInternship, weeklyQualityLevelsByInternship, reportScheduleByWeek, DateTime.UtcNow);
 
         using var ms = new MemoryStream();
         workbook.SaveAs(ms);
@@ -135,7 +135,7 @@ public class InternshipReportService : IInternshipReportService
             .GroupBy(e => e.InternshipId)
             .ToDictionary(g => g.Key, g => g.First());
 
-        var (absentWeeksByInternship, weeklyQualityLevelsByInternship) = await LoadGradingContextAsync(internships, semesterId, evaluations);
+        var (absentSessionsByInternship, weeklyQualityLevelsByInternship) = await LoadGradingContextAsync(internships, semesterId, evaluations);
 
         var totalCompanies = internships
             .Select(i => i.CompanyId)
@@ -202,9 +202,12 @@ public class InternshipReportService : IInternshipReportService
                 continue;
             }
 
-            var hasFinalReport = intern.Status == InternshipStatus.Completed || intern.Status == InternshipStatus.Graded
-                || intern.Submissions.Any(s => !s.IsDeleted && s.Type == SubmissionType.FinalReport && s.Status != SubmissionStatus.Rejected);
-            var (isEligible, _) = InternshipGradeCalculator.EvaluateEligibility(hasFinalReport, absentWeeksByInternship.GetValueOrDefault(intern.Id));
+            var hasFinalReport = intern.Submissions.Any(s =>
+                !s.IsDeleted && s.Type == SubmissionType.FinalReport
+                && s.Status != SubmissionStatus.Rejected);
+            var (isEligible, _) = InternshipGradeCalculator.EvaluateEligibility(
+                hasFinalReport,
+                absentSessionsByInternship.GetValueOrDefault(intern.Id));
 
             if (!isEligible)
             {
@@ -212,7 +215,7 @@ public class InternshipReportService : IInternshipReportService
                 incompleteInternships.Add(intern);
                 continue;
             }
-            if (!evaluations.TryGetValue(intern.Id, out var eval) || !eval.OralExamScore.HasValue)
+            if (!evaluations.TryGetValue(intern.Id, out var eval))
             {
                 gradeCounts["Chưa xếp loại"]++;
                 continue;
@@ -221,8 +224,12 @@ public class InternshipReportService : IInternshipReportService
             var (missingCount, lateCount, submittedWeekCount) = CountSubmissionStats(intern, reportScheduleByWeek, nowUtc);
             var hasApprovedProduct = intern.Submissions.Any(s =>
                 !s.IsDeleted && s.Type == SubmissionType.Product && s.Status == SubmissionStatus.Approved);
-            var processScore = InternshipGradeCalculator.ComputeProcessScore(missingCount, lateCount, submittedWeekCount, weeklyQualityLevelsByInternship.GetValueOrDefault(intern.Id), hasApprovedProduct);
-            var (_, classification) = InternshipGradeCalculator.ComputeAverage(true, processScore, eval.OralExamScore);
+            var processScore = InternshipGradeCalculator.ComputeProcessScore(
+                missingCount, lateCount, submittedWeekCount,
+                weeklyQualityLevelsByInternship.GetValueOrDefault(intern.Id) ?? new List<decimal?>(),
+                hasApprovedProduct,
+                reportScheduleByWeek.Count);
+            var (_, classification) = InternshipGradeCalculator.ComputeAverage(processScore, eval.OralExamScore);
             var templateLabel = MapClassificationToTemplateRow(classification);
             if (templateLabel != null)
                 gradeCounts[templateLabel]++;
@@ -239,10 +246,12 @@ public class InternshipReportService : IInternshipReportService
         var incompleteStudentRows = incompleteInternships
             .Select(i =>
             {
-                var hasFinalReport = i.Status == InternshipStatus.Completed || i.Status == InternshipStatus.Graded
-                    || i.Submissions.Any(s => !s.IsDeleted && s.Type == SubmissionType.FinalReport && s.Status != SubmissionStatus.Rejected);
+                var hasFinalReport = i.Submissions.Any(s =>
+                    !s.IsDeleted && s.Type == SubmissionType.FinalReport
+                    && s.Status != SubmissionStatus.Rejected);
                 var (_, reasons) = InternshipGradeCalculator.EvaluateEligibility(
-                    hasFinalReport, absentWeeksByInternship.GetValueOrDefault(i.Id));
+                    hasFinalReport,
+                    absentSessionsByInternship.GetValueOrDefault(i.Id));
                 var lyDo = reasons.Count > 0
                     ? string.Join("; ", reasons)
                     : "Không đủ điều kiện dự thi";
@@ -409,52 +418,85 @@ public class InternshipReportService : IInternshipReportService
     /// (2) mức rubric chất lượng từng tuần (WeeklyQualityJson) để tính Điểm QT.
     /// Cùng nguồn dữ liệu với màn hình chấm điểm (InternshipGradingService) và Excel C23 (ExcelExportService).
     /// </summary>
-    private async Task<(Dictionary<Guid, int> absentWeeksByInternship, Dictionary<Guid, List<decimal?>> weeklyQualityLevelsByInternship)> LoadGradingContextAsync(
+    private async Task<(Dictionary<Guid, int> absentSessionsByInternship, Dictionary<Guid, List<decimal?>> weeklyQualityLevelsByInternship)> LoadGradingContextAsync(
         List<Domain.Entities.Internship> internships,
         Guid? semesterId,
         Dictionary<Guid, Domain.Entities.Evaluation> evaluations)
     {
-        // (1) Số tuần vắng theo ĐIỂM DANH buổi hẹn.
+        // (1) Số buổi vắng bắt buộc theo điểm danh.
         var studentIds = internships.Select(i => i.StudentId).ToList();
         var absenceQuery = _db.AttendanceRecords
             .AsNoTracking()
             .Where(a => studentIds.Contains(a.StudentId) && !a.IsDeleted
                 && a.Status == AttendanceStatus.Absent
                 && !a.AttendanceSession.IsDeleted
+                && a.AttendanceSession.Status == AttendanceSessionStatus.Completed
                 && !a.AttendanceSession.IsLecturerOnly
                 // Buổi hướng dẫn chung (sinh hoạt lớp) là điểm danh PHỤ — vắng không tính điều kiện dự thi
                 && !a.AttendanceSession.IsGeneralSession);
         if (semesterId.HasValue)
             absenceQuery = absenceQuery.Where(a => a.AttendanceSession.SemesterId == semesterId.Value);
         var absenceRows = await absenceQuery
-            .Select(a => new { a.StudentId, a.AttendanceSession.WeekNumber })
+            .Select(a => new { a.StudentId, a.AttendanceSessionId })
             .ToListAsync();
-        var absentWeeksByStudent = absenceRows
+        var absentSessionsByStudent = absenceRows
             .GroupBy(a => a.StudentId)
-            .ToDictionary(g => g.Key, g => g.Select(x => x.WeekNumber).Distinct().Count());
-        var absentWeeksByInternship = internships.ToDictionary(
+            .ToDictionary(g => g.Key, g => g.Select(x => x.AttendanceSessionId).Distinct().Count());
+        var absentSessionsByInternship = internships.ToDictionary(
             i => i.Id,
-            i => absentWeeksByStudent.GetValueOrDefault(i.StudentId));
+            i => absentSessionsByStudent.GetValueOrDefault(i.StudentId));
 
-        // (2) Mức rubric từng tuần (WeeklyQualityJson) cho Điểm QT.
+        // (2) Mức rubric từng tuần đang mở (WeeklyQualityJson) cho Điểm QT.
+        var semesterIds = internships
+            .Where(internship => internship.SemesterId.HasValue)
+            .Select(internship => internship.SemesterId!.Value)
+            .Distinct()
+            .ToList();
+        var maxWeeksBySemester = internships
+            .Where(internship => internship.SemesterId.HasValue)
+            .GroupBy(internship => internship.SemesterId!.Value)
+            .ToDictionary(group => group.Key, group => group.Max(internship => internship.Semester?.TotalWeeks ?? 0));
+        var openSchedules = await _db.SemesterReportSchedules
+            .AsNoTracking()
+            .Where(schedule => !schedule.IsDeleted && schedule.IsSubmissionOpen
+                && semesterIds.Contains(schedule.SemesterId) && schedule.WeekNumber >= 1)
+            .Select(schedule => new { schedule.SemesterId, schedule.WeekNumber })
+            .ToListAsync();
+        var openWeeksBySemester = openSchedules
+            .Where(schedule => schedule.WeekNumber <= maxWeeksBySemester.GetValueOrDefault(schedule.SemesterId))
+            .GroupBy(schedule => schedule.SemesterId)
+            .ToDictionary(group => group.Key, group => group.Select(schedule => schedule.WeekNumber).ToHashSet());
+        var semesterByInternship = internships.ToDictionary(internship => internship.Id, internship => internship.SemesterId);
         var weeklyQualityLevelsByInternship = new Dictionary<Guid, List<decimal?>>();
         foreach (var (internshipId, evaluation) in evaluations)
         {
             var levels = new List<decimal?>();
+            var semesterIdForInternship = semesterByInternship.GetValueOrDefault(internshipId);
+            var openWeeks = semesterIdForInternship.HasValue
+                ? openWeeksBySemester.GetValueOrDefault(semesterIdForInternship.Value)
+                : null;
+            var hasWeeklyQualityJson = false;
             if (!string.IsNullOrWhiteSpace(evaluation.WeeklyQualityJson))
             {
                 try
                 {
                     var parsed = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, decimal>>(evaluation.WeeklyQualityJson);
-                    if (parsed != null) levels.AddRange(parsed.Values.Select(v => (decimal?)v));
+                    if (parsed != null && openWeeks != null)
+                    {
+                        hasWeeklyQualityJson = parsed.Count > 0;
+                        foreach (var (weekNumber, value) in parsed)
+                            if (int.TryParse(weekNumber, out var week) && openWeeks.Contains(week))
+                                levels.Add(value);
+                    }
                 }
                 catch (System.Text.Json.JsonException) { }
             }
-            if (levels.Count == 0 && evaluation.QualityLevel.HasValue) levels.Add(evaluation.QualityLevel);
+            if (!hasWeeklyQualityJson && levels.Count == 0 && evaluation.QualityLevel.HasValue && openWeeks?.Count > 0)
+                levels.Add(evaluation.QualityLevel);
             weeklyQualityLevelsByInternship[internshipId] = levels;
         }
 
-        return (absentWeeksByInternship, weeklyQualityLevelsByInternship);
+        return (absentSessionsByInternship, weeklyQualityLevelsByInternship);
     }
 
     private static List<ReportSectionContent>? DeserializeReportSections(string? storedResults)
@@ -969,7 +1011,7 @@ public class InternshipReportService : IInternshipReportService
         Dictionary<Guid, Domain.Entities.Evaluation> evaluations,
         int totalStudents,
         int totalCompanies,
-        Dictionary<Guid, int> absentWeeksByInternship,
+        Dictionary<Guid, int> absentSessionsByInternship,
         Dictionary<Guid, List<decimal?>> weeklyQualityLevelsByInternship,
         Dictionary<int, Domain.Entities.SemesterReportSchedule> reportScheduleByWeek,
         DateTime nowUtc)
@@ -1039,9 +1081,12 @@ public class InternshipReportService : IInternshipReportService
 
         foreach (var intern in internships)
         {
-            var hasFinalReport = intern.Status == InternshipStatus.Completed || intern.Status == InternshipStatus.Graded
-                || intern.Submissions.Any(s => !s.IsDeleted && s.Type == SubmissionType.FinalReport && s.Status != SubmissionStatus.Rejected);
-            var (isEligible, _) = InternshipGradeCalculator.EvaluateEligibility(hasFinalReport, absentWeeksByInternship.GetValueOrDefault(intern.Id));
+            var hasFinalReport = intern.Submissions.Any(s =>
+                !s.IsDeleted && s.Type == SubmissionType.FinalReport
+                && s.Status != SubmissionStatus.Rejected);
+            var (isEligible, _) = InternshipGradeCalculator.EvaluateEligibility(
+                hasFinalReport,
+                absentSessionsByInternship.GetValueOrDefault(intern.Id));
 
             if (!isEligible)
             {
@@ -1049,7 +1094,7 @@ public class InternshipReportService : IInternshipReportService
                 gradeCounts["Không thực tập"]++;
                 continue;
             }
-            if (!evaluations.TryGetValue(intern.Id, out var eval) || !eval.OralExamScore.HasValue)
+            if (!evaluations.TryGetValue(intern.Id, out var eval))
             {
                 gradeCounts[pendingClassification]++;
                 continue;
@@ -1058,8 +1103,12 @@ public class InternshipReportService : IInternshipReportService
             var (missingCount, lateCount, submittedWeekCount) = CountSubmissionStats(intern, reportScheduleByWeek, nowUtc);
             var hasApprovedProduct = intern.Submissions.Any(s =>
                 !s.IsDeleted && s.Type == SubmissionType.Product && s.Status == SubmissionStatus.Approved);
-            var processScore = InternshipGradeCalculator.ComputeProcessScore(missingCount, lateCount, submittedWeekCount, weeklyQualityLevelsByInternship.GetValueOrDefault(intern.Id), hasApprovedProduct);
-            var (_, classification) = InternshipGradeCalculator.ComputeAverage(true, processScore, eval.OralExamScore);
+            var processScore = InternshipGradeCalculator.ComputeProcessScore(
+                missingCount, lateCount, submittedWeekCount,
+                weeklyQualityLevelsByInternship.GetValueOrDefault(intern.Id) ?? new List<decimal?>(),
+                hasApprovedProduct,
+                reportScheduleByWeek.Count);
+            var (_, classification) = InternshipGradeCalculator.ComputeAverage(processScore, eval.OralExamScore);
             gradeCounts[classification]++;
         }
         // "Không thực tập" = SV không đủ điều kiện dự thi + SV không có kỳ thực tập.

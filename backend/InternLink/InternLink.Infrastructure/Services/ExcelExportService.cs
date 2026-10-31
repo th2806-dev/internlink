@@ -55,6 +55,8 @@ public class ExcelExportService : IExcelExportService
                 .ThenInclude(i => i.WeeklyReports)
             .Include(s => s.Internships.Where(i => !i.IsDeleted && (!semesterId.HasValue || i.SemesterId == semesterId.Value) && (!lecturerId.HasValue || i.LecturerId == lecturerId.Value)))
                 .ThenInclude(i => i.Submissions)
+            .Include(s => s.Internships.Where(i => !i.IsDeleted && (!semesterId.HasValue || i.SemesterId == semesterId.Value) && (!lecturerId.HasValue || i.LecturerId == lecturerId.Value)))
+                .ThenInclude(i => i.Semester)
             .Include(s => s.AttendanceRecords.Where(a => !a.IsDeleted))
                 .ThenInclude(a => a.AttendanceSession)
             .Where(s => !lecturerId.HasValue || s.Internships.Any(i => !i.IsDeleted && i.LecturerId == lecturerId.Value && (!semesterId.HasValue || i.SemesterId == semesterId.Value)));
@@ -151,22 +153,20 @@ public class ExcelExportService : IExcelExportService
                 var reportMissingCount = 0;
                 var lateCount = 0;
                 // Hai hệ thống độc lập: thiếu bài (nộp bài) vs vắng (điểm danh buổi hẹn)
-                var absentCount23 = 0;
-                foreach (var (week, schedule) in reportScheduleByWeek)
-                {
-                    var hasReport = reports23.Any(r => r.WeekNumber == week && r.SubmittedAt.HasValue);
-                    var absent = student.AttendanceRecords.Any(a => !a.IsDeleted
+                var absentCount23 = student.AttendanceRecords
+                    .Where(a => !a.IsDeleted
                         && a.Status == AttendanceStatus.Absent
                         && a.AttendanceSession != null
                         && a.AttendanceSession.SemesterId == (internship.SemesterId ?? semesterId)
+                        && a.AttendanceSession.Status == AttendanceSessionStatus.Completed
                         && !a.AttendanceSession.IsLecturerOnly
-                        // Buổi hướng dẫn chung (sinh hoạt lớp) là điểm danh PHỤ — vắng không tính điều kiện dự thi
-                        && !a.AttendanceSession.IsGeneralSession
-                        && a.AttendanceSession.WeekNumber == week);
-
-                    if (absent)
-                        absentCount23++;
-
+                        && !a.AttendanceSession.IsGeneralSession)
+                    .Select(a => a.AttendanceSessionId)
+                    .Distinct()
+                    .Count();
+                foreach (var (week, schedule) in reportScheduleByWeek)
+                {
+                    var hasReport = reports23.Any(r => r.WeekNumber == week && r.SubmittedAt.HasValue);
                     if (!hasReport)
                     {
                         // Chưa nộp quá hạn → tính thiếu bài (chỉ ảnh hưởng Điểm QT)
@@ -184,7 +184,7 @@ public class ExcelExportService : IExcelExportService
                 var finalSubmitted = internship.Submissions.Any(s => !s.IsDeleted
                     && s.Type == SubmissionType.FinalReport
                     && s.Status != SubmissionStatus.Rejected);
-                var ineligible = !finalSubmitted || absentCount23 >= InternshipGradeCalculator.MaxAbsentWeeks;
+                var disqualifiedByAbsence = absentCount23 >= InternshipGradeCalculator.MaxAbsences;
 
                 // Map scores from Evaluation if available
                 if (evaluations.TryGetValue(internship.Id, out var eval))
@@ -198,18 +198,26 @@ public class ExcelExportService : IExcelExportService
 
                     // Điểm QT = MIN(10, Điểm QT cơ bản + Điểm tham gia).
                     var weeklyQualityLevels = new List<decimal?>();
+                    var hasWeeklyQualityJson = false;
                     if (!string.IsNullOrWhiteSpace(eval.WeeklyQualityJson))
                     {
                         try
                         {
                             var parsedQuality = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, decimal>>(eval.WeeklyQualityJson);
-                            if (parsedQuality != null) weeklyQualityLevels.AddRange(parsedQuality.Values.Select(value => (decimal?)value));
+                            if (parsedQuality != null)
+                            {
+                                hasWeeklyQualityJson = parsedQuality.Count > 0;
+                                foreach (var (weekNumber, value) in parsedQuality)
+                                    if (int.TryParse(weekNumber, out var week) && requiredWeeks.Contains(week))
+                                        weeklyQualityLevels.Add(value);
+                            }
                         }
                         catch (System.Text.Json.JsonException) { }
                     }
-                    if (weeklyQualityLevels.Count == 0) weeklyQualityLevels.Add(eval.QualityLevel);
+                    if (!hasWeeklyQualityJson && weeklyQualityLevels.Count == 0)
+                        weeklyQualityLevels.Add(eval.QualityLevel);
                     var processScore = InternshipGradeCalculator.ComputeProcessScore(
-                        reportMissingCount, lateCount, submittedWeekCount, weeklyQualityLevels, false);
+                        reportMissingCount, lateCount, submittedWeekCount, weeklyQualityLevels, false, requiredWeeks.Count);
                     dto.DiemQT = InternshipGradeCalculator.Round1(Math.Min(10m, processScore + dto.DiemThamGia.Value));
                     // Cột J chỉ lấy điểm thi vấn đáp nhập tay; FinalGrade là điểm đánh giá tổng hợp.
                     dto.Thi = eval.OralExamScore;
@@ -221,11 +229,12 @@ public class ExcelExportService : IExcelExportService
                         reportMissingCount,
                         lateCount,
                         0,
-                        null,
-                        false);
+                        Array.Empty<decimal?>(),
+                        false,
+                        requiredWeeks.Count);
                 }
 
-                dto.IsIneligible = ineligible;
+                dto.IsDisqualifiedByAbsence = disqualifiedByAbsence;
 
                 // Các cột TUẦN dùng để đánh vắng: lấy từ điểm danh buổi gặp BẮT BUỘC, không lấy trạng thái bài nộp.
                 // Buổi hướng dẫn chung (sinh hoạt lớp) chỉ hiển thị riêng ở cột HD CHUNG.
@@ -853,8 +862,8 @@ public class ExcelExportService : IExcelExportService
         if (s.Thi.HasValue) ws.Cell(row, 10).Value = s.Thi.Value;
         else ws.Cell(row, 10).Clear(XLClearOptions.Contents);
 
-        // K: Điểm TB Formula — không đủ điều kiện → 0, ngược lại QT*0.4 + Thi*0.6
-        if (s.IsIneligible)
+        // K: only the attendance disqualification forces zero; a missing final report does not hide accumulation.
+        if (s.IsDisqualifiedByAbsence)
         {
             ws.Cell(row, 11).Value = 0m;
             ws.Cell(row, 12).Value = InternshipGradeCalculator.IneligibleClassification;

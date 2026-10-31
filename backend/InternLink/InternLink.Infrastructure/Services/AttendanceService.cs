@@ -475,6 +475,16 @@ public class AttendanceService : IAttendanceService
         var totalSessions = records.Count;
         var presentCount = records.Count(r => r.Status == AttendanceStatus.Present);
         var absentCount = records.Count(r => r.Status == AttendanceStatus.Absent);
+        var requiredAbsentCount = records
+            .Where(r => !r.IsDeleted
+                && r.Status == AttendanceStatus.Absent
+                && !r.AttendanceSession.IsDeleted
+                && r.AttendanceSession.Status == AttendanceSessionStatus.Completed
+                && !r.AttendanceSession.IsLecturerOnly
+                && !r.AttendanceSession.IsGeneralSession)
+            .Select(r => r.AttendanceSessionId)
+            .Distinct()
+            .Count();
         var rate = totalSessions > 0 ? Math.Round((double)presentCount / totalSessions * 100, 1) : 0.0;
 
         return new StudentAttendanceOverviewDto
@@ -482,6 +492,7 @@ public class AttendanceService : IAttendanceService
             TotalSessions = totalSessions,
             PresentCount = presentCount,
             AbsentCount = absentCount,
+            RequiredAbsentCount = requiredAbsentCount,
             AttendanceRate = rate,
             Sessions = records.Select(r => new StudentAttendanceItemDto
             {

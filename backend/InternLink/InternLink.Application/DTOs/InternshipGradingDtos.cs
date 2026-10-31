@@ -56,6 +56,7 @@ public class InternshipStudentGradeDto
     // Cột J-K: Thi & TB
     public decimal? OralExamScore { get; set; }
     public decimal? AverageScore { get; set; }
+    public bool IsFinalized { get; set; }
 
     // Cột L: Xếp loại
     public string Classification { get; set; } = string.Empty;

@@ -33,8 +33,7 @@ public class InternshipStudentExportDto
     public string NopBc { get; set; } = string.Empty;
 
     /// <summary>
-    /// C23: true khi không đủ điều kiện dự thi (chưa nộp báo cáo cuối kỳ hoặc vắng/thiếu >= 2 tuần)
-    /// → cột K = 0, cột L = "không thực tập" (giữ nguyên công thức Excel nếu false).
+    /// True khi vắng >= 2 buổi bắt buộc, trường hợp duy nhất làm điểm trung bình bằng 0.
     /// </summary>
-    public bool IsIneligible { get; set; }
+    public bool IsDisqualifiedByAbsence { get; set; }
 }

@@ -147,7 +147,9 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
         const submittedOpenWeeks = openWeeks.filter((week) => week.submittedAt).length;
         const requiredOpenWeeks = Math.max(openWeeks.length, 1);
         const reportPercent = Math.round((submittedOpenWeeks / requiredOpenWeeks) * 80);
-        const evaluationPercent = grade.averageScore != null || grade.oralExamScore != null ? 20 : 0;
+        const evaluationPercent = grade.isFinalized
+          ? 20
+          : grade.qualityScore != null || grade.oralExamScore != null ? 10 : 0;
         return {
           studentId: grade.studentId,
           internshipId: grade.studentId,
@@ -169,7 +171,7 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
           notes: grade.note || "",
           finalGrade: grade.averageScore ?? null,
           hasEvaluation: grade.processScore > 0 || grade.oralExamScore != null,
-          isEvaluationFinalized: grade.averageScore != null,
+          isEvaluationFinalized: grade.isFinalized,
           progressPercent: Math.min(100, reportPercent + evaluationPercent),
           progressBreakdown: undefined,
           classification: grade.classification || null,
@@ -301,7 +303,7 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
       const matchesQuery = !query || [student.fullName, student.studentCode, student.className, student.companyName]
         .filter(Boolean)
         .some((value) => value!.toLowerCase().includes(query));
-      const isFinalized = student.averageScore != null;
+      const isFinalized = student.isFinalized;
       const matchesStatus = statusFilter === "all"
         || (statusFilter === "finalized" && isFinalized)
         || (statusFilter === "pending" && !isFinalized);

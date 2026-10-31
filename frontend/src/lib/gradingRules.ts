@@ -9,15 +9,15 @@
  *    - Nộp sau deadline         → is_late = true
  *    - Quá deadline không nộp   → is_missing = true
  *
- * 2) Điều kiện dự thi (cột U — TỔNG): "Không đủ điều kiện" khi vi phạm 1 trong 2:
- *    - Không nộp báo cáo cuối kỳ (NỘP BC = "X" hoặc trống)
- *    - Số tuần vắng/không nộp báo cáo tuần (is_missing hoặc điểm danh V) >= 2 tuần
+ * 2) Điều kiện dự thi (cột U — TỔNG): "Không đủ điều kiện" khi:
+ *    - Học kỳ đã kết thúc nhưng không nộp báo cáo cuối kỳ
+ *    - Số buổi vắng bắt buộc theo điểm danh >= 2
  *
  * 3) Điểm QT (cột I, thang 10, hệ số 40%):
  *    Điểm QT = MIN(10, Điểm_Nộp_Đủ + Điểm_Đúng_Hạn + Điểm_Chất_Lượng + Điểm_Cộng)
  *    - Nộp đủ   (max 2.0): 2.0 - (số bài thiếu * 0.5)
  *    - Đúng hạn (max 2.0): 2.0 - (số bài trễ * 0.5)
- *    - Chất lượng (max 5.0): rubric 5 mức 1.0 / 2.0 / 3.5 / 4.0 / 5.0
+ *    - Chất lượng (max 5.0): tổng rubric tuần chia cho tổng deadline tuần đang mở
  *    - Cộng sáng tạo (+1.0): has_creative_product = true
  *
  * 4) Điểm Thi (cột J, thang 10, hệ số 60%): GVHD nhập tay.
@@ -50,8 +50,8 @@ export const GR_LATE_PENALTY = 0.5;
 export const GR_PROCESS_WEIGHT = 0.4;
 export const GR_ORAL_WEIGHT = 0.6;
 
-/** Ngưỡng vắng/không nộp để bị mất điều kiện dự thi */
-export const GR_MAX_MISSING_WEEKS = 2;
+/** Số buổi vắng bắt buộc tối đa để không bị mất điều kiện dự thi */
+export const GR_MAX_ABSENCES = 2;
 
 /** Ngưỡng cảnh báo "Sắp hết hạn" (ms) */
 export const GR_CLOSING_SOON_WINDOW_MS = 48 * 60 * 60 * 1000;
@@ -218,7 +218,9 @@ export interface GradeInput {
   /** Mức rubric chất lượng do GV chọn: 1 / 2 / 3.5 / 4 / 5 (null = chưa chấm) */
   qualityLevel?: number | null;
   weeklyQualityLevels?: number[];
-  absentWeekCount?: number;
+  /** Số deadline báo cáo tuần đang mở; tuần không chấm được tính 0 điểm chất lượng. */
+  totalOpenWeeks?: number;
+  absentSessionCount?: number;
   /** Có sản phẩm sáng tạo (+1.0) */
   hasCreativeProduct?: boolean;
   /** Điểm thi vấn đáp nhập tay (0..10) */
@@ -254,7 +256,7 @@ export interface GradeResult {
 
   /** Cột J */
   oralExamScore: number | null;
-  /** Cột K — Điểm TB (null khi đủ điều kiện nhưng chưa nhập Điểm Thi) */
+  /** Cột K — Điểm TB; khi chưa có điểm thi là phần tích lũy từ Điểm QT */
   averageScore: number | null;
   /** Cột L — Xếp loại */
   classification: string;
@@ -302,7 +304,7 @@ export function computeGrade(input: GradeInput): GradeResult {
   // ── Cột U: Điều kiện dự thi ──
   const ineligibilityReasons: string[] = [];
   if (!finalReportSubmitted) ineligibilityReasons.push(GR_INELIGIBLE_REASON_NO_FINAL);
-  if ((input.absentWeekCount ?? 0) >= GR_MAX_MISSING_WEEKS) ineligibilityReasons.push(GR_INELIGIBLE_REASON_ABSENCE);
+  if ((input.absentSessionCount ?? 0) >= GR_MAX_ABSENCES) ineligibilityReasons.push(GR_INELIGIBLE_REASON_ABSENCE);
   const isEligible = ineligibilityReasons.length === 0;
 
   // ── Cột I: Điểm QT ──
@@ -313,12 +315,17 @@ export function computeGrade(input: GradeInput): GradeResult {
   const punctualityPoints = roundScore(
     submittedWeekCount > 0 ? Math.max(0, GR_PUNCTUALITY_MAX - lateCount * GR_LATE_PENALTY) : 0,
   );
-  const ratedQualityLevels = (input.weeklyQualityLevels ?? [])
+  const validWeeklyLevels = (input.weeklyQualityLevels ?? [])
     .filter((level) => VALID_QUALITY_LEVELS.has(level));
-  const qualityLevel = ratedQualityLevels.length > 0
-    ? roundScore(ratedQualityLevels.reduce((sum, level) => sum + level, 0) / ratedQualityLevels.length)
-    : input.qualityLevel != null && VALID_QUALITY_LEVELS.has(input.qualityLevel) ? input.qualityLevel : null;
-  const qualityPoints = qualityLevel ?? 0;
+  const ratedQualityLevels = validWeeklyLevels.length > 0
+    ? validWeeklyLevels
+    : input.qualityLevel != null && VALID_QUALITY_LEVELS.has(input.qualityLevel) ? [input.qualityLevel] : [];
+  const qualityDenominator = input.totalOpenWeeks && input.totalOpenWeeks > 0
+    ? input.totalOpenWeeks
+    : ratedQualityLevels.length;
+  const qualityPoints = qualityDenominator > 0
+    ? Math.min(GR_QUALITY_MAX, roundScore(ratedQualityLevels.reduce((sum, level) => sum + level, 0) / qualityDenominator))
+    : 0;
   const creativeBonus = input.hasCreativeProduct ? GR_CREATIVE_BONUS : 0;
   const rawProcessScore = submissionPoints + punctualityPoints + qualityPoints + creativeBonus;
   const processScore = roundScore(Math.min(10, rawProcessScore));
@@ -330,12 +337,12 @@ export function computeGrade(input: GradeInput): GradeResult {
   // ── Cột K & L ──
   let averageScore: number | null;
   let classification: string;
-  if (!isEligible) {
+  if ((input.absentSessionCount ?? 0) >= GR_MAX_ABSENCES) {
     averageScore = 0;
     classification = GR_INELIGIBLE_LABEL;
   } else if (oralExamScore == null) {
-    averageScore = null;
-    classification = "";
+    averageScore = roundScore(processScore * GR_PROCESS_WEIGHT);
+    classification = classifyScore(averageScore);
   } else {
     averageScore = roundScore(processScore * GR_PROCESS_WEIGHT + oralExamScore * GR_ORAL_WEIGHT);
     classification = classifyScore(averageScore);

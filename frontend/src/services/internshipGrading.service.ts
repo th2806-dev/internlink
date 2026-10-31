@@ -52,6 +52,7 @@ export interface StudentGrade {
 
   oralExamScore: number | null;
   averageScore: number | null;
+  isFinalized: boolean;
   classification: string;
 
   weeks: GradingWeekStatus[];

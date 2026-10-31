@@ -538,16 +538,21 @@ function GradingTab({
         submittedAt: week.submittedAt,
         deadline: week.deadline,
       })),
-      absentWeekCount: selected.absentCount,
-      weeklyQualityLevels: Object.values(weeklyQuality),
+      absentSessionCount: selected.absentCount,
+      weeklyQualityLevels: selected.weeks
+        .filter((week) => week.isSubmissionOpen)
+        .map((week) => weeklyQuality[week.weekNumber])
+        .filter((score): score is number => score != null),
+      totalOpenWeeks: selected.weeks.filter((week) => week.isSubmissionOpen).length,
       finalReportSubmitted: selected.finalReportSubmitted,
-      qualityLevel: quality,
+      qualityLevel: Object.keys(weeklyQuality).length === 0 ? quality : null,
       hasCreativeProduct: selected.hasCreativeProduct,
       oralExamScore: oralNum != null && !isNaN(oralNum) ? oralNum : null,
     });
     return {
       qt: result.processScore,
       eligible: result.isEligible,
+      ineligibilityReasons: result.ineligibilityReasons,
       average: result.averageScore,
       classification: result.classification,
     };
@@ -985,7 +990,7 @@ function GradingTab({
                   title={
                     preview?.eligible
                       ? undefined
-                      : `Không đủ điều kiện dự thi: ${selected.ineligibleReasons.join("; ")}`
+                      : `Không đủ điều kiện dự thi: ${(preview?.ineligibilityReasons ?? selected.ineligibleReasons).join("; ")}`
                   }
                   className={`w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#026aa7] focus:ring-2 focus:ring-[#026aa7]/20 ${
                     !preview?.eligible ? "cursor-not-allowed bg-slate-100 text-slate-400" : ""
@@ -1182,7 +1187,7 @@ function SummaryTab({
       const oralRaw = oralDrafts[s.studentId] ?? "";
       const oralNum = oralRaw.trim() === "" ? null : Number(oralRaw);
       // Tính cùng input với tab Chấm điểm (GradingTab.preview): đủ weeks + isAbsent,
-      // absentWeekCount và weeklyQualityScores — hai bảng phải ra cùng kết quả cho cùng SV.
+      // số buổi vắng và weeklyQualityScores — hai bảng phải ra cùng kết quả cho cùng SV.
       const result = computeGrade({
         weeks: s.weeks.map((week) => ({
           weekNumber: week.weekNumber,
@@ -1191,10 +1196,14 @@ function SummaryTab({
           deadline: week.deadline,
           isAbsent: week.isAttendanceAbsent,
         })),
-        absentWeekCount: s.absentCount,
-        weeklyQualityLevels: Object.values(s.weeklyQualityScores ?? {}),
+        absentSessionCount: s.absentCount,
+        weeklyQualityLevels: s.weeks
+          .filter((week) => week.isSubmissionOpen)
+          .map((week) => s.weeklyQualityScores?.[week.weekNumber])
+          .filter((score): score is number => score != null),
+        totalOpenWeeks: s.weeks.filter((week) => week.isSubmissionOpen).length,
         finalReportSubmitted: s.finalReportSubmitted,
-        qualityLevel: s.qualityScore,
+        qualityLevel: Object.keys(s.weeklyQualityScores ?? {}).length === 0 ? s.qualityScore : null,
         hasCreativeProduct: s.hasCreativeProduct,
         oralExamScore: oralNum != null && !isNaN(oralNum) ? oralNum : null,
       });
@@ -1212,7 +1221,7 @@ function SummaryTab({
         s.className,
         s.companyName,
       ].some((value) => value?.toLowerCase().includes(q));
-      const isFinalized = s.averageScore != null;
+      const isFinalized = s.isFinalized;
       const matchesStatus = statusFilter === "all"
         || (statusFilter === "finalized" && isFinalized)
         || (statusFilter === "pending" && !isFinalized);

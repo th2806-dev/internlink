@@ -206,15 +206,19 @@ public class AttendanceServiceTests
 
         var session1 = new AttendanceSession { Id = Guid.NewGuid(), SemesterId = semester.Id, LecturerId = lecturer.Id, WeekNumber = 1, Title = "Tuần 1", MeetingDate = DateTime.UtcNow.AddDays(-7), Status = AttendanceSessionStatus.Completed };
         var session2 = new AttendanceSession { Id = Guid.NewGuid(), SemesterId = semester.Id, LecturerId = lecturer.Id, WeekNumber = 2, Title = "Tuần 2", MeetingDate = DateTime.UtcNow.AddDays(-1), Status = AttendanceSessionStatus.Completed };
+        var session3 = new AttendanceSession { Id = Guid.NewGuid(), SemesterId = semester.Id, LecturerId = lecturer.Id, WeekNumber = 2, Title = "Buổi thứ hai tuần 2", MeetingDate = DateTime.UtcNow, Status = AttendanceSessionStatus.Completed };
+        var generalSession = new AttendanceSession { Id = Guid.NewGuid(), SemesterId = semester.Id, LecturerId = lecturer.Id, WeekNumber = 3, Title = "Sinh hoạt chung", MeetingDate = DateTime.UtcNow.AddDays(-1), Status = AttendanceSessionStatus.Completed, IsGeneralSession = true };
 
         var rec1 = new AttendanceRecord { Id = Guid.NewGuid(), AttendanceSessionId = session1.Id, StudentId = student.Id, Status = AttendanceStatus.Present };
         var rec2 = new AttendanceRecord { Id = Guid.NewGuid(), AttendanceSessionId = session2.Id, StudentId = student.Id, Status = AttendanceStatus.Absent };
+        var rec3 = new AttendanceRecord { Id = Guid.NewGuid(), AttendanceSessionId = session3.Id, StudentId = student.Id, Status = AttendanceStatus.Absent };
+        var generalAbsence = new AttendanceRecord { Id = Guid.NewGuid(), AttendanceSessionId = generalSession.Id, StudentId = student.Id, Status = AttendanceStatus.Absent };
 
         await db.Semesters.AddAsync(semester);
         await db.Lecturers.AddAsync(lecturer);
         await db.Students.AddAsync(student);
-        await db.AttendanceSessions.AddRangeAsync(session1, session2);
-        await db.AttendanceRecords.AddRangeAsync(rec1, rec2);
+        await db.AttendanceSessions.AddRangeAsync(session1, session2, session3, generalSession);
+        await db.AttendanceRecords.AddRangeAsync(rec1, rec2, rec3, generalAbsence);
         await db.SaveChangesAsync();
 
         var service = new AttendanceService(db, NullLogger<AttendanceService>.Instance);
@@ -222,11 +226,12 @@ public class AttendanceServiceTests
         var overview = await service.GetStudentAttendanceAsync(student.Id, semester.Id);
 
         overview.Should().NotBeNull();
-        overview.TotalSessions.Should().Be(2);
+        overview.TotalSessions.Should().Be(4);
         overview.PresentCount.Should().Be(1);
-        overview.AbsentCount.Should().Be(1);
-        overview.AttendanceRate.Should().Be(50.0);
-        overview.Sessions.Should().HaveCount(2);
+        overview.AbsentCount.Should().Be(3);
+        overview.RequiredAbsentCount.Should().Be(2);
+        overview.AttendanceRate.Should().Be(25.0);
+        overview.Sessions.Should().HaveCount(4);
     }
 
     [Fact]

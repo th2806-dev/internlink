@@ -199,6 +199,64 @@ public sealed class InternshipGradingServiceTests
     }
 
     [Fact]
+    public async Task SaveGradeAsync_WithoutFinalReport_RejectsOralExamScore()
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+        await using var db = new AppDbContext(options);
+
+        var semester = new Semester
+        {
+            Id = Guid.NewGuid(),
+            Name = "Kỳ đang thực tập",
+            Term = "Học kỳ I",
+            AcademicYear = "2026 - 2027",
+            TotalWeeks = 1,
+            StartDate = DateTime.UtcNow.Date,
+            EndDate = DateTime.UtcNow.Date.AddDays(30),
+        };
+        var student = new Student
+        {
+            Id = Guid.NewGuid(),
+            StudentCode = "TEST-NO-FINAL-01",
+            FullName = "Sinh viên chưa nộp báo cáo cuối kỳ",
+        };
+        var internship = new Internship
+        {
+            Id = Guid.NewGuid(),
+            SemesterId = semester.Id,
+            Semester = semester,
+            StudentId = student.Id,
+            Student = student,
+            Status = InternshipStatus.InProgress,
+        };
+        db.Semesters.Add(semester);
+        db.Students.Add(student);
+        db.Internships.Add(internship);
+        await db.SaveChangesAsync();
+
+        var service = new InternshipGradingService(
+            db,
+            NullLogger<InternshipGradingService>.Instance,
+            new SemesterService(db));
+
+        var act = () => service.SaveGradeAsync(
+            semester.Id,
+            new SaveInternshipGradeRequestDto
+            {
+                StudentId = student.Id,
+                OralExamScore = 8m,
+            },
+            actorUserId: Guid.NewGuid(),
+            actorLecturerId: null);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Chưa nộp báo cáo cuối kỳ*");
+        (await db.Evaluations.ToListAsync()).Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task GetSummaryAsync_ScheduleContainsWeeklyDeadlinesOnly()
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()

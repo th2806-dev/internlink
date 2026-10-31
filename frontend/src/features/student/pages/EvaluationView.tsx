@@ -25,10 +25,11 @@ import { useAuth } from "../../../hooks/useAuth";
 import { computeGrade } from "../../../lib/gradingRules";
 import { getOpenWeeklyReportWeeks } from "../studentProgress";
 import { evaluationService } from "../../../services/evaluation.service";
+import { attendanceService } from "../../../services/attendance.service";
 import { semesterReportScheduleService, type SemesterReportScheduleDto } from "../../../services/semesterReportSchedule.service";
 import { submissionApiService } from "../../../services/submissionApi.service";
 import { weeklyReportService } from "../../../services/weeklyReport.service";
-import type { SubmissionAssetDto, SubmissionDto, WeeklyReportDto } from "../../../types/api";
+import type { StudentAttendanceOverviewDto, SubmissionAssetDto, SubmissionDto, WeeklyReportDto } from "../../../types/api";
 import { StudentSubPageHeader } from "../components/StudentSubPageHeader";
 
 type EvidencePhotoProps = {
@@ -118,7 +119,7 @@ const EvidencePhoto = ({ submissionId, asset, onPreview }: EvidencePhotoProps) =
 export const EvaluationView = ({ onShowToast }: { onShowToast: (msg: string) => void }) => {
   const { profile, internship, internshipId } = useStudentPortal();
   const { user, isLoggedIn } = useAuth();
-  const { selectedSemester, activeSemesterId } = useSemester();
+  const { selectedSemester, semesters, activeSemesterId } = useSemester();
   const scheduleSemesterId = internship?.semesterId ?? selectedSemester?.id ?? activeSemesterId;
   const [previewPhoto, setPreviewPhoto] = useState<{ url: string; fileName: string } | null>(null);
   const evaluationQuery = useQuery({
@@ -137,13 +138,17 @@ export const EvaluationView = ({ onShowToast }: { onShowToast: (msg: string) => 
         scheduleSemesterId
           ? semesterReportScheduleService.getSchedules(scheduleSemesterId)
           : Promise.resolve([] as SemesterReportScheduleDto[]),
+        scheduleSemesterId
+          ? attendanceService.getStudentAttendance(scheduleSemesterId)
+          : Promise.resolve(null as StudentAttendanceOverviewDto | null),
       ]);
-      const [evaluationResult, reportsResult, submissionsResult, schedulesResult] = results;
+      const [evaluationResult, reportsResult, submissionsResult, schedulesResult, attendanceResult] = results;
       const errors: string[] = [];
       if (evaluationResult.status === "rejected") errors.push("Không tải được kết quả đánh giá.");
       if (reportsResult.status === "rejected") errors.push("Không tải được dữ liệu báo cáo tuần.");
       if (submissionsResult.status === "rejected") errors.push("Không tải được điểm doanh nghiệp và minh chứng.");
       if (schedulesResult.status === "rejected") errors.push("Không tải được lịch báo cáo tuần.");
+      if (attendanceResult.status === "rejected") errors.push("Không tải được dữ liệu điểm danh.");
       return {
         evaluation: evaluationResult.status === "fulfilled" ? evaluationResult.value : null,
         weeklyReports: reportsResult.status === "fulfilled"
@@ -153,6 +158,7 @@ export const EvaluationView = ({ onShowToast }: { onShowToast: (msg: string) => 
           ? submissionsResult.value.filter((submission) => submission.internshipId === internshipId)
           : EMPTY_SUBMISSIONS,
         schedules: schedulesResult.status === "fulfilled" ? schedulesResult.value : EMPTY_SCHEDULES,
+        attendance: attendanceResult.status === "fulfilled" ? attendanceResult.value : null,
         errors,
       };
     },
@@ -161,6 +167,7 @@ export const EvaluationView = ({ onShowToast }: { onShowToast: (msg: string) => 
   const weeklyReports = evaluationQuery.data?.weeklyReports ?? EMPTY_WEEKLY_REPORTS;
   const submissions = evaluationQuery.data?.submissions ?? EMPTY_SUBMISSIONS;
   const schedules = evaluationQuery.data?.schedules ?? EMPTY_SCHEDULES;
+  const attendance = evaluationQuery.data?.attendance ?? null;
   const loadErrors = useMemo(() => evaluationQuery.data?.errors ?? (
     evaluationQuery.error ? [getApiErrorMessage(evaluationQuery.error)] : EMPTY_LOAD_ERRORS
   ), [evaluationQuery.data?.errors, evaluationQuery.error]);
@@ -174,7 +181,10 @@ export const EvaluationView = ({ onShowToast }: { onShowToast: (msg: string) => 
       : "Đã làm mới kết quả đánh giá thành công");
   };
 
-  const maxWeeks = selectedSemester?.totalWeeks;
+  const evaluationSemester = semesters.find((semester) => semester.id === scheduleSemesterId)
+    ?? (selectedSemester?.id === scheduleSemesterId ? selectedSemester : null);
+  const maxWeeks = evaluationSemester?.totalWeeks;
+  const isSemesterClosed = evaluationSemester?.status === "completed";
   const trackedWeeks = useMemo(
     () => getOpenWeeklyReportWeeks(schedules, maxWeeks ?? 0),
     [maxWeeks, schedules],
@@ -196,10 +206,16 @@ export const EvaluationView = ({ onShowToast }: { onShowToast: (msg: string) => 
     [submissions],
   );
   const employerScoreSubmission = evidenceSubmissions.find((item) => item.employerScore != null);
-  const finalReport = submissions.find((item) => item.type.toLowerCase() === "finalreport" && item.status.toLowerCase() !== "rejected");
+  const finalReport = submissions.find((item) =>
+    item.type.toLowerCase() === "finalreport" &&
+    !["rejected", "draft"].includes(item.status.toLowerCase()),
+  );
   const product = submissions.find((item) => item.type.toLowerCase() === "product" && item.status.toLowerCase() !== "rejected");
-  const processScore = useMemo(() => {
-    if (loadErrors.includes("Không tải được lịch báo cáo tuần.")) return null;
+  const gradeResult = useMemo(() => {
+    if (
+      loadErrors.includes("Không tải được lịch báo cáo tuần.") ||
+      loadErrors.includes("Không tải được dữ liệu điểm danh.")
+    ) return null;
 
     const weeks = schedules
       .filter((schedule) => !schedule.isFinalReport && schedule.weekNumber >= 1 && (!maxWeeks || schedule.weekNumber <= maxWeeks))
@@ -210,30 +226,46 @@ export const EvaluationView = ({ onShowToast }: { onShowToast: (msg: string) => 
         deadline: schedule.dueDate,
       }));
     const weeklyQualityLevels = weeks
+      .filter((week) => week.isSubmissionOpen)
       .map((week) => evaluation?.weeklyQualityScores?.[week.weekNumber])
       .filter((score): score is number => score != null);
 
     return computeGrade({
       weeks,
       weeklyQualityLevels,
+      qualityLevel: Object.keys(evaluation?.weeklyQualityScores ?? {}).length === 0 ? evaluation?.qualityLevel : null,
+      totalOpenWeeks: weeks.filter((week) => week.isSubmissionOpen).length,
+      finalReportSubmitted: Boolean(finalReport),
+      absentSessionCount: attendance?.requiredAbsentCount ?? 0,
+      oralExamScore: evaluation?.oralExamScore,
       hasCreativeProduct: evaluation?.hasCreativeProduct ?? submissions.some(
         (item) => item.type.toLowerCase() === "product" && item.status.toLowerCase() === "approved",
       ),
-    }).processScore;
-  }, [evaluation, loadErrors, maxWeeks, reportByWeek, schedules, submissions]);
+    });
+  }, [attendance, evaluation, finalReport, loadErrors, maxWeeks, reportByWeek, schedules, submissions]);
+  const processScore = gradeResult?.processScore ?? null;
   const submittedWeekCount = trackedWeeks.filter((week) => Boolean(reportByWeek.get(week)?.submittedAt)).length;
   const lateWeekCount = trackedWeeks.filter((week) => {
     const report = reportByWeek.get(week);
     const dueDate = scheduleByWeek.get(week)?.dueDate ?? report?.dueDate;
     return Boolean(report?.submittedAt && dueDate && new Date(report.submittedAt) > new Date(dueDate));
   }).length;
-  const finalGrade = evaluation?.finalGrade ?? (profile.currentGrade > 0 ? profile.currentGrade : null);
-  const classification = finalGrade == null
+  const hasGradeInputs = Boolean(
+    evaluation ||
+    weeklyReports.some((report) => report.submittedAt) ||
+    finalReport ||
+    isSemesterClosed ||
+    (attendance?.requiredAbsentCount ?? 0) >= 2,
+  );
+  const computedGrade = hasGradeInputs && gradeResult != null ? gradeResult.averageScore : null;
+  const finalGrade = computedGrade ?? evaluation?.finalGrade ?? (profile.currentGrade > 0 ? profile.currentGrade : null);
+  const classification = computedGrade != null ? gradeResult?.classification ?? "" : (finalGrade == null
     ? "—"
     : finalGrade >= 8.5 ? "Xuất sắc"
       : finalGrade >= 8 ? "Giỏi"
-        : finalGrade >= 6.5 ? "Khá"
-          : finalGrade >= 5 ? "Trung bình" : "Không đạt";
+          : finalGrade >= 6.5 ? "Khá"
+          : finalGrade >= 5 ? "Trung bình" : "Không đạt");
+  const isAccumulatedGrade = computedGrade != null && gradeResult?.isEligible === true && evaluation?.oralExamScore == null;
   const formatDate = (value?: string | null) =>
     value ? new Date(value).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "—";
   const statusLabel = (status: string) => ({
@@ -359,7 +391,11 @@ export const EvaluationView = ({ onShowToast }: { onShowToast: (msg: string) => 
                     {evaluation?.isFinalized ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Clock3 className="h-3.5 w-3.5" />}
                     {loadErrors.includes("Không tải được kết quả đánh giá.")
                       ? "Chưa tải được kết quả"
-                      : evaluation?.isFinalized ? "Đã công bố" : evaluation ? "Chưa công bố" : displayedGrade != null ? "Điểm trên hồ sơ" : "Chưa có kết quả"}
+                      : gradeResult && !gradeResult.isEligible ? "Không đủ điều kiện"
+                        : isAccumulatedGrade ? "Điểm tích lũy · tạm tính"
+                          : evaluation?.isFinalized ? "Đã công bố"
+                            : evaluation ? "Chưa công bố"
+                              : displayedGrade != null ? "Điểm trên hồ sơ" : "Chưa có kết quả"}
                   </span>
                   {evaluation && <span className="text-xs text-blue-100">Cập nhật {formatDate(evaluation.updatedAt ?? evaluation.evaluatedAt)}</span>}
                 </div>

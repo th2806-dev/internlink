@@ -106,6 +106,7 @@ public class StudentAttendanceOverviewDto
     public int TotalSessions { get; set; }
     public int PresentCount { get; set; }
     public int AbsentCount { get; set; }
+    public int RequiredAbsentCount { get; set; }
     public double AttendanceRate { get; set; }
     public List<StudentAttendanceItemDto> Sessions { get; set; } = new();
 }

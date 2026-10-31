@@ -168,6 +168,21 @@ describe("computeGrade", () => {
     expect(result.processScore).toBe(9.5);
   });
 
+  it("does not block oral exam eligibility for missing weekly reports", () => {
+    const result = computeGrade({
+      weeks: [
+        { weekNumber: 1, isSubmissionOpen: true, submittedAt: "2026-09-07T10:00:00Z" },
+        { weekNumber: 2, isSubmissionOpen: true, submittedAt: null },
+        { weekNumber: 3, isSubmissionOpen: false, submittedAt: null },
+      ],
+      finalReportSubmitted: true,
+      now: NOW,
+    });
+
+    expect(result.isEligible).toBe(true);
+    expect(result.ineligibilityReasons).toEqual([]);
+  });
+
   it("capped at MIN(10, ...)", () => {
     const result = computeGrade({
       weeks: onTimeWeeks(),
@@ -182,8 +197,8 @@ describe("computeGrade", () => {
     expect(result.classification).toBe("Khá");
   });
 
-  it("ineligible when missing >= 2 weeks: TB = 0, không thực tập", () => {
-    // Tuần 5, 6 quá hạn không nộp (quá hạn)
+  it("ineligible when absent from two required sessions: TB = 0, không thực tập", () => {
+    // Missing submissions affect process score, while two absences independently fail eligibility.
     const weeks: WeekRecord[] = [
       ...onTimeWeeks().slice(0, 4),
       { weekNumber: 5, deadline: "2026-09-11T23:59:59Z", submittedAt: null },
@@ -195,7 +210,7 @@ describe("computeGrade", () => {
       qualityLevel: 5,
       hasCreativeProduct: true,
       oralExamScore: 9,
-      absentWeekCount: 2,
+      absentSessionCount: 2,
       now: NOW,
     });
 
@@ -212,14 +227,13 @@ describe("computeGrade", () => {
       weeks: onTimeWeeks(),
       finalReportSubmittedAt: null,
       qualityLevel: 5,
-      oralExamScore: 9,
       now: NOW,
     });
 
     expect(result.isEligible).toBe(false);
     expect(result.ineligibilityReasons).toContain("Chưa nộp báo cáo cuối kỳ");
-    expect(result.averageScore).toBe(0);
-    expect(result.classification).toBe(GR_INELIGIBLE_LABEL);
+    expect(result.averageScore).toBe(3.6);
+    expect(result.classification).toBe("Không đạt");
   });
 
   it("attendance absence affects eligibility but never submission penalties", () => {
@@ -232,7 +246,7 @@ describe("computeGrade", () => {
     const updated = computeGrade({
       weeks,
       finalReportSubmittedAt: "2026-09-25T00:00:00Z",
-      absentWeekCount: 1,
+      absentSessionCount: 1,
       qualityLevel: 4,
       oralExamScore: 8,
       now: NOW,
@@ -264,7 +278,7 @@ describe("computeGrade", () => {
     expect(classifyScore(4.9)).toBe("Không đạt");
   });
 
-  it("averageScore is null while eligible but oral exam not entered yet", () => {
+  it("shows 40% of process score while eligible but oral exam is pending", () => {
     const result = computeGrade({
       weeks: onTimeWeeks(),
       finalReportSubmittedAt: "2026-09-25T00:00:00Z",
@@ -272,8 +286,70 @@ describe("computeGrade", () => {
       now: NOW,
     });
     expect(result.isEligible).toBe(true);
-    expect(result.averageScore).toBeNull();
-    expect(result.classification).toBe("");
+    expect(result.processScore).toBe(8);
+    expect(result.averageScore).toBe(3.2);
+    expect(result.classification).toBe("Không đạt");
+  });
+
+  it("divides weekly quality by all open weekly deadlines", () => {
+    const result = computeGrade({
+      weeks: Array.from({ length: 5 }, (_, index) => ({
+        weekNumber: index + 1,
+        isSubmissionOpen: true,
+        submittedAt: index === 0 ? "2026-09-07T10:00:00Z" : null,
+        deadline: "2026-09-12T23:59:59Z",
+      })),
+      weeklyQualityLevels: [5],
+      totalOpenWeeks: 5,
+      submittedWeekCount: 1,
+      now: NOW,
+    });
+
+    expect(result.qualityPoints).toBe(1);
+    expect(result.processScore).toBe(3);
+  });
+
+  it("requires the final report for exam eligibility even during an active semester", () => {
+    const result = computeGrade({
+      weeks: onTimeWeeks(),
+      finalReportSubmitted: false,
+      qualityLevel: 5,
+      hasCreativeProduct: true,
+      now: NOW,
+    });
+
+    expect(result.isEligible).toBe(false);
+    expect(result.ineligibilityReasons).toContain("Chưa nộp báo cáo cuối kỳ");
+    expect(result.averageScore).toBe(4);
+  });
+
+  it("keeps the accumulated average when a closed semester lacks the final report", () => {
+    const result = computeGrade({
+      weeks: onTimeWeeks(),
+      finalReportSubmitted: false,
+      qualityLevel: 5,
+      now: NOW,
+    });
+
+    expect(result.isEligible).toBe(false);
+    expect(result.ineligibilityReasons).toContain("Chưa nộp báo cáo cuối kỳ");
+    expect(result.averageScore).toBe(3.6);
+    expect(result.classification).toBe("Không đạt");
+  });
+
+  it("calculates a final average from process and oral scores", () => {
+    const result = computeGrade({
+      finalReportSubmitted: true,
+      submittedWeekCount: 1,
+      totalOpenWeeks: 1,
+      weeklyQualityLevels: [5],
+      oralExamScore: 8.5,
+      now: NOW,
+    });
+
+    expect(result.processScore).toBe(9);
+    expect(result.averageScore).toBe(8.7);
+    expect(result.classification).toBe("Xuất sắc");
   });
 
   it("ignores invalid quality levels", () => {
