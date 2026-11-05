@@ -116,17 +116,18 @@ app.UseSwaggerUI(c =>
 // CORS must come before HTTPS redirection to avoid 307 on OPTIONS preflight
 app.UseCors("Frontend");
 // Skip HTTPS redirect in development to allow HTTP frontend → HTTP API calls
-if (app.Environment.IsProduction())
-{
-    app.UseHttpsRedirection();
-}
+// app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<InternLink.API.Middleware.StudentArchiveReadOnlyMiddleware>();
 
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 app.MapControllers();
 app.MapHub<NotificationHub>("/hubs/notifications");
 app.MapCustomHealthChecks();
+app.MapFallbackToFile("index.html");
 
 await app.MigrateAndSeedDatabaseAsync();
 
