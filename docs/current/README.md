@@ -36,6 +36,7 @@ This directory describes the system that is present in the repository today. Whe
 | [12-Email-and-Configuration.md](12-Email-and-Configuration.md) | SMTP and secret configuration |
 | [13-Ubuntu-VMware-Demo.md](13-Ubuntu-VMware-Demo.md) | Ubuntu VM and VMware lab deployment |
 | [14-Windows-Server-2019-AWS.md](14-Windows-Server-2019-AWS.md) | Native IIS deployment on AWS Windows Server 2019 with DuckDNS and HTTPS |
+| [TROUBLESHOOTING_WINDOWS_SERVER_ARR_DEADLOCK.md](../TROUBLESHOOTING_WINDOWS_SERVER_ARR_DEADLOCK.md) | Sổ tay kỹ thuật xử lý sự cố IIS ARR Deadlock, Treo API và Direct SPA Hosting |
 
 ## Authoritative source locations
 

@@ -161,3 +161,11 @@ sqlcmd -S localhost -Q "BACKUP DATABASE [InternLink] TO DISK='C:\backup\internli
 # Restore database
 sqlcmd -S localhost -Q "RESTORE DATABASE [InternLink] FROM DISK='C:\backup\internlink.bak'"
 ```
+
+
+---
+
+## 9. Triển khai Windows Server Native & Cẩm Nang Sự Cố
+
+- **Hướng dẫn chi tiết:** Xem [docs/current/14-Windows-Server-2019-AWS.md](current/14-Windows-Server-2019-AWS.md) cho môi trường Windows Server 2019 IIS native hosting.
+- **Sổ tay sự cố đặc thù (ARR Deadlock / WPAD timeout):** Xem [docs/TROUBLESHOOTING_WINDOWS_SERVER_ARR_DEADLOCK.md](TROUBLESHOOTING_WINDOWS_SERVER_ARR_DEADLOCK.md) để nắm toàn bộ bài học kinh nghiệm về sự cố IIS ARR Deadlock, treo socket HTTP.sys loopback và kiến trúc chuyển đổi sang Direct Single-Port SPA Hosting trên Cổng 80.
