@@ -148,13 +148,13 @@ finally {
 
 $appRoot = 'C:\Apps\InternLink'
 $apiRoot = Join-Path $appRoot 'Api'
-$webRoot = 'C:\inetpub\wwwroot\InternLink'
+$wwwRoot = Join-Path $apiRoot 'wwwroot'
 $backupRoot = Join-Path $appRoot 'Backups'
 $frontendDist = Join-Path $sourceRoot 'frontend\dist'
 if (-not (Test-Path (Join-Path $frontendDist 'index.html'))) {
     throw "Frontend build output is missing: $frontendDist"
 }
-New-Item -ItemType Directory -Force $apiRoot, $webRoot, $backupRoot | Out-Null
+New-Item -ItemType Directory -Force $apiRoot, $wwwRoot, $backupRoot | Out-Null
 
 Write-Host 'Creating a non-compressed SQL Server backup before deployment...'
 Import-Module SqlServer -ErrorAction Stop
@@ -170,9 +170,15 @@ if (-not (Test-Path $backupPath) -or (Get-Item $backupPath).Length -eq 0) {
 
 Import-Module WebAdministration -ErrorAction Stop
 $apiSite = Get-Website -Name 'InternLinkApi' -ErrorAction Stop
-$webSite = Get-Website -Name 'InternLink' -ErrorAction Stop
+
+# Clean up / stop legacy separate IIS frontend site if it exists
+if (Get-Website -Name 'InternLink' -ErrorAction SilentlyContinue) {
+    Stop-Website -Name 'InternLink' -ErrorAction SilentlyContinue
+    Get-WebBinding -Name 'InternLink' | Remove-WebBinding -ErrorAction SilentlyContinue
+}
+
 $otherPort80Bindings = @(
-    Get-Website | Where-Object { $_.Name -ne 'InternLink' -and $_.State -eq 'Started' } |
+    Get-Website | Where-Object { $_.Name -ne 'InternLinkApi' -and $_.Name -ne 'InternLink' -and $_.State -eq 'Started' } |
         ForEach-Object {
             $siteName = $_.Name
             $_.Bindings.Collection |
@@ -187,8 +193,6 @@ $otherPort80Bindings = @(
 if ($otherPort80Bindings.Count -gt 0) {
     throw "Port 80 conflicts with another started IIS site: $($otherPort80Bindings -join ', '). Resolve this binding before deploying."
 }
-
-$webWasStarted = $webSite.State -eq 'Started'
 $offlinePath = Join-Path $apiRoot 'app_offline.htm'
 Set-Content -Path $offlinePath -Value 'InternLink update in progress.' -Encoding ASCII
 if ($apiSite.State -eq 'Started') {
@@ -253,21 +257,21 @@ if (Test-Path $deployedAppSettings) {
     & icacls.exe $deployedAppSettings /grant 'IIS AppPool\InternLinkApi:R' | Out-Null
 }
 
-Write-Host 'Deploying frontend files while preserving web.config...'
-& robocopy.exe $frontendDist $webRoot /E /XF 'web.config' /NFL /NDL /NJH /NJS /NP
+Write-Host 'Deploying frontend files directly to API wwwroot for unified direct hosting...'
+& robocopy.exe $frontendDist $wwwRoot /E /NFL /NDL /NJH /NJS /NP
 if ($LASTEXITCODE -ge 8) {
     throw "Frontend file deployment failed with robocopy exit code $LASTEXITCODE. The API remains stopped and app_offline.htm is retained; rerun this script after resolving the file copy error."
 }
 
 Set-ItemProperty 'IIS:\Sites\InternLinkApi' -Name physicalPath -Value $apiRoot
 Set-ItemProperty 'IIS:\Sites\InternLinkApi' -Name applicationPool -Value 'InternLinkApi'
-Remove-WebBinding -Name 'InternLink' -Protocol 'http' -Port 8000 `
-    -ErrorAction SilentlyContinue
-if (-not (Get-WebBinding -Name 'InternLink' -Protocol 'http' |
-        Where-Object { $_.bindingInformation -eq '*:80:internlink.duckdns.org' })) {
-    New-WebBinding -Name 'InternLink' -Protocol 'http' -IPAddress '*' `
-        -Port 80 -HostHeader 'internlink.duckdns.org'
-}
+Set-ItemProperty 'IIS:\AppPools\InternLinkApi' -Name processModel.idleTimeout -Value ([TimeSpan]::Zero)
+Set-ItemProperty 'IIS:\AppPools\InternLinkApi' -Name startMode -Value 'AlwaysRunning'
+
+# Configure Port 80 binding directly on InternLinkApi
+Get-WebBinding -Name 'InternLinkApi' | Remove-WebBinding -ErrorAction SilentlyContinue
+New-WebBinding -Name 'InternLinkApi' -Protocol 'http' -IPAddress '*' -Port 80 -HostHeader 'internlink.duckdns.org'
+New-WebBinding -Name 'InternLinkApi' -Protocol 'http' -IPAddress '*' -Port 80
 
 [Environment]::SetEnvironmentVariable(
     'Email__PortalUrl', 'http://internlink.duckdns.org', 'Machine'
@@ -301,16 +305,13 @@ if ((Get-WebAppPoolState -Name 'InternLinkApi').Value -ne 'Started') {
 if ((Get-Website -Name 'InternLinkApi').State -ne 'Started') {
     Start-Website -Name 'InternLinkApi'
 }
-if ($webWasStarted -and (Get-Website -Name 'InternLink').State -ne 'Started') {
-    Start-Website -Name 'InternLink'
-}
 
 Write-Host 'Checking API readiness and the IIS frontend binding...'
 $healthResponse = $null
 for ($attempt = 1; $attempt -le 10; $attempt++) {
     try {
         $healthResponse = Invoke-WebRequest -UseBasicParsing `
-            -Uri 'http://127.0.0.1:7109/health/ready' -TimeoutSec 15
+            -Uri 'http://127.0.0.1/health/ready' -TimeoutSec 15
         if ($healthResponse.StatusCode -eq 200) {
             break
         }
@@ -372,7 +373,7 @@ if ($smtpTestSent) {
     Write-Host "SMTP test email was accepted by the SMTP server for: $testRecipient"
 }
 Write-Host "  Public site: http://internlink.duckdns.org/"
-Write-Host "  API health:  http://127.0.0.1:7109/health/ready"
+Write-Host "  API health:  http://127.0.0.1/health/ready"
 Write-Host "  SQL backup:  $backupPath"
-Write-Warning 'In the EC2 Security Group, allow inbound Custom TCP port 80. Keep ports 1433 and 7109 closed publicly.'
+Write-Warning 'In the EC2 Security Group, allow inbound Custom TCP port 80. Keep port 1433 closed publicly.'
 Write-Warning 'HTTP is not encrypted. Configure HTTPS before using real credentials over the Internet.'

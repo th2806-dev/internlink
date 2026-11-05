@@ -65,10 +65,10 @@ if (-not (Get-Command choco.exe -ErrorAction SilentlyContinue)) {
 }
 
 $choco = (Get-Command choco.exe -ErrorAction Stop).Source
-Write-Host 'Installing Git, Node.js LTS, .NET 10 SDK, SQL Server Express, IIS URL Rewrite and ARR...'
+Write-Host 'Installing Git, Node.js LTS, .NET 10 SDK and SQL Server Express...'
 Invoke-ExternalCommand -FilePath $choco -Arguments @(
     'install', 'git', 'nodejs-lts', 'dotnet-10.0-sdk',
-    'sql-server-express', 'urlrewrite', 'iis-arr',
+    'sql-server-express',
     '--yes', '--accept-license', '--no-progress'
 )
 
@@ -96,8 +96,8 @@ $dotnet = (Get-Command dotnet.exe -ErrorAction Stop).Source
 
 $appRoot = 'C:\Apps\InternLink'
 $apiRoot = Join-Path $appRoot 'Api'
-$webRoot = 'C:\inetpub\wwwroot\InternLink'
-New-Item -ItemType Directory -Force $apiRoot, $webRoot | Out-Null
+$wwwRoot = Join-Path $apiRoot 'wwwroot'
+New-Item -ItemType Directory -Force $apiRoot, $wwwRoot | Out-Null
 
 Write-Host 'Building the frontend and publishing the API...'
 Push-Location $sourceRoot
@@ -115,74 +115,38 @@ finally {
     Pop-Location
 }
 
-Copy-Item (Join-Path $sourceRoot 'frontend\dist\*') $webRoot -Recurse -Force
+Write-Host 'Deploying frontend build to API wwwroot for unified direct hosting...'
+Copy-Item (Join-Path $sourceRoot 'frontend\dist\*') $wwwRoot -Recurse -Force
 
-$webConfig = @'
-<?xml version="1.0" encoding="utf-8"?>
-<configuration>
-  <system.webServer>
-    <rewrite>
-      <rules>
-        <rule name="Proxy API, SignalR and health checks" stopProcessing="true">
-          <match url="^(api|hubs|health)(/.*)?$" />
-          <action type="Rewrite" url="http://127.0.0.1:7109/{R:0}" appendQueryString="true" />
-        </rule>
-        <rule name="React SPA fallback" stopProcessing="true">
-          <match url=".*" />
-          <conditions logicalGrouping="MatchAll">
-            <add input="{REQUEST_FILENAME}" matchType="IsFile" negate="true" />
-            <add input="{REQUEST_FILENAME}" matchType="IsDirectory" negate="true" />
-          </conditions>
-          <action type="Rewrite" url="/index.html" />
-        </rule>
-      </rules>
-    </rewrite>
-  </system.webServer>
-</configuration>
-'@
-Set-Content -Path (Join-Path $webRoot 'web.config') -Value $webConfig -Encoding UTF8
-
-Write-Host 'Configuring the IIS application pool and sites...'
+Write-Host 'Configuring the IIS application pool and site...'
 Import-Module WebAdministration
 if (-not (Test-Path 'IIS:\AppPools\InternLinkApi')) {
     New-WebAppPool -Name 'InternLinkApi' | Out-Null
 }
 Set-ItemProperty 'IIS:\AppPools\InternLinkApi' -Name managedRuntimeVersion -Value ''
 Set-ItemProperty 'IIS:\AppPools\InternLinkApi' -Name processModel.identityType -Value ApplicationPoolIdentity
+Set-ItemProperty 'IIS:\AppPools\InternLinkApi' -Name processModel.idleTimeout -Value ([TimeSpan]::Zero)
+Set-ItemProperty 'IIS:\AppPools\InternLinkApi' -Name startMode -Value 'AlwaysRunning'
+
+# Remove legacy separate frontend site if present
+if (Get-Website -Name 'InternLink' -ErrorAction SilentlyContinue) {
+    Stop-Website -Name 'InternLink' -ErrorAction SilentlyContinue
+    Remove-Website -Name 'InternLink' -ErrorAction SilentlyContinue
+}
 
 if (-not (Get-Website -Name 'InternLinkApi' -ErrorAction SilentlyContinue)) {
-    New-Website -Name 'InternLinkApi' -PhysicalPath $apiRoot `
-        -IPAddress '127.0.0.1' -Port 7109 -ApplicationPool 'InternLinkApi' | Out-Null
+    New-Website -Name 'InternLinkApi' -PhysicalPath $apiRoot 
+        -IPAddress '*' -Port 80 -HostHeader 'internlink.duckdns.org' -ApplicationPool 'InternLinkApi' | Out-Null
 }
 else {
     Set-ItemProperty 'IIS:\Sites\InternLinkApi' -Name physicalPath -Value $apiRoot
 }
 Set-ItemProperty 'IIS:\Sites\InternLinkApi' -Name applicationPool -Value 'InternLinkApi'
 
-if (-not (Get-Website -Name 'InternLink' -ErrorAction SilentlyContinue)) {
-    New-Website -Name 'InternLink' -PhysicalPath $webRoot -IPAddress '*' `
-        -Port 80 -HostHeader 'internlink.duckdns.org' | Out-Null
-}
-else {
-    Set-ItemProperty 'IIS:\Sites\InternLink' -Name physicalPath -Value $webRoot
-}
-Remove-WebBinding -Name 'InternLink' -Protocol 'http' -Port 8000 `
-    -ErrorAction SilentlyContinue
-if (-not (Get-WebBinding -Name 'InternLink' -Protocol 'http' |
-        Where-Object { $_.bindingInformation -eq '*:80:internlink.duckdns.org' })) {
-    New-WebBinding -Name 'InternLink' -Protocol 'http' -IPAddress '*' `
-        -Port 80 -HostHeader 'internlink.duckdns.org'
-}
-
-$appcmd = Join-Path $env:windir 'System32\inetsrv\appcmd.exe'
-Invoke-ExternalCommand -FilePath $appcmd -Arguments @(
-    'set', 'config', '-section:system.webServer/proxy',
-    '/enabled:true', '/commit:apphost'
-)
-Invoke-ExternalCommand -FilePath $appcmd -Arguments @(
-    'set', 'config', '-section:system.webServer/webSocket',
-    '/enabled:true', '/commit:apphost'
-)
+# Bind InternLinkApi directly to Port 80
+Get-WebBinding -Name 'InternLinkApi' | Remove-WebBinding -ErrorAction SilentlyContinue
+New-WebBinding -Name 'InternLinkApi' -Protocol 'http' -IPAddress '*' -Port 80 -HostHeader 'internlink.duckdns.org'
+New-WebBinding -Name 'InternLinkApi' -Protocol 'http' -IPAddress '*' -Port 80
 
 Write-Host 'Preparing persistent uploads and log folders...'
 New-Item -ItemType Directory -Force `
@@ -275,7 +239,7 @@ iisreset
 Write-Host ''
 Write-Host 'Deployment finished. Verify SQL migrations and site health before first login:'
 Write-Host '  http://internlink.duckdns.org/'
-Write-Host '  http://127.0.0.1:7109/health/ready'
+Write-Host '  http://127.0.0.1/health/ready'
 Write-Host ''
-Write-Warning 'Add inbound Custom TCP port 80 to the EC2 Security Group. Keep ports 1433 and 7109 closed publicly.'
+Write-Warning 'Add inbound Custom TCP port 80 to the EC2 Security Group. Keep port 1433 closed publicly.'
 Write-Warning 'HTTP is not encrypted. Configure HTTPS before using real credentials over the Internet.'
