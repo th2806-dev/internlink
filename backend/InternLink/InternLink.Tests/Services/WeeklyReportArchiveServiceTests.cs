@@ -229,10 +229,18 @@ public class WeeklyReportArchiveServiceTests
             FileName = "final.pdf",
             FileUrl = "uploads/final.pdf",
         };
+        var archiveReport = new Submission
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = internship.Id,
+            Type = SubmissionType.ArchiveReport,
+            FileName = "BaoCaoLuuKhoa_SV001_v1.pdf",
+            FileUrl = "uploads/archive-report.pdf",
+        };
         db.Semesters.Add(semester);
         db.Students.Add(student);
         db.Internships.Add(internship);
-        db.Submissions.Add(finalReport);
+        db.Submissions.AddRange(finalReport, archiveReport);
         db.WeeklyReports.Add(new WeeklyReport
         {
             Id = Guid.NewGuid(),
@@ -251,6 +259,13 @@ public class WeeklyReportArchiveServiceTests
                 FileContent = Encoding.UTF8.GetBytes("final"),
                 FileName = "final.pdf",
             });
+        submissionService
+            .Setup(service => service.DownloadFileAsync(archiveReport.Id, It.IsAny<Guid>(), true))
+            .ReturnsAsync(new SubmissionFileDownloadDto
+            {
+                FileContent = Encoding.UTF8.GetBytes("archive"),
+                FileName = "BaoCaoLuuKhoa_SV001_v1.pdf",
+            });
         var service = new WeeklyReportArchiveService(db, Mock.Of<IWeeklyReportService>(), submissionService.Object);
 
         var zip = await service.CreateZipAsync(semester.Id, departmentId, Guid.NewGuid(), documentType: "final");
@@ -260,5 +275,17 @@ public class WeeklyReportArchiveServiceTests
         using var archive = new ZipArchive(input, ZipArchiveMode.Read);
         archive.Entries.Should().ContainSingle();
         archive.Entries[0].FullName.Should().Contain("BaoCaoCuoiKy/V01_final.pdf");
+
+        var archiveZip = await service.CreateZipAsync(
+            semester.Id,
+            departmentId,
+            Guid.NewGuid(),
+            documentType: "archive");
+        archiveZip.Should().NotBeNull();
+        using var archiveInput = new MemoryStream(archiveZip!.Content);
+        using var archiveReportZip = new ZipArchive(archiveInput, ZipArchiveMode.Read);
+        archiveReportZip.Entries.Should().ContainSingle();
+        archiveReportZip.Entries[0].FullName.Should()
+            .Contain("BaoCaoLuuKhoa/V01_BaoCaoLuuKhoa_SV001_v1.pdf");
     }
 }

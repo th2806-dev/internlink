@@ -37,6 +37,7 @@ const DOCUMENT_TYPES: { value: ArchiveDocumentType; label: string }[] = [
   { value: "final", label: "Báo cáo cuối kỳ" },
   { value: "evidence", label: "Đánh giá doanh nghiệp" },
   { value: "product", label: "Sản phẩm thực tế" },
+  { value: "archive", label: "Báo cáo chỉnh sửa lưu khoa" },
   { value: "other", label: "Nhật ký thực tập" },
 ];
 const EMPTY_ARCHIVE_STUDENTS: WeeklyReportArchiveStudentDto[] = [];
@@ -67,6 +68,7 @@ const matchesDocumentType = (document: StudentArchiveDocumentItemDto, type: Arch
   if (type === "final") return document.documentType === "FinalReport";
   if (type === "evidence") return document.documentType === "Evidence";
   if (type === "product") return document.documentType === "Product";
+  if (type === "archive") return document.documentType === "ArchiveReport";
   return document.documentType === "InternshipLog";
 };
 

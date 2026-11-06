@@ -115,6 +115,12 @@ public class SubmissionService : ISubmissionService
     }
 
     public async Task<SubmissionDto> CreateAsync(Guid userId, CreateSubmissionRequest request)
+        => await CreateAsync(userId, request, allowArchiveReportFile: false);
+
+    private async Task<SubmissionDto> CreateAsync(
+        Guid userId,
+        CreateSubmissionRequest request,
+        bool allowArchiveReportFile)
     {
         var internship = await _db.Internships
             .Include(i => i.Student)
@@ -136,6 +142,12 @@ public class SubmissionService : ISubmissionService
         if (type == SubmissionType.FinalReport
             && (string.IsNullOrWhiteSpace(request.FileName) || string.IsNullOrWhiteSpace(request.FileUrl)))
             throw new InvalidOperationException("Báo cáo cuối kỳ phải có tệp đính kèm.");
+        if (type == SubmissionType.ArchiveReport)
+        {
+            if (!allowArchiveReportFile)
+                throw new InvalidOperationException("Báo cáo lưu khoa phải được nộp bằng tệp PDF.");
+            ValidateArchiveReportFile(request.FileName, "application/pdf");
+        }
 
         if (type == SubmissionType.Evidence)
         {
@@ -151,6 +163,12 @@ public class SubmissionService : ISubmissionService
 
         if (type == SubmissionType.FinalReport)
             await EnsureFinalReportSubmissionWindowOpenAsync(internship);
+        if (type == SubmissionType.ArchiveReport)
+        {
+            if (!internship.SemesterId.HasValue)
+                throw new InvalidOperationException("Không tìm thấy học kỳ để kiểm tra deadline nộp báo cáo lưu khoa.");
+            await EnsureArchiveReportUploadWindowOpenAsync(internship.SemesterId.Value);
+        }
 
         var version = HasCanonicalSubmissionFileName(type)
             ? await GetNextSubmissionVersionAsync(request.InternshipId, type)
@@ -181,24 +199,32 @@ public class SubmissionService : ISubmissionService
         Guid userId,
         CreateSubmissionRequest request,
         Stream fileStream,
-        string originalFileName)
+        string originalFileName,
+        string? contentType = null)
     {
+        var type = Enum.TryParse<SubmissionType>(request.Type, true, out var parsedType)
+            ? parsedType
+            : (SubmissionType?)null;
+        if (type == SubmissionType.ArchiveReport)
+            ValidateArchiveReportFile(originalFileName, contentType);
+
         var canonicalName = originalFileName;
         var preserveFileName = false;
-        if (Enum.TryParse<SubmissionType>(request.Type, true, out var type) &&
-            HasCanonicalSubmissionFileName(type))
+        if (type.HasValue && HasCanonicalSubmissionFileName(type.Value))
         {
             var internship = await _db.Internships
                 .Include(item => item.Student)
                 .FirstOrDefaultAsync(item => item.Id == request.InternshipId && !item.IsDeleted);
-            var version = await GetNextSubmissionVersionAsync(request.InternshipId, type);
+            var version = await GetNextSubmissionVersionAsync(request.InternshipId, type.Value);
             canonicalName = CreateCanonicalSubmissionFileName(
-                type,
+                type.Value,
                 internship?.Student?.FullName,
                 version,
                 1,
                 1,
-                Path.GetExtension(originalFileName));
+                Path.GetExtension(originalFileName),
+                internship?.Student?.StudentCode,
+                internship?.Student?.Class);
             preserveFileName = true;
         }
         var (relativePath, savedFileName) = await SaveSubmissionFileAsync(
@@ -211,7 +237,7 @@ public class SubmissionService : ISubmissionService
         request.FileUrl = relativePath;
         try
         {
-            return await CreateAsync(userId, request);
+            return await CreateAsync(userId, request, allowArchiveReportFile: type == SubmissionType.ArchiveReport);
         }
         catch
         {
@@ -261,6 +287,15 @@ public class SubmissionService : ISubmissionService
         {
             throw new InvalidOperationException("Báo cáo cuối kỳ phải có ít nhất một tệp đính kèm.");
         }
+        else if (type == SubmissionType.ArchiveReport)
+        {
+            if (fileItems.Count != 1 || linkItems.Count != 0)
+                throw new InvalidOperationException("Báo cáo lưu khoa chỉ được nộp đúng một tệp PDF, không kèm liên kết.");
+            ValidateArchiveReportFile(fileItems[0].FileName, fileItems[0].ContentType);
+            if (!internship.SemesterId.HasValue)
+                throw new InvalidOperationException("Không tìm thấy học kỳ để kiểm tra deadline nộp báo cáo lưu khoa.");
+            await EnsureArchiveReportUploadWindowOpenAsync(internship.SemesterId.Value);
+        }
         else if (request.EmployerScore.HasValue)
         {
             throw new InvalidOperationException("Điểm doanh nghiệp chỉ áp dụng cho hồ sơ đánh giá doanh nghiệp.");
@@ -297,7 +332,9 @@ public class SubmissionService : ISubmissionService
                     version,
                     index + 1,
                     fileItems.Count,
-                    Path.GetExtension(file.FileName))
+                    Path.GetExtension(file.FileName),
+                    internship.Student?.StudentCode,
+                    internship.Student?.Class)
                 : file.FileName;
             var (relativePath, savedFileName) = await SaveSubmissionFileAsync(
                 file.Stream,
@@ -339,6 +376,13 @@ public class SubmissionService : ISubmissionService
     }
 
     public async Task<SubmissionDto?> ResubmitAsync(Guid id, Guid userId, ResubmitRequest request)
+        => await ResubmitAsync(id, userId, request, allowArchiveReportFile: false);
+
+    private async Task<SubmissionDto?> ResubmitAsync(
+        Guid id,
+        Guid userId,
+        ResubmitRequest request,
+        bool allowArchiveReportFile)
     {
         var existing = await _db.Submissions
             .Include(s => s.Internship)
@@ -357,6 +401,12 @@ public class SubmissionService : ISubmissionService
 
         if (existing.Status != SubmissionStatus.RevisionRequested)
             throw new InvalidOperationException("Resubmit is only allowed when status is RevisionRequested");
+        if (existing.Type == SubmissionType.ArchiveReport)
+        {
+            if (!allowArchiveReportFile)
+                throw new InvalidOperationException("Báo cáo lưu khoa phải được nộp lại bằng tệp PDF.");
+            ValidateArchiveReportFile(request.FileName, "application/pdf");
+        }
         var employerScore = request.EmployerScore ?? existing.EmployerScore;
         if (existing.Type == SubmissionType.Evidence)
         {
@@ -371,6 +421,8 @@ public class SubmissionService : ISubmissionService
         }
         if (existing.Type == SubmissionType.Evidence && existing.Internship.SemesterId.HasValue)
             await EnsureEvidenceUploadWindowOpenAsync(existing.Internship.SemesterId.Value);
+        if (existing.Type == SubmissionType.ArchiveReport && existing.Internship.SemesterId.HasValue)
+            await EnsureArchiveReportUploadWindowOpenAsync(existing.Internship.SemesterId.Value);
 
         var maxVersion = await _db.Submissions
             .Where(s => s.InternshipId == existing.InternshipId
@@ -405,7 +457,8 @@ public class SubmissionService : ISubmissionService
         Guid userId,
         ResubmitRequest request,
         Stream fileStream,
-        string originalFileName)
+        string originalFileName,
+        string? contentType = null)
     {
         var existing = await _db.Submissions
             .Include(s => s.Internship)
@@ -424,6 +477,13 @@ public class SubmissionService : ISubmissionService
 
         if (existing.Status != SubmissionStatus.RevisionRequested)
             throw new InvalidOperationException("Resubmit is only allowed when status is RevisionRequested");
+        if (existing.Type == SubmissionType.ArchiveReport)
+        {
+            ValidateArchiveReportFile(originalFileName, contentType);
+            if (!existing.Internship.SemesterId.HasValue)
+                throw new InvalidOperationException("Không tìm thấy học kỳ để kiểm tra deadline nộp báo cáo lưu khoa.");
+            await EnsureArchiveReportUploadWindowOpenAsync(existing.Internship.SemesterId.Value);
+        }
 
         if (existing.Type == SubmissionType.Evidence)
             ValidateEmployerEvaluation(request.EmployerScore ?? existing.EmployerScore, originalFileName, "image-upload");
@@ -440,7 +500,9 @@ public class SubmissionService : ISubmissionService
                 version,
                 1,
                 1,
-                Path.GetExtension(originalFileName))
+                Path.GetExtension(originalFileName),
+                existing.Internship.Student?.StudentCode,
+                existing.Internship.Student?.Class)
             : originalFileName;
         var (relativePath, savedFileName) = await SaveSubmissionFileAsync(
             fileStream,
@@ -452,7 +514,11 @@ public class SubmissionService : ISubmissionService
         request.FileUrl = relativePath;
         try
         {
-            var resubmission = await ResubmitAsync(id, userId, request);
+            var resubmission = await ResubmitAsync(
+                id,
+                userId,
+                request,
+                allowArchiveReportFile: existing.Type == SubmissionType.ArchiveReport);
             if (resubmission != null)
                 return resubmission;
         }
@@ -755,6 +821,7 @@ public class SubmissionService : ISubmissionService
                 {
                     SubmissionType.FinalReport => "BaoCaoCuoiKy",
                     SubmissionType.Evidence => "DanhGiaDoanhNghiep",
+                    SubmissionType.ArchiveReport => "BaoCaoLuuKhoa",
                     SubmissionType.Product => "SanPham",
                     _ => submission.Type.ToString(),
                 };
@@ -804,7 +871,7 @@ public class SubmissionService : ISubmissionService
     public async Task<SubmissionZipDownloadDto?> DownloadSemesterZipAsync(Guid semesterId, string category, Guid userId)
     {
         var normalizedCategory = category.Trim().ToLowerInvariant();
-        if (normalizedCategory is not ("weekly" or "final" or "product" or "evidence" or "student"))
+        if (normalizedCategory is not ("weekly" or "final" or "product" or "evidence" or "archive" or "student"))
             throw new InvalidOperationException("Loại hồ sơ ZIP không hợp lệ.");
 
         var actor = await _db.Users.AsNoTracking()
@@ -847,7 +914,8 @@ public class SubmissionService : ISubmissionService
                     && (normalizedCategory == "student"
                         || (normalizedCategory == "final" && submission.Type == SubmissionType.FinalReport)
                         || (normalizedCategory == "product" && submission.Type == SubmissionType.Product)
-                        || (normalizedCategory == "evidence" && submission.Type == SubmissionType.Evidence))))
+                        || (normalizedCategory == "evidence" && submission.Type == SubmissionType.Evidence)
+                        || (normalizedCategory == "archive" && submission.Type == SubmissionType.ArchiveReport))))
                 .ThenInclude(submission => submission.Assets.Where(asset => !asset.IsDeleted))
             .ToListAsync();
 
@@ -1268,7 +1336,7 @@ public class SubmissionService : ISubmissionService
     }
 
     private static bool HasCanonicalSubmissionFileName(SubmissionType type) =>
-        type is SubmissionType.FinalReport or SubmissionType.Evidence;
+        type is SubmissionType.FinalReport or SubmissionType.Evidence or SubmissionType.ArchiveReport;
 
     private static string CreateCanonicalSubmissionFileName(
         SubmissionType type,
@@ -1276,8 +1344,21 @@ public class SubmissionService : ISubmissionService
         int version,
         int fileNumber,
         int fileCount,
-        string extension)
+        string extension,
+        string? studentCode = null,
+        string? studentClass = null)
     {
+        if (type == SubmissionType.ArchiveReport)
+        {
+            var safeStudentCode = WeeklyReportService.SanitizeStudentNameForFileName(studentCode);
+            var trimmedClass = studentClass?.Trim();
+            var classPrefix = trimmedClass is { Length: >= 3 }
+                ? WeeklyReportService.SanitizeStudentNameForFileName(trimmedClass[..3])
+                : "XXX";
+            var safeStudentName = WeeklyReportService.SanitizeStudentNameForFileName(studentName);
+            return $"BaoCaoTTTN_{classPrefix}_{safeStudentName}_{safeStudentCode}_v{version}.pdf";
+        }
+
         var safeName = WeeklyReportService.SanitizeStudentNameForFileName(studentName);
 
         var typeName = type == SubmissionType.FinalReport
@@ -1285,6 +1366,32 @@ public class SubmissionService : ISubmissionService
             : "DanhGiaDoanhNghiep";
         var assetSequence = fileCount > 1 ? $"_{fileNumber:D2}" : string.Empty;
         return $"{typeName}_{safeName}_V{version}{assetSequence}{extension.ToLowerInvariant()}";
+    }
+
+    private static void ValidateArchiveReportFile(string? fileName, string? contentType)
+    {
+        if (!string.Equals(Path.GetExtension(fileName), ".pdf", StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(contentType, "application/pdf", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Báo cáo lưu khoa bắt buộc phải ở định dạng PDF (.pdf).");
+        }
+    }
+
+    private async Task EnsureArchiveReportUploadWindowOpenAsync(Guid semesterId)
+    {
+        var setting = await _db.SystemSettings.AsNoTracking()
+            .FirstOrDefaultAsync(item => item.Key == $"ArchiveReportUploadDeadline:{semesterId:N}" && !item.IsDeleted);
+        var deadline = setting == null
+            ? null
+            : System.Text.Json.JsonSerializer.Deserialize<SupplementalDeadlineDto>(setting.Value);
+        if (deadline == null)
+            throw new InvalidOperationException("Admin khoa chưa mở thời gian nộp báo cáo lưu khoa cho học kỳ này.");
+
+        var now = DateTime.UtcNow;
+        if (now < deadline.StartDate)
+            throw new InvalidOperationException($"Thời gian nộp báo cáo lưu khoa sẽ mở vào {deadline.StartDate:dd/MM/yyyy HH:mm}.");
+        if (now > deadline.EndDate)
+            throw new InvalidOperationException($"Thời hạn nộp báo cáo chỉnh sửa lưu khoa đã kết thúc vào {deadline.EndDate:dd/MM/yyyy HH:mm}.");
     }
 
     private async Task EnsureEvidenceUploadWindowOpenAsync(Guid semesterId)

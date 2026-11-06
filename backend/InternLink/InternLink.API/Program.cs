@@ -1,4 +1,4 @@
-using InternLink.API.Extensions;
+﻿using InternLink.API.Extensions;
 using InternLink.API.Filters;
 using InternLink.API.Hubs;
 using InternLink.Application;
@@ -8,7 +8,7 @@ using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Load local overrides (email passwords, etc.) — this file is gitignored
+// Load local overrides (email passwords, etc.) â€” this file is gitignored
 builder.Configuration.AddJsonFile("appsettings.local.json", optional: true, reloadOnChange: true);
 builder.Configuration.AddEnvironmentVariables();
 builder.Configuration.AddCommandLine(args);
@@ -38,7 +38,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("Frontend", policy =>
     {
-        // Content-Disposition phải được expose để frontend đọc tên file xuất (Excel/PDF/Word)
+        // Content-Disposition pháº£i Ä‘Æ°á»£c expose Ä‘á»ƒ frontend Ä‘á»c tĂªn file xuáº¥t (Excel/PDF/Word)
         if (allowedOrigins.Length > 0)
         {
             policy.WithOrigins(allowedOrigins)
@@ -97,9 +97,9 @@ var jwtSecret = builder.Configuration["Jwt:Secret"];
 if (string.IsNullOrWhiteSpace(jwtSecret) || jwtSecret.Length < 32)
 {
     throw new InvalidOperationException(
-        "Lỗi cấu hình bảo mật: 'Jwt:Secret' chưa được khai báo hoặc có độ dài dưới 32 ký tự. " +
-        "Vui lòng cấu hình khóa đủ mạnh qua biến môi trường (Jwt__Secret), " +
-        "User Secrets (dotnet user-secrets set \"Jwt:Secret\" \"<your-secret>\"), hoặc appsettings.Development.json.");
+        "Lá»—i cáº¥u hĂ¬nh báº£o máº­t: 'Jwt:Secret' chÆ°a Ä‘Æ°á»£c khai bĂ¡o hoáº·c cĂ³ Ä‘á»™ dĂ i dÆ°á»›i 32 kĂ½ tá»±. " +
+        "Vui lĂ²ng cáº¥u hĂ¬nh khĂ³a Ä‘á»§ máº¡nh qua biáº¿n mĂ´i trÆ°á»ng (Jwt__Secret), " +
+        "User Secrets (dotnet user-secrets set \"Jwt:Secret\" \"<your-secret>\"), hoáº·c appsettings.Development.json.");
 }
 
 app.UseApiExceptionHandler();
@@ -113,16 +113,23 @@ app.UseSwaggerUI(c =>
     c.RoutePrefix = "swagger";
 });
 
-// CORS must come before HTTPS redirection to avoid 307 on OPTIONS preflight
+// 1. Phuc vu Static Files cho React SPA truoc (tranh ton chi phi pipeline Auth cho asset tinh)
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
+// 2. CORS must come before HTTPS redirection to avoid 307 on OPTIONS preflight
 app.UseCors("Frontend");
-// Skip HTTPS redirect in development to allow HTTP frontend → HTTP API calls
-// app.UseHttpsRedirection();
+
+// 3. HTTPS Redirection (chi bat khi cau hinh yeu cau hoac co chung chi SSL thuc te)
+if (builder.Configuration.GetValue<bool>("Security:EnforceHttps", false))
+{
+    app.UseHttpsRedirection();
+}
+
+// 4. Authentication & Authorization cho API
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<InternLink.API.Middleware.StudentArchiveReadOnlyMiddleware>();
-
-app.UseDefaultFiles();
-app.UseStaticFiles();
 
 app.MapControllers();
 app.MapHub<NotificationHub>("/hubs/notifications");

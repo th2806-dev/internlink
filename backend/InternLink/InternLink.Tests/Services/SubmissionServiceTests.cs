@@ -274,6 +274,142 @@ public class SubmissionServiceTests
     }
 
     [Fact]
+    public async Task CreateAsync_ArchiveReportWithoutUploadedFile_ShouldRejectSubmission()
+    {
+        await using var db = GetDb();
+        var (studentUser, _, _, _, internship, _) = await SeedDataAsync(db);
+        var service = CreateService(db);
+
+        var act = () => service.CreateAsync(studentUser.Id, new CreateSubmissionRequest
+        {
+            InternshipId = internship.Id,
+            Type = "ArchiveReport",
+            FileName = "report.pdf",
+            FileUrl = "uploads/report.pdf",
+        });
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("Báo cáo lưu khoa phải được nộp bằng tệp PDF.");
+    }
+
+    [Fact]
+    public async Task CreateBundleAsync_ArchiveReportWithoutDeadline_ShouldRejectSubmission()
+    {
+        await using var db = GetDb();
+        var (studentUser, _, _, _, internship, _) = await SeedDataAsync(db);
+        var semester = new Semester
+        {
+            Id = Guid.NewGuid(),
+            Name = "Học kỳ demo",
+            Term = "HK1",
+            AcademicYear = "2026-2027",
+            Status = SemesterStatus.Active,
+        };
+        internship.SemesterId = semester.Id;
+        internship.Semester = semester;
+        await db.Semesters.AddAsync(semester);
+        await db.SaveChangesAsync();
+        var service = CreateService(db);
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("pdf"));
+
+        var act = () => service.CreateBundleAsync(
+            studentUser.Id,
+            new CreateSubmissionRequest
+            {
+                InternshipId = internship.Id,
+                Type = "ArchiveReport",
+                Title = "Báo cáo lưu khoa",
+            },
+            new[] { ((Stream)stream, "report.PDF", stream.Length, "application/pdf") },
+            Array.Empty<SubmissionAssetInput>());
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("Admin khoa chưa mở thời gian nộp báo cáo lưu khoa cho học kỳ này.");
+    }
+
+    [Fact]
+    public async Task CreateBundleAsync_ArchiveReportWithNonPdfFile_ShouldRejectSubmission()
+    {
+        await using var db = GetDb();
+        var (studentUser, _, _, _, internship, _) = await SeedDataAsync(db);
+        var service = CreateService(db);
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("not a pdf"));
+
+        var act = () => service.CreateBundleAsync(
+            studentUser.Id,
+            new CreateSubmissionRequest
+            {
+                InternshipId = internship.Id,
+                Type = "ArchiveReport",
+                Title = "Báo cáo lưu khoa",
+            },
+            new[] { ((Stream)stream, "report.docx", stream.Length, "application/pdf") },
+            Array.Empty<SubmissionAssetInput>());
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("Báo cáo lưu khoa bắt buộc phải ở định dạng PDF (.pdf).");
+    }
+
+    [Fact]
+    public async Task CreateWithFileAsync_ArchiveReport_ShouldUseCanonicalStudentClassNameAndCodeFilename()
+    {
+        await using var db = GetDb();
+        var (studentUser, _, _, _, internship, _) = await SeedDataAsync(db);
+        internship.Student!.Class = "C24KTPM";
+        internship.Student.FullName = "Nguyễn Văn An";
+        internship.Student.StudentCode = "2421160052";
+        var semester = new Semester
+        {
+            Id = Guid.NewGuid(),
+            Name = "Học kỳ demo",
+            Term = "HK1",
+            AcademicYear = "2026-2027",
+            Status = SemesterStatus.Active,
+        };
+        internship.SemesterId = semester.Id;
+        internship.Semester = semester;
+        db.Semesters.Add(semester);
+        db.SystemSettings.Add(new SystemSetting
+        {
+            Id = Guid.NewGuid(),
+            Key = $"ArchiveReportUploadDeadline:{semester.Id:N}",
+            Value = System.Text.Json.JsonSerializer.Serialize(new SupplementalDeadlineDto
+            {
+                StartDate = DateTime.UtcNow.AddMinutes(-1),
+                EndDate = DateTime.UtcNow.AddHours(1),
+            }),
+            Category = "Deadlines",
+        });
+        await db.SaveChangesAsync();
+
+        var tempRoot = Path.Combine(Path.GetTempPath(), $"internlink-archive-report-{Guid.NewGuid():N}");
+        try
+        {
+            var service = CreateService(db, contentRootPath: tempRoot);
+            using var stream = new MemoryStream(Encoding.UTF8.GetBytes("pdf"));
+            var result = await service.CreateWithFileAsync(
+                studentUser.Id,
+                new CreateSubmissionRequest
+                {
+                    InternshipId = internship.Id,
+                    Type = "ArchiveReport",
+                    Title = "Báo cáo lưu khoa",
+                },
+                stream,
+                "report.PDF",
+                "application/pdf");
+
+            result.FileName.Should().Be("BaoCaoTTTN_C24_NguyenVanAn_2421160052_v1.pdf");
+            result.Type.Should().Be("ArchiveReport");
+        }
+        finally
+        {
+            if (Directory.Exists(tempRoot))
+                Directory.Delete(tempRoot, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task CreateAsync_FinalReportBeforeScheduleStart_ShouldAllowSubmission()
     {
         var db = GetDb();

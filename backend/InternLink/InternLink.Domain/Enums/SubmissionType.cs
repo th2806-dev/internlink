@@ -6,5 +6,6 @@ public enum SubmissionType
     InternshipLog,
     FinalReport,
     Product,
-    Evidence
+    Evidence,
+    ArchiveReport = 5
 }

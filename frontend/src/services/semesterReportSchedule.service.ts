@@ -66,4 +66,18 @@ export const semesterReportScheduleService = {
       skipCache: true,
     });
   },
+
+  getArchiveReportDeadline(semesterId: string): Promise<SupplementalDeadline | null> {
+    return apiRequest<SupplementalDeadline | null>(`/api/Semesters/${semesterId}/report-schedules/archive-report-deadline`, {
+      skipCache: true,
+    });
+  },
+
+  saveArchiveReportDeadline(semesterId: string, request: SupplementalDeadline): Promise<SupplementalDeadline> {
+    return apiRequest<SupplementalDeadline>(`/api/Semesters/${semesterId}/report-schedules/archive-report-deadline`, {
+      method: "PUT",
+      body: request,
+      skipCache: true,
+    });
+  },
 };

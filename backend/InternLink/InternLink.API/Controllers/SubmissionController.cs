@@ -85,6 +85,8 @@ public class SubmissionController : ControllerBase
                 return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Hồ sơ đánh giá doanh nghiệp phải được nộp kèm tệp ảnh." }));
             if (string.Equals(request.Type, "FinalReport", StringComparison.OrdinalIgnoreCase))
                 return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Báo cáo cuối kỳ phải được nộp bằng tệp đính kèm." }));
+            if (string.Equals(request.Type, "ArchiveReport", StringComparison.OrdinalIgnoreCase))
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Báo cáo lưu khoa phải được nộp bằng một tệp PDF đính kèm." }));
 
             var userId = User.GetUserId();
             if (userId == null)
@@ -131,7 +133,8 @@ public class SubmissionController : ControllerBase
                 userId.Value,
                 createRequest,
                 stream,
-                form.File.FileName);
+                form.File.FileName,
+                form.File.ContentType);
 
             return CreatedAtAction(nameof(GetById), new { id = submission.Id }, ApiResponse<SubmissionDto>.Ok(submission));
         }
@@ -243,7 +246,8 @@ public class SubmissionController : ControllerBase
                 userId.Value,
                 resubmitRequest,
                 stream,
-                form.File.FileName);
+                form.File.FileName,
+                form.File.ContentType);
 
             if (submission == null)
                 return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SubmissionNotFound }));

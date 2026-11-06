@@ -106,6 +106,7 @@ export function mapSubmissionTypeToUi(type: string): string {
     FinalReport: "Báo cáo cuối kỳ",
     Product: "Sản phẩm",
     Evidence: "Đánh giá doanh nghiệp",
+    ArchiveReport: "Báo cáo chỉnh sửa lưu khoa",
   };
   return map[type] ?? type;
 }

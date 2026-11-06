@@ -88,6 +88,8 @@ export const queryKeys = {
     },
     evidenceDeadline: (semesterId?: string | null, userId?: string | null) =>
       [...queryKeys.admin.all, "evidence-deadline", semesterScope(semesterId), userId ?? "mine"] as const,
+    archiveReportDeadline: (semesterId?: string | null, userId?: string | null) =>
+      [...queryKeys.admin.all, "archive-report-deadline", semesterScope(semesterId), userId ?? "mine"] as const,
     accountRequests: {
       all: ["admin", "account-requests"] as const,
       list: (params: QueryParams = {}) =>
@@ -255,6 +257,8 @@ export const queryKeys = {
     },
     evidenceDeadline: (semesterId?: string | null, userId?: string | null) =>
       [...queryKeys.student.all, "evidence-deadline", semesterScope(semesterId), userId ?? "mine"] as const,
+    archiveReportDeadline: (semesterId?: string | null, userId?: string | null) =>
+      [...queryKeys.student.all, "archive-report-deadline", semesterScope(semesterId), userId ?? "mine"] as const,
     evidenceAsset: (submissionId: string, assetId: string, userId?: string | null) =>
       [...queryKeys.student.all, "evidence-asset", submissionId, assetId, userId ?? "mine"] as const,
     feedback: {

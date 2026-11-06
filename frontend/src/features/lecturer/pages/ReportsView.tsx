@@ -336,6 +336,7 @@ export const ReportsView = ({
             <option value="Tất cả">Tất cả loại hồ sơ</option>
             <option>Báo cáo tuần</option>
             <option>Báo cáo cuối kỳ</option>
+            <option>Báo cáo chỉnh sửa lưu khoa</option>
             <option>Sản phẩm thực tế</option>
             <option>Đánh giá doanh nghiệp</option>
           </select>
@@ -373,6 +374,7 @@ export const ReportsView = ({
                 {[
                   ["weekly", "Tải tất cả báo cáo tuần"],
                   ["final", "Tải tất cả báo cáo cuối kỳ"],
+                  ["archive", "Tải báo cáo chỉnh sửa lưu khoa"],
                   ["evidence", "Tải tất cả phiếu đánh giá doanh nghiệp"],
                   ["product", "Tải tất cả sản phẩm thực tế"],
                   ["student", "Gói ZIP phân thư mục theo sinh viên"],

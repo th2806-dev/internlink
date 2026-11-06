@@ -273,7 +273,7 @@ public sealed class WeeklyReportArchiveService : IWeeklyReportArchiveService
     private static string? NormalizeDocumentType(string? documentType)
     {
         var value = documentType?.Trim().ToLowerInvariant();
-        return value is "all" or "weekly" or "final" or "evidence" or "product" or "other"
+        return value is "all" or "weekly" or "final" or "evidence" or "product" or "archive" or "other"
             ? value
             : null;
     }
@@ -289,6 +289,7 @@ public sealed class WeeklyReportArchiveService : IWeeklyReportArchiveService
             "final" => type == SubmissionType.FinalReport,
             "evidence" => type == SubmissionType.Evidence,
             "product" => type == SubmissionType.Product,
+            "archive" => type == SubmissionType.ArchiveReport,
             "other" => type == SubmissionType.InternshipLog,
             _ => false,
         };
@@ -299,6 +300,7 @@ public sealed class WeeklyReportArchiveService : IWeeklyReportArchiveService
             SubmissionType.WeeklyReport => ("WeeklyReport", "Báo cáo tuần"),
             SubmissionType.FinalReport => ("FinalReport", "Báo cáo cuối kỳ"),
             SubmissionType.Evidence => ("Evidence", "Đánh giá doanh nghiệp"),
+            SubmissionType.ArchiveReport => ("ArchiveReport", "Báo cáo chỉnh sửa lưu khoa"),
             SubmissionType.Product => ("Product", "Sản phẩm thực tế"),
             SubmissionType.InternshipLog => ("InternshipLog", "Nhật ký thực tập"),
             _ => ("Submission", type.ToString()),
@@ -310,6 +312,7 @@ public sealed class WeeklyReportArchiveService : IWeeklyReportArchiveService
             SubmissionType.WeeklyReport => "BaoCaoTuan",
             SubmissionType.FinalReport => "BaoCaoCuoiKy",
             SubmissionType.Evidence => "DanhGiaDoanhNghiep",
+            SubmissionType.ArchiveReport => "BaoCaoLuuKhoa",
             SubmissionType.Product => "SanPhamThucTe",
             SubmissionType.InternshipLog => "NhatKyThucTap",
             _ => "HoSoKhac",

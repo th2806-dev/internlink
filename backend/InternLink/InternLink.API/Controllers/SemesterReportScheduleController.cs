@@ -239,5 +239,66 @@ public class SemesterReportScheduleController : ControllerBase
         }
     }
 
+    /// <summary>Reads the optional archive-report upload window for the semester.</summary>
+    [HttpGet("archive-report-deadline")]
+    [Authorize]
+    public async Task<IActionResult> GetArchiveReportDeadline(Guid semesterId)
+    {
+        var setting = await _db.SystemSettings.AsNoTracking()
+            .FirstOrDefaultAsync(item => item.Key == ArchiveReportDeadlineKey(semesterId) && !item.IsDeleted);
+        var deadline = setting == null
+            ? null
+            : JsonSerializer.Deserialize<SupplementalDeadlineDto>(setting.Value);
+        return Ok(ApiResponse<SupplementalDeadlineDto?>.Ok(deadline));
+    }
+
+    /// <summary>Creates or updates the archive-report upload window for a semester.</summary>
+    [HttpPut("archive-report-deadline")]
+    [Authorize(Policy = "RequireLecturerOrDepartmentAdmin")]
+    public async Task<IActionResult> SaveArchiveReportDeadline(
+        Guid semesterId,
+        [FromBody] SupplementalDeadlineDto request)
+    {
+        try
+        {
+            await EnsureSemesterWriteAccessAsync(semesterId);
+            if (request.StartDate > request.EndDate)
+                return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Ngày bắt đầu phải trước hoặc trùng ngày kết thúc." }));
+
+            var setting = await _db.SystemSettings
+                .FirstOrDefaultAsync(item => item.Key == ArchiveReportDeadlineKey(semesterId) && !item.IsDeleted);
+            if (setting == null)
+            {
+                setting = new InternLink.Domain.Entities.SystemSetting
+                {
+                    Id = Guid.NewGuid(),
+                    Key = ArchiveReportDeadlineKey(semesterId),
+                    Category = "Deadlines",
+                    Description = "Khoảng thời gian nộp báo cáo chỉnh sửa lưu khoa cho học kỳ",
+                    CreatedAt = DateTime.UtcNow
+                };
+                _db.SystemSettings.Add(setting);
+            }
+
+            setting.Value = JsonSerializer.Serialize(new SupplementalDeadlineDto
+            {
+                StartDate = request.StartDate,
+                EndDate = request.EndDate
+            });
+            setting.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+            return Ok(ApiResponse<SupplementalDeadlineDto>.Ok(request));
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = ex.Message }));
+        }
+    }
+
     private static string EvidenceDeadlineKey(Guid semesterId) => $"EvidenceUploadDeadline:{semesterId:N}";
+    private static string ArchiveReportDeadlineKey(Guid semesterId) => $"ArchiveReportUploadDeadline:{semesterId:N}";
 }

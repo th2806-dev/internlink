@@ -63,6 +63,7 @@ type UploadItem = {
 };
 
 type SubmissionLink = { label: string; url: string };
+type SubmissionUploadCategory = "FinalReport" | "Product" | "Evidence" | "ArchiveReport";
 type SubmissionPageData = { uploads: UploadItem[]; rows: SubmissionDto[] };
 
 function mapSubmissionResources(submission: SubmissionDto): UploadItem[] {
@@ -82,7 +83,9 @@ function mapSubmissionResources(submission: SubmissionDto): UploadItem[] {
       ? "Báo cáo cuối kỳ"
       : submission.type === "Evidence"
         ? "Đánh giá DN"
-        : "Sản phẩm sáng tạo";
+        : submission.type === "ArchiveReport"
+          ? "Báo cáo lưu khoa"
+          : "Sản phẩm sáng tạo";
   const assets = submission.assets ?? [];
   if (assets.length === 0) {
     return submission.fileUrl || submission.fileName
@@ -201,7 +204,7 @@ export const SubmissionsView: React.FC<{
         weeklyReportService.getMine(),
       ]);
       const nonWeeklyRows = rows.filter((submission) =>
-        ["FinalReport", "Product", "Evidence"].includes(submission.type),
+        ["FinalReport", "Product", "Evidence", "ArchiveReport"].includes(submission.type),
       );
       return {
         rows,
@@ -222,6 +225,16 @@ export const SubmissionsView: React.FC<{
     queryFn: () => semesterReportScheduleService.getEvidenceDeadline(selectedSemesterId!),
   });
   const evidenceDeadline: SupplementalDeadline | null = evidenceDeadlineQuery.data ?? null;
+  const archiveReportDeadlineQuery = useQuery({
+    queryKey: queryKeys.student.archiveReportDeadline(
+      selectedSemesterId,
+      user?.id ?? user?.username,
+    ),
+    enabled: isLoggedIn && Boolean(selectedSemesterId && selectedSemesterId !== "all"),
+    staleTime: 5 * 60 * 1000,
+    queryFn: () => semesterReportScheduleService.getArchiveReportDeadline(selectedSemesterId!),
+  });
+  const archiveReportDeadline: SupplementalDeadline | null = archiveReportDeadlineQuery.data ?? null;
   const uploads = useMemo(
     () => submissionsQuery.data?.uploads ?? [],
     [submissionsQuery.data?.uploads],
@@ -274,7 +287,7 @@ export const SubmissionsView: React.FC<{
   const [showContactModal, setShowContactModal] = useState(false);
   const [replaceTarget, setReplaceTarget] = useState<UploadItem | null>(null);
   const [uploadTitle, setUploadTitle] = useState("");
-  const [uploadCategory, setUploadCategory] = useState<"FinalReport" | "Product" | "Evidence">("FinalReport");
+  const [uploadCategory, setUploadCategory] = useState<SubmissionUploadCategory>("FinalReport");
   const [uploadNotes, setUploadNotes] = useState("");
   const [employerScore, setEmployerScore] = useState("");
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
@@ -300,6 +313,21 @@ export const SubmissionsView: React.FC<{
     evidenceDeadline &&
       Date.now() <= new Date(evidenceDeadline.endDate).getTime(),
   );
+  const archiveReportNow = Date.now();
+  const archiveReportWindowOpen = Boolean(
+    archiveReportDeadline &&
+      archiveReportNow >= new Date(archiveReportDeadline.startDate).getTime() &&
+      archiveReportNow <= new Date(archiveReportDeadline.endDate).getTime(),
+  );
+  const archiveReportWindowMessage = archiveReportDeadlineQuery.error
+    ? `Không thể tải deadline: ${getApiErrorMessage(archiveReportDeadlineQuery.error)}`
+    : !archiveReportDeadline
+      ? "Khoa chưa mở tiếp nhận"
+      : archiveReportNow < new Date(archiveReportDeadline.startDate).getTime()
+        ? `Chưa mở nhận đến ${new Date(archiveReportDeadline.startDate).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}`
+        : archiveReportWindowOpen
+          ? `Đang nhận đến ${new Date(archiveReportDeadline.endDate).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}`
+          : `Đã đóng từ ${new Date(archiveReportDeadline.endDate).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}`;
 
   const employerScoreValue = Number(employerScore);
   const employerScoreValid =
@@ -313,7 +341,9 @@ export const SubmissionsView: React.FC<{
   const hasRequiredUploadFile =
     uploadCategory === "FinalReport"
       ? uploadFiles.length > 0
-      : uploadCategory !== "Evidence" || hasEmployerImage;
+      : uploadCategory === "ArchiveReport"
+        ? uploadFiles.length === 1
+        : uploadCategory !== "Evidence" || hasEmployerImage;
   const validUploadLinks = uploadLinks.filter((link) => link.url.trim());
   const hasAnyResource = uploadFiles.length > 0 || validUploadLinks.length > 0;
 
@@ -328,6 +358,7 @@ export const SubmissionsView: React.FC<{
   const finalReport = latestSubmissionOfType("FinalReport");
   const productSubmission = latestSubmissionOfType("Product");
   const employerEvidence = latestSubmissionOfType("Evidence");
+  const archiveReport = latestSubmissionOfType("ArchiveReport");
   const pendingProductSubmissions = rawSubmissions
     .filter((submission) =>
       submission.type.toLowerCase() === "product" &&
@@ -432,7 +463,7 @@ export const SubmissionsView: React.FC<{
     [rawSubmissions],
   );
 
-  const openUploadFor = (category: "FinalReport" | "Product" | "Evidence") => {
+  const openUploadFor = (category: SubmissionUploadCategory) => {
     if (!hasAssignedCompany) {
       onShowToast?.("Bạn chưa được phân công đơn vị thực tập. Vui lòng liên hệ Văn phòng Khoa.", "error");
       return;
@@ -442,8 +473,10 @@ export const SubmissionsView: React.FC<{
       category === "FinalReport"
         ? "Báo cáo thực tập tốt nghiệp"
         : category === "Evidence"
-        ? "Phiếu đánh giá doanh nghiệp"
-        : "Sản phẩm thực tế",
+          ? "Phiếu đánh giá doanh nghiệp"
+          : category === "ArchiveReport"
+            ? "Báo cáo chỉnh sửa lưu khoa"
+            : "Sản phẩm thực tế",
     );
     setEmployerScore("");
     setUploadFiles([]);
@@ -453,6 +486,9 @@ export const SubmissionsView: React.FC<{
   };
 
   const isUploadFileAllowed = (file: File, category = uploadCategory) => {
+    if (category === "ArchiveReport") {
+      return /\.pdf$/i.test(file.name);
+    }
     if (category === "Product") {
       return /\.(pdf|docx?|zip|rar|pptx?|png|jpe?g)$/i.test(file.name);
     }
@@ -463,6 +499,14 @@ export const SubmissionsView: React.FC<{
   };
 
   const handleUploadFiles = (files: File[], append = false) => {
+    if (
+      uploadCategory === "ArchiveReport" &&
+      (files.length > 1 || (append && uploadFiles.length + files.length > 1))
+    ) {
+      onShowToast?.("Báo cáo lưu khoa chỉ được nộp một tệp PDF duy nhất.", "error");
+      if (uploadFileInputRef.current) uploadFileInputRef.current.value = "";
+      return;
+    }
     const maxSizeMb = uploadCategory === "Evidence" ? 15 : 50;
     const validFiles: File[] = [];
     let invalidFormatCount = 0;
@@ -477,11 +521,18 @@ export const SubmissionsView: React.FC<{
       }
     }
     if (invalidFormatCount > 0) {
+      if (uploadCategory === "ArchiveReport") {
+        onShowToast?.("Chỉ chấp nhận tệp báo cáo định dạng PDF (.pdf)", "error");
+        if (uploadFileInputRef.current) uploadFileInputRef.current.value = "";
+        return;
+      }
       const format =
         uploadCategory === "Evidence"
           ? "JPG, PNG, WEBP hoặc GIF"
           : uploadCategory === "FinalReport"
             ? "PDF, DOC hoặc DOCX"
+            : uploadCategory === "ArchiveReport"
+              ? "PDF (.pdf)"
             : "PDF, Word, ZIP, RAR, PowerPoint, PNG hoặc JPG";
       onShowToast?.(
         `${invalidFormatCount} tệp không đúng định dạng. Chỉ chấp nhận ${format}.`,
@@ -530,7 +581,7 @@ export const SubmissionsView: React.FC<{
       return;
     }
     setUploadCategory(
-      submission.type === "FinalReport" || submission.type === "Evidence"
+      submission.type === "FinalReport" || submission.type === "Evidence" || submission.type === "ArchiveReport"
         ? submission.type
         : "Product",
     );
@@ -542,7 +593,9 @@ export const SubmissionsView: React.FC<{
           ? "Báo cáo cuối kỳ"
           : submission.type === "Evidence"
             ? "Đánh giá DN"
-            : "Sản phẩm sáng tạo",
+            : submission.type === "ArchiveReport"
+              ? "Báo cáo lưu khoa"
+              : "Sản phẩm sáng tạo",
     };
     setReplaceTarget(item);
     setUploadNotes(item.notes || "");
@@ -560,8 +613,10 @@ export const SubmissionsView: React.FC<{
       (uploadCategory === "FinalReport"
         ? "Báo cáo thực tập tốt nghiệp"
         : uploadCategory === "Evidence"
-        ? "Minh chứng thực tập"
-        : "Sản phẩm thực tế");
+          ? "Minh chứng thực tập"
+          : uploadCategory === "ArchiveReport"
+            ? "Báo cáo chỉnh sửa lưu khoa"
+            : "Sản phẩm thực tế");
 
     if (!title) {
       onShowToast?.("Vui lòng nhập tên sản phẩm!", "error");
@@ -574,6 +629,17 @@ export const SubmissionsView: React.FC<{
     }
     if (uploadCategory === "Evidence" && !evidenceWindowOpen) {
       onShowToast?.("Minh chứng chỉ được nộp trong thời hạn do khoa cấu hình.", "error");
+      return;
+    }
+    if (uploadCategory === "ArchiveReport" && !archiveReportWindowOpen) {
+      onShowToast?.("Báo cáo lưu khoa chỉ được nộp trong thời hạn do khoa cấu hình.", "error");
+      return;
+    }
+    if (
+      uploadCategory === "ArchiveReport" &&
+      (uploadFiles.length !== 1 || validUploadLinks.length > 0)
+    ) {
+      onShowToast?.("Báo cáo lưu khoa chỉ được nộp đúng một tệp PDF, không kèm liên kết.", "error");
       return;
     }
 
@@ -642,7 +708,9 @@ export const SubmissionsView: React.FC<{
             ? "Đã nộp điểm và ảnh phiếu đánh giá doanh nghiệp thành công."
             : uploadCategory === "FinalReport"
               ? "Đã nộp báo cáo cuối kỳ thành công."
-              : `Đã nộp sản phẩm cùng ${uploadFiles.length + links.length} tài nguyên.`
+              : uploadCategory === "ArchiveReport"
+                ? "Đã nộp báo cáo lưu khoa thành công."
+                : `Đã nộp sản phẩm cùng ${uploadFiles.length + links.length} tài nguyên.`
           : "Đã nộp thành công nhưng chưa thể làm mới danh sách. Vui lòng thử tải lại.",
         refreshed ? "success" : "info",
       );
@@ -665,15 +733,26 @@ export const SubmissionsView: React.FC<{
       onShowToast?.("Vui lòng chọn tệp thay thế!", "error");
       return;
     }
-    const category: "FinalReport" | "Product" | "Evidence" =
+    const category: SubmissionUploadCategory =
       replaceTarget.fileCategory === "Đánh giá DN"
         ? "Evidence"
         : replaceTarget.fileCategory === "Báo cáo cuối kỳ"
           ? "FinalReport"
-          : "Product";
+          : replaceTarget.fileCategory === "Báo cáo lưu khoa"
+            ? "ArchiveReport"
+            : "Product";
     const maxSizeMb = category === "Evidence" ? 15 : 50;
+    if (category === "ArchiveReport" && !archiveReportWindowOpen) {
+      onShowToast?.("Báo cáo lưu khoa chỉ được nộp trong thời hạn do khoa cấu hình.", "error");
+      return;
+    }
     if (!isUploadFileAllowed(replaceFile, category)) {
-      onShowToast?.("Định dạng tệp thay thế không được hỗ trợ cho hồ sơ này.", "error");
+      onShowToast?.(
+        category === "ArchiveReport"
+          ? "Chỉ chấp nhận tệp báo cáo định dạng PDF (.pdf)"
+          : "Định dạng tệp thay thế không được hỗ trợ cho hồ sơ này.",
+        "error",
+      );
       return;
     }
     if (replaceFile.size > maxSizeMb * 1024 * 1024) {
@@ -712,16 +791,23 @@ export const SubmissionsView: React.FC<{
     const file = event.target.files?.[0];
     event.currentTarget.value = "";
     if (!file || !replaceTarget) return;
-    const category: "FinalReport" | "Product" | "Evidence" =
+    const category: SubmissionUploadCategory =
       replaceTarget.fileCategory === "Đánh giá DN"
         ? "Evidence"
         : replaceTarget.fileCategory === "Báo cáo cuối kỳ"
           ? "FinalReport"
-          : "Product";
+          : replaceTarget.fileCategory === "Báo cáo lưu khoa"
+            ? "ArchiveReport"
+            : "Product";
     const maxSizeMb = category === "Evidence" ? 15 : 50;
     if (!isUploadFileAllowed(file, category)) {
       setReplaceFile(null);
-      onShowToast?.("Định dạng tệp thay thế không được hỗ trợ cho hồ sơ này.", "error");
+      onShowToast?.(
+        category === "ArchiveReport"
+          ? "Chỉ chấp nhận tệp báo cáo định dạng PDF (.pdf)"
+          : "Định dạng tệp thay thế không được hỗ trợ cho hồ sơ này.",
+        "error",
+      );
       return;
     }
     if (file.size > maxSizeMb * 1024 * 1024) {
@@ -857,7 +943,7 @@ export const SubmissionsView: React.FC<{
         )}
       </div>
       {/* 2. 4 THẺ THAO TÁC THEO DANH MỤC HỒ SƠ */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
         {/* THẺ 1: BÁO CÁO TUẦN */}
         <div className="rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs flex flex-col justify-between space-y-3">
           <div className="space-y-1.5">
@@ -1035,6 +1121,67 @@ export const SubmissionsView: React.FC<{
           </button>
           {canCancelSubmission(employerEvidence) && renderCancelButton(employerEvidence!, true)}
         </div>
+
+        {/* THẺ 5: BÁO CÁO CHỈNH SỬA LƯU KHOA */}
+        <div className="flex flex-col justify-between space-y-3 rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs">
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-[#026aa7]">
+                <FileText className="h-4 w-4" aria-hidden="true" />
+                <h3 className="text-sm font-bold text-slate-900">Báo cáo lưu khoa</h3>
+              </div>
+              <span
+                className={`rounded border px-2 py-0.5 text-[10px] font-bold ${
+                  archiveReport?.status === "Approved"
+                    ? "border-[#7bc043]/40 bg-[#7bc043]/10 text-[#426f20]"
+                    : archiveReport?.status === "RevisionRequested" || archiveReport?.status === "Rejected"
+                      ? "border-rose-200 bg-rose-50 text-rose-700"
+                      : archiveReport
+                        ? "border-sky-200 bg-sky-50 text-sky-700"
+                        : "border-slate-200 bg-slate-100 text-slate-600"
+                }`}
+              >
+                {archiveReport?.status === "Approved"
+                  ? "Đã duyệt lưu khoa"
+                  : archiveReport?.status === "RevisionRequested"
+                    ? "Cần bổ sung"
+                    : archiveReport?.status === "Rejected"
+                      ? "Từ chối"
+                      : archiveReport
+                        ? "Chờ duyệt"
+                        : "Chưa nộp"}
+              </span>
+            </div>
+            <p className="text-xs leading-relaxed text-slate-600">
+              Nộp bản PDF hoàn thiện sau khi chỉnh sửa theo góp ý để lưu trữ cấp Khoa. Tối đa 50MB.
+            </p>
+            <p className="text-[10.5px] font-medium text-slate-500">{archiveReportWindowMessage}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() =>
+              isRevisionRequested(archiveReport)
+                ? openRevisionUpload(archiveReport)
+                : openUploadFor("ArchiveReport")
+            }
+            disabled={
+              !hasAssignedCompany ||
+              !internshipId ||
+              !archiveReportWindowOpen ||
+              Boolean(archiveReport && !isRevisionRequested(archiveReport))
+            }
+            title={!hasAssignedCompany ? "Cần được phân công đơn vị thực tập trước khi nộp hồ sơ." : undefined}
+            className="flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg bg-[#026aa7] px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-[#025a8e] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Upload className="h-3.5 w-3.5" aria-hidden="true" />
+            {isRevisionRequested(archiveReport)
+              ? "Nộp bản chỉnh sửa"
+              : archiveReport
+                ? archiveReport.status === "Approved" ? "Đã duyệt lưu khoa" : "Đã nộp"
+                : "Nộp báo cáo lưu khoa"}
+          </button>
+          {canCancelSubmission(archiveReport) && renderCancelButton(archiveReport!, true)}
+        </div>
       </div>
 
       {/* 4. MAIN WORKSPACE: BẢNG HỒ SƠ & CỘT GÓP Ý GIẢNG VIÊN */}
@@ -1080,6 +1227,7 @@ export const SubmissionsView: React.FC<{
                     <option value="Tất cả">Tất cả loại file</option>
                     <option value="Báo cáo tuần">Báo cáo tuần</option>
                     <option value="Báo cáo cuối kỳ">Báo cáo cuối kỳ</option>
+                    <option value="Báo cáo lưu khoa">Báo cáo lưu khoa</option>
                     <option value="Đánh giá DN">Đánh giá DN</option>
                     <option value="Sản phẩm sáng tạo">Sản phẩm sáng tạo</option>
                   </select>
@@ -1152,7 +1300,7 @@ export const SubmissionsView: React.FC<{
                             <Upload className="mx-auto h-8 w-8 text-slate-400" aria-hidden="true" />
                             <p className="text-sm font-semibold text-slate-700">Bạn chưa nộp hồ sơ nào.</p>
                             <p className="text-xs leading-relaxed text-slate-500">
-                              Bấm “Tải lên hồ sơ” để nộp Báo cáo cuối kỳ hoặc Phiếu đánh giá của Doanh nghiệp.
+                              Dùng các thẻ hồ sơ phía trên để nộp Báo cáo cuối kỳ, Báo cáo lưu khoa hoặc Phiếu đánh giá doanh nghiệp.
                             </p>
                           </div>
                         ) : "Không có tài nguyên phù hợp với bộ lọc hiện tại."}
@@ -1442,18 +1590,22 @@ export const SubmissionsView: React.FC<{
           >
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
-                <Upload className="w-4 h-4 text-blue-600" />
+                <Upload className={`w-4 h-4 ${uploadCategory === "ArchiveReport" ? "text-[#026aa7]" : "text-blue-600"}`} />
                 {uploadCategory === "FinalReport"
                   ? "Nộp báo cáo cuối kỳ"
                   : uploadCategory === "Evidence"
-                  ? "Nộp đánh giá doanh nghiệp"
-                  : "Nộp sản phẩm thực tế"}
+                    ? "Nộp đánh giá doanh nghiệp"
+                    : uploadCategory === "ArchiveReport"
+                      ? "Nộp báo cáo lưu khoa"
+                      : "Nộp sản phẩm thực tế"}
               </h3>
               <button
                 type="button"
                 onClick={() => setShowUploadModal(false)}
                 aria-label="Đóng cửa sổ nộp hồ sơ"
-                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                className={`inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 ${
+                  uploadCategory === "ArchiveReport" ? "focus-visible:ring-[#026aa7]" : "focus-visible:ring-blue-500"
+                }`}
               >
                 <X className="h-4 w-4" aria-hidden="true" />
               </button>
@@ -1465,15 +1617,19 @@ export const SubmissionsView: React.FC<{
                   {uploadCategory === "FinalReport"
                     ? "Báo cáo thực tập tốt nghiệp"
                     : uploadCategory === "Evidence"
-                    ? "Phiếu đánh giá / xác nhận của doanh nghiệp"
-                    : "Sản phẩm thực tế"}
+                      ? "Phiếu đánh giá / xác nhận của doanh nghiệp"
+                      : uploadCategory === "ArchiveReport"
+                        ? "Báo cáo chỉnh sửa lưu khoa"
+                        : "Sản phẩm thực tế"}
                 </p>
                 <p className="mt-1 text-[11px] leading-relaxed text-slate-600">
                   {uploadCategory === "FinalReport"
                     ? "Nộp file báo cáo tổng kết cuối kỳ của đợt thực tập."
                     : uploadCategory === "Evidence"
-                    ? "Nhập điểm doanh nghiệp và tải ảnh chụp phiếu có mộc đỏ. Điểm chỉ để giảng viên tham khảo."
-                    : "Tải tài liệu, slide, source code hoặc liên kết triển khai."}
+                      ? "Nhập điểm doanh nghiệp và tải ảnh chụp phiếu có mộc đỏ. Điểm chỉ để giảng viên tham khảo."
+                      : uploadCategory === "ArchiveReport"
+                        ? "Tải duy nhất một bản PDF hoàn thiện sau khi chỉnh sửa theo góp ý."
+                        : "Tải tài liệu, slide, source code hoặc liên kết triển khai."}
                 </p>
               </div>
 
@@ -1485,12 +1641,16 @@ export const SubmissionsView: React.FC<{
                     uploadCategory === "Evidence"
                       ? "Phiếu đánh giá doanh nghiệp"
                       : uploadCategory === "Product"
-                      ? "Tên sản phẩm thực tế"
-                      : "Báo cáo thực tập tốt nghiệp"
+                        ? "Tên sản phẩm thực tế"
+                        : uploadCategory === "ArchiveReport"
+                          ? "Báo cáo chỉnh sửa lưu khoa"
+                          : "Báo cáo thực tập tốt nghiệp"
                   }
                   value={uploadTitle}
                   onChange={(e) => setUploadTitle(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none font-medium focus:border-blue-500 focus:bg-white"
+                  className={`w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-medium outline-none focus:bg-white ${
+                    uploadCategory === "ArchiveReport" ? "focus:border-[#026aa7]" : "focus:border-blue-500"
+                  }`}
                 />
               </div>
 
@@ -1530,6 +1690,17 @@ export const SubmissionsView: React.FC<{
                   </label>
                 </div>
               )}
+              {uploadCategory === "ArchiveReport" && (
+                <div
+                  className={`rounded-lg border px-3 py-2 text-xs ${
+                    archiveReportWindowOpen
+                      ? "border-[#7bc043]/40 bg-[#7bc043]/10 text-slate-800"
+                      : "border-amber-200 bg-amber-50 text-amber-900"
+                  }`}
+                >
+                  {archiveReportWindowMessage}
+                </div>
+              )}
 
               <div>
                 <label className="block font-bold text-slate-700 mb-1">
@@ -1552,20 +1723,26 @@ export const SubmissionsView: React.FC<{
                   }}
                   className={`block cursor-pointer space-y-1 rounded-xl border-2 border-dashed p-4 text-center transition-colors ${
                     isUploadDragging
-                      ? "border-blue-500 bg-blue-50"
-                      : "border-slate-300 bg-slate-50/60 hover:border-blue-400"
+                      ? uploadCategory === "ArchiveReport"
+                        ? "border-[#026aa7] bg-[#026aa7]/5"
+                        : "border-blue-500 bg-blue-50"
+                      : uploadCategory === "ArchiveReport"
+                        ? "border-slate-300 bg-slate-50/60 hover:border-[#026aa7]"
+                        : "border-slate-300 bg-slate-50/60 hover:border-blue-400"
                   }`}
                 >
                   <input
                     ref={uploadFileInputRef}
                     type="file"
-                    multiple
+                    multiple={uploadCategory !== "ArchiveReport"}
                     accept={
                       uploadCategory === "Evidence"
                         ? "image/jpeg,image/png,image/webp,image/gif"
                         : uploadCategory === "FinalReport"
-                        ? ".pdf,.doc,.docx"
-                        : ".pdf,.doc,.docx,.zip,.rar,.ppt,.pptx,.png,.jpg,.jpeg"
+                          ? ".pdf,.doc,.docx"
+                          : uploadCategory === "ArchiveReport"
+                            ? ".pdf"
+                            : ".pdf,.doc,.docx,.zip,.rar,.ppt,.pptx,.png,.jpg,.jpeg"
                     }
                     className="hidden"
                     onChange={(event) => {
@@ -1573,20 +1750,24 @@ export const SubmissionsView: React.FC<{
                       event.currentTarget.value = "";
                     }}
                   />
-                  <Upload className="w-5 h-5 text-blue-600 mx-auto" />
+                  <Upload className={`mx-auto h-5 w-5 ${uploadCategory === "ArchiveReport" ? "text-[#026aa7]" : "text-blue-600"}`} />
                   <p className="font-bold text-slate-800 text-xs">
                     {isUploadDragging
                       ? "Thả tệp vào đây"
                       : uploadCategory === "Evidence"
                         ? "Chọn hoặc kéo thả ảnh phiếu xác nhận"
-                        : "Chọn hoặc kéo thả tệp trên thiết bị"}
+                        : uploadCategory === "ArchiveReport"
+                          ? "Chọn một tệp PDF"
+                          : "Chọn hoặc kéo thả tệp trên thiết bị"}
                   </p>
                   <p className="break-words text-[11px] font-medium text-slate-500">
                     {uploadCategory === "FinalReport"
                       ? "PDF, DOC, DOCX — tối đa 50MB (bắt buộc)"
                       : uploadCategory === "Evidence"
-                      ? "Ảnh JPG, PNG, WEBP hoặc GIF — tối đa 15MB (bắt buộc)"
-                      : "PDF, Word, ZIP, RAR, PowerPoint, PNG hoặc JPG — tối đa 50MB mỗi tệp"}
+                        ? "Ảnh JPG, PNG, WEBP hoặc GIF — tối đa 15MB (bắt buộc)"
+                        : uploadCategory === "ArchiveReport"
+                          ? "Chỉ PDF (.pdf) — tối đa 50MB, một tệp duy nhất"
+                          : "PDF, Word, ZIP, RAR, PowerPoint, PNG hoặc JPG — tối đa 50MB mỗi tệp"}
                   </p>
                 </label>
                 {uploadFiles.length > 0 && (
@@ -1594,7 +1775,11 @@ export const SubmissionsView: React.FC<{
                     {uploadFiles.map((file) => (
                       <li
                         key={`${file.name}-${file.size}-${file.lastModified}`}
-                        className="flex min-w-0 items-center justify-between gap-2 rounded-lg border border-blue-200 bg-blue-50/60 px-3 py-2"
+                        className={`flex min-w-0 items-center justify-between gap-2 rounded-lg border px-3 py-2 ${
+                          uploadCategory === "ArchiveReport"
+                            ? "border-[#026aa7]/20 bg-[#026aa7]/5"
+                            : "border-blue-200 bg-blue-50/60"
+                        }`}
                       >
                         <span className="min-w-0 truncate font-medium text-slate-700">
                           {file.name}
@@ -1614,7 +1799,7 @@ export const SubmissionsView: React.FC<{
                 )}
               </div>
 
-              {uploadCategory !== "Evidence" && (
+              {uploadCategory !== "Evidence" && uploadCategory !== "ArchiveReport" && (
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="block font-bold text-slate-700">
@@ -1709,6 +1894,8 @@ export const SubmissionsView: React.FC<{
                   (uploadCategory === "Evidence" &&
                     (!evidenceWindowOpen || !employerScoreValid || !hasEmployerImage)) ||
                   (uploadCategory === "FinalReport" && !hasRequiredUploadFile) ||
+                  (uploadCategory === "ArchiveReport" &&
+                    (!archiveReportWindowOpen || !hasRequiredUploadFile)) ||
                   (uploadCategory === "Product" && !hasAnyResource)
                 }
                 className="px-4 py-2 bg-[#026aa7] hover:bg-[#025a8f] text-white font-bold text-xs rounded-lg shadow-xs disabled:opacity-50 cursor-pointer"
@@ -1717,9 +1904,11 @@ export const SubmissionsView: React.FC<{
                   ? "Đang nộp..."
                   : uploadCategory === "Evidence"
                   ? "Nộp điểm & ảnh phiếu"
-                  : uploadCategory === "FinalReport"
-                  ? "Nộp báo cáo cuối kỳ"
-                  : "Nộp sản phẩm"}
+                    : uploadCategory === "FinalReport"
+                      ? "Nộp báo cáo cuối kỳ"
+                      : uploadCategory === "ArchiveReport"
+                        ? "Nộp báo cáo lưu khoa"
+                        : "Nộp sản phẩm"}
               </button>
             </div>
           </form>
@@ -1763,7 +1952,9 @@ export const SubmissionsView: React.FC<{
                         ? "image/jpeg,image/png,image/webp,image/gif"
                         : replaceTarget.fileCategory === "Báo cáo cuối kỳ"
                           ? ".pdf,.doc,.docx"
-                          : ".pdf,.doc,.docx,.zip,.rar,.ppt,.pptx,.png,.jpg,.jpeg"
+                          : replaceTarget.fileCategory === "Báo cáo lưu khoa"
+                            ? ".pdf"
+                            : ".pdf,.doc,.docx,.zip,.rar,.ppt,.pptx,.png,.jpg,.jpeg"
                     }
                     className="hidden"
                     onChange={handleReplaceFileSelection}
@@ -1799,7 +1990,10 @@ export const SubmissionsView: React.FC<{
               </button>
               <button
                 type="submit"
-                disabled={isSubmitting}
+                disabled={
+                  isSubmitting ||
+                  (replaceTarget.fileCategory === "Báo cáo lưu khoa" && !archiveReportWindowOpen)
+                }
                 className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-lg shadow-xs disabled:opacity-50 cursor-pointer"
               >
                 {isSubmitting ? "Đang nộp lại..." : "Lưu thay thế"}

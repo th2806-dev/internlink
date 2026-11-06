@@ -33,7 +33,7 @@ export interface StudentArchiveDocumentItemDto {
   submittedAt?: string | null;
 }
 
-export type ArchiveDocumentType = "all" | "weekly" | "final" | "evidence" | "product" | "other";
+export type ArchiveDocumentType = "all" | "weekly" | "final" | "evidence" | "product" | "archive" | "other";
 
 export const adminReportArchiveService = {
   getStudents(semesterId: string): Promise<WeeklyReportArchiveStudentDto[]> {

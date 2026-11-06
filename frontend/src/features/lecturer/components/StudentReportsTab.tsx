@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   CheckCircle2,
   Clock,
@@ -7,6 +7,7 @@ import {
   FileText,
   RefreshCw,
   AlertTriangle,
+  X,
 } from "lucide-react";
 import { Panel } from "../../../components/common/Panel";
 import { getApiErrorMessage } from "../../../lib/apiClient";
@@ -18,6 +19,7 @@ import {
   mapSubmissionTypeToUi,
 } from "../../../lib/portalMappers";
 import type { WeeklyReportDto, SubmissionDto } from "../../../types/api";
+import { PdfViewer } from "./PdfViewer";
 
 interface StudentReportsTabProps {
   internshipId: string;
@@ -46,6 +48,16 @@ export function StudentReportsTab({
   const [downloadingKey, setDownloadingKey] = useState<string | null>(null);
   const [submissionTypeFilter, setSubmissionTypeFilter] = useState("all");
   const [submissionStatusFilter, setSubmissionStatusFilter] = useState("all");
+  const [preview, setPreview] = useState<{ url: string; fileName: string } | null>(null);
+  const [previewPage, setPreviewPage] = useState(1);
+  const [previewPages, setPreviewPages] = useState(1);
+  const [revisionTargetId, setRevisionTargetId] = useState<string | null>(null);
+  const [revisionComment, setRevisionComment] = useState("");
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
+
+  useEffect(() => () => {
+    if (preview?.url) URL.revokeObjectURL(preview.url);
+  }, [preview]);
 
   // Sort trên BẢN SAO — không mutate array props của parent (React strict-mode & memo-safe).
   const sortedWeeklyReports = useMemo(
@@ -61,14 +73,14 @@ export function StudentReportsTab({
   );
 
   const weeklyStatusClass = (status: string) => {
-    if (status === "Approved") return "bg-emerald-50 text-emerald-700 border-emerald-200";
+    if (status === "Approved") return "bg-[#7bc043]/10 text-[#426f20] border-[#7bc043]/40";
     if (status === "RevisionRequested") return "bg-rose-50 text-rose-700 border-rose-200";
     if (status === "Submitted") return "bg-blue-50 text-blue-700 border-blue-200";
     return "bg-slate-100 text-slate-600 border-slate-200";
   };
 
   const submissionStatusClass = (status: string) => {
-    if (status === "Approved") return "bg-emerald-50 text-emerald-700 border-emerald-200";
+    if (status === "Approved") return "bg-[#7bc043]/10 text-[#426f20] border-[#7bc043]/40";
     if (status === "RevisionRequested") return "bg-rose-50 text-rose-700 border-rose-200";
     return "bg-blue-50 text-blue-700 border-blue-200";
   };
@@ -81,6 +93,69 @@ export function StudentReportsTab({
       onShowToast?.(getApiErrorMessage(error));
     } finally {
       setDownloadingKey(null);
+    }
+  };
+
+  const previewArchiveReport = async (submission: SubmissionDto) => {
+    setDownloadingKey(`preview-${submission.id}`);
+    try {
+      const fileAsset = submission.assets?.find(
+        (asset) => asset.assetType === "file" && asset.fileName,
+      );
+      const result = fileAsset
+        ? await submissionApiService.downloadAsset(
+            submission.id,
+            fileAsset.id,
+            fileAsset.fileName ?? submission.title ?? "BaoCaoLuuKhoa.pdf",
+            false,
+          )
+        : await submissionApiService.download(
+            submission.id,
+            submission.fileName ?? submission.title ?? "BaoCaoLuuKhoa.pdf",
+            false,
+          );
+      if (!result.blob.type.toLowerCase().includes("pdf")) {
+        throw new Error("Tệp báo cáo lưu khoa không phải PDF hợp lệ.");
+      }
+      if (preview?.url) URL.revokeObjectURL(preview.url);
+      setPreview({ url: URL.createObjectURL(result.blob), fileName: result.filename });
+      setPreviewPage(1);
+    } catch (error) {
+      onShowToast?.(getApiErrorMessage(error));
+    } finally {
+      setDownloadingKey(null);
+    }
+  };
+
+  const reviewArchiveReport = async (
+    submission: SubmissionDto,
+    status: "Đã duyệt" | "Yêu cầu sửa" | "Từ chối",
+  ) => {
+    if (status === "Yêu cầu sửa" && !revisionComment.trim()) {
+      onShowToast?.("Vui lòng nhập lý do cần chỉnh sửa.");
+      return;
+    }
+    setReviewingId(submission.id);
+    try {
+      await submissionApiService.review(
+        submission.id,
+        status,
+        status === "Yêu cầu sửa" ? revisionComment : undefined,
+      );
+      setRevisionTargetId(null);
+      setRevisionComment("");
+      onShowToast?.(
+        status === "Đã duyệt"
+          ? "Đã duyệt báo cáo lưu khoa."
+          : status === "Yêu cầu sửa"
+            ? "Đã gửi yêu cầu chỉnh sửa báo cáo lưu khoa."
+            : "Đã từ chối báo cáo lưu khoa.",
+      );
+      await onRefresh?.();
+    } catch (error) {
+      onShowToast?.(getApiErrorMessage(error));
+    } finally {
+      setReviewingId(null);
     }
   };
 
@@ -134,6 +209,7 @@ export function StudentReportsTab({
                 <option value="FinalReport">Báo cáo cuối kỳ</option>
                 <option value="Product">Sản phẩm thực tế</option>
                 <option value="Evidence">Đánh giá doanh nghiệp</option>
+                <option value="ArchiveReport">Báo cáo chỉnh sửa lưu khoa</option>
               </select>
               <select
                 aria-label="Lọc hồ sơ theo trạng thái"
@@ -253,6 +329,11 @@ export function StudentReportsTab({
                         </td>
                         <td className="py-3 px-3 font-bold text-slate-900">
                           {s.title ?? "—"}
+                          {s.type === "ArchiveReport" && (
+                            <span className="ml-2 inline-flex rounded-full border border-[#026aa7]/20 bg-[#026aa7]/5 px-2 py-0.5 text-[10px] font-semibold text-[#025a8e]">
+                              Lưu khoa (PDF)
+                            </span>
+                          )}
                           {s.type.toLowerCase() === "evidence" && s.employerScore != null && (
                             <span className="mt-1 block text-[11px] font-semibold text-blue-700">
                               Điểm doanh nghiệp: {s.employerScore.toFixed(1)}/10 · tham khảo
@@ -309,6 +390,83 @@ export function StudentReportsTab({
                           >
                             {mapSubmissionStatusToUi(s.status)}
                           </span>
+                          {s.type === "ArchiveReport" && (
+                            <div className="mt-2 flex flex-wrap justify-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => void previewArchiveReport(s)}
+                                disabled={downloadingKey === `preview-${s.id}`}
+                                className="inline-flex min-h-8 items-center gap-1 rounded-md border border-slate-200 px-2 text-[10px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                              >
+                                <Eye className="h-3 w-3" aria-hidden="true" />
+                                {downloadingKey === `preview-${s.id}` ? "Đang mở…" : "Xem PDF"}
+                              </button>
+                              {(s.status === "Submitted" || s.status === "Reviewed") && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => void reviewArchiveReport(s, "Đã duyệt")}
+                                    disabled={reviewingId !== null}
+                                    className="inline-flex min-h-8 items-center gap-1 rounded-md bg-[#7bc043]/10 px-2 text-[10px] font-semibold text-[#426f20] hover:bg-[#7bc043]/20 disabled:opacity-50"
+                                  >
+                                    <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
+                                    Duyệt đạt
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setRevisionTargetId(revisionTargetId === s.id ? null : s.id);
+                                      setRevisionComment("");
+                                    }}
+                                    disabled={reviewingId !== null}
+                                    className="inline-flex min-h-8 items-center gap-1 rounded-md border border-rose-200 px-2 text-[10px] font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50"
+                                  >
+                                    Yêu cầu chỉnh sửa
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => void reviewArchiveReport(s, "Từ chối")}
+                                    disabled={reviewingId !== null}
+                                    className="inline-flex min-h-8 items-center gap-1 rounded-md border border-slate-200 px-2 text-[10px] font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                                  >
+                                    Từ chối
+                                  </button>
+                                </>
+                              )}
+                              {revisionTargetId === s.id && (
+                                <div className="mt-1 w-full space-y-1.5 text-left">
+                                  <label className="sr-only" htmlFor={`archive-feedback-${s.id}`}>
+                                    Lý do cần chỉnh sửa
+                                  </label>
+                                  <textarea
+                                    id={`archive-feedback-${s.id}`}
+                                    rows={2}
+                                    value={revisionComment}
+                                    onChange={(event) => setRevisionComment(event.target.value)}
+                                    placeholder="Nhập lý do cần chỉnh sửa (bắt buộc)"
+                                    className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/30"
+                                  />
+                                  <div className="flex justify-end gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => setRevisionTargetId(null)}
+                                      className="inline-flex min-h-8 items-center gap-1 rounded-md border border-slate-200 px-2 text-[10px] font-semibold text-slate-600"
+                                    >
+                                      Hủy
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => void reviewArchiveReport(s, "Yêu cầu sửa")}
+                                      disabled={!revisionComment.trim() || reviewingId !== null}
+                                      className="inline-flex min-h-8 items-center gap-1 rounded-md bg-[#026aa7] px-2 text-[10px] font-semibold text-white hover:bg-[#025a8e] disabled:opacity-50"
+                                    >
+                                      {reviewingId === s.id ? "Đang gửi…" : "Gửi yêu cầu"}
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </td>
                       </tr>
                       );
@@ -320,6 +478,60 @@ export function StudentReportsTab({
           </div>
         )}
       </Panel>
+      {preview && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/70 p-3 sm:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Xem trước ${preview.fileName}`}
+          onClick={() => setPreview(null)}
+        >
+          <div
+            className="flex max-h-full w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+              <p className="truncate text-sm font-semibold text-slate-800">{preview.fileName}</p>
+              <button
+                type="button"
+                onClick={() => setPreview(null)}
+                aria-label="Đóng xem trước PDF"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-auto bg-slate-100 p-3">
+              <PdfViewer
+                file={{ url: preview.url }}
+                pageNumber={previewPage}
+                scale={1}
+                onLoadSuccess={setPreviewPages}
+                onLoadError={(message) => onShowToast?.(message)}
+              />
+            </div>
+            <div className="flex items-center justify-center gap-3 border-t border-slate-200 px-4 py-2 text-xs">
+              <button
+                type="button"
+                onClick={() => setPreviewPage((page) => Math.max(1, page - 1))}
+                disabled={previewPage <= 1}
+                className="min-h-9 rounded-md border border-slate-200 px-3 font-semibold disabled:opacity-50"
+              >
+                Trang trước
+              </button>
+              <span className="text-slate-600">Trang {previewPage} / {previewPages}</span>
+              <button
+                type="button"
+                onClick={() => setPreviewPage((page) => Math.min(previewPages, page + 1))}
+                disabled={previewPage >= previewPages}
+                className="min-h-9 rounded-md border border-slate-200 px-3 font-semibold disabled:opacity-50"
+              >
+                Trang sau
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

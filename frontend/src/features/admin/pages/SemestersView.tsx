@@ -24,6 +24,7 @@ import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
 import { CreateSemesterModal } from "../components/modals/CreateSemesterModal";
 import { SchoolAcademicTermsPanel } from "../components/SchoolAcademicTermsPanel";
 import { EvidenceDeadlinePanel } from "../components/EvidenceDeadlinePanel";
+import { ArchiveReportDeadlinePanel } from "../components/ArchiveReportDeadlinePanel";
 import { AssignLecturerModal } from "../components/modals/AssignLecturerModal";
 import { ImportStudentsModal } from "../components/modals/ImportStudentsModal";
 import { ImportLecturersModal } from "../components/modals/ImportLecturersModal";
@@ -240,7 +241,10 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
       {isSuperAdmin && <SchoolAcademicTermsPanel onShowToast={onShowToast} />}
 
       {canMutateSemesters && hasRealSemester && (
-        <EvidenceDeadlinePanel semesterId={activeSem.id} semesterName={activeSem.name} />
+        <>
+          <EvidenceDeadlinePanel semesterId={activeSem.id} semesterName={activeSem.name} />
+          <ArchiveReportDeadlinePanel semesterId={activeSem.id} semesterName={activeSem.name} />
+        </>
       )}
 
       {/* Current semester summary and semester list */}
