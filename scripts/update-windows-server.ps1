@@ -172,9 +172,16 @@ Import-Module WebAdministration -ErrorAction Stop
 $apiSite = Get-Website -Name 'InternLinkApi' -ErrorAction Stop
 
 # Clean up / stop legacy separate IIS frontend site if it exists
-if (Get-Website -Name 'InternLink' -ErrorAction SilentlyContinue) {
-    Stop-Website -Name 'InternLink' -ErrorAction SilentlyContinue
-    Get-WebBinding -Name 'InternLink' | Remove-WebBinding -ErrorAction SilentlyContinue
+try {
+    $legacySite = Get-Website -Name 'InternLink' -ErrorAction SilentlyContinue
+    if ($legacySite) {
+        if ($legacySite.State -eq 'Started') {
+            Stop-Website -Name 'InternLink' -ErrorAction SilentlyContinue
+        }
+        Get-WebBinding -Name 'InternLink' -ErrorAction SilentlyContinue | Remove-WebBinding -ErrorAction SilentlyContinue
+    }
+} catch {
+    # Suppress non-critical COM errors from already-stopped legacy site
 }
 
 $otherPort80Bindings = @(

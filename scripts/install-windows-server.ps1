@@ -129,9 +129,16 @@ Set-ItemProperty 'IIS:\AppPools\InternLinkApi' -Name processModel.idleTimeout -V
 Set-ItemProperty 'IIS:\AppPools\InternLinkApi' -Name startMode -Value 'AlwaysRunning'
 
 # Remove legacy separate frontend site if present
-if (Get-Website -Name 'InternLink' -ErrorAction SilentlyContinue) {
-    Stop-Website -Name 'InternLink' -ErrorAction SilentlyContinue
-    Remove-Website -Name 'InternLink' -ErrorAction SilentlyContinue
+try {
+    $legacySite = Get-Website -Name 'InternLink' -ErrorAction SilentlyContinue
+    if ($legacySite) {
+        if ($legacySite.State -eq 'Started') {
+            Stop-Website -Name 'InternLink' -ErrorAction SilentlyContinue
+        }
+        Remove-Website -Name 'InternLink' -ErrorAction SilentlyContinue
+    }
+} catch {
+    # Suppress non-critical COM errors from legacy site
 }
 
 if (-not (Get-Website -Name 'InternLinkApi' -ErrorAction SilentlyContinue)) {
