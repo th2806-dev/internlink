@@ -45,14 +45,9 @@ public class InternshipGradingService : IInternshipGradingService
         var schedules = await _context.SemesterReportSchedules
             .AsNoTracking()
             .Where(s => s.SemesterId == semesterId && !s.IsDeleted
-                && (s.LecturerId == null || (lecturerId != null && s.LecturerId == lecturerId)))
+                && (!lecturerId.HasValue || s.LecturerId == null || s.LecturerId == lecturerId))
             .OrderBy(s => s.WeekNumber)
             .ToListAsync();
-        schedules = schedules
-            .GroupBy(s => s.WeekNumber)
-            .Select(g => g.OrderByDescending(s => s.LecturerId != null).First())
-            .OrderBy(s => s.WeekNumber)
-            .ToList();
 
         if (schedules.Count == 0)
         {
@@ -60,14 +55,9 @@ public class InternshipGradingService : IInternshipGradingService
             schedules = await _context.SemesterReportSchedules
                 .AsNoTracking()
                 .Where(s => s.SemesterId == semesterId && !s.IsDeleted
-                    && (s.LecturerId == null || (lecturerId != null && s.LecturerId == lecturerId)))
+                    && (!lecturerId.HasValue || s.LecturerId == null || s.LecturerId == lecturerId))
                 .OrderBy(s => s.WeekNumber)
                 .ToListAsync();
-            schedules = schedules
-                .GroupBy(s => s.WeekNumber)
-                .Select(g => g.OrderByDescending(s => s.LecturerId != null).First())
-                .OrderBy(s => s.WeekNumber)
-                .ToList();
         }
 
         // 2) Sinh viên: internship trong kỳ, lọc theo GV/phân hệ khoa
@@ -160,11 +150,10 @@ public class InternshipGradingService : IInternshipGradingService
 
         var totalWeeks = Math.Max(semester.TotalWeeks, 1);
         var finalReportWeek = totalWeeks + 1;
-        // Tiến độ / điểm QT chỉ tính tuần báo cáo tuần đang bật trong «Cấu hình báo cáo».
-        var weekSchedules = schedules
+        var summarySchedules = ResolveEffectiveSchedules(schedules, lecturerId);
+        var summaryWeekSchedules = summarySchedules
             .Where(s => s.WeekNumber >= 1 && s.WeekNumber <= totalWeeks)
             .ToList();
-        var finalSchedule = schedules.FirstOrDefault(s => s.WeekNumber == finalReportWeek && s.IsSubmissionOpen);
 
         // 5c) Mức rubric TỪNG TUẦN đã lưu trong Evaluation.WeeklyQualityJson ("{"1":4.0,...}")
         var weeklyQualityByInternship = new Dictionary<Guid, Dictionary<int, decimal>>();
@@ -185,7 +174,7 @@ public class InternshipGradingService : IInternshipGradingService
             }
         }
 
-        var scheduleDtos = weekSchedules.Select(s => new InternshipWeekStatusDto
+        var scheduleDtos = summaryWeekSchedules.Select(s => new InternshipWeekStatusDto
         {
             WeekNumber = s.WeekNumber,
             Title = s.Title,
@@ -217,6 +206,15 @@ public class InternshipGradingService : IInternshipGradingService
                 ? atMap : new Dictionary<int, string>();
             var requiredAbsencesByWeek = requiredAbsencesByStudent.TryGetValue(student.Id, out var absenceMap)
                 ? absenceMap : new Dictionary<int, bool>();
+
+            var studentSchedules = lecturerId.HasValue
+                ? summarySchedules
+                : ResolveEffectiveSchedules(schedules, internship.LecturerId);
+            var weekSchedules = studentSchedules
+                .Where(schedule => schedule.WeekNumber >= 1 && schedule.WeekNumber <= totalWeeks)
+                .ToList();
+            var finalSchedule = studentSchedules.FirstOrDefault(schedule =>
+                schedule.WeekNumber == finalReportWeek && schedule.IsSubmissionOpen);
 
             var weeks = new List<InternshipWeekStatusDto>();
             var lateCount = 0;
@@ -380,6 +378,21 @@ public class InternshipGradingService : IInternshipGradingService
             GeneratedAt = DateTime.UtcNow,
         };
     }
+
+    private static List<SemesterReportSchedule> ResolveEffectiveSchedules(
+        IEnumerable<SemesterReportSchedule> schedules,
+        Guid? lecturerId) =>
+        schedules
+            .Where(schedule => schedule.LecturerId == null
+                || (lecturerId.HasValue && schedule.LecturerId == lecturerId))
+            .GroupBy(schedule => schedule.WeekNumber)
+            .Select(group => group
+                .OrderByDescending(schedule => lecturerId.HasValue && schedule.LecturerId == lecturerId)
+                .ThenByDescending(schedule => schedule.UpdatedAt ?? schedule.CreatedAt)
+                .ThenByDescending(schedule => schedule.CreatedAt)
+                .First())
+            .OrderBy(schedule => schedule.WeekNumber)
+            .ToList();
 
     public async Task<InternshipStudentGradeDto?> SaveGradeAsync(Guid semesterId, SaveInternshipGradeRequestDto dto, Guid actorUserId, Guid? actorLecturerId)
     {

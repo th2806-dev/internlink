@@ -85,7 +85,11 @@ export const ReportsView = ({
     .filter((schedule) => !schedule.isSubmissionOpen || new Date(schedule.dueDate).getTime() < Date.now())
     .map((schedule) => schedule.weekNumber);
 
-  const reports = useLecturerReportsQuery({ semesterId, onReviewed: onRefresh });
+  const reports = useLecturerReportsQuery({
+    semesterId,
+    excludeApproved: reviewArea === "pending",
+    onReviewed: onRefresh,
+  });
   const setWeeklyReportStatus = reports.setStatus;
   useEffect(() => {
     setWeeklyReportStatus(reviewArea === "approved" ? "Approved" : "");
@@ -451,7 +455,7 @@ export const ReportsView = ({
                   </p>
                 </div>
                 <span className="text-xs font-medium text-slate-500">
-                  {pagination.total} báo cáo
+                  {pagination.total} sinh viên
                 </span>
               </div>
               {visibleWeeklyReports.length > 0 ? (
@@ -490,33 +494,35 @@ export const ReportsView = ({
                   </p>
                 </Panel>
               )}
-              <div
-                aria-busy={isFetching}
-                className={`flex items-center justify-end gap-2 transition-opacity duration-150 ${isFetching ? "opacity-60" : ""}`}
-              >
-                <span className="mr-2 text-xs text-slate-500" data-testid="reports-pagination">
-                  {pagination.total === 0
-                    ? "0 / 0"
-                    : `${pagination.from}-${pagination.to} / ${pagination.total}`}
-                </span>
-                <button
-                  type="button"
-                  disabled={!pagination.hasPrev}
-                  onClick={() => goToPage(pagination.page - 1)}
-                  className="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Trước
-                </button>
-                <button
-                  type="button"
-                  disabled={!pagination.hasNext}
-                  onClick={() => goToPage(pagination.page + 1)}
-                  className="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Sau
-                </button>
-              </div>
             </section>
+          )}
+          {(reportType === "Tất cả" || reportType === "Báo cáo tuần") && (
+            <div
+              aria-busy={isFetching}
+              className={`flex items-center justify-end gap-2 transition-opacity duration-150 ${isFetching ? "opacity-60" : ""}`}
+            >
+              <span className="mr-2 text-xs text-slate-500" data-testid="reports-pagination">
+                {pagination.total === 0
+                  ? "0 / 0 sinh viên"
+                  : `${pagination.from}-${pagination.to} / ${pagination.total} sinh viên`}
+              </span>
+              <button
+                type="button"
+                disabled={!pagination.hasPrev}
+                onClick={() => goToPage(pagination.page - 1)}
+                className="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Trước
+              </button>
+              <button
+                type="button"
+                disabled={!pagination.hasNext}
+                onClick={() => goToPage(pagination.page + 1)}
+                className="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Sau
+              </button>
+            </div>
           )}
         </>
       )}

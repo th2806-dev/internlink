@@ -53,7 +53,7 @@ const zipIdsOf = (items: Submission[]) =>
   items.filter((sub) => !isWeekly(sub)).map((sub) => sub.id);
 
 const statusBadge = (status: string) =>
-  status === "Đã duyệt"
+  isApprovedStatus(status)
     ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
     : status === "Chờ duyệt" || status === "Đã nộp" || status === "Cần nhận xét" || status === "Quá hạn"
     ? "bg-amber-100 text-amber-800 border border-amber-200"
@@ -62,7 +62,7 @@ const statusBadge = (status: string) =>
     : "bg-slate-100 text-slate-700";
 
 const statusIcon = (status: string) =>
-  status === "Đã duyệt" ? (
+  isApprovedStatus(status) ? (
     <CheckCircle2 className="w-3 h-3" />
   ) : status === "Yêu cầu sửa" ? (
     <AlertCircle className="w-3 h-3" />
@@ -83,7 +83,7 @@ const reviewOrder = (status: string) =>
       ? 1
       : status === "Từ chối"
         ? 2
-        : status === "Đã duyệt"
+        : isApprovedStatus(status)
           ? 3
           : 2;
 
@@ -148,7 +148,7 @@ export const SubmissionsHub = ({
 
   const stats = useMemo(() => {
     const total = submissions.length;
-    const approved = submissions.filter((s) => s.status === "Đã duyệt").length;
+    const approved = submissions.filter((s) => isApprovedStatus(s.status)).length;
     const pending = submissions.filter((s) => isPendingReview(s.status)).length;
     // "Quá hạn" chỉ thuộc nhóm CHỜ DUYỆT (cần GV xử lý), không đếm vào "cần sửa"
     // để tổng KPI không trùng lặp và khớp bộ lọc tab bên dưới.
@@ -158,7 +158,7 @@ export const SubmissionsHub = ({
 
   const filteredSubmissions = useMemo(() => {
     return submissions.filter((sub) => {
-      if (activeSubTab === "approved" && sub.status !== "Đã duyệt") return false;
+      if (activeSubTab === "approved" && !isApprovedStatus(sub.status)) return false;
       if (activeSubTab === "pending" && !isPendingReview(sub.status)) return false;
       // Tab "Yêu cầu sửa" KHÔNG chứa "Quá hạn" (đã thuộc nhóm chờ duyệt) — khớp KPI stats.
       if (activeSubTab === "revision" && sub.status !== "Yêu cầu sửa") return false;
@@ -253,7 +253,7 @@ export const SubmissionsHub = ({
     );
 
   const groupSummary = (group: StudentGroup) => {
-    const approved = group.items.filter((s) => s.status === "Đã duyệt").length;
+    const approved = group.items.filter((s) => isApprovedStatus(s.status)).length;
     const revision = group.items.filter((s) => s.status === "Yêu cầu sửa").length;
     const pending = group.items.filter((s) => isPendingReview(s.status)).length;
     return { approved, revision, pending };

@@ -103,19 +103,11 @@ public class ExcelExportService : IExcelExportService
             : Math.Max(await _db.Internships.Where(i => internshipIds.Contains(i.Id)).Select(i => (int?)i.Semester!.TotalWeeks).MaxAsync(cancellationToken) ?? 1, 1);
         var finalReportWeek = totalWeeks + 1;
 
-        // Report schedule and attendance use the week count configured on the semester.
-        // Từ khi có lịch override theo GV, cùng 1 tuần có thể có 2 dòng (chung + riêng GV):
-        // merge theo tuần, lịch CÓ GV (override) đè lịch chung — khớp pattern các service khác.
+        // Load shared and lecturer-specific schedules; resolve the effective schedule per internship below.
         var scheduleRows = await _db.SemesterReportSchedules
             .AsNoTracking()
-            .Where(s => !s.IsDeleted && s.IsSubmissionOpen && (!semesterId.HasValue || s.SemesterId == semesterId.Value) && s.WeekNumber >= 1 && s.WeekNumber <= totalWeeks)
+            .Where(s => !s.IsDeleted && (!semesterId.HasValue || s.SemesterId == semesterId.Value) && s.WeekNumber >= 1 && s.WeekNumber <= totalWeeks)
             .ToListAsync(cancellationToken);
-        var reportScheduleByWeek = scheduleRows
-            .GroupBy(s => s.WeekNumber)
-            .ToDictionary(g => g.Key, g => g.OrderByDescending(s => s.LecturerId != null)
-                .ThenByDescending(s => s.UpdatedAt ?? s.CreatedAt)
-                .ThenByDescending(s => s.CreatedAt)
-                .First());
         var studentExportList = new List<InternshipStudentExportDto>();
         int stt = 1;
         var now = DateTime.UtcNow;
@@ -136,6 +128,19 @@ public class ExcelExportService : IExcelExportService
 
             if (internship != null)
             {
+                var reportScheduleByWeek = scheduleRows
+                    .Where(schedule => schedule.LecturerId == null
+                        || (internship.LecturerId.HasValue && schedule.LecturerId == internship.LecturerId))
+                    .GroupBy(schedule => schedule.WeekNumber)
+                    .ToDictionary(group => group.Key, group => group
+                        .OrderByDescending(schedule => internship.LecturerId.HasValue
+                            && schedule.LecturerId == internship.LecturerId)
+                        .ThenByDescending(schedule => schedule.UpdatedAt ?? schedule.CreatedAt)
+                        .ThenByDescending(schedule => schedule.CreatedAt)
+                        .First());
+                var openReportSchedules = reportScheduleByWeek
+                    .Where(pair => pair.Value.IsSubmissionOpen)
+                    .ToDictionary(pair => pair.Key, pair => pair.Value);
                 dto.PhuTrachCongTy = internship.Company?.CompanyName ?? "Chưa có";
                 dto.GvHuongDan = internship.Lecturer?.FullName ?? "Chưa phân công";
                 dto.GhiChu = string.Empty;
@@ -144,9 +149,10 @@ public class ExcelExportService : IExcelExportService
                 var reports23 = internship.WeeklyReports
                     .Where(r => !r.IsDeleted && r.Status != WeeklyReportStatus.Draft)
                     .ToList();
-                var requiredWeeks = reportScheduleByWeek.Keys.ToHashSet();
+                var scheduledWeeks = reportScheduleByWeek.Keys.ToHashSet();
+                var requiredWeeks = openReportSchedules.Keys.ToHashSet();
                 var submittedWeekCount = reports23
-                    .Where(r => r.SubmittedAt.HasValue && requiredWeeks.Contains(r.WeekNumber))
+                    .Where(r => r.SubmittedAt.HasValue && scheduledWeeks.Contains(r.WeekNumber))
                     .Select(r => r.WeekNumber)
                     .Distinct()
                     .Count();
@@ -170,7 +176,7 @@ public class ExcelExportService : IExcelExportService
                     if (!hasReport)
                     {
                         // Chưa nộp quá hạn → tính thiếu bài (chỉ ảnh hưởng Điểm QT)
-                        if (schedule.DueDate < now)
+                        if (schedule.IsSubmissionOpen && schedule.DueDate < now)
                             reportMissingCount++;
                     }
                     else

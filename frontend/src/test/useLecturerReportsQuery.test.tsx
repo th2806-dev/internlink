@@ -77,7 +77,7 @@ describe("useLecturerReportsQuery", () => {
       return makePage([makeReport("r1"), makeReport("r2")], 45, params?.skip ?? 0, params?.take ?? 20);
     });
 
-    const { result } = renderHook(() => useLecturerReportsQuery(), {
+    const { result } = renderHook(() => useLecturerReportsQuery({ excludeApproved: true }), {
       wrapper: createWrapper(),
     });
 
@@ -95,7 +95,12 @@ describe("useLecturerReportsQuery", () => {
     });
 
     const listCall = listCalls()[0];
-    expect(listCall).toMatchObject({ skip: 0, take: 20 });
+    expect(listCall).toMatchObject({
+      skip: 0,
+      take: 20,
+      groupByInternship: true,
+      excludeApproved: true,
+    });
     expect(listCall?.signal).toBeInstanceOf(AbortSignal);
 
     await waitFor(() =>

@@ -130,8 +130,8 @@ describe("ReportsView (lát dọc tiên phong /lecturer/reports)", () => {
     renderReportsView();
 
     // KPI lấy từ tổng server-side (toàn kỳ), không phải đếm theo trang.
-    expect(await screen.findByText("45 báo cáo")).toBeInTheDocument();
-    expect(screen.getByText("1-20 / 45")).toBeInTheDocument();
+    expect(await screen.findByText("45 sinh viên")).toBeInTheDocument();
+    expect(screen.getByText("1-20 / 45 sinh viên")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Trạng thái duyệt" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Báo cáo tuần cần duyệt" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Tải hồ sơ học kỳ" })).toBeInTheDocument();
@@ -219,7 +219,7 @@ describe("ReportsView (lát dọc tiên phong /lecturer/reports)", () => {
 
     expect(await screen.findByText("Không có báo cáo nào")).toBeInTheDocument();
     expect(screen.queryByTestId("request-error-state")).not.toBeInTheDocument();
-    expect(screen.getByText("0 / 0")).toBeInTheDocument();
+    expect(screen.getByText("0 / 0 sinh viên")).toBeInTheDocument();
     expect(screen.queryByTestId("submissions-hub")).not.toBeInTheDocument();
   });
 
@@ -242,7 +242,7 @@ describe("ReportsView (lát dọc tiên phong /lecturer/reports)", () => {
     await user.click(screen.getByRole("button", { name: "Sau" }));
 
     expect(await screen.findByText(/Tuần 1 — Báo cáo page2-r1/)).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByText("21-40 / 45")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("21-40 / 45 sinh viên")).toBeInTheDocument());
     const listCalls = getAllForLecturer.mock.calls
       .map((call) => call[0])
       .filter((p) => (p?.take ?? 0) > 1);

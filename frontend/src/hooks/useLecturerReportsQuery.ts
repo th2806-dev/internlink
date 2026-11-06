@@ -35,6 +35,7 @@ export interface UseLecturerReportsQueryOptions {
   semesterId?: string;
   enabled?: boolean;
   pageSize?: number;
+  excludeApproved?: boolean;
   /** Gọi sau khi duyệt thành công để đồng bộ các cache khác (portal legacy/dashboard). */
   onReviewed?: () => void;
 }
@@ -71,6 +72,7 @@ export function useLecturerReportsQuery(options: UseLecturerReportsQueryOptions 
     semesterId,
     enabled = true,
     pageSize = REPORTS_PAGE_SIZE,
+    excludeApproved = false,
     onReviewed,
   } = options;
   const queryClient = useQueryClient();
@@ -102,6 +104,8 @@ export function useLecturerReportsQuery(options: UseLecturerReportsQueryOptions 
       weekNumber: query.weekNumber,
       page: query.page,
       pageSize,
+      groupByInternship: true,
+      excludeApproved,
     }),
     queryFn: ({ signal }) =>
       weeklyReportService.getAllForLecturer({
@@ -111,6 +115,8 @@ export function useLecturerReportsQuery(options: UseLecturerReportsQueryOptions 
         status: query.status || undefined,
         searchTerm: query.searchTerm || undefined,
         weekNumber: query.weekNumber,
+        groupByInternship: true,
+        excludeApproved,
         signal,
       }),
     // Giữ dữ liệu trang cũ (mờ nhẹ) cho đến khi trang mới về → không giật màn hình trắng.

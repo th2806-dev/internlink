@@ -32,6 +32,8 @@ export const weeklyReportService = {
     status?: string;
     searchTerm?: string;
     weekNumber?: number | null;
+    groupByInternship?: boolean;
+    excludeApproved?: boolean;
     /** Nhận AbortSignal từ TanStack Query để hủy request cũ khi đổi bộ lọc. */
     signal?: AbortSignal;
   } = {}): Promise<PaginatedResponse<WeeklyReportDto>> {
@@ -42,6 +44,8 @@ export const weeklyReportService = {
     if (params.status) query.set("status", params.status);
     if (params.searchTerm?.trim()) query.set("searchTerm", params.searchTerm.trim());
     if (params.weekNumber != null) query.set("weekNumber", String(params.weekNumber));
+    if (params.groupByInternship) query.set("groupByInternship", "true");
+    if (params.excludeApproved) query.set("excludeApproved", "true");
     return apiRequest<PaginatedResponse<WeeklyReportDto>>(`/api/Lecturer/weekly-reports?${query.toString()}`, {
       signal: params.signal,
     });

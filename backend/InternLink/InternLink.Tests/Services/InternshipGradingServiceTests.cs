@@ -305,6 +305,119 @@ public sealed class InternshipGradingServiceTests
     }
 
     [Fact]
+    public async Task GetSummaryAsync_AdminUsesEachInternshipsLecturerScheduleOverride()
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+        await using var db = new AppDbContext(options);
+        var now = DateTime.UtcNow;
+        var semester = new Semester
+        {
+            Id = Guid.NewGuid(),
+            Name = "Kỳ có lịch riêng giảng viên",
+            Term = "Học kỳ I",
+            AcademicYear = "2026 - 2027",
+            TotalWeeks = 1,
+            StartDate = now.Date,
+            EndDate = now.Date.AddDays(30),
+            CreatedAt = now,
+        };
+        var lecturerA = Guid.NewGuid();
+        var lecturerB = Guid.NewGuid();
+        var students = new[]
+        {
+            new Student { Id = Guid.NewGuid(), StudentCode = "SV-A", FullName = "Sinh viên A", CreatedAt = now },
+            new Student { Id = Guid.NewGuid(), StudentCode = "SV-B", FullName = "Sinh viên B", CreatedAt = now },
+        };
+        var internships = new[]
+        {
+            new Internship
+            {
+                Id = Guid.NewGuid(), SemesterId = semester.Id, StudentId = students[0].Id,
+                LecturerId = lecturerA, Status = InternshipStatus.InProgress, CreatedAt = now,
+            },
+            new Internship
+            {
+                Id = Guid.NewGuid(), SemesterId = semester.Id, StudentId = students[1].Id,
+                LecturerId = lecturerB, Status = InternshipStatus.InProgress, CreatedAt = now,
+            },
+        };
+
+        db.Semesters.Add(semester);
+        db.Students.AddRange(students);
+        db.Internships.AddRange(internships);
+        db.SemesterReportSchedules.AddRange(
+            new SemesterReportSchedule
+            {
+                Id = Guid.NewGuid(),
+                SemesterId = semester.Id,
+                WeekNumber = 1,
+                Title = "Lịch chung",
+                DueDate = now.AddDays(-2),
+                IsSubmissionOpen = false,
+                CreatedAt = now,
+            },
+            new SemesterReportSchedule
+            {
+                Id = Guid.NewGuid(),
+                SemesterId = semester.Id,
+                LecturerId = lecturerA,
+                WeekNumber = 1,
+                Title = "Lịch giảng viên A",
+                DueDate = now.AddDays(1),
+                IsSubmissionOpen = true,
+                CreatedAt = now,
+            },
+            new SemesterReportSchedule
+            {
+                Id = Guid.NewGuid(),
+                SemesterId = semester.Id,
+                LecturerId = lecturerB,
+                WeekNumber = 1,
+                Title = "Lịch giảng viên B",
+                DueDate = now.AddDays(2),
+                IsSubmissionOpen = true,
+                CreatedAt = now,
+            });
+        db.WeeklyReports.AddRange(internships.Select(internship => new WeeklyReport
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = internship.Id,
+            WeekNumber = 1,
+            Status = WeeklyReportStatus.Submitted,
+            Title = "Báo cáo tuần 1",
+            Content = "Nội dung báo cáo tuần 1",
+            SubmittedAt = now,
+            CreatedAt = now,
+        }));
+        db.Evaluations.AddRange(internships.Select(internship => new Evaluation
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = internship.Id,
+            WeeklyQualityJson = "{\"1\":5}",
+            CreatedAt = now,
+        }));
+        await db.SaveChangesAsync();
+
+        var service = new InternshipGradingService(
+            db,
+            NullLogger<InternshipGradingService>.Instance,
+            new SemesterService(db));
+
+        var summary = await service.GetSummaryAsync(semester.Id, lecturerId: null, departmentId: null);
+
+        summary.Students.Should().HaveCount(2);
+        summary.Students.Should().ContainSingle(student => student.StudentId == students[0].Id)
+            .Which.Weeks.Should().ContainSingle(week =>
+                week.Title == "Lịch giảng viên A" && week.IsSubmissionOpen && week.Status == "on_time");
+        summary.Students.Should().ContainSingle(student => student.StudentId == students[1].Id)
+            .Which.Weeks.Should().ContainSingle(week =>
+                week.Title == "Lịch giảng viên B" && week.IsSubmissionOpen && week.Status == "on_time");
+        summary.Students.Should().OnlyContain(student => student.QualityScore == 5m);
+    }
+
+    [Fact]
     public async Task GetSummaryAsync_UsesProductApprovalInsteadOfSavedCreativeFlag()
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()

@@ -501,7 +501,9 @@ public class LecturerController : ControllerBase
         [FromQuery] int take = 20,
         [FromQuery] string? status = null,
         [FromQuery] string? searchTerm = null,
-        [FromQuery] int? weekNumber = null)
+        [FromQuery] int? weekNumber = null,
+        [FromQuery] bool groupByInternship = false,
+        [FromQuery] bool excludeApproved = false)
     {
         var userId = User.GetUserId();
         if (userId == null)
@@ -528,6 +530,8 @@ public class LecturerController : ControllerBase
             Status = status,
             SearchTerm = searchTerm,
             WeekNumber = weekNumber,
+            GroupByInternship = groupByInternship,
+            ExcludeApproved = excludeApproved,
         });
         return Ok(ApiResponse<PaginatedResponse<WeeklyReportDto>>.Ok(allReports));
     }

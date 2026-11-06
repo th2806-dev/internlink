@@ -498,6 +498,9 @@ public class LecturerService : ILecturerService
         if (!string.IsNullOrWhiteSpace(filter.Status))
             reportQuery = reportQuery.Where(r => r.Status.ToString() == filter.Status);
 
+        if (filter.ExcludeApproved)
+            reportQuery = reportQuery.Where(r => r.Status != WeeklyReportStatus.Approved);
+
         if (filter.WeekNumber.HasValue)
             reportQuery = reportQuery.Where(r => r.WeekNumber == filter.WeekNumber.Value);
 
@@ -511,13 +514,45 @@ public class LecturerService : ILecturerService
                   r.Internship.Student.StudentCode.ToLower().Contains(term))));
         }
 
-        var total = await reportQuery.CountAsync();
-        var reports = await reportQuery
-            .OrderByDescending(r => r.CreatedAt)
-            .ThenByDescending(r => r.Id)
-            .Skip(Math.Max(0, filter.Skip))
-            .Take(Math.Clamp(filter.Take, 1, 100))
-            .ToListAsync();
+        var take = Math.Clamp(filter.Take, 1, 100);
+        var skip = Math.Max(0, filter.Skip);
+        List<WeeklyReport> reports;
+        int total;
+        if (filter.GroupByInternship)
+        {
+            total = await reportQuery
+                .Select(report => report.InternshipId)
+                .Distinct()
+                .CountAsync();
+            var pagedInternshipIds = await reportQuery
+                .GroupBy(report => report.InternshipId)
+                .Select(group => new
+                {
+                    InternshipId = group.Key,
+                    LatestReportAt = group.Max(report => report.CreatedAt),
+                })
+                .OrderByDescending(group => group.LatestReportAt)
+                .ThenByDescending(group => group.InternshipId)
+                .Skip(skip)
+                .Take(take)
+                .Select(group => group.InternshipId)
+                .ToListAsync();
+            reports = await reportQuery
+                .Where(report => pagedInternshipIds.Contains(report.InternshipId))
+                .OrderByDescending(report => report.CreatedAt)
+                .ThenByDescending(report => report.Id)
+                .ToListAsync();
+        }
+        else
+        {
+            total = await reportQuery.CountAsync();
+            reports = await reportQuery
+                .OrderByDescending(report => report.CreatedAt)
+                .ThenByDescending(report => report.Id)
+                .Skip(skip)
+                .Take(take)
+                .ToListAsync();
+        }
 
         var dtoList = _mapper.Map<List<WeeklyReportDto>>(reports);
         var internshipIds = reports.Select(r => r.InternshipId).Distinct().ToList();
@@ -556,8 +591,8 @@ public class LecturerService : ILecturerService
         {
             Items = dtoList,
             Total = total,
-            Skip = filter.Skip,
-            Take = Math.Clamp(filter.Take, 1, 100),
+            Skip = skip,
+            Take = take,
         };
     }
 

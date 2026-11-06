@@ -208,6 +208,61 @@ public class LecturerServiceTests
     }
 
     [Fact]
+    public async Task GetAssignedWeeklyReportsAsync_GroupByInternshipReturnsEveryMatchingReportForPagedStudents()
+    {
+        await using var db = GetDb();
+        var (lecturerUser, _, internship1, internship2) = await SeedLecturerDataAsync(db);
+        var now = DateTime.UtcNow;
+        db.WeeklyReports.AddRange(
+            new WeeklyReport
+            {
+                Id = Guid.NewGuid(),
+                InternshipId = internship1.Id,
+                WeekNumber = 2,
+                Status = WeeklyReportStatus.Submitted,
+                Title = "Báo cáo tuần 2",
+                Content = "Nội dung tuần 2",
+                CreatedAt = now.AddMinutes(2),
+            },
+            new WeeklyReport
+            {
+                Id = Guid.NewGuid(),
+                InternshipId = internship2.Id,
+                WeekNumber = 2,
+                Status = WeeklyReportStatus.Submitted,
+                Title = "Báo cáo tuần 2 của sinh viên khác",
+                Content = "Nội dung tuần 2",
+                CreatedAt = now.AddMinutes(1),
+            },
+            new WeeklyReport
+            {
+                Id = Guid.NewGuid(),
+                InternshipId = internship1.Id,
+                WeekNumber = 3,
+                Status = WeeklyReportStatus.Approved,
+                Title = "Báo cáo tuần 3 đã duyệt",
+                Content = "Nội dung tuần 3",
+                CreatedAt = now.AddMinutes(3),
+            });
+        await db.SaveChangesAsync();
+
+        var service = new LecturerService(db, _mapper, Mock.Of<INotificationService>());
+        var result = await service.GetAssignedWeeklyReportsAsync(lecturerUser.Id, new WeeklyReportFilterRequest
+        {
+            GroupByInternship = true,
+            ExcludeApproved = true,
+            Skip = 0,
+            Take = 1,
+        });
+
+        result.Total.Should().Be(2);
+        result.Items.Should().HaveCount(2);
+        result.Items.Select(report => report.InternshipId).Distinct().Should().ContainSingle()
+            .Which.Should().Be(internship1.Id);
+        result.Items.Should().NotContain(report => report.Status == nameof(WeeklyReportStatus.Approved));
+    }
+
+    [Fact]
     public async Task GetGradeDistributionAsync_ShouldUseConversionScaleBoundaries()
     {
         var db = GetDb();

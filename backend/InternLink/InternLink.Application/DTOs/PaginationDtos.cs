@@ -123,6 +123,8 @@ public class WeeklyReportFilterRequest : PaginationRequest
     public string? Status { get; set; }
     public string? SearchTerm { get; set; }
     public int? WeekNumber { get; set; }
+    public bool GroupByInternship { get; set; }
+    public bool ExcludeApproved { get; set; }
 }
 
 /// <summary>

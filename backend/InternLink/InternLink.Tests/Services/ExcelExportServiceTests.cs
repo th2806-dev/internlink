@@ -1,11 +1,13 @@
 using ClosedXML.Excel;
 using FluentAssertions;
+using InternLink.Application.DTOs;
 using InternLink.Domain.Entities;
 using InternLink.Domain.Enums;
 using InternLink.Infrastructure.Persistence;
 using InternLink.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Xunit;
 
@@ -127,6 +129,104 @@ public class ExcelExportServiceTests
         data.LecturerAssignments.Should().HaveCount(1);
         data.LecturerAssignments[0].StudentFullName.Should().Be("Trần Thị C");
         data.LecturerAssignments[0].LecturerName.Should().Be("TS. Nguyễn Văn B");
+    }
+
+    [Fact]
+    public async Task GetExportDataAsync_UsesLecturerScheduleOverrideLikeAdminSummary()
+    {
+        await using var db = GetDb();
+        var now = DateTime.UtcNow;
+        var semester = new Semester
+        {
+            Id = Guid.NewGuid(),
+            Name = "HK kiểm thử lịch override",
+            Term = "HK1",
+            AcademicYear = "2026-2027",
+            TotalWeeks = 1,
+            StartDate = now.Date,
+            EndDate = now.Date.AddDays(30),
+        };
+        var lecturer = new Lecturer
+        {
+            Id = Guid.NewGuid(),
+            StaffCode = "GV001",
+            FullName = "Giảng viên A",
+            Department = "CNTT",
+        };
+        var student = new Student
+        {
+            Id = Guid.NewGuid(),
+            StudentCode = "SV001",
+            FullName = "Sinh viên kiểm thử",
+            Class = "C24A",
+        };
+        var internship = new Internship
+        {
+            Id = Guid.NewGuid(),
+            StudentId = student.Id,
+            Student = student,
+            LecturerId = lecturer.Id,
+            Lecturer = lecturer,
+            SemesterId = semester.Id,
+            Semester = semester,
+            Status = InternshipStatus.InProgress,
+        };
+        db.Semesters.Add(semester);
+        db.Lecturers.Add(lecturer);
+        db.Students.Add(student);
+        db.Internships.Add(internship);
+        db.SemesterReportSchedules.AddRange(
+            new SemesterReportSchedule
+            {
+                Id = Guid.NewGuid(),
+                SemesterId = semester.Id,
+                WeekNumber = 1,
+                Title = "Lịch chung đã đóng",
+                DueDate = now.AddDays(-1),
+                IsSubmissionOpen = false,
+            },
+            new SemesterReportSchedule
+            {
+                Id = Guid.NewGuid(),
+                SemesterId = semester.Id,
+                LecturerId = lecturer.Id,
+                WeekNumber = 1,
+                Title = "Lịch riêng đang mở",
+                DueDate = now.AddDays(1),
+                IsSubmissionOpen = true,
+            });
+        db.WeeklyReports.Add(new WeeklyReport
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = internship.Id,
+            WeekNumber = 1,
+            Title = "Báo cáo tuần 1",
+            Content = "Nội dung báo cáo",
+            Status = WeeklyReportStatus.Submitted,
+            SubmittedAt = now,
+            CreatedAt = now,
+        });
+        db.Evaluations.Add(new Evaluation
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = internship.Id,
+            WeeklyQualityJson = "{\"1\":4}",
+            CreatedAt = now,
+        });
+        await db.SaveChangesAsync();
+
+        var exportData = await CreateService(db).GetExportDataAsync(semester.Id);
+        var summary = await new InternshipGradingService(
+            db,
+            NullLogger<InternshipGradingService>.Instance,
+            new SemesterService(db))
+            .GetSummaryAsync(semester.Id, lecturerId: null, departmentId: null);
+        var exportStudent = exportData.Students.Should().ContainSingle().Which;
+        var summaryStudent = summary.Students.Should().ContainSingle().Which;
+
+        exportStudent.DiemQT.Should().Be(summaryStudent.ProcessScore);
+        summaryStudent.QualityScore.Should().Be(4m);
+        summaryStudent.Weeks.Should().ContainSingle(week => week.Title == "Lịch riêng đang mở");
     }
 
     [Fact]
