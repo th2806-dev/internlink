@@ -50,7 +50,7 @@ public sealed class AdminReportArchiveController : ControllerBase
             return Forbid();
         if (!userId.HasValue)
             return Unauthorized();
-        if (documentType.Trim().ToLowerInvariant() is not ("all" or "weekly" or "final" or "evidence" or "product" or "other"))
+        if (documentType.Trim().ToLowerInvariant() is not ("all" or "weekly" or "final" or "evidence" or "product" or "archive" or "other"))
             return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Loại tài liệu cần tải không hợp lệ." }));
 
         try

@@ -351,8 +351,22 @@ function parseContentDispositionFilename(
   header: string | null,
 ): string | null {
   if (!header) return null;
-  const match = /filename\*?=(?:UTF-8''|")?([^";]+)/i.exec(header);
-  return match ? decodeURIComponent(match[1].replace(/"/g, "")) : null;
+  const encodedMatch = /filename\*\s*=\s*UTF-8''([^;]+)/i.exec(header);
+  if (encodedMatch) {
+    const encodedFilename = encodedMatch[1].trim().replace(/^"|"$/g, "");
+    try {
+      return decodeURIComponent(encodedFilename);
+    } catch {
+      return null;
+    }
+  }
+
+  const match = /filename\s*=\s*("(?:\\.|[^"])*"|[^;]+)/i.exec(header);
+  if (!match) return null;
+  return match[1]
+    .trim()
+    .replace(/^"(.*)"$/, "$1")
+    .replace(/\\(.)/g, "$1");
 }
 
 /** Download binary file with JWT auth and trigger browser download. */

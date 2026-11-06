@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import {
   apiRequest,
   ApiClientError,
+  downloadAuthenticatedFile,
   getApiErrorMessage,
   getStoredToken,
   setStoredToken,
@@ -178,6 +179,31 @@ describe("apiClient", () => {
       await expect(apiRequest("/api/action")).rejects.toThrow(
         "Business validation failed",
       );
+    });
+  });
+
+  describe("downloadAuthenticatedFile", () => {
+    it("prefers the UTF-8 filename over the ASCII Content-Disposition fallback", async () => {
+      const expectedFilename = "archive_Thực tập Tốt nghiệp_C24A.TH.zip";
+      vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        {
+          ok: true,
+          status: 200,
+          headers: new Headers({
+            "Content-Disposition":
+              "attachment; filename=\"archive_Th_c_t_p_T_t_nghi_p_C24A.TH.zip\"; filename*=UTF-8''archive_Th%E1%BB%B1c%20t%E1%BA%ADp%20T%E1%BB%91t%20nghi%E1%BB%87p_C24A.TH.zip",
+          }),
+          blob: vi.fn().mockResolvedValue(new Blob(["zip"])),
+        } as unknown as Response,
+      );
+
+      const result = await downloadAuthenticatedFile(
+        "/api/archive",
+        "fallback.zip",
+        false,
+      );
+
+      expect(result.filename).toBe(expectedFilename);
     });
   });
 });
