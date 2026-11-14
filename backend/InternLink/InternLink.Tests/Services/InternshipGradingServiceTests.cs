@@ -2,6 +2,7 @@ using FluentAssertions;
 using ClosedXML.Excel;
 using InternLink.Application.DTOs;
 using InternLink.Domain.Entities;
+using InternLink.Domain.Entities.Rbac;
 using InternLink.Domain.Enums;
 using InternLink.Infrastructure.Persistence;
 using InternLink.Infrastructure.Services;
@@ -517,8 +518,9 @@ public sealed class InternshipGradingServiceTests
             new SaveInternshipGradeRequestDto { StudentId = student.Id, HasCreativeProduct = false },
             actorUserId: Guid.NewGuid(),
             actorLecturerId: null);
-        saved!.HasCreativeProduct.Should().BeTrue();
-        (await db.Evaluations.SingleAsync()).HasCreativeProduct.Should().BeTrue();
+        saved!.HasCreativeProduct.Should().BeFalse();
+        (await db.Evaluations.SingleAsync()).HasCreativeProduct.Should().BeFalse();
+        (await db.Submissions.SingleAsync(s => s.Type == SubmissionType.Product)).Status.Should().Be(SubmissionStatus.Rejected);
     }
 
     [Fact]
@@ -612,6 +614,129 @@ public sealed class InternshipGradingServiceTests
         grade.EmployerEvidenceAssetId.Should().Be(proof.Id);
         grade.EmployerEvidenceFileName.Should().Be("Phieu-danh-gia.jpg");
         grade.ProcessScore.Should().Be(0m);
+    }
+
+    [Fact]
+    public async Task GetSummaryAsync_AppliesDepartmentGradingRulesToWeightsAndEligibility()
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .ConfigureWarnings(warnings => warnings.Ignore(InMemoryEventId.TransactionIgnoredWarning))
+            .Options;
+        await using var db = new AppDbContext(options);
+        var now = DateTime.UtcNow;
+        var departmentId = Guid.NewGuid();
+        var semester = new Semester
+        {
+            Id = Guid.NewGuid(),
+            DepartmentId = departmentId,
+            Name = "Kỳ quy chế riêng",
+            Term = "Học kỳ I",
+            AcademicYear = "2026 - 2027",
+            TotalWeeks = 2,
+            StartDate = now.Date,
+            EndDate = now.Date.AddDays(30),
+        };
+        var student = new Student
+        {
+            Id = Guid.NewGuid(),
+            DepartmentId = departmentId,
+            StudentCode = "RULE-001",
+            FullName = "Sinh viên theo quy chế riêng",
+        };
+        var internship = new Internship
+        {
+            Id = Guid.NewGuid(),
+            SemesterId = semester.Id,
+            Semester = semester,
+            StudentId = student.Id,
+            Student = student,
+            Status = InternshipStatus.InProgress,
+        };
+        var schedule1 = new SemesterReportSchedule
+        {
+            Id = Guid.NewGuid(),
+            SemesterId = semester.Id,
+            WeekNumber = 1,
+            Title = "Tuần 1",
+            StartDate = now.Date,
+            DueDate = now.AddDays(2),
+            IsSubmissionOpen = true,
+        };
+        var schedule2 = new SemesterReportSchedule
+        {
+            Id = Guid.NewGuid(),
+            SemesterId = semester.Id,
+            WeekNumber = 2,
+            Title = "Tuần 2",
+            StartDate = now.Date,
+            DueDate = now.AddDays(-2),
+            IsSubmissionOpen = true,
+        };
+        var evidence = new Submission
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = internship.Id,
+            Internship = internship,
+            Type = SubmissionType.Evidence,
+            Status = SubmissionStatus.Approved,
+            EmployerScore = 7m,
+            SubmittedAt = now,
+        };
+
+        db.Semesters.Add(semester);
+        db.Students.Add(student);
+        db.Internships.Add(internship);
+        db.SemesterReportSchedules.AddRange(schedule1, schedule2);
+        db.WeeklyReports.Add(new WeeklyReport
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = internship.Id,
+            Internship = internship,
+            WeekNumber = 1,
+            Title = "Báo cáo tuần 1",
+            Content = "Nội dung",
+            Status = WeeklyReportStatus.Submitted,
+            SubmittedAt = now,
+        });
+        db.Submissions.Add(evidence);
+        db.Evaluations.Add(new Evaluation
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = internship.Id,
+            Internship = internship,
+            QualityLevel = 5m,
+            WeeklyQualityJson = """{"1":5}""",
+            OralExamScore = 8m,
+        });
+        db.SysGradingRuleSets.Add(new SysGradingRuleSet
+        {
+            Id = Guid.NewGuid(),
+            SemesterId = semester.Id,
+            DepartmentId = departmentId,
+            RuleSetName = "Quy chế khoa",
+            ProcessScoreWeight = 0.2m,
+            ExamScoreWeight = 0.3m,
+            EmployerScoreWeight = 0.5m,
+            RequiredWeeklyReportsCount = 1,
+            StepPenaltyPerLateReport = 1m,
+            StepPenaltyPerMissingReport = 1m,
+            RequireFinalReportForExamEligibility = false,
+        });
+        await db.SaveChangesAsync();
+
+        var service = new InternshipGradingService(
+            db,
+            NullLogger<InternshipGradingService>.Instance,
+            new SemesterService(db));
+
+        var grade = (await service.GetSummaryAsync(semester.Id, lecturerId: null, departmentId: null))
+            .Students.Should().ContainSingle().Subject;
+
+        grade.IsEligible.Should().BeTrue();
+        grade.MissingCount.Should().Be(0);
+        grade.ProcessScore.Should().Be(9m);
+        grade.AverageScore.Should().Be(7.7m);
     }
 
     [Fact]
