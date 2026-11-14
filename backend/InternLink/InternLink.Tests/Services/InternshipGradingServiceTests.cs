@@ -517,9 +517,8 @@ public sealed class InternshipGradingServiceTests
             new SaveInternshipGradeRequestDto { StudentId = student.Id, HasCreativeProduct = false },
             actorUserId: Guid.NewGuid(),
             actorLecturerId: null);
-        saved!.HasCreativeProduct.Should().BeFalse();
-        (await db.Evaluations.SingleAsync()).HasCreativeProduct.Should().BeFalse();
-        (await db.Submissions.SingleAsync(s => s.Type == SubmissionType.Product)).Status.Should().Be(SubmissionStatus.Rejected);
+        saved!.HasCreativeProduct.Should().BeTrue();
+        (await db.Evaluations.SingleAsync()).HasCreativeProduct.Should().BeTrue();
     }
 
     [Fact]

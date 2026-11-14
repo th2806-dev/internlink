@@ -470,38 +470,9 @@ public class InternshipGradingService : IInternshipGradingService
                 evaluation.QualityLevel = InternshipGradeCalculator.Round1(dto.WeeklyQualityScores.Values.Average());
         }
         if (dto.QualityScore.HasValue) evaluation.QualityLevel = dto.QualityScore;
-        // Giảng viên có quyền công nhận hoặc hủy duyệt / đổi ý không đạt sản phẩm thực tế
-        var productSubmissions = await _context.Submissions
-            .Where(s => s.InternshipId == internship.Id && !s.IsDeleted && s.Type == SubmissionType.Product)
-            .ToListAsync();
-
-        if (productSubmissions.Count > 0)
-        {
-            if (!dto.HasCreativeProduct)
-            {
-                // Giảng viên hủy duyệt / đánh dấu sản phẩm không đạt
-                foreach (var ps in productSubmissions.Where(s => s.Status == SubmissionStatus.Approved))
-                {
-                    ps.Status = SubmissionStatus.Rejected;
-                    ps.UpdatedAt = DateTime.UtcNow;
-                }
-                evaluation.HasCreativeProduct = false;
-            }
-            else
-            {
-                // Giảng viên duyệt / công nhận sản phẩm đạt
-                foreach (var ps in productSubmissions)
-                {
-                    ps.Status = SubmissionStatus.Approved;
-                    ps.UpdatedAt = DateTime.UtcNow;
-                }
-                evaluation.HasCreativeProduct = true;
-            }
-        }
-        else
-        {
-            evaluation.HasCreativeProduct = dto.HasCreativeProduct;
-        }
+        evaluation.HasCreativeProduct = await _context.Submissions.AsNoTracking().AnyAsync(s =>
+            s.InternshipId == internship.Id && !s.IsDeleted
+            && s.Type == SubmissionType.Product && s.Status == SubmissionStatus.Approved);
         if (dto.OralExamScore.HasValue)
             evaluation.OralExamScore = Math.Clamp(dto.OralExamScore.Value, 0m, 10m);
         if (dto.Note != null) internship.Notes = dto.Note;

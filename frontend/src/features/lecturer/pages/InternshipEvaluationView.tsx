@@ -459,7 +459,6 @@ function GradingTab({
   const [quality, setQuality] = useState<number | null>(null);
   const [weeklyQuality, setWeeklyQuality] = useState<Record<number, number>>({});
   const [oralExam, setOralExam] = useState<string>("");
-  const [hasCreativeProduct, setHasCreativeProduct] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDownloadingEmployerProof, setIsDownloadingEmployerProof] = useState(false);
   const [isPreviewingEmployerProof, setIsPreviewingEmployerProof] = useState(false);
@@ -527,14 +526,7 @@ function GradingTab({
     setQuality(student.qualityScore);
     setWeeklyQuality(student.weeklyQualityScores ?? {});
     setOralExam(student.oralExamScore != null ? String(student.oralExamScore) : "");
-    setHasCreativeProduct(student.hasCreativeProduct);
   };
-
-  useEffect(() => {
-    if (selected) {
-      setHasCreativeProduct(selected.hasCreativeProduct);
-    }
-  }, [selected?.studentId]);
 
   const preview = useMemo(() => {
     if (!selected) return null;
@@ -554,7 +546,7 @@ function GradingTab({
       totalOpenWeeks: selected.weeks.filter((week) => week.isSubmissionOpen).length,
       finalReportSubmitted: selected.finalReportSubmitted,
       qualityLevel: Object.keys(weeklyQuality).length === 0 ? quality : null,
-      hasCreativeProduct: hasCreativeProduct,
+      hasCreativeProduct: selected.hasCreativeProduct,
       oralExamScore: oralNum != null && !isNaN(oralNum) ? oralNum : null,
     });
     return {
@@ -564,7 +556,7 @@ function GradingTab({
       average: result.averageScore,
       classification: result.classification,
     };
-  }, [selected, quality, weeklyQuality, oralExam, hasCreativeProduct]);
+  }, [selected, quality, weeklyQuality, oralExam]);
 
   const saveGrade = async () => {
     if (isSemesterClosed || !semesterId || !selected) return;
@@ -578,7 +570,7 @@ function GradingTab({
         studentId: selected.studentId,
         qualityScore: Object.keys(weeklyQuality).length > 0 ? null : quality,
         weeklyQualityScores: weeklyQuality,
-        hasCreativeProduct: hasCreativeProduct,
+        hasCreativeProduct: selected.hasCreativeProduct,
         oralExamScore: eligibleOral,
       });
       queryClient.setQueryData<GradingSummaryResponse>(summaryKey, (current) =>
@@ -890,69 +882,31 @@ function GradingTab({
                 </div>
               </div>
 
-              {/* Cụm 2 — Thưởng sản phẩm được duyệt / Hủy duyệt nếu không đạt */}
-              <div className={`flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between transition-colors ${
-                hasCreativeProduct
-                  ? "border-emerald-200 bg-emerald-50/70"
-                  : selected.productStatus === "Rejected" || (!hasCreativeProduct && selected.hasCreativeProduct)
-                    ? "border-rose-200 bg-rose-50/70"
+              {/* Cụm 2 — Thưởng sản phẩm được duyệt */}
+              <div className={`flex items-center justify-between rounded-lg border px-3 py-2.5 ${
+                selected.hasCreativeProduct
+                  ? "border-emerald-200 bg-emerald-50"
+                  : selected.productStatus === "Rejected"
+                    ? "border-rose-200 bg-rose-50"
                     : "border-slate-200 bg-slate-50"
               }`}>
-                <div className="flex items-center gap-2.5 flex-wrap">
-                  <label className="inline-flex items-center gap-2 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={hasCreativeProduct}
-                      onChange={(e) => setHasCreativeProduct(e.target.checked)}
-                      disabled={isSemesterClosed}
-                      className="h-4 w-4 rounded border-slate-300 text-[#026aa7] focus:ring-[#026aa7]"
-                    />
-                    <span className="flex items-center gap-1.5 text-sm font-medium text-slate-800">
-                      <Sparkles className="h-4 w-4 text-amber-500 shrink-0" />
-                      {hasCreativeProduct
-                        ? "Công nhận sản phẩm thực tế"
-                        : selected.productStatus === "Rejected" || (!hasCreativeProduct && selected.hasCreativeProduct)
-                          ? "Sản phẩm không đạt yêu cầu"
-                          : selected.productStatus === "RevisionRequested"
-                            ? "Sản phẩm cần bổ sung"
-                            : selected.productSubmitted
-                              ? "Sản phẩm đang chờ duyệt"
-                              : "Chưa nộp sản phẩm"}
-                    </span>
-                  </label>
-
-                  {/* Nút hủy duyệt nhanh nếu giảng viên lỡ duyệt rồi muốn đổi ý */}
-                  {hasCreativeProduct && (
-                    <button
-                      type="button"
-                      onClick={() => setHasCreativeProduct(false)}
-                      disabled={isSemesterClosed}
-                      className="rounded border border-rose-300 bg-white px-2 py-0.5 text-xs font-semibold text-rose-700 hover:bg-rose-50 transition-colors shadow-2xs"
-                      title="Hủy duyệt / Đổi ý không đạt vì sản phẩm chưa đạt yêu cầu"
-                    >
-                      Hủy duyệt
-                    </button>
-                  )}
-                  {!hasCreativeProduct && selected.productSubmitted && (
-                    <button
-                      type="button"
-                      onClick={() => setHasCreativeProduct(true)}
-                      disabled={isSemesterClosed}
-                      className="rounded border border-[#026aa7]/30 bg-white px-2 py-0.5 text-xs font-semibold text-[#026aa7] hover:bg-[#026aa7]/5 transition-colors shadow-2xs"
-                      title="Duyệt công nhận sản phẩm thực tế"
-                    >
-                      Duyệt đạt (+1.0đ)
-                    </button>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2 self-end sm:self-auto">
-                  <span className={`text-xs font-semibold ${
-                    hasCreativeProduct ? "text-emerald-700" : "text-slate-500"
-                  }`}>
-                    {hasCreativeProduct ? "+1.0đ" : "Không cộng điểm"}
-                  </span>
-                </div>
+                <span className="flex items-center gap-2 text-sm">
+                  <Sparkles className="h-4 w-4 text-amber-500" />
+                  {selected.hasCreativeProduct
+                    ? "Sản phẩm đã được duyệt"
+                    : selected.productStatus === "Rejected"
+                      ? "Sản phẩm không đạt yêu cầu"
+                      : selected.productStatus === "RevisionRequested"
+                        ? "Sản phẩm cần bổ sung"
+                        : selected.productSubmitted
+                          ? "Sản phẩm đang chờ duyệt"
+                          : "Chưa nộp sản phẩm"}
+                </span>
+                <span className={`text-xs font-semibold ${
+                  selected.hasCreativeProduct ? "text-emerald-700" : "text-slate-500"
+                }`}>
+                  {selected.hasCreativeProduct ? "+1.0đ" : "Không cộng điểm"}
+                </span>
               </div>
               {/* Cụm 3 — tự đếm + QT tạm tính */}
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
