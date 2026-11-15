@@ -531,8 +531,6 @@ export const SubmissionsView: React.FC<{
           ? "JPG, PNG, WEBP hoặc GIF"
           : uploadCategory === "FinalReport"
             ? "PDF, DOC hoặc DOCX"
-            : uploadCategory === "ArchiveReport"
-              ? "PDF (.pdf)"
             : "PDF, Word, ZIP, RAR, PowerPoint, PNG hoặc JPG";
       onShowToast?.(
         `${invalidFormatCount} tệp không đúng định dạng. Chỉ chấp nhận ${format}.`,

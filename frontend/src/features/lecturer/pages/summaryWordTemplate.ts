@@ -15,8 +15,66 @@ export interface WordReportPreviewData {
     registeredStudents: number;
     completedStudents: number;
     incompleteStudents: number;
+    totalStudents: number;
+    notInterningStudents: number;
   };
   gradeSummary: GradeSummaryRow[];
+}
+
+export interface AdminWordGradeEntry {
+  companyName?: string | null;
+  isEligible: boolean;
+  oralExamScore: number | null;
+  classification?: string | null;
+}
+
+export function buildAdminWordGradeSummary(
+  grades: AdminWordGradeEntry[],
+  notInterningStudentCount = 0,
+): { gradeSummary: GradeSummaryRow[]; totalStudents: number; notInterningStudents: number } {
+  const labels = [
+    "Xuất sắc",
+    "Giỏi",
+    "Khá",
+    "Trung bình khá",
+    "Trung bình",
+    "Yếu",
+    "Không hoàn thành",
+    "Chưa xếp loại",
+    "Không thực tập",
+  ];
+  const counts = new Map(labels.map((label) => [label, 0]));
+
+  grades.forEach((grade) => {
+    let label: string;
+    if (!grade.companyName?.trim()) {
+      label = "Không thực tập";
+    } else if (!grade.isEligible) {
+      label = "Không hoàn thành";
+    } else if (grade.oralExamScore == null) {
+      label = "Chưa xếp loại";
+    } else {
+      const classification = grade.classification?.trim();
+      label = classification === "Không đạt" ? "Yếu" : classification || "Chưa xếp loại";
+      if (!counts.has(label)) label = "Chưa xếp loại";
+    }
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+  });
+
+  const cohortCount = Math.max(0, Math.trunc(notInterningStudentCount));
+  counts.set("Không thực tập", (counts.get("Không thực tập") ?? 0) + cohortCount);
+  const totalStudents = grades.length + cohortCount;
+  const gradeSummary = [...counts].map(([label, quantity]) => ({
+    label,
+    quantity,
+    rate: totalStudents > 0 ? Number(((quantity / totalStudents) * 100).toFixed(1)) : 0,
+  }));
+
+  return {
+    gradeSummary,
+    totalStudents,
+    notInterningStudents: counts.get("Không thực tập") ?? 0,
+  };
 }
 
 export function formatWordDate(value?: string | Date | null): string {
@@ -51,6 +109,8 @@ export function buildWordReportPreviewData(input: {
   registeredStudents?: number;
   completedStudents?: number;
   incompleteStudents?: number;
+  totalStudents?: number;
+  notInterningStudents?: number;
   gradeSummary?: GradeSummaryRow[];
 }): WordReportPreviewData {
   const departmentName = (input.semesterName ?? "KHOA").trim();
@@ -77,6 +137,8 @@ export function buildWordReportPreviewData(input: {
       registeredStudents: input.registeredStudents ?? 0,
       completedStudents: input.completedStudents ?? 0,
       incompleteStudents: input.incompleteStudents ?? 0,
+      totalStudents: input.totalStudents ?? input.registeredStudents ?? 0,
+      notInterningStudents: input.notInterningStudents ?? 0,
     },
     gradeSummary: (input.gradeSummary ?? GradeSummaryDefault).map((item) => ({
       ...item,

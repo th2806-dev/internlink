@@ -82,6 +82,22 @@ public class InternshipGradingService : IInternshipGradingService
 
         var internshipIds = internships.Select(i => i.Id).ToList();
         var studentIds = internships.Select(i => i.StudentId).ToList();
+        var notInterningStudentCount = 0;
+        if (!lecturerId.HasValue && internships.Count > 0)
+        {
+            var cohortStudentsQuery = _context.Students
+                .AsNoTracking()
+                .Where(student => !student.IsDeleted);
+            if (departmentId.HasValue)
+                cohortStudentsQuery = cohortStudentsQuery.Where(student => student.DepartmentId == departmentId.Value);
+
+            var cohortStudents = await cohortStudentsQuery
+                .Select(student => new { student.Id, student.Class })
+                .ToListAsync();
+            notInterningStudentCount = InternshipCohortStatsCalculator.CountNotInterningStudents(
+                internships.Select(internship => (internship.StudentId, internship.Student?.Class)),
+                cohortStudents.Select(student => (student.Id, student.Class)));
+        }
 
         // 3) Báo cáo đã nộp (mọi trạng thái != Draft tính là đã nộp — gồm cả "GV đã duyệt")
         var reports = await _context.WeeklyReports
@@ -375,6 +391,8 @@ public class InternshipGradingService : IInternshipGradingService
             SemesterName = semester.Name,
             Schedule = scheduleDtos,
             Students = students,
+            TotalStudentCount = students.Count + notInterningStudentCount,
+            NotInterningStudentCount = notInterningStudentCount,
             GeneratedAt = DateTime.UtcNow,
         };
     }

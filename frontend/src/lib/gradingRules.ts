@@ -25,7 +25,7 @@
  * 5) Điểm TB (cột K) & Xếp loại (cột L):
  *    - Không đủ điều kiện → Điểm TB = 0, Xếp loại = "không thực tập"
  *    - Đủ điều kiện       → TB = ROUND(QT * 0.4 + Thi * 0.6, 1)
- *      >= 8.5 Xuất sắc | >= 8.0 Giỏi | >= 6.5 Khá | >= 5.0 Trung bình | < 5.0 Không đạt
+ *      >= 8.5 Xuất sắc | >= 8.0 Giỏi | >= 7.0 Khá | >= 6.5 Trung bình khá | >= 5.0 Trung bình | < 5.0 Không đạt
  *
  * Module này là pure functions (không I/O) để dùng chung cho:
  *  - Màn hình 2 (chấm điểm rubric — tự nhảy Điểm QT tạm tính)
@@ -71,7 +71,8 @@ const VALID_QUALITY_LEVELS = new Set<number>(GR_QUALITY_RUBRIC_LEVELS.map((l) =>
 export const GR_CLASSIFICATION_THRESHOLDS = [
   { min: 8.5, label: "Xuất sắc" },
   { min: 8.0, label: "Giỏi" },
-  { min: 6.5, label: "Khá" },
+  { min: 7.0, label: "Khá" },
+  { min: 6.5, label: "Trung bình khá" },
   { min: 5.0, label: "Trung bình" },
   { min: 0.0, label: "Không đạt" },
 ] as const;
@@ -342,7 +343,7 @@ export function computeGrade(input: GradeInput): GradeResult {
     classification = GR_INELIGIBLE_LABEL;
   } else if (oralExamScore == null) {
     averageScore = roundScore(processScore * GR_PROCESS_WEIGHT);
-    classification = classifyScore(averageScore);
+    classification = "Chưa xếp loại";
   } else {
     averageScore = roundScore(processScore * GR_PROCESS_WEIGHT + oralExamScore * GR_ORAL_WEIGHT);
     classification = classifyScore(averageScore);

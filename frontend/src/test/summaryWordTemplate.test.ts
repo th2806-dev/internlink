@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildWordReportPreviewData, formatWordDate } from "../features/lecturer/pages/summaryWordTemplate";
+import {
+  buildAdminWordGradeSummary,
+  buildWordReportPreviewData,
+  formatWordDate,
+} from "../features/lecturer/pages/summaryWordTemplate";
 
 describe("summaryWordTemplate", () => {
   it("formats date in the Word template style", () => {
@@ -52,5 +56,24 @@ describe("summaryWordTemplate", () => {
       "Chưa xếp loại",
       "Không thực tập",
     ]);
+  });
+
+  it("counts the missing oral score as unclassified and includes the unregistered cohort", () => {
+    const result = buildAdminWordGradeSummary([
+      { companyName: "Công ty A", isEligible: true, oralExamScore: 6.5, classification: "Trung bình khá" },
+      { companyName: "Công ty B", isEligible: true, oralExamScore: 7, classification: "Khá" },
+      { companyName: "Công ty C", isEligible: true, oralExamScore: null, classification: "Chưa xếp loại" },
+      { companyName: null, isEligible: true, oralExamScore: null, classification: "Chưa xếp loại" },
+    ], 1);
+    const quantity = (label: string) =>
+      result.gradeSummary.find((row) => row.label === label)?.quantity;
+
+    expect(result.totalStudents).toBe(5);
+    expect(quantity("Trung bình khá")).toBe(1);
+    expect(quantity("Khá")).toBe(1);
+    expect(quantity("Chưa xếp loại")).toBe(1);
+    expect(quantity("Không thực tập")).toBe(2);
+    expect(result.notInterningStudents).toBe(2);
+    expect(result.gradeSummary.reduce((sum, row) => sum + row.quantity, 0)).toBe(5);
   });
 });

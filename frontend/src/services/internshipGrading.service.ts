@@ -68,6 +68,8 @@ export interface GradingSummaryResponse {
   semesterName: string;
   schedule: GradingWeekStatus[];
   students: StudentGrade[];
+  totalStudentCount?: number;
+  notInterningStudentCount?: number;
   generatedAt: string;
 }
 
