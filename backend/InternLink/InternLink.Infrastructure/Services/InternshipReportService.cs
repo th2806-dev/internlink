@@ -322,8 +322,7 @@ public class InternshipReportService : IInternshipReportService
         var (totalStudents, notInterning) = await ComputeCohortStatsAsync(internships, department, departmentId);
 
         // Trạng thái không phân bổ doanh nghiệp và không đủ điều kiện là hai nhóm riêng.
-        // Chuẩn chấm điểm hiện tại: ≥8.5 XS | ≥8 Giỏi | ≥6.5 Khá | ≥5 TB | <5 Không đạt.
-        // "Không đạt" map → "Yếu"; "Trung bình khá" giữ 0 (mẫu có dòng, quy chế chưa tách ngưỡng).
+        // Chuẩn chấm điểm: ≥8.5 XS | ≥8 Giỏi | ≥7 Khá | ≥6.5 TB khá | ≥5 TB | <5 Không đạt.
         var templateGradeRows = new[]
         {
             "Xuất sắc", "Giỏi", "Khá", "Trung bình khá", "Trung bình", "Yếu",
@@ -535,6 +534,7 @@ public class InternshipReportService : IInternshipReportService
             "Trung bình" => "Trung bình",
             "Yếu" => "Yếu",
             "Không đạt" => "Yếu",
+            "Chưa xếp loại" => "Chưa xếp loại",
             "Không thực tập" => "Không thực tập",
             var s when string.Equals(s, InternshipGradeCalculator.IneligibleClassification, StringComparison.OrdinalIgnoreCase)
                 => "Không hoàn thành",
@@ -1246,10 +1246,10 @@ public class InternshipReportService : IInternshipReportService
         WriteMerged("II. BẢNG TỔNG HỢP KẾT QUẢ XẾP LOẠI:");
         row++;
 
-        // Classification — DÙNG CHUẨN DUY NHẤT InternshipGradeCalculator (khớp màn hình chấm điểm + Excel C23):
-        // SV chưa có Điểm thi → "Chưa chốt"; không đủ điều kiện dự thi → "không thực tập".
-        const string pendingClassification = "Chưa chốt";
-        var gradeCategories = new[] { "Xuất sắc", "Giỏi", "Khá", "Trung bình", "Không đạt", pendingClassification, "Không thực tập" };
+        // Classification — DÙNG CHUẨN DUY NHẤT InternshipGradeCalculator.
+        // SV chưa có Điểm thi → "Chưa xếp loại"; không đủ điều kiện dự thi → "không thực tập".
+        const string pendingClassification = "Chưa xếp loại";
+        var gradeCategories = new[] { "Xuất sắc", "Giỏi", "Khá", "Trung bình khá", "Trung bình", "Không đạt", pendingClassification, "Không thực tập" };
         var gradeCounts = new Dictionary<string, int>();
         foreach (var cat in gradeCategories) gradeCounts[cat] = 0;
 
@@ -1469,13 +1469,6 @@ public class InternshipReportService : IInternshipReportService
         string? department,
         Guid? departmentId)
     {
-        var interningStudentIds = internships.Select(i => i.StudentId).ToHashSet();
-        var cohortClasses = internships
-            .Select(i => i.Student?.Class?.Trim())
-            .Where(c => !string.IsNullOrWhiteSpace(c))
-            .Select(c => c!)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
         var khoaStudentsQuery = _db.Students.AsNoTracking().Where(s => !s.IsDeleted);
         if (!string.IsNullOrWhiteSpace(department))
             khoaStudentsQuery = khoaStudentsQuery.Where(s => s.Department == department);
@@ -1486,10 +1479,9 @@ public class InternshipReportService : IInternshipReportService
             .Select(s => new { s.Id, s.Class })
             .ToListAsync();
 
-        var notInterning = khoaStudentClassRows.Count(s =>
-            !interningStudentIds.Contains(s.Id)
-            && !string.IsNullOrWhiteSpace(s.Class)
-            && cohortClasses.Contains(s.Class!.Trim()));
+        var notInterning = InternshipCohortStatsCalculator.CountNotInterningStudents(
+            internships.Select(internship => (internship.StudentId, internship.Student?.Class)),
+            khoaStudentClassRows.Select(student => (student.Id, student.Class)));
 
         return (internships.Count + notInterning, notInterning);
     }

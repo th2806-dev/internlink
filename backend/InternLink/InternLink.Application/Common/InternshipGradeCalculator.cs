@@ -22,7 +22,7 @@ namespace InternLink.Application.Common;
 ///   2. Số buổi VẮNG theo điểm danh >= 2
 ///   → Chỉ khi vắng >= 2 buổi thì Điểm TB = 0, Xếp loại = "không thực tập".
 ///     Chưa nộp báo cáo cuối kỳ vẫn hiển thị Điểm TB tích lũy từ Điểm QT.
-/// Xếp loại: >= 8.5 Xuất sắc | >= 8 Giỏi | >= 6.5 Khá | >= 5 Trung bình | < 5 Không đạt
+/// Xếp loại: >= 8.5 Xuất sắc | >= 8 Giỏi | >= 7 Khá | >= 6.5 Trung bình khá | >= 5 Trung bình | < 5 Không đạt
 /// ============================================================================
 /// </summary>
 public static class InternshipGradeCalculator
@@ -56,7 +56,8 @@ public static class InternshipGradeCalculator
         score < minimumPassingScore ? "Không đạt" :
         score >= 8.5m ? "Xuất sắc" :
         score >= 8.0m ? "Giỏi" :
-        score >= 6.5m ? "Khá" :
+        score >= 7.0m ? "Khá" :
+        score >= 6.5m ? "Trung bình khá" :
         "Trung bình";
 
     public static (decimal Score4, string LetterGrade) ConvertToFourPointScale(decimal score)
@@ -71,7 +72,6 @@ public static class InternshipGradeCalculator
             _ => (0.0m, "F")
         };
     }
-
     /// <summary>
     /// Cột I — Điểm QT.
     /// missingCount/lateCount chỉ tính từ NỘP BÀI (không liên quan điểm danh).
@@ -124,7 +124,10 @@ public static class InternshipGradeCalculator
         if (employerScore.HasValue)
             weightedScore += Math.Clamp(employerScore.Value, 0m, 10m) * employerWeight;
         var average = Round1(weightedScore);
-        return (average, Classify(average, minimumPassingScore));
+        var classification = oralExamScore.HasValue
+            ? Classify(average, minimumPassingScore)
+            : "Chưa xếp loại";
+        return (average, classification);
     }
 
     /// <summary>

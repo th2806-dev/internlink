@@ -30,7 +30,7 @@ import { internshipGradingService, type GradingSummaryResponse, type GradingWeek
 import { useSemester } from "../../../contexts/SemesterContext";
 import { useEnsureSpecificSemester } from "../../../hooks/useEnsureSpecificSemester";
 import type { AttendanceSessionDto, LecturerStudentListItemDto } from "../../../types/api";
-import { buildWordReportPreviewData, formatWordDate } from "./summaryWordTemplate";
+import { buildAdminWordGradeSummary, buildWordReportPreviewData, formatWordDate } from "./summaryWordTemplate";
 import { queryKeys } from "../../../lib/queryKeys";
 import { useAuth } from "../../../hooks/useAuth";
 
@@ -347,51 +347,38 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
 
   const reportPreview = useMemo(() => {
     const adminGrades = adminGradeSummary?.students ?? [];
+    const adminDistribution = isAdminScope
+      ? buildAdminWordGradeSummary(adminGrades, adminGradeSummary?.notInterningStudentCount ?? 0)
+      : null;
     let gradeSummary: { label: string; quantity: number; rate: number }[];
     if (isAdminScope) {
-      const labels = ["Xuất sắc", "Giỏi", "Khá", "Trung bình khá", "Trung bình", "Yếu", "Không hoàn thành", "Chưa xếp loại", "Không thực tập"];
-      const classificationCounts = new Map(labels.map((label) => [label, 0]));
-      adminGrades.forEach((grade) => {
-        let label: string;
-        if (!grade.companyName?.trim()) {
-          label = "Không thực tập";
-        } else if (!grade.isEligible) {
-          label = "Không hoàn thành";
-        } else if (grade.oralExamScore == null) {
-          label = "Chưa xếp loại";
-        } else {
-          const classification = grade.classification?.trim();
-          label = classification === "Không đạt" ? "Yếu" : classification || "Chưa xếp loại";
-          if (!classificationCounts.has(label)) label = "Chưa xếp loại";
-        }
-        classificationCounts.set(label, (classificationCounts.get(label) ?? 0) + 1);
-      });
-      gradeSummary = [...classificationCounts].map(([label, quantity]) => ({
-        label,
-        quantity,
-        rate: adminGrades.length > 0 ? Number(((quantity / adminGrades.length) * 100).toFixed(1)) : 0,
-      }));
+      gradeSummary = adminDistribution!.gradeSummary;
     } else {
-      const graded = students.filter((student) => student.finalGrade != null);
+      const graded = students.filter((student) =>
+        student.finalGrade != null && student.classification !== "Chưa xếp loại",
+      );
       const percentOf = (count: number) =>
         students.length > 0 ? Number(((count / students.length) * 100).toFixed(1)) : 0;
       const shareOf = (predicate: (grade: number) => boolean) =>
         graded.filter((student) => predicate(student.finalGrade!)).length;
       const xs = shareOf((grade) => grade >= 8.5);
       const gioi = shareOf((grade) => grade >= 8 && grade < 8.5);
-      const kha = shareOf((grade) => grade >= 6.5 && grade < 8);
+      const kha = shareOf((grade) => grade >= 7 && grade < 8);
+      const tbKha = shareOf((grade) => grade >= 6.5 && grade < 7);
       const tb = shareOf((grade) => grade >= 5 && grade < 6.5);
       const yeu = shareOf((grade) => grade < 5);
       const noCompany = students.filter((student) => !student.companyName?.trim()).length;
       const notEligible = students.filter((student) => Boolean(student.companyName?.trim()) && student.isEligible === false).length;
       const unclassified = students.filter((student) =>
-        Boolean(student.companyName?.trim()) && student.isEligible !== false && student.finalGrade == null,
+        Boolean(student.companyName?.trim())
+        && student.isEligible !== false
+        && (student.finalGrade == null || student.classification === "Chưa xếp loại"),
       ).length;
       gradeSummary = [
         { label: "Xuất sắc", quantity: xs, rate: percentOf(xs) },
         { label: "Giỏi", quantity: gioi, rate: percentOf(gioi) },
         { label: "Khá", quantity: kha, rate: percentOf(kha) },
-        { label: "Trung bình khá", quantity: 0, rate: 0 },
+        { label: "Trung bình khá", quantity: tbKha, rate: percentOf(tbKha) },
         { label: "Trung bình", quantity: tb, rate: percentOf(tb) },
         { label: "Yếu", quantity: yeu, rate: percentOf(yeu) },
         { label: "Không hoàn thành", quantity: notEligible, rate: percentOf(notEligible) },
@@ -409,6 +396,12 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
         ? new Set(adminGrades.map((student) => student.companyName).filter(Boolean)).size
         : new Set(students.map((student) => student.companyName).filter(Boolean)).size,
       registeredStudents: isAdminScope ? adminGrades.length : students.length,
+      totalStudents: isAdminScope
+        ? adminGradeSummary?.totalStudentCount ?? adminDistribution?.totalStudents ?? adminGrades.length
+        : students.length,
+      notInterningStudents: isAdminScope
+        ? adminDistribution?.notInterningStudents ?? 0
+        : gradeSummary.find((row) => row.label === "Không thực tập")?.quantity ?? 0,
       completedStudents: isAdminScope
         ? adminGrades.filter((student) => Boolean(student.companyName?.trim()) && student.isEligible).length
         : students.filter((student) => Boolean(student.companyName?.trim()) && student.isEligible !== false).length,
@@ -1042,6 +1035,8 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
                     <li>Sinh viên có hồ sơ thực tập: {reportPreview.stats.registeredStudents} sinh viên</li>
                     <li>Số lượng sinh viên hoàn thành đợt thực tập: {reportPreview.stats.completedStudents} sinh viên</li>
                     <li>Số sinh viên không hoàn thành (đã phân bổ doanh nghiệp nhưng không đủ điều kiện dự thi): {reportPreview.stats.incompleteStudents} sinh viên</li>
+                    <li>Số sinh viên không thực tập: {reportPreview.stats.notInterningStudents} sinh viên</li>
+                    <li>Tổng số sinh viên theo khóa: {reportPreview.stats.totalStudents} sinh viên</li>
                   </ul>
 
                   <p className="mt-4 font-bold">2. Thống kê kết quả thực tập:</p>
@@ -1054,7 +1049,7 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
                       </tr>
                     </thead>
                     <tbody>
-                      {[...reportPreview.gradeSummary, { label: "TỔNG", quantity: reportPreview.stats.registeredStudents, rate: reportPreview.stats.registeredStudents > 0 ? 100 : 0 }].map((row) => (
+                      {[...reportPreview.gradeSummary, { label: "TỔNG", quantity: reportPreview.stats.totalStudents, rate: reportPreview.stats.totalStudents > 0 ? 100 : 0 }].map((row) => (
                         <tr key={row.label}>
                           <td className="border border-slate-300 px-1 py-2 text-left pl-2">{row.label}</td>
                           <td className="border border-slate-300 px-1 py-2">{row.quantity}</td>

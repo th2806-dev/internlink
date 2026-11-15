@@ -147,7 +147,7 @@ describe("computeGrade", () => {
     expect(result.creativeBonus).toBe(0);
     expect(result.processScore).toBe(6.5);
     expect(result.averageScore).toBe(6.8); // 6.5*0.4 + 7*0.6 = 2.6 + 4.2
-    expect(result.classification).toBe("Khá");
+    expect(result.classification).toBe("Trung bình khá");
   });
 
   it("does not penalize weeks where submission is disabled", () => {
@@ -233,7 +233,7 @@ describe("computeGrade", () => {
     expect(result.isEligible).toBe(false);
     expect(result.ineligibilityReasons).toContain("Chưa nộp báo cáo cuối kỳ");
     expect(result.averageScore).toBe(3.6);
-    expect(result.classification).toBe("Không đạt");
+    expect(result.classification).toBe("Chưa xếp loại");
   });
 
   it("attendance absence affects eligibility but never submission penalties", () => {
@@ -269,11 +269,15 @@ describe("computeGrade", () => {
     expect(result.missingCount).toBe(1);
   });
 
-  it("classification boundaries: 8.5 → Xuất sắc, 8 → Giỏi, 6.5 → Khá, 5 → Trung bình (chuẩn khớp BE InternshipGradeCalculator)", () => {
+  it("classification boundaries match the official score ranges", () => {
     expect(classifyScore(8.5)).toBe("Xuất sắc");
     expect(classifyScore(8.4)).toBe("Giỏi");
     expect(classifyScore(8)).toBe("Giỏi");
-    expect(classifyScore(6.5)).toBe("Khá");
+    expect(classifyScore(7.9)).toBe("Khá");
+    expect(classifyScore(7)).toBe("Khá");
+    expect(classifyScore(6.9)).toBe("Trung bình khá");
+    expect(classifyScore(6.5)).toBe("Trung bình khá");
+    expect(classifyScore(6.4)).toBe("Trung bình");
     expect(classifyScore(5)).toBe("Trung bình");
     expect(classifyScore(4.9)).toBe("Không đạt");
   });
@@ -288,7 +292,7 @@ describe("computeGrade", () => {
     expect(result.isEligible).toBe(true);
     expect(result.processScore).toBe(8);
     expect(result.averageScore).toBe(3.2);
-    expect(result.classification).toBe("Không đạt");
+    expect(result.classification).toBe("Chưa xếp loại");
   });
 
   it("divides weekly quality by all open weekly deadlines", () => {
@@ -334,7 +338,7 @@ describe("computeGrade", () => {
     expect(result.isEligible).toBe(false);
     expect(result.ineligibilityReasons).toContain("Chưa nộp báo cáo cuối kỳ");
     expect(result.averageScore).toBe(3.6);
-    expect(result.classification).toBe("Không đạt");
+    expect(result.classification).toBe("Chưa xếp loại");
   });
 
   it("calculates a final average from process and oral scores", () => {
