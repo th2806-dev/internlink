@@ -1,13 +1,18 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StudentsView } from "../features/lecturer/pages/StudentsView";
 import { mapLecturerStudentDtoToStudent } from "../lib/portalMappers";
 import type { LecturerStudentListItemDto } from "../types/api";
 import type { Student } from "../types/student";
 
-vi.mock("../hooks/useAuth", () => ({
+const { getStudentPageMock } = vi.hoisted(() => ({
+  getStudentPageMock: vi.fn(),
+}));
+
+vi.mock("../contexts/AuthContext", () => ({
   useAuth: () => ({ user: { name: "Trần Văn Giảng Viên", email: "gv@dn.edu.vn" } }),
 }));
 
@@ -22,6 +27,36 @@ vi.mock("../contexts/SemesterContext", () => ({
     },
     selectSemester: vi.fn(),
   }),
+}));
+
+vi.mock("../hooks/useSystemMenu", () => ({
+  useGridConfig: () => ({
+    data: [
+      { fieldCode: "studentCode", headerTitle: "Mã sinh viên", columnWidth: 120, isVisible: true, isFrozen: true, sortOrder: 0, cellFormatType: "text" },
+      { fieldCode: "fullName", headerTitle: "Họ và tên", columnWidth: 180, isVisible: true, isFrozen: true, sortOrder: 1, cellFormatType: "text" },
+      { fieldCode: "className", headerTitle: "Lớp sinh hoạt", columnWidth: 110, isVisible: true, isFrozen: false, sortOrder: 2, cellFormatType: "text" },
+      { fieldCode: "companyName", headerTitle: "Doanh nghiệp thực tập", columnWidth: 200, isVisible: true, isFrozen: false, sortOrder: 3, cellFormatType: "text" },
+      { fieldCode: "progressWeeks", headerTitle: "Tiến độ báo cáo", columnWidth: 130, isVisible: true, isFrozen: false, sortOrder: 4, cellFormatType: "number" },
+      { fieldCode: "employerScore", headerTitle: "Điểm DN", columnWidth: 100, isVisible: true, isFrozen: false, sortOrder: 5, cellFormatType: "number" },
+      { fieldCode: "lecturerScore", headerTitle: "Điểm GV", columnWidth: 100, isVisible: true, isFrozen: false, sortOrder: 6, cellFormatType: "number" },
+      { fieldCode: "finalGrade", headerTitle: "Điểm tổng kết", columnWidth: 110, isVisible: true, isFrozen: false, sortOrder: 7, cellFormatType: "number" },
+      { fieldCode: "actions", headerTitle: "Thao tác", columnWidth: 160, isVisible: true, isFrozen: true, frozenSide: "right", sortOrder: 8, cellFormatType: "text" },
+    ],
+    isPending: false,
+    isError: false,
+  }),
+}));
+
+vi.mock("../services/internshipGrading.service", () => ({
+  internshipGradingService: {
+    getSummary: vi.fn().mockResolvedValue({ students: [] }),
+  },
+}));
+
+vi.mock("../services/lecturerInternships.service", () => ({
+  lecturerInternshipsService: {
+    getStudentPage: getStudentPageMock,
+  },
 }));
 
 /** Dữ liệu đúng theo DTO backend trả về (`/api/Lecturer/students`). */
@@ -59,11 +94,96 @@ function toStudent(overrides: Partial<LecturerStudentListItemDto> = {}): Student
   return mapLecturerStudentDtoToStudent(makeDto(overrides), "Trần Văn Giảng Viên");
 }
 
-function renderView(props: Partial<React.ComponentProps<typeof StudentsView>> = {}) {
+function toDto(student: Student): LecturerStudentListItemDto {
+  const statusByLabel: Record<string, string> = {
+    "Chưa bắt đầu": "NotStarted",
+    "Đúng tiến độ": "InProgress",
+    "Quá hạn": "BehindSchedule",
+    "Chờ phản hồi": "AwaitingFeedback",
+    "Đang chỉnh sửa": "RequiresRevision",
+    "Hoàn thành": "Completed",
+  };
+  return makeDto({
+    studentId: student.studentId ?? student.id,
+    internshipId: student.id,
+    studentCode: student.mssv,
+    fullName: student.name,
+    email: student.email ?? null,
+    phone: student.phone ?? null,
+    class: student.class,
+    major: student.major,
+    companyName: student.company === "Chưa có" ? null : student.company,
+    position: student.position === "—" ? null : student.position,
+    internshipStatus: statusByLabel[student.status] ?? student.status,
+    progressPercent: student.progress,
+    finalGrade: student.finalGrade ?? null,
+  });
+}
+
+let pageItems: LecturerStudentListItemDto[] = [];
+
+function renderView(
+  props: Partial<React.ComponentProps<typeof StudentsView>> = {},
+  pageData?: LecturerStudentListItemDto[],
+  failFirstPageRequest = false,
+) {
+  const viewProps = { students: [toStudent()], ...props };
+  pageItems = pageData ?? viewProps.students!.map(toDto);
+  getStudentPageMock.mockImplementation(async (params: {
+    skip: number;
+    take: number;
+    search?: string;
+    status?: string;
+    className?: string;
+    companyName?: string;
+    unassignedCompany?: boolean;
+    sortBy?: string;
+  }) => {
+    let filtered = pageItems.filter((item) => {
+      const search = params.search?.toLocaleLowerCase();
+      const matchesSearch = !search || [
+        item.fullName,
+        item.studentCode,
+        item.class ?? "",
+        item.major ?? "",
+        item.companyName ?? "",
+        item.position ?? "",
+      ].some((value) => value.toLocaleLowerCase().includes(search));
+      const matchesStatus = !params.status || item.internshipStatus === params.status;
+      const matchesClass = !params.className || item.class === params.className;
+      const matchesCompany = params.unassignedCompany
+        ? !item.companyName
+        : !params.companyName || item.companyName === params.companyName;
+      return matchesSearch && matchesStatus && matchesClass && matchesCompany;
+    });
+    if (params.sortBy === "class") {
+      filtered = [...filtered].sort((a, b) => (a.class ?? "").localeCompare(b.class ?? ""));
+    } else if (params.sortBy === "progress") {
+      filtered = [...filtered].sort((a, b) => b.progressPercent - a.progressPercent);
+    } else {
+      filtered = [...filtered].sort((a, b) => a.fullName.localeCompare(b.fullName));
+    }
+    return {
+      items: filtered.slice(params.skip, params.skip + params.take),
+      total: filtered.length,
+      skip: params.skip,
+      take: params.take,
+    };
+  });
+  if (failFirstPageRequest) {
+    getStudentPageMock.mockRejectedValueOnce(new Error("HTTP 500"));
+  }
   const ui = (
-    <StudentsView students={[toStudent()]} {...props} />
+    <StudentsView {...viewProps} />
   );
-  return render(<MemoryRouter>{ui}</MemoryRouter>);
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter>{ui}</MemoryRouter>
+    </QueryClientProvider>,
+  );
 }
 
 beforeEach(() => {
@@ -93,7 +213,7 @@ describe("StudentsView — /lecturer/students theo UI_DESIGN_SYSTEM.md", () => {
     expect(container).not.toBeNull();
   });
 
-  it("2. Render đúng dữ liệu backend, không có số/fake tự bịa", () => {
+  it("2. Render đúng dữ liệu backend, không có số/fake tự bịa", async () => {
     renderView({
       students: [
         toStudent(),
@@ -110,6 +230,8 @@ describe("StudentsView — /lecturer/students theo UI_DESIGN_SYSTEM.md", () => {
         }),
       ],
     });
+
+    await screen.findByText("2 / 2 sinh viên");
 
     // Họ tên từ DTO.
     expect(screen.getAllByText("Nguyễn Văn An").length).toBeGreaterThan(0);
@@ -135,9 +257,14 @@ describe("StudentsView — /lecturer/students theo UI_DESIGN_SYSTEM.md", () => {
     expect(screen.getByText("2 / 2 sinh viên")).toBeInTheDocument();
   });
 
-  it("3. Empty state đúng chuẩn §8 (icon vòng tròn + text hướng dẫn)", () => {
+  it("3. Empty state đúng chuẩn §8 (icon vòng tròn + text hướng dẫn)", async () => {
     renderView({ students: [] });
 
+    await waitFor(() =>
+      expect(
+        screen.getAllByText("Chưa có sinh viên được phân công trong học kỳ này."),
+      ).toHaveLength(2),
+    );
     // Bản mobile + bản desktop cùng render trong jsdom (chưa áp media query).
     expect(
       screen.getAllByText("Chưa có sinh viên được phân công trong học kỳ này.").length,
@@ -165,9 +292,9 @@ describe("StudentsView — /lecturer/students theo UI_DESIGN_SYSTEM.md", () => {
     const user = userEvent.setup();
     const onRefresh = vi.fn().mockResolvedValue(undefined);
 
-    renderView({ error: "HTTP 500", onRefresh });
+    renderView({ onRefresh }, undefined, true);
 
-    expect(screen.getByRole("alert")).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
     expect(screen.getByText("Không thể tải danh sách sinh viên")).toBeInTheDocument();
     expect(screen.getByText(/HTTP 500/)).toBeInTheDocument();
 
@@ -180,8 +307,9 @@ describe("StudentsView — /lecturer/students theo UI_DESIGN_SYSTEM.md", () => {
     ).toHaveLength(0);
   });
 
-  it("6. Không dùng màu cấm của bảng §1 (blue/indigo/emerald...)", () => {
+  it("6. Không dùng màu cấm của bảng §1 (blue/indigo/emerald...)", async () => {
     renderView();
+    await screen.findByText("1 / 1 sinh viên");
 
     const html = document.body.innerHTML;
     for (const banned of [
@@ -214,25 +342,48 @@ describe("StudentsView — /lecturer/students theo UI_DESIGN_SYSTEM.md", () => {
       ],
     });
 
-    expect(
-      screen.getAllByText("2 / 2 sinh viên").length,
-    ).toBeGreaterThan(0);
+    expect(await screen.findByText("2 / 2 sinh viên")).toBeInTheDocument();
 
     await user.type(screen.getByLabelText("Tìm sinh viên"), "Bình");
 
-    expect(
-      screen.getAllByText("1 / 2 sinh viên").length,
-    ).toBeGreaterThan(0);
+    expect(await screen.findByText("1 / 2 sinh viên")).toBeInTheDocument();
     expect(screen.getAllByText("Lê Thị Bình").length).toBeGreaterThan(0);
     expect(screen.queryAllByText("Nguyễn Văn An")).toHaveLength(0);
   });
 
-  it("8. Mỗi dòng có nút Xem hồ sơ trỏ tới chi tiết sinh viên", () => {
+  it("8. Mỗi dòng có nút vào workspace chấm điểm", async () => {
     renderView();
 
-    const buttons = screen.getAllByRole("button", { name: /Xem hồ sơ/ });
+    const buttons = await screen.findAllByRole("button", { name: /Vào không gian chấm điểm/ });
     expect(buttons.length).toBeGreaterThan(0);
     expect(screen.getByLabelText("Tìm sinh viên")).toBeInTheDocument();
     expect(screen.getByText(/Hiển thị .* sinh viên/)).toBeInTheDocument();
+  });
+
+  it("9. Phân trang gọi API với skip/take và hiển thị đúng trang server trả về", async () => {
+    const user = userEvent.setup();
+    const students = Array.from({ length: 11 }, (_, index) =>
+      makeDto({
+        studentId: `st-${index + 1}`,
+        internshipId: `int-${index + 1}`,
+        studentCode: `CNTT${String(index + 1).padStart(5, "0")}`,
+        fullName: `Sinh viên ${String(index + 1).padStart(2, "0")}`,
+      }),
+    );
+
+    renderView({ students: students.slice(0, 10).map((dto) => mapLecturerStudentDtoToStudent(dto)) }, students);
+
+    await waitFor(() => expect(screen.getAllByText("Sinh viên 01").length).toBeGreaterThan(0));
+    expect(getStudentPageMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ skip: 0, take: 10 }),
+      expect.anything(),
+    );
+    await user.click(screen.getByRole("button", { name: "Trang sau" }));
+
+    await waitFor(() => expect(screen.getAllByText("Sinh viên 11").length).toBeGreaterThan(0));
+    expect(getStudentPageMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ skip: 10, take: 10 }),
+      expect.anything(),
+    );
   });
 });

@@ -18,6 +18,12 @@ public class InternshipStudentExportDto
     public decimal? DiemThamGia { get; set; }
     public decimal? DiemQT { get; set; }
     public decimal? Thi { get; set; }
+    public decimal? DiemNhaTuyenDung { get; set; }
+    public decimal ProcessScoreWeight { get; set; } = 0.40m;
+    public decimal ExamScoreWeight { get; set; } = 0.60m;
+    public decimal EmployerScoreWeight { get; set; }
+    public bool RequireFinalReportForExamEligibility { get; set; } = true;
+    public decimal MinimumPassingScore { get; set; } = 5m;
 
     // Guidance & Progress
     public string HdChung { get; set; } = string.Empty;

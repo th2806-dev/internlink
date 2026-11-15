@@ -1,0 +1,9 @@
+<Project>
+  <PropertyGroup>
+    <!-- 
+      Tắt cảnh báo NU1902 / NU1903 (Advisory CVE-2024-38095 của System.Security.Cryptography.Pkcs do MailKit kéo theo).
+      Dự án chỉ dùng gửi mail SMTP thông thường, không dùng giải mã CMS/PKCS S/MIME.
+    -->
+    <NoWarn>$(NoWarn);NU1902;NU1903</NoWarn>
+  </PropertyGroup>
+</Project>

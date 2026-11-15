@@ -1,3 +1,4 @@
+using System.Data;
 using InternLink.Domain.Entities;
 
 namespace InternLink.Application.Interfaces;
@@ -24,6 +25,14 @@ public interface IUnitOfWork : IDisposable, IAsyncDisposable
     IRepository<Notification> Notifications { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
+    Task ExecuteTransactionAsync(
+        Func<Task> action,
+        IsolationLevel isolationLevel = IsolationLevel.ReadCommitted,
+        CancellationToken cancellationToken = default);
+    Task<TResult> ExecuteTransactionAsync<TResult>(
+        Func<Task<TResult>> action,
+        IsolationLevel isolationLevel = IsolationLevel.ReadCommitted,
+        CancellationToken cancellationToken = default);
     Task BeginTransactionAsync(CancellationToken cancellationToken = default);
     Task CommitTransactionAsync(CancellationToken cancellationToken = default);
     Task RollbackTransactionAsync(CancellationToken cancellationToken = default);

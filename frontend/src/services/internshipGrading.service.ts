@@ -52,6 +52,8 @@ export interface StudentGrade {
 
   oralExamScore: number | null;
   averageScore: number | null;
+  score4: number | null;
+  letterGrade: string | null;
   isFinalized: boolean;
   classification: string;
 

@@ -42,12 +42,14 @@ import { useSemester } from "../../../contexts/SemesterContext";
 import { useWeeklyReports } from "../../../hooks/useWeeklyReports";
 import { useAuth } from "../../../hooks/useAuth";
 import { queryKeys } from "../../../lib/queryKeys";
-import { calculateWeeklyReportProgress } from "../studentProgress";
+import {
+  calculateWeeklyReportProgress,
+  getStudentDashboardWeeks,
+} from "../studentProgress";
 import { evaluationService } from "../../../services/evaluation.service";
 import { submissionApiService } from "../../../services/submissionApi.service";
-import {
-  semesterReportScheduleService,
-} from "../../../services/semesterReportSchedule.service";
+import { studentPortalService } from "../../../services/studentPortal.service";
+import { IntroductionLetterCard } from "../components/IntroductionLetterCard";
 
 type ChartMode = "bar" | "line" | "table";
 
@@ -83,19 +85,19 @@ export const DashboardView = ({
     enabled: isLoggedIn,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      const [evaluationResult, averagesResult, submissionsResult, schedulesResult] =
+      const [evaluationResult, averagesResult, submissionsResult, progressResult] =
         await Promise.allSettled([
           internshipId ? evaluationService.getByInternship(internshipId) : Promise.resolve(null),
           internshipId
             ? evaluationService.getWeeklyQualityAverages(internshipId)
             : Promise.resolve([]),
           submissionApiService.getMine(),
-          scheduleSemesterId
-            ? semesterReportScheduleService.getSchedules(scheduleSemesterId)
-            : Promise.resolve([]),
+          studentPortalService.getDashboardProgress(),
         ]);
       const submissions =
         submissionsResult.status === "fulfilled" ? submissionsResult.value : [];
+      const dashboardProgress =
+        progressResult.status === "fulfilled" ? progressResult.value : null;
 
       return {
         evaluation:
@@ -103,8 +105,9 @@ export const DashboardView = ({
         weeklyQualityAverages:
           averagesResult.status === "fulfilled" ? averagesResult.value : [],
         weeklyQualityAveragesError: averagesResult.status === "rejected",
-        reportSchedules:
-          schedulesResult.status === "fulfilled" ? schedulesResult.value : [],
+        dashboardProgress,
+        dashboardProgressError: progressResult.status === "rejected",
+        reportSchedules: dashboardProgress?.weeks ?? [],
         submissionComments: submissions.flatMap((submission) =>
           (submission.feedbacks ?? [])
             .filter((feedback) => feedback.isPublic)
@@ -125,6 +128,8 @@ export const DashboardView = ({
   );
   const weeklyQualityAveragesError =
     extrasQuery.data?.weeklyQualityAveragesError ?? false;
+  const dashboardProgress = extrasQuery.data?.dashboardProgress ?? null;
+  const dashboardProgressError = extrasQuery.data?.dashboardProgressError ?? false;
   const reportSchedules = useMemo(
     () => extrasQuery.data?.reportSchedules ?? [],
     [extrasQuery.data?.reportSchedules],
@@ -145,6 +150,7 @@ export const DashboardView = ({
       const weeklyAveragesLoaded =
         !extrasResult.error &&
         !extrasResult.data?.weeklyQualityAveragesError &&
+        !extrasResult.data?.dashboardProgressError &&
         !reportsResult.error;
       onShowToast?.(
         weeklyAveragesLoaded
@@ -159,37 +165,29 @@ export const DashboardView = ({
 
   // d2: Chương trình đào tạo = tên ngành + 4 ký tự đầu lớp
   const majorName =
-    profile.major && profile.major !== "—" ? profile.major : "Khoa học Máy tính";
+    profile.major && profile.major !== "—" ? profile.major : "Chưa cập nhật";
   const classPrefix =
-    profile.class && profile.class !== "—" ? profile.class.slice(0, 4) : "C23A";
-  const programName = majorName.includes(classPrefix)
-    ? majorName
-    : `${majorName} ${classPrefix}`.trim();
+    profile.class && profile.class !== "—" ? profile.class.slice(0, 4) : "";
+  const programName = classPrefix && !majorName.includes(classPrefix)
+    ? `${majorName} ${classPrefix}`.trim()
+    : majorName;
 
   // d2: Danh sách Năm học & Học kỳ
   const academicYears = useMemo(() => {
-    const years = Array.from(
+    return Array.from(
       new Set(semesters.map((s) => s.academicYear).filter(Boolean)),
     );
-    if (years.length === 0) {
-      return [selectedSemester?.academicYear || "2025 - 2026", "2026 - 2027"];
-    }
-    return years;
-  }, [semesters, selectedSemester]);
+  }, [semesters]);
 
   const terms = useMemo(() => {
-    const termList = Array.from(
+    return Array.from(
       new Set(semesters.map((s) => s.term).filter(Boolean)),
     );
-    if (termList.length === 0) {
-      return ["Học kỳ 1", "Học kỳ 2", "Học kỳ hè"];
-    }
-    return termList;
   }, [semesters]);
 
   const currentAcademicYear =
-    selectedSemester?.academicYear || academicYears[0] || "2025 - 2026";
-  const currentTerm = selectedSemester?.term || terms[0] || "Học kỳ 1";
+    selectedSemester?.academicYear || academicYears[0] || "—";
+  const currentTerm = selectedSemester?.term || terms[0] || "—";
 
   const handleYearChange = (year: string) => {
     const match =
@@ -215,7 +213,7 @@ export const DashboardView = ({
   );
   const nextReportSchedule = nextPendingReport
     ? reportSchedules.find((s) => s.weekNumber === nextPendingReport.weekNumber)
-    : reportSchedules.find((s) => s.isSubmissionOpen);
+    : reportSchedules.find((s) => s.isSubmissionOpen && !s.isFinalReport);
 
   const daysRemaining = nextReportSchedule?.dueDate
     ? Math.ceil((new Date(nextReportSchedule.dueDate).getTime() - Date.now()) / 86_400_000)
@@ -238,6 +236,12 @@ export const DashboardView = ({
     company?.contactPhone?.trim() ||
     (profile.supervisorPhone && profile.supervisorPhone !== "—" ? profile.supervisorPhone : "") ||
     "—";
+  const lecturerEmail = profile.lecturerEmail && profile.lecturerEmail !== "—"
+    ? profile.lecturerEmail
+    : "";
+  const lecturerPhone = profile.lecturerPhone && profile.lecturerPhone !== "—"
+    ? profile.lecturerPhone
+    : "";
 
   // Show one chart position for every weekly report schedule currently enabled by the lecturer.
   const academicResultsData = useMemo(() => {
@@ -272,7 +276,7 @@ export const DashboardView = ({
   const weeklyReportProgress = calculateWeeklyReportProgress(
     reports,
     reportSchedules,
-    selectedSemester?.totalWeeks ?? 0,
+    dashboardProgress?.totalWeeks ?? selectedSemester?.totalWeeks ?? 0,
     profile.progressBreakdown?.requiredWeeksCount ?? 0,
   );
   const {
@@ -384,6 +388,8 @@ export const DashboardView = ({
       }));
   }, [reports, reportSchedules]);
 
+  const configuredWeeks = getStudentDashboardWeeks(dashboardProgress?.weeks ?? []);
+
   return (
     <div className="mx-auto max-w-[1300px] space-y-4 animate-in fade-in duration-200 font-sans pb-12">
       {/* 1. KHỐI THÔNG TIN THỰC TẬP (Chuẩn layout banner xanh + dữ liệu thực tế) */}
@@ -394,7 +400,7 @@ export const DashboardView = ({
             <GraduationCap className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> THÔNG TIN THỰC TẬP SINH VIÊN
           </h2>
           <span className="text-[10.5px] font-medium bg-white/15 px-2 py-0.5 rounded-md border border-white/20">
-            {selectedSemester?.name || "Kỳ thực tập hiện tại"}
+            {dashboardProgress?.semesterName || selectedSemester?.name || "Chưa có học kỳ"}
           </span>
         </div>
 
@@ -404,22 +410,20 @@ export const DashboardView = ({
           <div className="flex flex-wrap items-center justify-between gap-y-2 gap-x-5 text-xs text-slate-700">
             <div>
               <span className="text-slate-500 font-normal">Mã sinh viên : </span>
-              <span className="font-semibold text-slate-800">{profile.mssv || "CNTTSV0003"}</span>
+              <span className="font-semibold text-slate-800">{profile.mssv || "—"}</span>
             </div>
             <div>
               <span className="text-slate-500 font-normal">Họ và tên : </span>
-              <span className="font-semibold text-slate-800">{profile.name || "Phạm Quốc Duy"}</span>
+              <span className="font-semibold text-slate-800">{profile.name || "—"}</span>
             </div>
             <div>
               <span className="text-slate-500 font-normal">Lớp : </span>
-              <span className="font-semibold text-slate-800">{profile.class || "C23A.TH2"}</span>
+              <span className="font-semibold text-slate-800">{profile.class || "—"}</span>
             </div>
             <div>
               <span className="text-slate-500 font-normal">Doanh nghiệp : </span>
-              <span className="font-semibold text-blue-700">
-                {profile.company && profile.company !== "—"
-                  ? profile.company
-                  : "Công ty TNHH FPT Software"}
+              <span className="font-semibold text-[#026aa7]">
+                {company?.companyName || "Chưa được phân công"}
               </span>
             </div>
             <div>
@@ -427,8 +431,47 @@ export const DashboardView = ({
               <span className="font-semibold text-slate-800">
                 {profile.lecturerName && profile.lecturerName !== "—"
                   ? profile.lecturerName
-                  : "TS. Nguyễn Văn An"}
+                  : "Chưa được phân công"}
               </span>
+            </div>
+            <div>
+              <span className="text-slate-500 font-normal">Trạng thái hồ sơ : </span>
+              <span className="font-semibold text-slate-800">{profile.statusBadge || "Chưa bắt đầu"}</span>
+            </div>
+          </div>
+
+          <div className="grid gap-2 border-t border-slate-100 pt-3 text-xs sm:grid-cols-2">
+            <div className="rounded-lg bg-slate-50 p-3">
+              <p className="font-semibold text-slate-700">Liên hệ giảng viên hướng dẫn</p>
+              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                {lecturerEmail ? (
+                  <a className="inline-flex items-center gap-1 text-[#026aa7] hover:underline" href={`mailto:${lecturerEmail}`}>
+                    <Mail className="h-3.5 w-3.5" aria-hidden="true" />
+                    {lecturerEmail}
+                  </a>
+                ) : <span className="text-slate-500">Chưa cập nhật email</span>}
+                {lecturerPhone ? (
+                  <a className="inline-flex items-center gap-1 text-[#026aa7] hover:underline" href={`tel:${lecturerPhone}`}>
+                    <Phone className="h-3.5 w-3.5" aria-hidden="true" />
+                    {lecturerPhone}
+                  </a>
+                ) : <span className="text-slate-500">Chưa cập nhật số điện thoại</span>}
+              </div>
+            </div>
+            <div className="rounded-lg bg-slate-50 p-3">
+              <p className="font-semibold text-slate-700">Mentor doanh nghiệp</p>
+              <p className="mt-1 text-slate-600">{mentorName}</p>
+              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                {mentorEmail !== "—" && (
+                  <a className="text-[#026aa7] hover:underline" href={`mailto:${mentorEmail}`}>{mentorEmail}</a>
+                )}
+                {mentorPhone !== "—" && (
+                  <a className="text-[#026aa7] hover:underline" href={`tel:${mentorPhone}`}>{mentorPhone}</a>
+                )}
+                {mentorEmail === "—" && mentorPhone === "—" && (
+                  <span className="text-slate-500">Chưa cập nhật thông tin liên hệ</span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -460,8 +503,10 @@ export const DashboardView = ({
                 <select
                   value={currentAcademicYear}
                   onChange={(e) => handleYearChange(e.target.value)}
+                  disabled={academicYears.length === 0}
                   className="w-full appearance-none rounded-lg border border-slate-300 bg-white px-3.5 py-1.5 text-xs font-medium text-slate-800 shadow-2xs hover:border-slate-400 focus:border-blue-600 focus:outline-hidden pr-8 h-8.5"
                 >
+                  {academicYears.length === 0 && <option value="—">Chưa có dữ liệu học kỳ</option>}
                   {academicYears.map((year) => (
                     <option key={year} value={year}>
                       {year}
@@ -481,8 +526,10 @@ export const DashboardView = ({
                 <select
                   value={currentTerm}
                   onChange={(e) => handleTermChange(e.target.value)}
+                  disabled={terms.length === 0}
                   className="w-full appearance-none rounded-lg border border-slate-300 bg-white px-3.5 py-1.5 text-xs font-medium text-slate-800 shadow-2xs hover:border-slate-400 focus:border-blue-600 focus:outline-hidden pr-8 h-8.5"
                 >
+                  {terms.length === 0 && <option value="—">Chưa có dữ liệu học kỳ</option>}
                   {terms.map((term) => (
                     <option key={term} value={term}>
                       {term}
@@ -495,6 +542,82 @@ export const DashboardView = ({
           </div>
         </div>
       </div>
+
+      <IntroductionLetterCard />
+
+      <section className="rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs sm:p-5">
+        <div className="flex flex-col gap-1 border-b border-slate-100 pb-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-sm font-bold text-slate-900">Tiến độ báo cáo theo tuần</h2>
+            <p className="mt-1 text-xs text-slate-500">
+              {dashboardProgress?.requiredWeeklyReportsCount != null
+                ? `Quy chế yêu cầu ${dashboardProgress.requiredWeeklyReportsCount} báo cáo tuần`
+                : "Tiến độ theo lịch báo cáo và quy chế học kỳ hiện có"}
+            </p>
+          </div>
+          <span className="text-xs font-semibold text-slate-600">
+            {profile.progressBreakdown?.submittedReportsCount ?? 0}/
+            {dashboardProgress?.requiredWeeklyReportsCount
+              ?? profile.progressBreakdown?.requiredWeeksCount
+              ?? 0} báo cáo đã nộp
+          </span>
+        </div>
+        {extrasQuery.isPending ? (
+          <p role="status" className="mt-4 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
+            Đang tải tiến độ và lịch báo cáo...
+          </p>
+        ) : dashboardProgressError ? (
+          <p role="alert" className="mt-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+            Không tải được tiến độ theo lịch học kỳ. Vui lòng làm mới trang để thử lại.
+          </p>
+        ) : configuredWeeks.length === 0 ? (
+          <p className="mt-4 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
+            Học kỳ hiện chưa cấu hình tuần báo cáo đang mở.
+          </p>
+        ) : (
+          <ol className="mt-4 flex gap-3 overflow-x-auto pb-2" aria-label="Tiến độ báo cáo theo tuần">
+            {configuredWeeks.map((week) => {
+              const report = reports.find((item) => item.weekNumber === week.weekNumber);
+              const status = report?.status.toLocaleLowerCase();
+              const deadlinePassed = new Date(week.dueDate).getTime() < Date.now();
+              const timeUntilDeadline = new Date(week.dueDate).getTime() - Date.now();
+              const label = status === "approved" || status === "completed"
+                ? "Đã duyệt"
+                : status === "submitted" || status === "reviewed"
+                  ? "Chờ duyệt"
+                  : status === "revised" || status === "revisionrequested" || status === "revisionsubmitted"
+                    ? "Cần sửa"
+                    : !week.isSubmissionOpen || (deadlinePassed && !week.allowLateSubmission)
+                      ? "Đã khóa"
+                      : deadlinePassed
+                        ? "Có thể nộp trễ"
+                        : timeUntilDeadline <= 24 * 60 * 60 * 1000
+                          ? "Sắp hết hạn"
+                        : "Chưa nộp";
+              const stateClass = label === "Đã duyệt"
+                ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                : label === "Cần sửa"
+                  ? "border-rose-300 bg-rose-50 text-rose-800"
+                  : label === "Đã khóa"
+                    ? "border-slate-300 bg-slate-100 text-slate-700"
+                    : label === "Chờ duyệt"
+                      ? "border-sky-300 bg-sky-50 text-sky-800"
+                      : label === "Có thể nộp trễ" || label === "Sắp hết hạn"
+                        ? "border-amber-300 bg-amber-50 text-amber-800"
+                        : "border-slate-200 bg-white text-slate-700";
+              return (
+                <li key={week.weekNumber} className={`min-w-32 rounded-lg border p-3 ${stateClass}`}>
+                  <p className="text-xs font-bold">Tuần {week.weekNumber}</p>
+                  <p className="mt-1 text-[11px] font-semibold">{label}</p>
+                  <p className="mt-2 text-[10px] text-slate-600">
+                    Hạn: {new Date(week.dueDate).toLocaleDateString("vi-VN")}
+                  </p>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+      </section>
 
       {/* 2. HAI THẺ BIỂU ĐỒ SONG SONG (Chuẩn layout ảnh mẫu) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

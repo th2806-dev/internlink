@@ -1,9 +1,11 @@
 ﻿using InternLink.API.Extensions;
 using InternLink.API.Filters;
 using InternLink.API.Hubs;
+using InternLink.API.Authorization;
 using InternLink.Application;
 using InternLink.Infrastructure;
 using Microsoft.OpenApi;
+using Microsoft.AspNetCore.Authorization;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -26,6 +28,8 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.Converters.Add(new JsonDateTimeUtcConverter());
         options.JsonSerializerOptions.Converters.Add(new JsonNullableDateTimeUtcConverter());
     });
+builder.Services.AddMemoryCache();
+builder.Services.AddDataProtection();
 builder.Services.AddResponseCompression(options =>
 {
     options.EnableForHttps = true;
@@ -68,6 +72,8 @@ builder.Services.AddCors(options =>
 builder.Services.AddSignalR();
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddSingleton<IAuthorizationPolicyProvider, PermissionAuthorizationPolicyProvider>();
+builder.Services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
 builder.Services.AddScoped<InternLink.Application.Interfaces.IRealtimeNotificationService, InternLink.Infrastructure.Services.RealtimeNotificationService<NotificationHub>>();
 
 builder.Services.AddEndpointsApiExplorer();

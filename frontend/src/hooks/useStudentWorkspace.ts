@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSemester } from "../contexts/SemesterContext";
 import { lecturerInternshipsService } from "../services/lecturerInternships.service";
-import { weeklyReportService } from "../services/weeklyReport.service";
 import { evaluationService } from "../services/evaluation.service";
 import { getApiErrorMessage } from "../lib/apiClient";
 import type {
   InternshipDetailDto,
   LecturerStudentListItemDto,
   WeeklyReportDto,
+  StudentWeeklyTimelineDto,
   SubmissionDto,
   EvaluationDetailDto,
 } from "../types/api";
@@ -16,6 +16,7 @@ export interface StudentWorkspaceData {
   detail: InternshipDetailDto | null;
   assignment: LecturerStudentListItemDto | null;
   weeklyReports: WeeklyReportDto[];
+  weeklyTimeline: StudentWeeklyTimelineDto | null;
   submissions: SubmissionDto[];
   evaluation: EvaluationDetailDto | null;
   isLoading: boolean;
@@ -37,6 +38,7 @@ export function useStudentWorkspace(internshipId: string | undefined): StudentWo
   const [detail, setDetail] = useState<InternshipDetailDto | null>(null);
   const [assignment, setAssignment] = useState<LecturerStudentListItemDto | null>(null);
   const [weeklyReports, setWeeklyReports] = useState<WeeklyReportDto[]>([]);
+  const [weeklyTimeline, setWeeklyTimeline] = useState<StudentWeeklyTimelineDto | null>(null);
   const [submissions, setSubmissions] = useState<SubmissionDto[]>([]);
   const [evaluation, setEvaluation] = useState<EvaluationDetailDto | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -70,15 +72,33 @@ export function useStudentWorkspace(internshipId: string | undefined): StudentWo
       setAssignment(
         assignedStudents.find((item) => item.internshipId === internshipId) ?? null,
       );
+      if (!detailData.student?.id) {
+        setWeeklyTimeline(null);
+        setWeeklyReports([]);
+        setSectionErrors((previous) => ({
+          ...previous,
+          reports: "Không tìm thấy mã sinh viên để tải tiến độ báo cáo tuần.",
+        }));
+      }
       const results = await Promise.allSettled([
-        weeklyReportService.getByInternship(internshipId),
+        detailData.student?.id
+          ? lecturerInternshipsService.getStudentTimeline(detailData.student.id, semesterId)
+          : Promise.reject(new Error("Không tìm thấy mã sinh viên để tải tiến độ báo cáo tuần.")),
         lecturerInternshipsService.getSubmissions(internshipId, semesterId),
         evaluationService.getByInternship(internshipId),
       ]);
 
-      const [reportsResult, submissionsResult, evaluationResult] = results;
-      if (reportsResult.status === "fulfilled") setWeeklyReports(reportsResult.value);
-      else setSectionErrors((previous) => ({ ...previous, reports: getApiErrorMessage(reportsResult.reason) }));
+      const [timelineResult, submissionsResult, evaluationResult] = results;
+      if (timelineResult.status === "fulfilled") {
+        setWeeklyTimeline(timelineResult.value);
+        setWeeklyReports(
+          timelineResult.value.weeks.flatMap((week) => week.reports),
+        );
+      } else {
+        setWeeklyTimeline(null);
+        setWeeklyReports([]);
+        setSectionErrors((previous) => ({ ...previous, reports: getApiErrorMessage(timelineResult.reason) }));
+      }
       if (submissionsResult.status === "fulfilled") setSubmissions(submissionsResult.value);
       else setSectionErrors((previous) => ({ ...previous, submissions: getApiErrorMessage(submissionsResult.reason) }));
       if (evaluationResult.status === "fulfilled") setEvaluation(evaluationResult.value);
@@ -94,5 +114,5 @@ export function useStudentWorkspace(internshipId: string | undefined): StudentWo
     void load();
   }, [load]);
 
-  return { detail, assignment, weeklyReports, submissions, evaluation, isLoading, error, sectionErrors, refresh: load };
+  return { detail, assignment, weeklyReports, weeklyTimeline, submissions, evaluation, isLoading, error, sectionErrors, refresh: load };
 }

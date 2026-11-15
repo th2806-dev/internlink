@@ -30,7 +30,9 @@ public class Internship : BaseEntity
     public InternshipStatus Status { get; set; } = InternshipStatus.NotStarted;
     public string? Position { get; set; }
     public string? SupervisorName { get; set; }
-    public string? Notes { get; set; }
+    public string? SupervisorPhone { get; set; }
+    public string? SupervisorEmail { get; set; }
+    public string? SupervisorDepartment { get; set; }
 
     public ICollection<Submission> Submissions { get; set; } = new List<Submission>();
     public ICollection<WeeklyReport> WeeklyReports { get; set; } = new List<WeeklyReport>();

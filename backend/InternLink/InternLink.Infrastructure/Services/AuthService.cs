@@ -6,6 +6,7 @@ using InternLink.Application.Exceptions;
 using InternLink.Application.Interfaces;
 using InternLink.Infrastructure.Persistence;
 using InternLink.Domain.Entities;
+using InternLink.Domain.Entities.Rbac;
 using InternLink.Domain.Enums;
 using InternLink.Shared.Interfaces;
 using Microsoft.AspNetCore.Identity;
@@ -54,6 +55,7 @@ public class AuthService : IAuthService
         if (user == null || !user.IsActive)
         {
             _logger.LogWarning("Failed login attempt for user {Username}", request.Username);
+            await LogLoginAsync(request.Username, ipAddress, "FAILED");
             throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.InvalidCredentials);
         }
 
@@ -61,6 +63,7 @@ public class AuthService : IAuthService
         if (verification == PasswordVerificationResult.Failed)
         {
             _logger.LogWarning("Failed login attempt for user {Username} - wrong password", request.Username);
+            await LogLoginAsync(request.Username, ipAddress, "FAILED");
             throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.InvalidCredentials);
         }
 
@@ -84,6 +87,13 @@ public class AuthService : IAuthService
         };
 
         _db.RefreshTokens.Add(refreshTokenEntity);
+        _db.SysLoginLogs.Add(new SysLoginLog
+        {
+            LoginAt = DateTime.UtcNow,
+            Username = user.Username,
+            IpAddress = ipAddress,
+            Status = "SUCCESS"
+        });
         await _db.SaveChangesAsync();
 
         _logger.LogInformation("User {Username} logged in successfully with RefreshToken", request.Username);
@@ -98,6 +108,18 @@ public class AuthService : IAuthService
             MustChangePassword = user.MustChangePassword,
             DepartmentId = user.DepartmentId
         };
+    }
+
+    private async Task LogLoginAsync(string username, string? ipAddress, string status)
+    {
+        _db.SysLoginLogs.Add(new SysLoginLog
+        {
+            LoginAt = DateTime.UtcNow,
+            Username = username,
+            IpAddress = ipAddress,
+            Status = status
+        });
+        await _db.SaveChangesAsync();
     }
 
     public async Task<LoginResponse> RefreshTokenAsync(RefreshTokenRequest request, string? ipAddress = null)

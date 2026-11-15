@@ -618,7 +618,7 @@ export const InternshipView = ({
                           Giảng viên hướng dẫn
                         </span>
                         <h5 className="font-bold text-slate-900 truncate text-xs sm:text-sm">
-                          {profile.lecturerName && profile.lecturerName !== "—" ? profile.lecturerName : "TS. Nguyễn Văn An"}
+                          {profile.lecturerName && profile.lecturerName !== "—" ? profile.lecturerName : "Chưa được phân công"}
                         </h5>
                         <p className="text-[11px] text-slate-500 truncate">
                           {profile.lecturerEmail && profile.lecturerEmail !== "—" ? profile.lecturerEmail : "gvhd@khoacntt.edu.vn"}
@@ -1079,7 +1079,7 @@ export const InternshipView = ({
                 <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg">
                   <p className="font-bold text-slate-900 text-sm">
                     {activeContactModal === "lecturer"
-                      ? profile.lecturerName || "TS. Nguyễn Văn An"
+                      ? profile.lecturerName || "Chưa được phân công"
                       : profile.supervisorName || "Mentor Doanh nghiệp"}
                   </p>
                   <p className="text-slate-500 text-[11px] mt-0.5">

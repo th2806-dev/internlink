@@ -175,6 +175,8 @@ export function mapLecturerStudentDtoToStudent(
     phone: item.phone ?? undefined,
     startDate: item.startDate ?? undefined,
     endDate: item.endDate ?? undefined,
+    studentId: item.studentId,
+    finalGrade: item.finalGrade ?? null,
     lastReportName: "—",
     lastReportDate: "—",
     updatedAt: formatViDate(item.endDate),

@@ -1082,10 +1082,10 @@ export const StudentsView = ({
             {/* Internship Preferences */}
             {(selectedStudent.desiredPosition || selectedStudent.skills || selectedStudent.desiredLocation || selectedStudent.preferredIndustry || selectedStudent.department) && (
               <div className="space-y-3 text-xs">
-                <h4 className="font-bold text-violet-700 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                <h4 className="font-bold text-[#026aa7] text-[11px] uppercase tracking-wider flex items-center gap-1.5">
                   <Briefcase className="w-3.5 h-3.5" /> Nguyện vọng thực tập
                 </h4>
-                <div className="p-3 bg-violet-50/50 rounded-md space-y-2 font-medium text-slate-700 border border-violet-100">
+                <div className="p-3 bg-[#026aa7]/5 rounded-md space-y-2 font-medium text-slate-700 border border-[#026aa7]/15">
                   {selectedStudent.department && (
                     <div className="flex justify-between">
                       <span className="text-slate-400">Khoa:</span>
@@ -1142,7 +1142,7 @@ export const StudentsView = ({
                       const s = skill.trim();
                       if (!s) return null;
                       return (
-                        <span key={i} className="px-2 py-0.5 bg-violet-100 text-violet-700 border border-violet-200 rounded-full text-[10px] font-bold">
+                        <span key={i} className="px-2 py-0.5 bg-[#026aa7]/10 text-[#026aa7] border border-[#026aa7]/20 rounded-full text-[10px] font-bold">
                           {s}
                         </span>
                       );

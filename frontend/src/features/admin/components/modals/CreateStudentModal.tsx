@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { UserPlus, X, Save } from "lucide-react";
+import { DynamicFormField } from "../../../../components/common/DynamicFormField";
 
 export interface CreateStudentFormPayload {
   studentCode: string;
@@ -152,13 +153,15 @@ export const CreateStudentModal = ({
               />
             </div>
             <div>
-              <label className="block font-bold text-slate-700 mb-1">Lớp</label>
-              <input
-                type="text"
-                value={form.class}
-                onChange={(e) => setField("class", e.target.value)}
+              <DynamicFormField
+                formCode="FORM_STUDENT_PROFILE"
+                roleId={null}
+                fieldKey="Class"
+                label="Lớp"
+                name="class"
+                value={form.class || undefined}
+                onChange={(value) => setField("class", value)}
                 placeholder="DH24TIN06"
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-blue-500"
               />
             </div>
             <div>
@@ -197,30 +200,36 @@ export const CreateStudentModal = ({
               />
             </div>
             <div>
-              <label className="block font-bold text-slate-700 mb-1">Email</label>
-              <input
+              <DynamicFormField
+                formCode="FORM_STUDENT_PROFILE"
+                roleId={null}
+                fieldKey="Email"
+                label="Email"
+                name="email"
                 type="email"
-                value={form.email}
-                onChange={(e) => setField("email", e.target.value)}
+                value={form.email || undefined}
+                onChange={(value) => setField("email", value)}
                 placeholder="vana@student.edu.vn"
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-blue-500"
               />
             </div>
             <div className="sm:col-span-2">
-              <label className="block font-bold text-slate-700 mb-1">SDT</label>
-              <input
-                type="text"
-                value={form.phone}
-                onChange={(e) => setField("phone", e.target.value)}
+              <DynamicFormField
+                formCode="FORM_STUDENT_PROFILE"
+                roleId={null}
+                fieldKey="Phone"
+                label="Điện thoại"
+                name="phone"
+                type="tel"
+                value={form.phone || undefined}
+                onChange={(value) => setField("phone", value)}
                 placeholder="0901234567"
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-blue-500"
               />
             </div>
           </div>
 
           {/* INTERNSHIP PREFERENCES SECTION */}
           <div className="pt-3 border-t border-slate-100 space-y-3">
-            <h3 className="text-[11px] font-bold uppercase tracking-wider text-violet-600">
+            <h3 className="text-[11px] font-bold uppercase tracking-wider text-[#026aa7]">
               Nguyện vọng thực tập & Kỹ năng (Tùy chọn)
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -231,7 +240,7 @@ export const CreateStudentModal = ({
                   value={form.department}
                   onChange={(e) => setField("department", e.target.value)}
                   placeholder="Công nghệ thông tin"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-violet-500"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-[#026aa7]"
                 />
               </div>
               <div>
@@ -241,7 +250,7 @@ export const CreateStudentModal = ({
                   value={form.desiredPosition}
                   onChange={(e) => setField("desiredPosition", e.target.value)}
                   placeholder="Backend Developer"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-violet-500"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-[#026aa7]"
                 />
               </div>
             </div>
@@ -253,7 +262,7 @@ export const CreateStudentModal = ({
                   value={form.alternativePosition}
                   onChange={(e) => setField("alternativePosition", e.target.value)}
                   placeholder="QA/Tester"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-violet-500"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-[#026aa7]"
                 />
               </div>
               <div>
@@ -263,7 +272,7 @@ export const CreateStudentModal = ({
                   value={form.skills}
                   onChange={(e) => setField("skills", e.target.value)}
                   placeholder="C#, .NET, React"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-violet-500"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-[#026aa7]"
                 />
               </div>
             </div>
@@ -275,7 +284,7 @@ export const CreateStudentModal = ({
                   value={form.desiredLocation}
                   onChange={(e) => setField("desiredLocation", e.target.value)}
                   placeholder="Hà Nội, TP.HCM"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-violet-500"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-[#026aa7]"
                 />
               </div>
               <div>
@@ -283,7 +292,7 @@ export const CreateStudentModal = ({
                 <select
                   value={form.workPreference}
                   onChange={(e) => setField("workPreference", e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-violet-500"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-[#026aa7]"
                 >
                   <option value="">— Chọn hình thức —</option>
                   <option value="Onsite">Onsite</option>
@@ -300,7 +309,7 @@ export const CreateStudentModal = ({
                   value={form.preferredIndustry}
                   onChange={(e) => setField("preferredIndustry", e.target.value)}
                   placeholder="Fintech, AI, Thương mại điện tử"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-violet-500"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-[#026aa7]"
                 />
               </div>
               <div>
@@ -310,7 +319,7 @@ export const CreateStudentModal = ({
                   value={form.resumeUrl}
                   onChange={(e) => setField("resumeUrl", e.target.value)}
                   placeholder="https://drive.google.com/..."
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-violet-500"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-[#026aa7]"
                 />
               </div>
             </div>

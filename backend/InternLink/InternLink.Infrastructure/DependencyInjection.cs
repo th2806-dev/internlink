@@ -21,6 +21,7 @@ public static class DependencyInjection
         services.AddDbContext<Persistence.AppDbContext>(options =>
             options.UseSqlServer(connection)
                    .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning)));
+        services.AddScoped<Application.Interfaces.IUnitOfWork, Persistence.UnitOfWork>();
 
         // Jwt settings
         var jwtSection = configuration.GetSection("Jwt");
@@ -141,6 +142,8 @@ public static class DependencyInjection
         // System settings (DB-backed)
         services.AddScoped<Application.Interfaces.ISettingsService, Services.SettingsService>();
         services.AddScoped<InternLink.Application.Interfaces.IDatabaseBackupService, Services.DatabaseBackupService>();
+        services.AddScoped<ISysFunctionService, SysFunctionService>();
+        services.AddScoped<ISysFieldPolicyService, SysFieldPolicyService>();
 
         // Account requests management
         services.AddScoped<IAccountRequestService, Services.AccountRequestService>();

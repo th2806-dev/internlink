@@ -1,10 +1,21 @@
 import { describe, expect, it } from "vitest";
 import {
   calculateWeeklyReportProgress,
+  getStudentDashboardWeeks,
   getOpenWeeklyReportWeeks,
 } from "../features/student/studentProgress";
 
 describe("calculateWeeklyReportProgress", () => {
+  it("keeps configured closed weeks in the dashboard timeline but excludes final reports", () => {
+    const weeks = getStudentDashboardWeeks([
+      { weekNumber: 3, isSubmissionOpen: false, isFinalReport: false },
+      { weekNumber: 1, isSubmissionOpen: true, isFinalReport: false },
+      { weekNumber: 13, isSubmissionOpen: true, isFinalReport: true },
+    ]);
+
+    expect(weeks.map((week) => week.weekNumber)).toEqual([1, 3]);
+  });
+
   it("counts only enabled weekly reports and excludes final-report schedules", () => {
     const result = calculateWeeklyReportProgress(
       [

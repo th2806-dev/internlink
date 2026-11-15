@@ -1,4 +1,5 @@
 using System.Data;
+using System.Globalization;
 using ClosedXML.Excel;
 using InternLink.Application.Common;
 using InternLink.Application.DTOs.Export;
@@ -79,6 +80,7 @@ public class ExcelExportService : IExcelExportService
             .OrderBy(s => s.Class)
             .ThenBy(s => s.FullName)
             .ToListAsync(cancellationToken);
+        var gradingRuleSets = await GradingRuleResolver.LoadAllAsync(_db, cancellationToken);
 
         var internshipIds = students
             .SelectMany(s => s.Internships)
@@ -128,6 +130,10 @@ public class ExcelExportService : IExcelExportService
 
             if (internship != null)
             {
+                var gradingRules = GradingRuleResolver.Resolve(
+                    gradingRuleSets,
+                    internship.SemesterId,
+                    departmentId ?? student.DepartmentId ?? internship.Semester?.DepartmentId);
                 var reportScheduleByWeek = scheduleRows
                     .Where(schedule => schedule.LecturerId == null
                         || (internship.LecturerId.HasValue && schedule.LecturerId == internship.LecturerId))
@@ -149,15 +155,18 @@ public class ExcelExportService : IExcelExportService
                 var reports23 = internship.WeeklyReports
                     .Where(r => !r.IsDeleted && r.Status != WeeklyReportStatus.Draft)
                     .ToList();
-                var scheduledWeeks = reportScheduleByWeek.Keys.ToHashSet();
-                var requiredWeeks = openReportSchedules.Keys.ToHashSet();
+                var requiredWeeks = openReportSchedules.Keys
+                    .Order()
+                    .Take(Math.Max(0, gradingRules.RequiredWeeklyReportsCount))
+                    .ToHashSet();
                 var submittedWeekCount = reports23
-                    .Where(r => r.SubmittedAt.HasValue && scheduledWeeks.Contains(r.WeekNumber))
+                    .Where(r => r.SubmittedAt.HasValue && requiredWeeks.Contains(r.WeekNumber))
                     .Select(r => r.WeekNumber)
                     .Distinct()
                     .Count();
                 var reportMissingCount = 0;
                 var lateCount = 0;
+                var latePenaltyDays = 0;
                 // Hai hệ thống độc lập: thiếu bài (nộp bài) vs vắng (điểm danh buổi hẹn)
                 var absentCount23 = student.AttendanceRecords
                     .Where(a => !a.IsDeleted
@@ -170,7 +179,7 @@ public class ExcelExportService : IExcelExportService
                     .Select(a => a.AttendanceSessionId)
                     .Distinct()
                     .Count();
-                foreach (var (week, schedule) in reportScheduleByWeek)
+                foreach (var (week, schedule) in reportScheduleByWeek.Where(pair => requiredWeeks.Contains(pair.Key)))
                 {
                     var hasReport = reports23.Any(r => r.WeekNumber == week && r.SubmittedAt.HasValue);
                     if (!hasReport)
@@ -183,14 +192,30 @@ public class ExcelExportService : IExcelExportService
                     {
                         var submittedAt = reports23.First(r => r.WeekNumber == week && r.SubmittedAt.HasValue).SubmittedAt!.Value;
                         if (submittedAt > schedule.DueDate)
+                        {
                             lateCount++;
+                            latePenaltyDays += (int)Math.Ceiling((submittedAt - schedule.DueDate).TotalDays);
+                        }
                     }
                 }
 
                 var finalSubmitted = internship.Submissions.Any(s => !s.IsDeleted
                     && s.Type == SubmissionType.FinalReport
                     && s.Status != SubmissionStatus.Rejected);
+                var employerScore = internship.Submissions
+                    .Where(submission => !submission.IsDeleted
+                        && submission.Type == SubmissionType.Evidence
+                        && submission.Status != SubmissionStatus.Rejected)
+                    .OrderByDescending(submission => submission.SubmittedAt)
+                    .Select(submission => submission.EmployerScore)
+                    .FirstOrDefault();
                 var disqualifiedByAbsence = absentCount23 >= InternshipGradeCalculator.MaxAbsences;
+                dto.DiemNhaTuyenDung = employerScore;
+                dto.ProcessScoreWeight = gradingRules.ProcessScoreWeight;
+                dto.ExamScoreWeight = gradingRules.ExamScoreWeight;
+                dto.EmployerScoreWeight = gradingRules.EmployerScoreWeight;
+                dto.RequireFinalReportForExamEligibility = gradingRules.RequireFinalReportForExamEligibility;
+                dto.MinimumPassingScore = gradingRules.MinimumPassingScore;
 
                 // Map scores from Evaluation if available
                 if (evaluations.TryGetValue(internship.Id, out var eval))
@@ -223,7 +248,11 @@ public class ExcelExportService : IExcelExportService
                     if (!hasWeeklyQualityJson && weeklyQualityLevels.Count == 0)
                         weeklyQualityLevels.Add(eval.QualityLevel);
                     var processScore = InternshipGradeCalculator.ComputeProcessScore(
-                        reportMissingCount, lateCount, submittedWeekCount, weeklyQualityLevels, false, requiredWeeks.Count);
+                        reportMissingCount, lateCount, submittedWeekCount, weeklyQualityLevels, false, requiredWeeks.Count,
+                        gradingRules.StepPenaltyPerMissingReport,
+                        gradingRules.StepPenaltyPerLateReport,
+                        latePenaltyDays,
+                        gradingRules.LatePenaltyPointsPerDay);
                     dto.DiemQT = InternshipGradeCalculator.Round1(Math.Min(10m, processScore + dto.DiemThamGia.Value));
                     // Cột J chỉ lấy điểm thi vấn đáp nhập tay; FinalGrade là điểm đánh giá tổng hợp.
                     dto.Thi = eval.OralExamScore;
@@ -237,7 +266,11 @@ public class ExcelExportService : IExcelExportService
                         0,
                         Array.Empty<decimal?>(),
                         false,
-                        requiredWeeks.Count);
+                        requiredWeeks.Count,
+                        gradingRules.StepPenaltyPerMissingReport,
+                        gradingRules.StepPenaltyPerLateReport,
+                        latePenaltyDays,
+                        gradingRules.LatePenaltyPointsPerDay);
                 }
 
                 dto.IsDisqualifiedByAbsence = disqualifiedByAbsence;
@@ -374,6 +407,50 @@ public class ExcelExportService : IExcelExportService
     {
         var data = await GetExportDataAsync(semesterId, lecturerId, department, departmentId, cancellationToken);
         return GenerateFromData(data);
+    }
+
+    public async Task<byte[]> GenerateC23AccreditationExcelAsync(
+        Guid semesterId,
+        Guid? departmentId = null,
+        Guid? lecturerId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var export = await GenerateInternshipExportExcelAsync(
+            semesterId,
+            lecturerId: lecturerId,
+            departmentId: departmentId,
+            cancellationToken: cancellationToken);
+        using var source = new MemoryStream(export);
+        using var workbook = new XLWorkbook(source);
+        var sheet = workbook.Worksheets.Add("XÁC NHẬN");
+        sheet.Cell(1, 1).Value = "XÁC NHẬN BẢNG TỔNG HỢP KẾT QUẢ THỰC TẬP C23";
+        sheet.Range(1, 1, 1, 4).Merge();
+        sheet.Cell(1, 1).Style.Font.Bold = true;
+        sheet.Cell(1, 1).Style.Font.FontSize = 14;
+        sheet.Cell(1, 1).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+        sheet.Cell(3, 1).Value = "Học kỳ";
+        sheet.Cell(3, 2).Value = semesterId.ToString();
+        sheet.Cell(5, 1).Value = "Ban Chủ nhiệm Khoa";
+        sheet.Cell(5, 3).Value = "Giảng viên hướng dẫn";
+        sheet.Cell(6, 1).Value = "Người ký: ____________________";
+        sheet.Cell(6, 3).Value = "Người ký: ____________________";
+        sheet.Cell(7, 1).Value = "Chữ ký / dấu: ____________________";
+        sheet.Cell(7, 3).Value = "Chữ ký: ____________________";
+        sheet.Cell(9, 1).Value = $"Ngày xuất: {DateTime.UtcNow:dd/MM/yyyy HH:mm} UTC";
+        sheet.Cell(11, 1).Value = "Trạng thái chữ ký số: Chưa ký số. Trang này dành cho người có thẩm quyền xác nhận.";
+        sheet.Range(11, 1, 11, 4).Merge();
+        sheet.Cell(11, 1).Style.Font.Italic = true;
+        sheet.Column(1).Width = 34;
+        sheet.Column(2).Width = 24;
+        sheet.Column(3).Width = 34;
+        sheet.Column(4).Width = 24;
+        sheet.Range(5, 1, 7, 4).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+        sheet.Range(5, 1, 7, 4).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+        sheet.Rows(5, 7).Height = 28;
+
+        using var output = new MemoryStream();
+        workbook.SaveAs(output);
+        return output.ToArray();
     }
 
     /// <inheritdoc />
@@ -876,10 +953,22 @@ public class ExcelExportService : IExcelExportService
         }
         else
         {
-            ws.Cell(row, 11).FormulaA1 = $"ROUND(I{row}*0.4+J{row}*0.6,1)";
+            var averageTerms = new List<string>
+            {
+                $"I{row}*{s.ProcessScoreWeight.ToString(CultureInfo.InvariantCulture)}",
+                $"J{row}*{s.ExamScoreWeight.ToString(CultureInfo.InvariantCulture)}",
+            };
+            if (s.DiemNhaTuyenDung.HasValue && s.EmployerScoreWeight != 0m)
+            {
+                averageTerms.Add(
+                    $"{s.DiemNhaTuyenDung.Value.ToString(CultureInfo.InvariantCulture)}*{s.EmployerScoreWeight.ToString(CultureInfo.InvariantCulture)}");
+            }
+            ws.Cell(row, 11).FormulaA1 = $"ROUND({string.Join("+", averageTerms)},1)";
 
             // L: Xếp loại Formula via dynamic VLOOKUP
-            ws.Cell(row, 12).FormulaA1 = $"VLOOKUP(K{row},$I${lookupStartRow}:$L${lookupEndRow},4,1)";
+            var minimumPassingScore = s.MinimumPassingScore.ToString(CultureInfo.InvariantCulture);
+            ws.Cell(row, 12).FormulaA1 =
+                $"IF(K{row}<{minimumPassingScore},\"Không đạt\",IF(K{row}<5,\"Trung bình\",VLOOKUP(K{row},$I${lookupStartRow}:$L${lookupEndRow},4,1)))";
         }
 
         // Progress starts at M and expands with the configured number of weeks.
@@ -902,7 +991,10 @@ public class ExcelExportService : IExcelExportService
         var firstWeekAddress = ws.Cell(row, firstWeekColumn).Address.ColumnLetter;
         var lastWeekAddress = ws.Cell(row, lastWeekColumn).Address.ColumnLetter;
         var finalReportAddress = ws.Cell(row, finalReportColumn).Address.ColumnLetter;
-        ws.Cell(row, eligibilityColumn).FormulaA1 = $"IF(OR(NOT(OR({finalReportAddress}{row}=\"C\",{finalReportAddress}{row}=\"✓\")),(COUNTIF({firstWeekAddress}{row}:{lastWeekAddress}{row},\"V\")>=2)),\"{InternshipGradeCalculator.IneligibleCell}\",\"\")";
+        var finalReportNotSubmitted = s.RequireFinalReportForExamEligibility
+            ? $"NOT(OR({finalReportAddress}{row}=\"C\",{finalReportAddress}{row}=\"✓\")),"
+            : string.Empty;
+        ws.Cell(row, eligibilityColumn).FormulaA1 = $"IF(OR({finalReportNotSubmitted}(COUNTIF({firstWeekAddress}{row}:{lastWeekAddress}{row},\"V\")>=2)),\"{InternshipGradeCalculator.IneligibleCell}\",\"\")";
 
         ApplyDataRowStyle(ws, row, 1, eligibilityColumn);
 

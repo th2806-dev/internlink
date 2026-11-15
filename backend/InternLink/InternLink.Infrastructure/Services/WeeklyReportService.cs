@@ -16,6 +16,7 @@ namespace InternLink.Infrastructure.Services;
 public class WeeklyReportService : IWeeklyReportService
 {
     private const long MaxFileSize = 20 * 1024 * 1024;
+    private const int MaxReportContentLength = 8000;
     private const string UploadFolder = "uploads/weekly-reports";
 
     private readonly AppDbContext _db;
@@ -197,6 +198,7 @@ public class WeeklyReportService : IWeeklyReportService
         long fileSize,
         string mimeType)
     {
+        ValidateReportContent(request.Content);
         ValidateFile(fileStream, originalFileName, fileSize, mimeType);
         var internship = await GetOwnedInternshipAsync(userId, request.InternshipId);
         if (internship == null)
@@ -213,12 +215,14 @@ public class WeeklyReportService : IWeeklyReportService
         if (duplicate)
             throw new InvalidOperationException($"A weekly report for week {request.WeekNumber} already exists");
 
+        var extension = Path.GetExtension(originalFileName).ToLowerInvariant();
         var savedVersion = GetAvailableReportVersion(
             request.InternshipId,
             request.WeekNumber,
             internship.Student?.FullName,
-            1);
-        var savedFileName = CreateReportFileName(request.WeekNumber, internship.Student?.FullName, savedVersion);
+            1,
+            extension);
+        var savedFileName = CreateReportFileName(request.WeekNumber, internship.Student?.FullName, savedVersion, extension);
         var (relativePath, _) = await SaveFileAsync(fileStream, savedFileName, request.InternshipId);
         var report = new WeeklyReport
         {
@@ -227,7 +231,7 @@ public class WeeklyReportService : IWeeklyReportService
             WeekNumber = request.WeekNumber,
             Version = savedVersion,
             Title = request.Title,
-            Content = savedFileName,
+            Content = string.IsNullOrWhiteSpace(request.Content) ? savedFileName : request.Content,
             FileName = savedFileName,
             FileUrl = relativePath,
             FileSize = fileSize,
@@ -284,6 +288,7 @@ public class WeeklyReportService : IWeeklyReportService
         long fileSize,
         string mimeType)
     {
+        ValidateReportContent(request.Content);
         ValidateFile(fileStream, originalFileName, fileSize, mimeType);
         var report = await LoadOwnedReportAsync(id, userId);
         if (report == null)
@@ -293,16 +298,22 @@ public class WeeklyReportService : IWeeklyReportService
             throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.OnlyDraftOrRevisionUpdatable);
 
         await EnsureUploadWindowOpenAsync(report.Internship, report.WeekNumber);
+        var extension = Path.GetExtension(originalFileName).ToLowerInvariant();
         var savedVersion = GetAvailableReportVersion(
             report.InternshipId,
             report.WeekNumber,
             report.Internship.Student?.FullName,
-            report.Version + 1);
-        var savedFileName = CreateReportFileName(report.WeekNumber, report.Internship.Student?.FullName, savedVersion);
+            report.Version + 1,
+            extension);
+        var savedFileName = CreateReportFileName(report.WeekNumber, report.Internship.Student?.FullName, savedVersion, extension);
         var (relativePath, _) = await SaveFileAsync(fileStream, savedFileName, report.InternshipId);
         if (!string.IsNullOrWhiteSpace(request.Title))
             report.Title = request.Title;
-        report.Content = savedFileName;
+        if (!string.IsNullOrWhiteSpace(request.Content))
+            report.Content = request.Content;
+        else if (string.IsNullOrWhiteSpace(report.Content)
+            || string.Equals(report.Content, report.FileName, StringComparison.Ordinal))
+            report.Content = savedFileName;
         report.FileName = savedFileName;
         report.FileUrl = relativePath;
         report.FileSize = fileSize;
@@ -873,10 +884,22 @@ public class WeeklyReportService : IWeeklyReportService
     {
         if (fileStream == null || fileSize <= 0 || fileSize > MaxFileSize)
             throw new InvalidOperationException("File must be between 1 byte and 20 MB");
-        if (!string.Equals(Path.GetExtension(originalFileName), ".pdf", StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("Only PDF files are accepted");
-        if (!string.Equals(mimeType, "application/pdf", StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("The uploaded file must have PDF content type");
+        var extension = Path.GetExtension(originalFileName);
+        var expectedMimeType = extension.Equals(".pdf", StringComparison.OrdinalIgnoreCase)
+            ? "application/pdf"
+            : extension.Equals(".docx", StringComparison.OrdinalIgnoreCase)
+                ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                : null;
+        if (expectedMimeType == null)
+            throw new InvalidOperationException("Only PDF and DOCX files are accepted");
+        if (!string.Equals(mimeType, expectedMimeType, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("The uploaded file content type does not match its extension");
+    }
+
+    private static void ValidateReportContent(string? content)
+    {
+        if (content?.Length > MaxReportContentLength)
+            throw new InvalidOperationException($"Nội dung báo cáo không được vượt quá {MaxReportContentLength} ký tự.");
     }
 
     private async Task EnsureUploadWindowOpenAsync(Internship internship, int weekNumber)
@@ -949,17 +972,17 @@ public class WeeklyReportService : IWeeklyReportService
         return string.IsNullOrWhiteSpace(safeName) ? "SinhVien" : safeName;
     }
 
-    private static string CreateReportFileName(int weekNumber, string? studentName, int version)
+    private static string CreateReportFileName(int weekNumber, string? studentName, int version, string extension = ".pdf")
     {
         var safeName = SanitizeStudentNameForFileName(studentName);
-        return $"Tuan{weekNumber:D2}_{safeName}_V{version}.pdf";
+        return $"Tuan{weekNumber:D2}_{safeName}_V{version}{extension}";
     }
 
-    private int GetAvailableReportVersion(Guid internshipId, int weekNumber, string? studentName, int firstVersion)
+    private int GetAvailableReportVersion(Guid internshipId, int weekNumber, string? studentName, int firstVersion, string extension = ".pdf")
     {
         var directory = Path.Combine(GetUploadRoot(), UploadFolder, internshipId.ToString());
         var version = firstVersion;
-        while (File.Exists(Path.Combine(directory, CreateReportFileName(weekNumber, studentName, version))))
+        while (File.Exists(Path.Combine(directory, CreateReportFileName(weekNumber, studentName, version, extension))))
             version++;
         return version;
     }

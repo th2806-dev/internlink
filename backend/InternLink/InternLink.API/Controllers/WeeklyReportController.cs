@@ -122,7 +122,7 @@ public class WeeklyReportController : ControllerBase
                 InternshipId = form.InternshipId,
                 WeekNumber = form.WeekNumber,
                 Title = form.Title,
-                Content = form.File.FileName,
+                Content = string.IsNullOrWhiteSpace(form.Content) ? form.File.FileName : form.Content,
             };
 
             await using var stream = form.File.OpenReadStream();
@@ -189,7 +189,7 @@ public class WeeklyReportController : ControllerBase
             var report = await _weeklyReportService.UpdateDraftWithFileAsync(
                 id,
                 userId.Value,
-                new UpdateWeeklyReportRequest { Title = form.Title },
+                new UpdateWeeklyReportRequest { Title = form.Title, Content = form.Content },
                 stream,
                 form.File.FileName,
                 form.File.Length,

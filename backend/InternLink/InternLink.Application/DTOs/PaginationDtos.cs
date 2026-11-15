@@ -127,6 +127,17 @@ public class WeeklyReportFilterRequest : PaginationRequest
     public bool ExcludeApproved { get; set; }
 }
 
+public sealed class LecturerStudentFilterRequest : PaginationRequest
+{
+    public Guid? SemesterId { get; set; }
+    public string? SearchTerm { get; set; }
+    public string? Status { get; set; }
+    public string? ClassName { get; set; }
+    public string? CompanyName { get; set; }
+    public bool UnassignedCompany { get; set; }
+    public string? SortBy { get; set; }
+}
+
 /// <summary>
 /// Generic paginated response wrapper
 /// </summary>

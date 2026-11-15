@@ -55,11 +55,14 @@ public static class ApplicationBuilderExtensions
                 logger.LogInformation("Full development seed completed.");
             }
 
+            await SystemRbacSeeder.SeedAsync(context);
+
             logger.LogInformation("Database migration completed successfully.");
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "An error occurred while migrating or seeding the database: {Message}", ex.Message);
+            throw;
         }
     }
 }

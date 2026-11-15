@@ -132,9 +132,9 @@ export const AdminKpiSection = ({
       unit="doanh nghiệp"
       footer={stats ? `${stats.activeCompanies} đang hợp tác` : "Đang tải…"}
       icon={Building2}
-      iconClassName="bg-violet-50 text-violet-700"
-      valueClassName="text-violet-700"
-      hoverClassName="hover:border-violet-300"
+      iconClassName="bg-[#7bc043]/10 text-[#026aa7]"
+      valueClassName="text-[#026aa7]"
+      hoverClassName="hover:border-[#7bc043]"
       onClick={onCardClick ? () => onCardClick("companies") : undefined}
     />
   </section>

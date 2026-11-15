@@ -152,6 +152,15 @@ public class InternshipReportServiceTests
             FinalGrade = 9.2m,
             IsFinalized = true,
         });
+        await db.Submissions.AddAsync(new Submission
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = completedInternship.Id,
+            Type = SubmissionType.FinalReport,
+            Status = SubmissionStatus.Approved,
+            Title = "Báo cáo cuối kỳ",
+            SubmittedAt = DateTime.UtcNow,
+        });
         await db.SaveChangesAsync();
         return (db, semester.Id);
     }

@@ -354,6 +354,45 @@ export interface StudentPortalProfileDto {
   isArchiveReadOnly?: boolean;
 }
 
+export interface StudentDashboardWeekDto {
+  weekNumber: number;
+  title: string;
+  isSubmissionOpen: boolean;
+  allowLateSubmission: boolean;
+  isFinalReport: boolean;
+  startDate?: string | null;
+  dueDate: string;
+}
+
+export interface StudentDashboardProgressDto {
+  profile: StudentPortalProfileDto;
+  semesterId?: string | null;
+  semesterName?: string | null;
+  semesterStatus?: string | null;
+  totalWeeks: number;
+  requiredWeeklyReportsCount?: number | null;
+  weeklyDeadlineDay?: number | null;
+  latePenaltyPointsPerDay?: number | null;
+  weeks: StudentDashboardWeekDto[];
+}
+
+export interface StudentIntroductionLetterDto {
+  referenceCode: string;
+  token: string;
+  expiresAt: string;
+  studentName: string;
+  studentCode: string;
+  className?: string | null;
+  major?: string | null;
+  departmentName?: string | null;
+  companyName?: string | null;
+  position?: string | null;
+  lecturerName?: string | null;
+  semesterName?: string | null;
+  internshipStartDate?: string | null;
+  internshipEndDate?: string | null;
+}
+
 // --- Portal DTOs (Lecturer / Student) ---
 
 export interface StudentSummaryDto {
@@ -396,6 +435,10 @@ export interface LecturerStudentListItemDto {
   submissionCount: number;
   notes?: string | null;
   finalGrade?: number | null;
+  employerScore?: number | null;
+  processScore?: number | null;
+  score4?: number | null;
+  letterGrade?: string | null;
   hasEvaluation: boolean;
   isEvaluationFinalized: boolean;
   progressPercent: number;
@@ -586,6 +629,41 @@ export interface WeeklyReportVersionDto {
   fileSize: number;
   mimeType: string;
   uploadedAt: string;
+}
+
+export interface StudentWeeklyTimelineDto {
+  studentId: string;
+  studentCode: string;
+  fullName: string;
+  companyName: string;
+  mentorName?: string | null;
+  totalWeeks: number;
+  submittedWeeks: number;
+  approvedWeeks: number;
+  averageWeeklyScore?: number | null;
+  weeks: StudentWeeklyTimelineWeekDto[];
+}
+
+export interface StudentWeeklyTimelineWeekDto {
+  weekNumber: number;
+  title: string;
+  dueDate?: string | null;
+  status: "NotSubmitted" | "Submitted" | "Approved" | "Rejected" | "Late" | string;
+  submittedAt?: string | null;
+  reportContent?: string | null;
+  attachments: StudentWeeklyTimelineAttachmentDto[];
+  score?: number | null;
+  feedback?: string | null;
+  gradedAt?: string | null;
+  reports: WeeklyReportDto[];
+}
+
+export interface StudentWeeklyTimelineAttachmentDto {
+  id: string;
+  fileName: string;
+  fileSize?: number | null;
+  mimeType?: string | null;
+  version: number;
 }
 
 export interface CreateWeeklyReportRequestDto {

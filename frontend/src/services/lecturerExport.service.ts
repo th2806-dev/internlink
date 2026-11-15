@@ -53,5 +53,36 @@ export const lecturerExportService = {
       `BaoCaoTongKetCongTac_${new Date().toISOString().slice(0, 10)}.docx`,
     );
   },
-};
 
+  async downloadC22Batch(
+    semesterId: string,
+    departmentId?: string,
+    onProgress?: (fraction: number | null) => void,
+  ): Promise<{ blob: Blob; filename: string }> {
+    const params = new URLSearchParams({ semesterId });
+    if (departmentId) params.set("departmentId", departmentId);
+    return downloadAuthenticatedFile(
+      `/api/v1/reports/c22/export-batch?${params.toString()}`,
+      `C22_PhieuDanhGia_${new Date().toISOString().slice(0, 10)}.zip`,
+      true,
+      {},
+      onProgress,
+    );
+  },
+
+  async downloadC23Excel(
+    semesterId: string,
+    departmentId?: string,
+    onProgress?: (fraction: number | null) => void,
+  ): Promise<{ blob: Blob; filename: string }> {
+    const params = new URLSearchParams({ semesterId });
+    if (departmentId) params.set("departmentId", departmentId);
+    return downloadAuthenticatedFile(
+      `/api/v1/reports/c23/export-excel?${params.toString()}`,
+      `C23_TongHopThucTap_${new Date().toISOString().slice(0, 10)}.xlsx`,
+      true,
+      {},
+      onProgress,
+    );
+  },
+};

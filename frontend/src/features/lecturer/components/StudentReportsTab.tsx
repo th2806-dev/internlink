@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   CheckCircle2,
-  Clock,
   Download,
   Eye,
   FileText,
   RefreshCw,
-  AlertTriangle,
   X,
 } from "lucide-react";
 import { Panel } from "../../../components/common/Panel";
@@ -18,7 +16,11 @@ import {
   mapSubmissionStatusToUi,
   mapSubmissionTypeToUi,
 } from "../../../lib/portalMappers";
-import type { WeeklyReportDto, SubmissionDto } from "../../../types/api";
+import type {
+  WeeklyReportDto,
+  SubmissionDto,
+  StudentWeeklyTimelineDto,
+} from "../../../types/api";
 import { PdfViewer } from "./PdfViewer";
 
 interface StudentReportsTabProps {
@@ -26,6 +28,7 @@ interface StudentReportsTabProps {
   studentName: string;
   studentCode: string;
   weeklyReports: WeeklyReportDto[];
+  weeklyTimeline?: StudentWeeklyTimelineDto | null;
   submissions: SubmissionDto[];
   isLoading: boolean;
   onRefresh?: () => Promise<void>;
@@ -34,10 +37,8 @@ interface StudentReportsTabProps {
 }
 
 export function StudentReportsTab({
-  internshipId,
-  studentName,
-  studentCode,
   weeklyReports,
+  weeklyTimeline,
   submissions,
   isLoading,
   onRefresh,
@@ -61,8 +62,13 @@ export function StudentReportsTab({
 
   // Sort trên BẢN SAO — không mutate array props của parent (React strict-mode & memo-safe).
   const sortedWeeklyReports = useMemo(
-    () => [...weeklyReports].sort((a, b) => a.weekNumber - b.weekNumber),
-    [weeklyReports],
+    () => [...(weeklyTimeline?.weeks.flatMap((week) => week.reports) ?? weeklyReports)]
+      .sort((a, b) => a.weekNumber - b.weekNumber || a.version - b.version),
+    [weeklyReports, weeklyTimeline],
+  );
+  const timelineWeekByNumber = useMemo(
+    () => new Map(weeklyTimeline?.weeks.map((week) => [week.weekNumber, week]) ?? []),
+    [weeklyTimeline],
   );
   const filteredSubmissions = useMemo(
     () => submissions.filter((submission) =>
@@ -183,7 +189,7 @@ export function StudentReportsTab({
               }`}
             >
               <FileText className="w-3.5 h-3.5 inline mr-1" />
-              Báo cáo tuần ({weeklyReports.length})
+              Báo cáo tuần ({sortedWeeklyReports.length})
             </button>
             <button
               onClick={() => setView("submissions")}
@@ -244,51 +250,64 @@ export function StudentReportsTab({
                       <th className="py-2.5 px-3">Tiêu đề</th>
                       <th className="py-2.5 px-3">Tệp nộp</th>
                       <th className="py-2.5 px-3">Ngày nộp</th>
+                      <th className="py-2.5 px-3">Hạn nộp</th>
                       <th className="py-2.5 px-3 text-center">Trạng thái</th>
+                      <th className="py-2.5 px-3 text-center">Điểm rubric</th>
                       <th className="py-2.5 px-3">Nhận xét</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {sortedWeeklyReports
-                      .map((r) => (
-                        <tr key={r.id} className="hover:bg-slate-50/80 transition-colors">
-                          <td className="py-3 px-3 font-bold text-blue-700">
-                            Tuần {r.weekNumber}
-                          </td>
-                          <td className="py-3 px-3 font-bold text-slate-900">
-                            {r.title}
-                          </td>
-                          <td className="py-3 px-3">
-                            {r.fileName ? (
-                              <button
-                                type="button"
-                                onClick={() => void downloadFile(`weekly-${r.id}`, () => weeklyReportService.download(r.id, r.fileName!))}
-                                disabled={downloadingKey === `weekly-${r.id}`}
-                                className="inline-flex max-w-56 items-center gap-1.5 truncate font-medium text-blue-700 hover:text-blue-900 disabled:opacity-50"
-                                title={`Tải ${r.fileName}`}
+                      .map((r) => {
+                        const week = timelineWeekByNumber.get(r.weekNumber);
+                        return (
+                          <tr key={r.id} className="hover:bg-slate-50/80 transition-colors">
+                            <td className="py-3 px-3 font-bold text-blue-700">
+                              Tuần {r.weekNumber}
+                            </td>
+                            <td className="py-3 px-3 font-bold text-slate-900">
+                              {r.title}
+                            </td>
+                            <td className="py-3 px-3">
+                              {r.fileName ? (
+                                <button
+                                  type="button"
+                                  onClick={() => void downloadFile(`weekly-${r.id}`, () => weeklyReportService.download(r.id, r.fileName!))}
+                                  disabled={downloadingKey === `weekly-${r.id}`}
+                                  className="inline-flex max-w-56 items-center gap-1.5 truncate font-medium text-blue-700 hover:text-blue-900 disabled:opacity-50"
+                                  title={`Tải ${r.fileName}`}
+                                >
+                                  <Download className="h-3.5 w-3.5 shrink-0" />
+                                  <span className="truncate">{downloadingKey === `weekly-${r.id}` ? "Đang tải…" : r.fileName}</span>
+                                </button>
+                              ) : <span className="text-slate-400">Không có tệp</span>}
+                            </td>
+                            <td className="py-3 px-3 text-slate-600">
+                              {r.submittedAt
+                                ? new Date(r.submittedAt).toLocaleDateString("vi-VN")
+                                : "—"}
+                            </td>
+                            <td className="py-3 px-3 text-slate-600">
+                              {week?.dueDate
+                                ? new Date(week.dueDate).toLocaleDateString("vi-VN")
+                                : "—"}
+                            </td>
+                            <td className="py-3 px-3 text-center">
+                              <span
+                                className={`px-2.5 py-0.5 text-[10px] font-bold rounded-md border inline-flex items-center ${weeklyStatusClass(r.status)}`}
                               >
-                                <Download className="h-3.5 w-3.5 shrink-0" />
-                                <span className="truncate">{downloadingKey === `weekly-${r.id}` ? "Đang tải…" : r.fileName}</span>
-                              </button>
-                            ) : <span className="text-slate-400">Không có tệp</span>}
-                          </td>
-                          <td className="py-3 px-3 text-slate-600">
-                            {r.submittedAt
-                              ? new Date(r.submittedAt).toLocaleDateString("vi-VN")
-                              : "—"}
-                          </td>
-                          <td className="py-3 px-3 text-center">
-                            <span
-                              className={`px-2.5 py-0.5 text-[10px] font-bold rounded-md border inline-flex items-center ${weeklyStatusClass(r.status)}`}
-                            >
-                              {mapWeeklyReportStatusToUi(r.status)}
-                            </span>
-                          </td>
-                          <td className="py-3 px-3 text-xs text-slate-600 max-w-[200px] truncate">
-                            {r.lecturerComment ?? "—"}
-                          </td>
-                        </tr>
-                      ))}
+                                {mapWeeklyReportStatusToUi(r.status)}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3 text-center font-semibold tabular-nums text-slate-700">
+                              {week?.score ?? r.qualityScore ?? "—"}
+                            </td>
+                            <td className="py-3 px-3 text-xs text-slate-600 max-w-[200px] truncate">
+                              {week?.feedback ?? r.lecturerComment ?? "—"}
+                            </td>
+                          </tr>
+                        );
+                      })}
                   </tbody>
                 </table>
               </div>

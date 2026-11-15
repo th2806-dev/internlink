@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { PageHeader } from "../../../components/common/PageHeader";
 import { Panel } from "../../../components/common/Panel";
+import { PermissionGuard } from "../../../components/common/PermissionGuard";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { lecturerExportService } from "../../../services/lecturerExport.service";
 import { adminSemestersService } from "../../../services/adminSemesters.service";
@@ -45,13 +46,13 @@ type ExportOption = {
 };
 
 function getReviewStatus(student: LecturerStudentListItemDto) {
-  if (student.isEvaluationFinalized) return { label: "Đã chốt", className: "text-emerald-700 bg-emerald-50 border-emerald-200" };
+  if (student.isEvaluationFinalized) return { label: "Đã chốt", className: "text-[#426f20] bg-[#7bc043]/10 border-[#7bc043]/40" };
   if (student.hasEvaluation) return { label: "Đang rà soát", className: "text-[#4d74c9] bg-[#4d74c9]/10 border-[#4d74c9]/20" };
   return { label: "Chưa có điểm", className: "text-amber-700 bg-amber-50 border-amber-200" };
 }
 
 const SUMMARY_WEEK_STATUS_STYLE: Record<GradingWeekStatus["status"], string> = {
-  on_time: "bg-emerald-50 text-emerald-700",
+  on_time: "bg-[#7bc043]/10 text-[#426f20]",
   late: "bg-amber-50 text-amber-700",
   missing: "bg-rose-100 text-rose-700 font-bold",
   pending: "bg-slate-50 text-slate-400",
@@ -135,9 +136,29 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
     enabled: Boolean(semesterId),
     queryFn: async () => {
       if (!isAdminScope) {
+        const [students, grading] = await Promise.all([
+          lecturerInternshipsService.getStudents(semesterId),
+          internshipGradingService.getSummary(semesterId),
+        ]);
+        const gradesByStudentId = new Map(
+          grading.students.map((grade) => [grade.studentId, grade]),
+        );
         return {
-          students: await lecturerInternshipsService.getStudents(semesterId),
-          grading: null as GradingSummaryResponse | null,
+          students: students.map((student) => {
+            const grade = gradesByStudentId.get(student.studentId);
+            return {
+              ...student,
+              employerScore: grade?.employerScore ?? null,
+              processScore: grade?.processScore ?? null,
+              finalGrade: grade?.averageScore ?? student.finalGrade ?? null,
+              score4: grade?.score4 ?? null,
+              letterGrade: grade?.letterGrade ?? null,
+              classification: grade?.classification ?? student.classification,
+              isEligible: grade?.isEligible ?? student.isEligible,
+              ineligibleReasons: grade?.ineligibleReasons ?? student.ineligibleReasons,
+            };
+          }),
+          grading,
         };
       }
 
@@ -170,6 +191,10 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
           submissionCount: submittedOpenWeeks,
           notes: grade.note || "",
           finalGrade: grade.averageScore ?? null,
+          employerScore: grade.employerScore,
+          processScore: grade.processScore,
+          score4: grade.score4,
+          letterGrade: grade.letterGrade,
           hasEvaluation: grade.processScore > 0 || grade.oralExamScore != null,
           isEvaluationFinalized: grade.isFinalized,
           progressPercent: Math.min(100, reportPercent + evaluationPercent),
@@ -192,7 +217,8 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
   const isLoading = studentsQuery.isPending;
   const studentsLoadError = studentsQuery.error ? getApiErrorMessage(studentsQuery.error) : null;
   const [isSaving, setIsSaving] = useState(false);
-  const [exporting, setExporting] = useState<ExportKind | "exam" | "process" | null>(null);
+  const [exporting, setExporting] = useState<ExportKind | "exam" | "process" | "c22" | "c23" | null>(null);
+  const [exportProgress, setExportProgress] = useState<number | null>(null);
   const [reportSections, setReportSections] = useState<ReportSection[]>(createDefaultReportSections);
   const [reportDraftScope, setReportDraftScope] = useState("");
   const [isSavingReport, setIsSavingReport] = useState(false);
@@ -251,7 +277,7 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
       description: isAdminScope ? "Danh sách sinh viên trong kỳ đang chọn, phục vụ xem tổng quan và xuất báo cáo khoa." : "Danh sách sinh viên và kết quả đánh giá của nhóm đang phụ trách.",
       format: "Excel (.xlsx)",
       icon: FileSpreadsheet,
-      tone: "text-emerald-700 bg-emerald-50 border-emerald-100",
+      tone: "text-[#426f20] bg-[#7bc043]/10 border-[#7bc043]/40",
     },
     {
       kind: "report",
@@ -470,7 +496,7 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
     }
   };
 
-  const handleExport = async (kind: ExportKind | "exam" | "process") => {
+  const handleExport = async (kind: ExportKind | "exam" | "process" | "c22" | "c23") => {
     if ((kind === "exam" || kind === "process") && !isAdminScope) {
       onShowToast?.("Mẫu điểm thi/quá trình chính thức chỉ được xuất từ cổng quản trị khoa.");
       return;
@@ -484,6 +510,7 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
       return;
     }
     setExporting(kind);
+    setExportProgress(null);
     try {
       if (kind === "exam") {
         await internshipGradingService.exportExamScoresExcel(semesterId);
@@ -498,6 +525,19 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
         else await lecturerExportService.downloadInternshipExcel(semesterId);
       }
       else if (kind === "report") await lecturerExportService.downloadSummaryReportWord(semesterId);
+      else if (kind === "c22") {
+        await lecturerExportService.downloadC22Batch(
+          semesterId,
+          isAdminScope ? selectedDepartment?.id : undefined,
+          setExportProgress,
+        );
+      } else if (kind === "c23") {
+        await lecturerExportService.downloadC23Excel(
+          semesterId,
+          isAdminScope ? selectedDepartment?.id : undefined,
+          setExportProgress,
+        );
+      }
       else await lecturerExportService.downloadGuidanceSchedule(semesterId);
       onShowToast?.("Đã tải file thành công.");
     } catch (error) {
@@ -545,23 +585,96 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
             <span className="hidden text-slate-500 sm:inline">{selectedSemester?.name ?? "Chưa chọn học kỳ"}</span>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button type="button" className="il-btn il-btn-primary" disabled={Boolean(exporting) || !semesterId} onClick={() => void handleExport("grades")}>
-              {exporting === "grades" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
-              Bảng điểm Excel
-            </button>
-            <button type="button" className="il-btn il-btn-secondary" disabled={Boolean(exporting) || !semesterId} onClick={() => void handleExport("exam")}>
-              {exporting === "exam" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-              Điểm thi
-            </button>
-            <button type="button" className="il-btn il-btn-secondary" disabled={Boolean(exporting) || !semesterId} onClick={() => void handleExport("process")}>
-              {exporting === "process" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-              Điểm quá trình
-            </button>
-            <button type="button" className="il-btn il-btn-secondary" disabled={Boolean(exporting) || !semesterId} onClick={() => void handleExport("report")}>
-              {exporting === "report" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-              Báo cáo Word
-            </button>
+            <PermissionGuard functionCode="LECTURER" action="EXPORT">
+              <button type="button" className="il-btn il-btn-primary" disabled={Boolean(exporting) || !semesterId} onClick={() => void handleExport("grades")}>
+                {exporting === "grades" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
+                Bảng điểm Excel
+              </button>
+            </PermissionGuard>
+            <PermissionGuard functionCode="LECTURER" action="EXPORT">
+              <button type="button" className="il-btn il-btn-secondary" disabled={Boolean(exporting) || !semesterId} onClick={() => void handleExport("exam")}>
+                {exporting === "exam" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                Điểm thi
+              </button>
+            </PermissionGuard>
+            <PermissionGuard functionCode="LECTURER" action="EXPORT">
+              <button type="button" className="il-btn il-btn-secondary" disabled={Boolean(exporting) || !semesterId} onClick={() => void handleExport("process")}>
+                {exporting === "process" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                Điểm quá trình
+              </button>
+            </PermissionGuard>
+            <PermissionGuard functionCode="LECTURER" action="EXPORT">
+              <button type="button" className="il-btn il-btn-secondary" disabled={Boolean(exporting) || !semesterId} onClick={() => void handleExport("report")}>
+                {exporting === "report" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                Báo cáo Word
+              </button>
+            </PermissionGuard>
+            <PermissionGuard functionCode="LECTURER" action="EXPORT">
+              <button type="button" className="il-btn il-btn-secondary" disabled={Boolean(exporting) || !semesterId} onClick={() => void handleExport("c22")}>
+                {exporting === "c22" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                Hồ sơ đánh giá SV (ZIP)
+              </button>
+            </PermissionGuard>
+            <PermissionGuard functionCode="LECTURER" action="EXPORT">
+              <button type="button" className="il-btn il-btn-secondary" disabled={Boolean(exporting) || !semesterId} onClick={() => void handleExport("c23")}>
+                {exporting === "c23" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
+                Bảng tổng hợp kết quả (Excel)
+              </button>
+            </PermissionGuard>
           </div>
+          {(exporting === "c22" || exporting === "c23") && (
+            <div className="w-full text-xs text-slate-600 sm:ml-auto sm:max-w-64">
+              <span>{exportProgress == null ? "Đang tạo và tải báo cáo..." : `Đang tải ${Math.round(exportProgress * 100)}%`}</span>
+              <progress
+                aria-label="Tiến trình tải báo cáo"
+                value={exportProgress == null ? undefined : Math.round(exportProgress * 100)}
+                max={100}
+                className="mt-1 block h-2 w-full accent-[#026aa7]"
+              />
+            </div>
+          )}
+        </section>
+      )}
+
+      {!isAdminScope && (
+        <section className="flex flex-col gap-3 rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs" aria-label="Bộ báo cáo kiểm định">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-sm font-bold text-slate-900">Bộ báo cáo kiểm định</h2>
+              <p className="mt-1 text-xs text-slate-500">Tạo hồ sơ ZIP, bảng tổng hợp Excel và báo cáo Word cho nhóm sinh viên được phân công.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <PermissionGuard functionCode="LECTURER" action="EXPORT">
+                <button type="button" className="il-btn il-btn-secondary" disabled={Boolean(exporting) || !semesterId} onClick={() => void handleExport("c22")}>
+                  {exporting === "c22" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                  Hồ sơ sinh viên (ZIP)
+                </button>
+              </PermissionGuard>
+              <PermissionGuard functionCode="LECTURER" action="EXPORT">
+                <button type="button" className="il-btn il-btn-secondary" disabled={Boolean(exporting) || !semesterId} onClick={() => void handleExport("c23")}>
+                  {exporting === "c23" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
+                  Bảng tổng hợp (Excel)
+                </button>
+              </PermissionGuard>
+              <PermissionGuard functionCode="LECTURER" action="EXPORT">
+                <button type="button" className="il-btn il-btn-primary" disabled={Boolean(exporting) || !semesterId} onClick={() => void handleExport("report")}>
+                  {exporting === "report" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                  Báo cáo tổng kết (Word)
+                </button>
+              </PermissionGuard>
+            </div>
+          </div>
+          {(exporting === "c22" || exporting === "c23") && (
+            <div className="w-full text-xs text-slate-600 sm:ml-auto sm:max-w-64">
+              <span>{exportProgress == null ? "Đang tạo và tải báo cáo..." : `Đang tải ${Math.round(exportProgress * 100)}%`}</span>
+              <progress
+                aria-label="Tiến trình tải báo cáo"
+                value={exportProgress == null ? undefined : Math.round(exportProgress * 100)}
+                max={100}
+                className="mt-1 block h-2 w-full accent-[#026aa7]"
+              />
+            </div>
+          )}
         </section>
       )}
 
@@ -592,9 +705,9 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
 
       {activeModule === "grades" && !isAdminScope && <section className="grid grid-cols-2 lg:grid-cols-4 il-panel overflow-hidden">
         <div className="p-4 border-r border-b lg:border-b-0 border-slate-100"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Sinh viên</p><p className="text-2xl font-bold text-slate-900 mt-1">{students.length}</p><p className="text-[11px] text-slate-500 mt-1">{isAdminScope ? "Trong kỳ đang chọn" : "Trong nhóm hướng dẫn"}</p></div>
-        <div className="p-4 border-r border-b lg:border-b-0 border-slate-100 border-l-4 border-l-emerald-500"><p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Đã chốt điểm</p><p className="text-2xl font-bold text-slate-900 mt-1">{finalizedCount}</p><p className="text-[11px] text-slate-500 mt-1">Có thể rà soát lần cuối</p></div>
+        <div className="p-4 border-r border-b lg:border-b-0 border-slate-100 border-l-4 border-l-[#7bc043]"><p className="text-[10px] font-bold uppercase tracking-wider text-[#426f20]">Đã chốt điểm</p><p className="text-2xl font-bold text-slate-900 mt-1">{finalizedCount}</p><p className="text-[11px] text-slate-500 mt-1">Có thể rà soát lần cuối</p></div>
         <div className="p-4 border-r border-slate-100 border-l-4 border-l-amber-500"><p className="text-[10px] font-bold uppercase tracking-wider text-amber-700">Chưa hoàn tất</p><p className="text-2xl font-bold text-slate-900 mt-1">{students.length - finalizedCount}</p><p className="text-[11px] text-slate-500 mt-1">Cần kiểm tra thêm</p></div>
-        <div className="p-4 border-l-4 border-l-blue-500"><p className="text-[10px] font-bold uppercase tracking-wider text-blue-700">Đã bổ sung</p><p className="text-2xl font-bold text-slate-900 mt-1">{notesCount}</p><p className="text-[11px] text-slate-500 mt-1">Có nội dung ghi chú</p></div>
+        <div className="p-4 border-l-4 border-l-[#026aa7]"><p className="text-[10px] font-bold uppercase tracking-wider text-[#025a8e]">Đã bổ sung</p><p className="text-2xl font-bold text-slate-900 mt-1">{notesCount}</p><p className="text-[11px] text-slate-500 mt-1">Có nội dung ghi chú</p></div>
       </section>}
 
       {isAdminScope && activeModule === "grades" && (
@@ -738,8 +851,8 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
 
       {activeModule === "grades" && !isAdminScope && <Panel padding="none" className="overflow-hidden">
         <div className="p-4 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          <div><div className="flex items-center gap-2"><Users className="w-4 h-4 text-blue-700" /><h2 className="text-sm font-bold text-slate-900">{isAdminScope ? "Danh sách sinh viên trong kỳ" : "Rà soát hồ sơ sinh viên"}</h2></div><p className="text-xs text-slate-500 mt-1">{isAdminScope ? "Toàn bộ sinh viên trong kỳ đang chọn, phục vụ rà soát kết quả và báo cáo tổng kết khoa." : "Chọn từng sinh viên để kiểm tra điểm và bổ sung nhận xét trước khi xuất hồ sơ."}</p></div>
-          <div className="flex flex-wrap gap-2"><div className="relative"><Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm tên, MSSV, lớp..." className="pl-8 pr-3 py-2 text-xs border border-slate-200 rounded-md outline-none focus:border-blue-500 w-52" /></div><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="px-3 py-2 text-xs border border-slate-200 rounded-md"><option value="all">Tất cả trạng thái</option><option value="finalized">Đã chốt điểm</option><option value="pending">Chưa hoàn tất</option></select></div>
+          <div><div className="flex items-center gap-2"><Users className="w-4 h-4 text-[#026aa7]" /><h2 className="text-sm font-bold text-slate-900">{isAdminScope ? "Danh sách sinh viên trong kỳ" : "Rà soát hồ sơ sinh viên"}</h2></div><p className="text-xs text-slate-500 mt-1">{isAdminScope ? "Toàn bộ sinh viên trong kỳ đang chọn, phục vụ rà soát kết quả và báo cáo tổng kết khoa." : "Chọn từng sinh viên để kiểm tra điểm và bổ sung nhận xét trước khi xuất hồ sơ."}</p></div>
+          <div className="flex flex-wrap gap-2"><div className="relative"><Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm tên, MSSV, lớp..." className="pl-8 pr-3 py-2 text-xs border border-slate-200 rounded-md outline-none focus:border-[#026aa7] w-52" /></div><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="px-3 py-2 text-xs border border-slate-200 rounded-md"><option value="all">Tất cả trạng thái</option><option value="finalized">Đã chốt điểm</option><option value="pending">Chưa hoàn tất</option></select></div>
         </div>
         <div className="grid lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)]">
           <div className="overflow-x-auto lg:border-r border-slate-100">
@@ -749,9 +862,9 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
                 <div className="max-h-[720px] overflow-y-auto">
                   <table className="w-full text-left text-xs">
                     <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 sticky top-0 z-10">
-                      <tr><th className="px-4 py-3 font-bold">Sinh viên</th><th className="px-4 py-3 font-bold">Doanh nghiệp</th><th className="px-4 py-3 font-bold">Điểm</th><th className="px-4 py-3 font-bold">Xếp loại</th><th className="px-4 py-3 font-bold">ĐK dự thi</th><th className="px-4 py-3 font-bold">Trạng thái</th><th className="px-4 py-3" /></tr>
+                      <tr><th className="px-4 py-3 font-bold">Sinh viên</th><th className="px-4 py-3 font-bold">Doanh nghiệp</th><th className="px-4 py-3 font-bold">Điểm / 10</th><th className="px-4 py-3 font-bold">Điểm / 4</th><th className="px-4 py-3 font-bold">Điểm chữ</th><th className="px-4 py-3 font-bold">Xếp loại</th><th className="px-4 py-3 font-bold">ĐK dự thi</th><th className="px-4 py-3 font-bold">Trạng thái</th><th className="px-4 py-3" /></tr>
                     </thead>
-                    <tbody>{pagedStudents.map((student) => { const status = getReviewStatus(student); const active = student.studentId === selectedStudentId; return <tr key={student.studentId} className={`border-t border-slate-100 ${active ? "bg-blue-50/60" : "hover:bg-slate-50"}`}><td className="px-4 py-3"><p className="font-bold text-slate-800">{student.fullName}</p><p className="text-[11px] text-slate-500">{student.studentCode} · {student.class || "Chưa có lớp"}</p></td><td className="px-4 py-3 text-slate-600">{student.companyName || "Chưa có doanh nghiệp"}</td><td className="px-4 py-3 font-bold text-slate-800">{student.finalGrade == null ? "—" : student.finalGrade.toFixed(2)}</td><td className="px-4 py-3">{student.classification ? <span className="inline-flex px-2 py-1 rounded border text-[10px] font-bold bg-slate-50 text-slate-700 border-slate-200">{student.classification}</span> : <span className="text-slate-400">—</span>}</td><td className="px-4 py-3">{student.isEligible == null ? <span className="text-slate-400">—</span> : student.isEligible ? <span className="inline-flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold text-emerald-700 bg-emerald-50 border-emerald-200"><CheckCircle2 className="w-3 h-3" />Đủ</span> : <span className="inline-flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold text-rose-700 bg-rose-50 border-rose-200" title={(student.ineligibleReasons || []).join("; ")}><XCircle className="w-3 h-3" />Không đủ</span>}</td><td className="px-4 py-3"><span className={`inline-flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold ${status.className}`}>{student.isEvaluationFinalized ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}{status.label}</span></td><td className="px-4 py-3 text-right"><button type="button" onClick={() => setSelectedStudentId(student.studentId)} className="text-blue-700 font-bold hover:text-blue-900">Rà soát</button></td></tr>; })}</tbody>
+                    <tbody>{pagedStudents.map((student) => { const status = getReviewStatus(student); const active = student.studentId === selectedStudentId; return <tr key={student.studentId} className={`border-t border-slate-100 ${active ? "bg-[#026aa7]/5" : "hover:bg-slate-50"}`}><td className="px-4 py-3"><p className="font-bold text-slate-800">{student.fullName}</p><p className="text-[11px] text-slate-500">{student.studentCode} · {student.class || "Chưa có lớp"}</p></td><td className="px-4 py-3 text-slate-600">{student.companyName || "Chưa có doanh nghiệp"}</td><td className="px-4 py-3 font-bold text-slate-800">{student.finalGrade == null ? "—" : student.finalGrade.toFixed(1)}</td><td className="px-4 py-3">{student.score4 == null ? "—" : student.score4.toFixed(1)}</td><td className="px-4 py-3 font-semibold">{student.letterGrade || "—"}</td><td className="px-4 py-3">{student.classification ? <span className="inline-flex px-2 py-1 rounded border text-[10px] font-bold bg-slate-50 text-slate-700 border-slate-200">{student.classification}</span> : <span className="text-slate-400">—</span>}</td><td className="px-4 py-3">{student.isEligible == null ? <span className="text-slate-400">—</span> : student.isEligible ? <span className="inline-flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold text-[#426f20] bg-[#7bc043]/10 border-[#7bc043]/40"><CheckCircle2 className="w-3 h-3" />Đủ</span> : <span className="inline-flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold text-rose-700 bg-rose-50 border-rose-200" title={(student.ineligibleReasons || []).join("; ")}><XCircle className="w-3 h-3" />Không đủ</span>}</td><td className="px-4 py-3"><span className={`inline-flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold ${status.className}`}>{student.isEvaluationFinalized ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}{status.label}</span></td><td className="px-4 py-3 text-right"><button type="button" onClick={() => setSelectedStudentId(student.studentId)} className="font-bold text-[#026aa7] hover:text-[#025a8e]">Rà soát</button></td></tr>; })}</tbody>
                   </table>
                 </div>
                 {/* Phân trang */}
@@ -787,7 +900,7 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
             )}
           </div>
           <aside className="p-4 bg-slate-50/60 min-h-[300px]">
-            {selectedStudent ? <div className="space-y-4"><div><p className="text-[10px] uppercase tracking-wider font-bold text-slate-500">Đang rà soát</p><h3 className="text-base font-bold text-slate-900 mt-1">{selectedStudent.fullName}</h3><p className="text-xs text-slate-500">{selectedStudent.studentCode} · {selectedStudent.major || "Chưa có ngành"}</p></div><div className="grid grid-cols-2 gap-2"><div className="p-3 bg-white border border-slate-200 rounded-md"><p className="text-[10px] text-slate-500">Tiến độ</p><p className="text-lg font-bold text-slate-900">{selectedStudent.progressPercent}%</p></div><div className="p-3 bg-white border border-slate-200 rounded-md"><p className="text-[10px] text-slate-500">Báo cáo tuần</p><p className="text-lg font-bold text-slate-900">{selectedStudent.weeklyReportCount}</p></div></div><label className="block"><span className="text-xs font-bold text-slate-800">Nội dung bổ sung / nhận xét tổng kết</span><textarea value={notesDraft} onChange={(event) => setNotesDraft(event.target.value)} rows={6} placeholder="Bổ sung nhận xét, lưu ý hồ sơ hoặc nội dung cần thể hiện khi tổng kết..." className="mt-2 w-full resize-y rounded-md border border-slate-200 bg-white p-3 text-xs leading-5 outline-none focus:border-blue-500" /></label><button type="button" onClick={() => void handleSaveNotes()} disabled={isSaving} className="il-btn il-btn-primary w-full justify-center disabled:opacity-50">{isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}{isSaving ? "Đang lưu..." : "Lưu nội dung bổ sung"}</button></div> : <div className="h-full flex items-center justify-center text-center text-xs text-slate-500">Chọn một sinh viên để bắt đầu rà soát.</div>}
+            {selectedStudent ? <div className="space-y-4"><div><p className="text-[10px] uppercase tracking-wider font-bold text-slate-500">Đang rà soát</p><h3 className="text-base font-bold text-slate-900 mt-1">{selectedStudent.fullName}</h3><p className="text-xs text-slate-500">{selectedStudent.studentCode} · {selectedStudent.major || "Chưa có ngành"}</p></div><div className="grid grid-cols-2 gap-2"><div className="p-3 bg-white border border-slate-200 rounded-md"><p className="text-[10px] text-slate-500">Tiến độ</p><p className="text-lg font-bold text-slate-900">{selectedStudent.progressPercent}%</p></div><div className="p-3 bg-white border border-slate-200 rounded-md"><p className="text-[10px] text-slate-500">Báo cáo tuần</p><p className="text-lg font-bold text-slate-900">{selectedStudent.weeklyReportCount}</p></div></div><label className="block"><span className="text-xs font-bold text-slate-800">Nội dung bổ sung / nhận xét tổng kết</span><textarea value={notesDraft} onChange={(event) => setNotesDraft(event.target.value)} rows={6} placeholder="Bổ sung nhận xét, lưu ý hồ sơ hoặc nội dung cần thể hiện khi tổng kết..." className="mt-2 w-full resize-y rounded-md border border-slate-200 bg-white p-3 text-xs leading-5 outline-none focus:border-[#026aa7]" /></label><button type="button" onClick={() => void handleSaveNotes()} disabled={isSaving} className="il-btn il-btn-primary w-full justify-center disabled:opacity-50">{isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}{isSaving ? "Đang lưu..." : "Lưu nội dung bổ sung"}</button></div> : <div className="h-full flex items-center justify-center text-center text-xs text-slate-500">Chọn một sinh viên để bắt đầu rà soát.</div>}
           </aside>
         </div>
       </Panel>}
@@ -800,7 +913,7 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
                 <div className="flex items-center gap-2"><FileText className="w-4 h-4 text-[#026aa7]" /><h2 className="text-sm font-bold text-slate-900">{isAdminScope ? "Tổng hợp báo cáo công tác khoa" : "Tổng hợp nội dung báo cáo"}</h2></div>
                 <p className="text-xs text-slate-500 mt-1">{isAdminScope ? "Soạn phần diễn giải tổng thể về tình hình thực tập của khoa theo học kỳ đang chọn." : "Soạn phần diễn giải của cả kỳ trước khi tạo báo cáo Word gửi Ban Giám hiệu."}</p>
               </div>
-              {reportSavedAt && <span className="text-[11px] text-emerald-700 font-medium">Đã lưu lúc {new Date(reportSavedAt).toLocaleString("vi-VN")}</span>}
+              {reportSavedAt && <span className="text-[11px] text-[#426f20] font-medium">Đã lưu lúc {new Date(reportSavedAt).toLocaleString("vi-VN")}</span>}
             </div>
             {reportLoadError && (
               <div role="alert" className="flex flex-col gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2.5 text-xs text-rose-800 sm:flex-row sm:items-center sm:justify-between">
@@ -1020,7 +1133,9 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
             <div className="flex items-center gap-2"><CalendarDays className="w-4 h-4 text-amber-700" /><h2 className="text-sm font-bold text-slate-900">Lịch hướng dẫn thực tập</h2></div>
             <p className="text-xs text-slate-500 mt-1">Chỉ xem lịch công tác riêng (không có điểm danh SV). Quản lý lịch chung vui lòng qua trang <strong>Điểm danh &amp; Buổi gặp hướng dẫn</strong>.</p>
           </div>
-          <button type="button" className="il-btn il-btn-primary" disabled={Boolean(exporting) || !semesterId} onClick={() => void handleExport("schedule")}>{exporting === "schedule" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} Xuất lịch theo mẫu kỳ này</button>
+          <PermissionGuard functionCode="LECTURER" action="EXPORT">
+            <button type="button" className="il-btn il-btn-primary" disabled={Boolean(exporting) || !semesterId} onClick={() => void handleExport("schedule")}>{exporting === "schedule" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} Xuất lịch theo mẫu kỳ này</button>
+          </PermissionGuard>
         </div>
 
         {(() => {
@@ -1067,14 +1182,16 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
       {!isAdminScope && activeModule === "grades" && <Panel className="space-y-4">
         <div className="flex flex-col gap-3 border-b border-slate-100 pb-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <div className="flex items-center gap-2"><FileSpreadsheet className="w-4 h-4 text-emerald-700" /><h2 className="text-sm font-bold text-slate-900">Xuất dữ liệu bảng điểm</h2></div>
+            <div className="flex items-center gap-2"><FileSpreadsheet className="w-4 h-4 text-[#426f20]" /><h2 className="text-sm font-bold text-slate-900">Xuất dữ liệu bảng điểm</h2></div>
             <p className="text-xs text-slate-500 mt-1">Điểm thi và điểm quá trình xuất theo mẫu import tương ứng của trường.</p>
           </div>
           <div className="flex flex-wrap gap-2 sm:justify-end">
-            {!isAdminScope && <button type="button" className="il-btn il-btn-primary" disabled={Boolean(exporting) || !semesterId} onClick={() => void handleExport("grades")}>
-              {exporting === "grades" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              Xuất bảng điểm
-            </button>}
+            {!isAdminScope && <PermissionGuard functionCode="LECTURER" action="EXPORT">
+              <button type="button" className="il-btn il-btn-primary" disabled={Boolean(exporting) || !semesterId} onClick={() => void handleExport("grades")}>
+                {exporting === "grades" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                Xuất bảng điểm
+              </button>
+            </PermissionGuard>}
           </div>
         </div>
       </Panel>}

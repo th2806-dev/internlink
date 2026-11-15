@@ -35,6 +35,22 @@ export function setStoredRefreshToken(token: string | null): void {
 export function clearAuthTokens(): void {
   localStorage.removeItem(TOKEN_STORAGE_KEY);
   localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+  sessionStorage.removeItem("internlink:impersonated-role");
+  sessionStorage.removeItem("internlink:impersonation-context");
+}
+
+export function getImpersonatedRoleCode(): string | null {
+  const roleCode = sessionStorage.getItem("internlink:impersonated-role");
+  return roleCode && /^[A-Za-z][A-Za-z0-9._-]{0,99}$/.test(roleCode)
+    ? roleCode
+    : null;
+}
+
+export function setImpersonatedRoleCode(roleCode: string | null): void {
+  if (roleCode && /^[A-Za-z][A-Za-z0-9._-]{0,99}$/.test(roleCode))
+    sessionStorage.setItem("internlink:impersonated-role", roleCode);
+  else
+    sessionStorage.removeItem("internlink:impersonated-role");
 }
 
 export function getApiErrorMessage(err: unknown): string {
@@ -174,6 +190,9 @@ export async function apiRequest<T>(
     if (auth) {
       const token = getStoredToken();
       if (token) reqHeaders.set("Authorization", `Bearer ${token}`);
+      const impersonatedRoleCode = getImpersonatedRoleCode();
+      if (impersonatedRoleCode)
+        reqHeaders.set("X-Impersonate-Role", impersonatedRoleCode);
     }
 
     const res = await fetch(url, {
@@ -375,6 +394,7 @@ export async function downloadAuthenticatedFile(
   fallbackFilename: string,
   autoTrigger = true,
   options: RequestInit = {},
+  onProgress?: (fraction: number | null) => void,
 ): Promise<{ blob: Blob; filename: string }> {
   const url = resolveApiUrl(path);
   const token = getStoredToken();
@@ -403,7 +423,27 @@ export async function downloadAuthenticatedFile(
   const filename =
     parseContentDispositionFilename(res.headers.get("Content-Disposition")) ??
     fallbackFilename;
-  const blob = await res.blob();
+  const totalBytes = Number(res.headers.get("Content-Length")) || 0;
+  let blob: Blob;
+  if (res.body) {
+    const reader = res.body.getReader();
+    const chunks: BlobPart[] = [];
+    let receivedBytes = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) {
+        chunks.push(value);
+        receivedBytes += value.byteLength;
+        onProgress?.(totalBytes > 0 ? Math.min(receivedBytes / totalBytes, 1) : null);
+      }
+    }
+    blob = new Blob(chunks);
+  } else {
+    blob = await res.blob();
+    onProgress?.(1);
+  }
+  onProgress?.(1);
   if (autoTrigger && typeof window !== "undefined") {
     triggerBlobDownload(blob, filename);
   }

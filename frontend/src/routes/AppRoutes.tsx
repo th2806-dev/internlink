@@ -9,6 +9,7 @@ import { useAuth } from "../hooks/useAuth";
 import { useToast } from "../hooks/useToast";
 import { FEATURES } from "../config/featureFlags";
 import { useSemester } from "../contexts/SemesterContext";
+import { ImpersonationProvider } from "../contexts/ImpersonationContext";
 
 
 // Auth & Layouts
@@ -39,6 +40,16 @@ import { DepartmentsView as AdminDepartmentsView } from "../features/admin/pages
 import { AttendanceView as AdminAttendanceView } from "../features/admin/pages/AttendanceView";
 import { ReportArchiveView as AdminReportArchiveView } from "../features/admin/pages/ReportArchiveView";
 import { BackupsView as AdminBackupsView } from "../features/admin/pages/BackupsView";
+import { GridConfigStudioView as AdminGridConfigStudioView } from "../features/admin/pages/GridConfigStudioView";
+import { PermissionMatrixView as AdminPermissionMatrixView } from "../features/admin/pages/PermissionMatrixView";
+import { GradingRulesConfigView as AdminGradingRulesConfigView } from "../features/admin/pages/GradingRulesConfigView";
+import { AuditLogsView as AdminAuditLogsView } from "../features/admin/pages/AuditLogsView";
+import { SysFunctionsManagerView as AdminSysFunctionsManagerView } from "../features/admin/pages/SysFunctionsManagerView";
+import { FieldPoliciesStudioView as AdminFieldPoliciesStudioView } from "../features/admin/pages/FieldPoliciesStudioView";
+import EmployerQuickEvaluationView from "../features/public/pages/EmployerQuickEvaluationView";
+import CompanyQuickAcceptanceView from "../features/public/pages/CompanyQuickAcceptanceView";
+import PublicVerificationView from "../features/public/pages/PublicVerificationView";
+import SmartExcelImportView from "../features/admin/pages/SmartExcelImportView";
 
 // Lecturer Pages
 import { DashboardView as LecturerDashboardView } from "../features/lecturer/pages/DashboardView";
@@ -94,6 +105,9 @@ export function AppRoutes() {
   return (
     <Routes>
       {/* Public auth routes */}
+      <Route path="/accept/:token" element={<CompanyQuickAcceptanceView />} />
+      <Route path="/evaluate/:token" element={<EmployerQuickEvaluationView />} />
+      <Route path="/verify/:code" element={<PublicVerificationView />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route
@@ -160,21 +174,22 @@ export function AppRoutes() {
         <Route
           path="/admin/*"
           element={
-            <AdminLayout
-              activeTab={currentTabFromPath}
-              onNavigate={(tab) =>
-                navigate(`/admin/${tab.replace("admin-", "")}`)
-              }
-              onSwitchPortal={(r) => {
-                switchRole(r);
-                navigate(`/${r}/dashboard`);
-              }}
-              onLogout={async () => {
-                await logout();
-                navigate("/login");
-              }}
-            >
-              <Routes>
+            <ImpersonationProvider>
+              <AdminLayout
+                activeTab={currentTabFromPath}
+                onNavigate={(tab) =>
+                  navigate(`/admin/${tab.replace("admin-", "")}`)
+                }
+                onSwitchPortal={(r) => {
+                  switchRole(r);
+                  navigate(`/${r}/dashboard`);
+                }}
+                onLogout={async () => {
+                  await logout();
+                  navigate("/login");
+                }}
+              >
+                <Routes>
                 <Route
                   path="dashboard"
                   element={
@@ -369,11 +384,50 @@ export function AppRoutes() {
                   }
                 />
                 <Route
+                  path="config/grid"
+                  element={
+                    <AdminGridConfigStudioView onShowToast={showToast} />
+                  }
+                />
+                <Route
+                  path="system/permissions"
+                  element={<AdminPermissionMatrixView onShowToast={showToast} />}
+                />
+                <Route
+                  path="functions"
+                  element={
+                    isSuperAdmin
+                      ? <AdminSysFunctionsManagerView onShowToast={showToast} />
+                      : <Navigate to="/admin/dashboard" replace />
+                  }
+                />
+                <Route
+                  path="config/field-policies"
+                  element={
+                    isSuperAdmin
+                      ? <AdminFieldPoliciesStudioView onShowToast={showToast} />
+                      : <Navigate to="/admin/dashboard" replace />
+                  }
+                />
+                <Route
+                  path="config/grading-rules"
+                  element={<AdminGradingRulesConfigView onShowToast={showToast} />}
+                />
+                <Route
+                  path="logs/audit"
+                  element={<AdminAuditLogsView />}
+                />
+                <Route
+                  path="config/import-excel"
+                  element={<SmartExcelImportView />}
+                />
+                <Route
                   path="*"
                   element={<Navigate to="/admin/dashboard" replace />}
                 />
-              </Routes>
-            </AdminLayout>
+                </Routes>
+              </AdminLayout>
+            </ImpersonationProvider>
           }
         />
       </Route>

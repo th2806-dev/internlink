@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
   FileCheck2,
   Upload,
@@ -29,15 +29,23 @@ import {
 } from "../../../hooks/useStudentWeeklyReportsQuery";
 import { INTERNSHIP_WEEKS } from "../../../config/internship";
 import { StudentSubPageHeader } from "../components/StudentSubPageHeader";
+import { DynamicFormField } from "../../../components/common/DynamicFormField";
 
-const MAX_WEEKLY_REPORT_FILE_SIZE = 15 * 1024 * 1024;
+const MAX_WEEKLY_REPORT_FILE_SIZE = 20 * 1024 * 1024;
 
 function getWeeklyReportFileError(file: File): string | null {
-  if (!file.name.toLowerCase().endsWith(".pdf")) {
-    return "Hệ thống chỉ chấp nhận định dạng file PDF (.pdf)!";
+  const extension = file.name.split(".").pop()?.toLowerCase();
+  if (extension !== "pdf" && extension !== "docx") {
+    return "Hệ thống chỉ chấp nhận tệp PDF hoặc DOCX.";
   }
   if (file.size > MAX_WEEKLY_REPORT_FILE_SIZE) {
-    return "Dung lượng file vượt quá giới hạn 15MB!";
+    return "Dung lượng tệp vượt quá giới hạn 20MB.";
+  }
+  const expectedMimeType = extension === "pdf"
+    ? "application/pdf"
+    : "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  if (file.type && file.type !== expectedMimeType) {
+    return "Định dạng nội dung tệp không khớp với phần mở rộng.";
   }
   return null;
 }
@@ -57,6 +65,11 @@ function getDeadlineStatus(report: Pick<
     return state === "late"
       ? { label: "Nộp trễ", className: "bg-amber-100 text-amber-800" }
       : { label: "Đúng hạn", className: "bg-emerald-100 text-emerald-800" };
+  }
+
+  const timeUntilDeadline = new Date(report.scheduleDueDate).getTime() - Date.now();
+  if (timeUntilDeadline > 0 && timeUntilDeadline <= 24 * 60 * 60 * 1000) {
+    return { label: "Sắp hết hạn", className: "bg-amber-100 text-amber-900" };
   }
 
   if (state === "missing") {
@@ -84,10 +97,11 @@ export const WeeklyReportsView = ({
   const semWeek = (week: number) => week + internshipStartWeek - 1;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const reportFormRef = useRef<HTMLFormElement>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("Tất cả");
   const [selectedWeek, setSelectedWeek] = useState(1);
-  const [selectedPdfFile, setSelectedPdfFile] = useState<{
+  const [selectedReportFile, setSelectedReportFile] = useState<{
     name: string;
     size: string;
     time: string;
@@ -98,6 +112,18 @@ export const WeeklyReportsView = ({
     name: string;
   } | null>(null);
   const [showRequirementModal, setShowRequirementModal] = useState(false);
+  const [reportFields, setReportFields] = useState({
+    workSummary: "",
+    keyResults: "",
+    blockers: "",
+    attachments: "",
+  });
+  const [loadedFieldPolicies, setLoadedFieldPolicies] = useState<Record<string, boolean>>({});
+  const handlePolicyStateChange = useCallback((fieldKey: string, isLoaded: boolean, hasError: boolean) => {
+    setLoadedFieldPolicies((current) => ({ ...current, [fieldKey]: isLoaded && !hasError }));
+  }, []);
+  const arePoliciesLoaded = ["workSummary", "keyResults", "blockers", "attachments"]
+    .every((fieldKey) => loadedFieldPolicies[fieldKey] === true);
 
   const {
     reports,
@@ -212,7 +238,7 @@ export const WeeklyReportsView = ({
     }
     try {
       await cancelSubmission(currentReport.id);
-      setSelectedPdfFile(null);
+      setSelectedReportFile(null);
       onShowToast?.("Đã hủy nộp báo cáo và xóa file tải lên.", "success");
     } catch (err) {
       onShowToast?.(getApiErrorMessage(err), "error");
@@ -334,12 +360,12 @@ export const WeeklyReportsView = ({
     const errorMessage = getWeeklyReportFileError(file);
     e.currentTarget.value = "";
     if (errorMessage) {
-      setSelectedPdfFile(null);
+      setSelectedReportFile(null);
       onShowToast?.(errorMessage, "error");
       return;
     }
     const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
-    setSelectedPdfFile({
+    setSelectedReportFile({
       name: file.name,
       size: `${sizeMb} MB`,
       time: "Vừa chọn",
@@ -355,12 +381,12 @@ export const WeeklyReportsView = ({
     if (!file) return;
     const errorMessage = getWeeklyReportFileError(file);
     if (errorMessage) {
-      setSelectedPdfFile(null);
+      setSelectedReportFile(null);
       onShowToast?.(errorMessage, "error");
       return;
     }
     const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
-    setSelectedPdfFile({
+    setSelectedReportFile({
       name: file.name,
       size: `${sizeMb} MB`,
       time: "Vừa kéo thả",
@@ -374,8 +400,14 @@ export const WeeklyReportsView = ({
   };
 
   const handleSubmitPdf = async () => {
-    if (!selectedPdfFile) {
-      onShowToast?.("Vui lòng chọn file PDF trước khi nộp báo cáo.", "info");
+    if (!arePoliciesLoaded) {
+      onShowToast?.("Chính sách biểu mẫu chưa tải xong. Vui lòng kiểm tra kết nối và thử lại.", "error");
+      return;
+    }
+    if (reportFormRef.current && !reportFormRef.current.reportValidity()) return;
+
+    if (!selectedReportFile) {
+      onShowToast?.("Vui lòng chọn tệp báo cáo trước khi nộp.", "info");
       return;
     }
 
@@ -401,10 +433,16 @@ export const WeeklyReportsView = ({
         internshipId,
         weekNumber: selectedWeek,
         title: currentReport.title || `Báo cáo tuần ${selectedWeek}`,
-        file: selectedPdfFile.file,
+        content: [
+          `Nội dung công việc:\n${reportFields.workSummary.trim()}`,
+          `Kết quả đạt được:\n${reportFields.keyResults.trim()}`,
+          `Khó khăn cần hỗ trợ:\n${reportFields.blockers.trim() || "Không có"}`,
+          `Liên kết minh chứng:\n${reportFields.attachments.trim() || "Không có"}`,
+        ].join("\n\n"),
+        file: selectedReportFile.file,
         reportId: currentReport.id,
       });
-      setSelectedPdfFile(null);
+      setSelectedReportFile(null);
       onShowToast?.(`Đã nộp báo cáo tuần ${selectedWeek} lên hệ thống thành công.`, "success");
     } catch (err) {
       onShowToast?.(getApiErrorMessage(err), "error");
@@ -506,160 +544,53 @@ export const WeeklyReportsView = ({
 
       </div>
 
-      {/* 2. KPI OVERVIEW CARDS (Chuẩn design system thẻ bo tròn đồng bộ) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* KPI 1: Tiến độ hoàn thành */}
-        <div className="rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs flex flex-col justify-between transition-all hover:border-blue-300">
+      <section className="rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs sm:p-5">
+        <div className="flex flex-col gap-3 border-b border-slate-100 pb-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className="flex items-center justify-between text-xs mb-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                Tiến độ nộp báo cáo
-              </span>
-              <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center">
-                <FileCheck2 className="w-4 h-4" />
-              </div>
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl sm:text-3xl font-extrabold text-slate-900">
-                {completionRate}%
-              </span>
-              <span className="text-xs font-semibold text-blue-700">
-                {approvedCount}/{requiredWeekCount} tuần
-              </span>
-            </div>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Tổng quan báo cáo tuần</p>
+            <h2 className="mt-1 text-base font-bold text-slate-900">Tiến độ nộp theo các tuần yêu cầu</h2>
           </div>
-          <div className="text-[11px] font-medium text-slate-500 pt-3 border-t border-slate-100 mt-3 flex items-center justify-between">
-            <span>{approvedCount} báo cáo đã duyệt</span>
-            <span className="text-slate-400 text-[10px]">
-              Yêu cầu {requiredWeekCount} tuần
-            </span>
+          <div className="text-xs text-slate-600">
+            {approvedCount}/{requiredWeekCount} tuần đã hoàn thành
           </div>
         </div>
 
-        {/* KPI 2: Đã hoàn thành */}
-        <div className="rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs flex flex-col justify-between transition-all hover:border-emerald-300">
+        <div className="mt-4 space-y-4">
           <div>
-            <div className="flex items-center justify-between text-xs mb-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                Đã hoàn thành
-              </span>
-              <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
-                <CheckCircle2 className="w-4 h-4" />
-              </div>
+            <div className="mb-1 flex items-center justify-between text-xs font-medium text-slate-600">
+              <span>Tiến độ hoàn thành</span>
+              <span className="font-bold text-[#026aa7]">{completionRate}%</span>
             </div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl sm:text-3xl font-extrabold text-emerald-700">
-                {approvedCount}
-              </span>
-              <span className="text-xs font-bold text-slate-500">báo cáo</span>
+            <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
+              <div className="h-full rounded-full bg-[#026aa7]" style={{ width: `${Math.min(100, completionRate)}%` }} />
             </div>
           </div>
-          <div className="text-[11px] font-medium text-emerald-700 pt-3 border-t border-slate-100 mt-3 flex items-center gap-1">
-            <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Đã chốt</p>
+              <p className="mt-1 text-xl font-extrabold text-[#7bc043]">{approvedCount}</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Chờ duyệt</p>
+              <p className="mt-1 text-xl font-extrabold text-amber-600">{submittedCount}</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Cần sửa</p>
+              <p className="mt-1 text-xl font-extrabold text-rose-600">{needsRevisionCount}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs text-slate-600">
+            <Clock className="h-3.5 w-3.5 text-[#026aa7]" aria-hidden="true" />
             <span>
-              {completionRate >= 100
-                ? "Đã hoàn thành toàn bộ tuần"
-                : `Còn ${Math.max(0, requiredWeekCount - approvedCount)} tuần cần nộp`}
-            </span>
-          </div>
-        </div>
-
-        {/* KPI 3: Cần chỉnh sửa / Chờ duyệt */}
-        <div className="rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs flex flex-col justify-between transition-all hover:border-rose-300">
-          <div>
-            <div className="flex items-center justify-between text-xs mb-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                Chờ duyệt / Cần sửa
-              </span>
-              <div
-                className={`w-7 h-7 rounded-lg flex items-center justify-center ${
-                  needsRevisionCount > 0
-                    ? "bg-rose-50 text-rose-700"
-                    : submittedCount > 0
-                    ? "bg-sky-50 text-sky-700"
-                    : "bg-slate-50 text-slate-600"
-                }`}
-              >
-                <AlertCircle className="w-4 h-4" />
-              </div>
-            </div>
-            <div className="flex items-baseline gap-1.5">
-              <span
-                className={`text-2xl sm:text-3xl font-extrabold ${
-                  needsRevisionCount > 0
-                    ? "text-rose-600"
-                    : submittedCount > 0
-                    ? "text-sky-700"
-                    : "text-slate-800"
-                }`}
-              >
-                {needsRevisionCount + submittedCount}
-              </span>
-              <span className="text-xs font-bold text-slate-500">báo cáo</span>
-            </div>
-          </div>
-          <div
-            className={`text-[11px] font-medium pt-3 border-t border-slate-100 mt-3 flex items-center gap-1 ${
-              needsRevisionCount > 0
-                ? "text-rose-700"
-                : submittedCount > 0
-                ? "text-sky-700"
-                : "text-slate-500"
-            }`}
-          >
-            {needsRevisionCount > 0 ? (
-              <>
-                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                <span>{needsRevisionCount} bài cần chỉnh sửa nộp lại</span>
-              </>
-            ) : submittedCount > 0 ? (
-              <>
-                <Clock className="w-3.5 h-3.5 shrink-0" />
-                <span>{submittedCount} bài đang chờ GV phản hồi</span>
-              </>
-            ) : (
-              <>
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                <span>Không có bài nào bị yêu cầu sửa</span>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* KPI 4: Tuần cần nộp tiếp theo */}
-        <div className="rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs flex flex-col justify-between transition-all hover:border-amber-300">
-          <div>
-            <div className="flex items-center justify-between text-xs mb-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                Tuần cần nộp kế tiếp
-              </span>
-              <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center">
-                <Clock className="w-4 h-4" />
-              </div>
-            </div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl sm:text-3xl font-extrabold text-slate-900">
-                {nextPendingWeek ? `Tuần ${nextPendingWeek.weekNumber}` : "Đầy đủ"}
-              </span>
-              {nextPendingWeek && showSemesterWeek && (
-                <span className="text-xs font-semibold text-slate-400">
-                  (HK {semWeek(nextPendingWeek.weekNumber)})
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="text-[11px] font-medium text-slate-500 pt-3 border-t border-slate-100 mt-3 flex items-center gap-1 truncate">
-            <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-            <span className="truncate">
               {nextPendingWeek
-                ? nextPendingWeek.deadline !== "—"
-                  ? `Hạn: ${nextPendingWeek.deadline}`
-                  : "Theo tiến độ thực tập"
-                : "Đã hoàn thành tất cả tuần"}
+                ? `Tuần tiếp theo cần nộp: ${nextPendingWeek.weekNumber}${nextPendingWeek.deadline !== "—" ? ` · Hạn: ${nextPendingWeek.deadline}` : ""}`
+                : "Tất cả các tuần yêu cầu đã được hoàn thành."}
             </span>
           </div>
         </div>
-      </div>
+      </section>
 
       {/* 3. MAIN WORKSPACE: BẢNG BÁO CÁO & KHU VỰC NỘP BÀI */}
       {isLoadingApi && reports.length === 0 ? (
@@ -939,7 +870,7 @@ export const WeeklyReportsView = ({
                 <div className="flex flex-col gap-3 rounded-xl border border-blue-200 bg-blue-50/60 p-3.5 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex min-w-0 items-center gap-3">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-rose-200 bg-rose-100 font-bold text-rose-700">
-                      PDF
+                      {currentReport.fileName.toLowerCase().endsWith(".docx") ? "DOCX" : "PDF"}
                     </div>
                     <div className="min-w-0">
                       <p className="truncate text-sm font-bold text-slate-800" title={currentReport.fileName}>
@@ -960,14 +891,16 @@ export const WeeklyReportsView = ({
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
-                    <button
-                      type="button"
-                      onClick={() => void handlePreviewReport(undefined, currentReport.fileName)}
-                      className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-100"
-                    >
-                      <Eye className="h-4 w-4" aria-hidden="true" />
-                      Xem
-                    </button>
+                    {currentReport.fileName.toLowerCase().endsWith(".pdf") && (
+                      <button
+                        type="button"
+                        onClick={() => void handlePreviewReport(undefined, currentReport.fileName)}
+                        className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-100"
+                      >
+                        <Eye className="h-4 w-4" aria-hidden="true" />
+                        Xem
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => void handleDownloadReport(undefined, currentReport.fileName)}
@@ -1057,10 +990,83 @@ export const WeeklyReportsView = ({
               ) : (
                 /* Drag & Drop Upload Zone */
                 <div className="space-y-3">
+                  <form
+                    ref={reportFormRef}
+                    className="grid gap-4 rounded-xl border border-slate-200 bg-slate-50/70 p-4 sm:grid-cols-2"
+                    onSubmit={(event) => event.preventDefault()}
+                    aria-label="Nội dung báo cáo tuần"
+                  >
+                    <DynamicFormField
+                      screenCode="STUDENT_WEEKLY_REPORT"
+                      roleId={null}
+                      currentUserRole
+                      fieldKey="workSummary"
+                      label="Nội dung công việc trong tuần"
+                      name="workSummary"
+                      value={reportFields.workSummary}
+                      onChange={(value) => setReportFields((current) => ({ ...current, workSummary: value }))}
+                      type="textarea"
+                      rows={4}
+                      maxLength={2700}
+                      required
+                      placeholder="Mô tả các nhiệm vụ đã thực hiện."
+                      onPolicyStateChange={handlePolicyStateChange}
+                    />
+                    <DynamicFormField
+                      screenCode="STUDENT_WEEKLY_REPORT"
+                      roleId={null}
+                      currentUserRole
+                      fieldKey="keyResults"
+                      label="Kết quả / sản phẩm đạt được"
+                      name="keyResults"
+                      value={reportFields.keyResults}
+                      onChange={(value) => setReportFields((current) => ({ ...current, keyResults: value }))}
+                      type="textarea"
+                      rows={4}
+                      maxLength={2200}
+                      placeholder="Nêu đầu ra hoặc kết quả có thể kiểm chứng."
+                      onPolicyStateChange={handlePolicyStateChange}
+                    />
+                    <DynamicFormField
+                      screenCode="STUDENT_WEEKLY_REPORT"
+                      roleId={null}
+                      currentUserRole
+                      fieldKey="blockers"
+                      label="Khó khăn cần hỗ trợ"
+                      name="blockers"
+                      value={reportFields.blockers}
+                      onChange={(value) => setReportFields((current) => ({ ...current, blockers: value }))}
+                      type="textarea"
+                      rows={3}
+                      maxLength={1400}
+                      placeholder="Ghi rõ vấn đề cần giảng viên hoặc mentor hỗ trợ."
+                      onPolicyStateChange={handlePolicyStateChange}
+                    />
+                    <DynamicFormField
+                      screenCode="STUDENT_WEEKLY_REPORT"
+                      roleId={null}
+                      currentUserRole
+                      fieldKey="attachments"
+                      label="Liên kết minh chứng / sản phẩm"
+                      name="attachments"
+                      value={reportFields.attachments}
+                      onChange={(value) => setReportFields((current) => ({ ...current, attachments: value }))}
+                      type="url"
+                      maxLength={600}
+                      placeholder="https://..."
+                      onPolicyStateChange={handlePolicyStateChange}
+                    />
+                    <p className="text-xs text-slate-500 sm:col-span-2" role="status">
+                      {arePoliciesLoaded
+                        ? "Chính sách biểu mẫu đã được áp dụng."
+                        : "Đang tải chính sách biểu mẫu của trường..."}
+                    </p>
+                  </form>
+
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".pdf,application/pdf"
+                    accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                     className="hidden"
                     onChange={handleFileInputChange}
                   />
@@ -1083,27 +1089,27 @@ export const WeeklyReportsView = ({
                     </div>
                     <div>
                       <p className="text-xs font-bold text-slate-800">
-                        Bấm để chọn file PDF hoặc kéo thả file báo cáo vào đây
+                        Bấm để chọn tệp báo cáo hoặc kéo thả vào đây
                       </p>
                       <p className="text-[11px] text-slate-400 font-medium mt-0.5">
-                        Chỉ chấp nhận định dạng <strong>PDF (.pdf)</strong> • Dung lượng tối đa <strong>15MB</strong>
+                        Chỉ chấp nhận <strong>PDF hoặc DOCX</strong> • Dung lượng tối đa <strong>20MB</strong>
                       </p>
                     </div>
                   </div>
 
-                  {/* Selected PDF file card */}
-                  {selectedPdfFile && (
+                  {/* Selected report file card */}
+                  {selectedReportFile && (
                     <div className="p-3.5 bg-blue-50/60 rounded-xl border border-blue-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                       <div className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-lg bg-rose-100 text-rose-700 font-bold text-xs flex items-center justify-center shrink-0 border border-rose-200">
-                          PDF
+                          {selectedReportFile.name.toLowerCase().endsWith(".docx") ? "DOCX" : "PDF"}
                         </div>
                         <div className="min-w-0">
                           <h4 className="font-bold text-slate-800 truncate">
-                            {selectedPdfFile.name}
+                            {selectedReportFile.name}
                           </h4>
                           <p className="text-[10px] text-slate-500 font-medium">
-                            {selectedPdfFile.size} • {selectedPdfFile.time}
+                            {selectedReportFile.size} • {selectedReportFile.time}
                           </p>
                         </div>
                       </div>
@@ -1112,7 +1118,7 @@ export const WeeklyReportsView = ({
                         <button
                           type="button"
                           onClick={() => {
-                            setSelectedPdfFile(null);
+                            setSelectedReportFile(null);
                             if (fileInputRef.current) fileInputRef.current.value = "";
                           }}
                           aria-label="Bỏ file đã chọn"
@@ -1187,13 +1193,15 @@ export const WeeklyReportsView = ({
                           {ver.status}
                         </span>
                         <div className="flex items-center gap-3">
-                          <button
-                            type="button"
-                            onClick={() => handlePreviewReport(ver.id, ver.fileName)}
-                            className="text-xs text-blue-600 hover:underline font-bold flex items-center gap-0.5 cursor-pointer"
-                          >
-                            <Eye className="w-3.5 h-3.5" /> Xem
-                          </button>
+                          {ver.fileName.toLowerCase().endsWith(".pdf") && (
+                            <button
+                              type="button"
+                              onClick={() => handlePreviewReport(ver.id, ver.fileName)}
+                              className="text-xs text-blue-600 hover:underline font-bold flex items-center gap-0.5 cursor-pointer"
+                            >
+                              <Eye className="w-3.5 h-3.5" /> Xem
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => handleDownloadReport(ver.id, ver.fileName)}
@@ -1294,11 +1302,11 @@ export const WeeklyReportsView = ({
                 <p className="font-bold text-slate-900 mb-1">1. Quy định file báo cáo:</p>
                 <ul className="list-disc list-inside space-y-1 pl-2 text-slate-600">
                   <li>Soạn thảo bằng Microsoft Word theo biểu mẫu chuẩn của Khoa.</li>
-                  <li>Xuất file định dạng <strong>PDF (.pdf)</strong> trước khi nộp lên hệ thống. Dung lượng tối đa 15MB.</li>
+                  <li>Xuất tệp định dạng <strong>PDF (.pdf) hoặc DOCX (.docx)</strong> trước khi nộp lên hệ thống. Dung lượng tối đa 20MB.</li>
                   <li>
                     Cấu trúc tên file:{" "}
                     <code className="bg-slate-100 px-1.5 py-0.5 rounded font-mono text-blue-700">
-                      BaoCao_Tuan[X]_[MSSV]_[HoTen].pdf
+                      BaoCao_Tuan[X]_[MSSV]_[HoTen].pdf hoặc .docx
                     </code>
                   </li>
                 </ul>

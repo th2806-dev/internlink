@@ -387,7 +387,18 @@ public class AttendanceService : IAttendanceService
         if (session == null)
             return false;
 
-        _context.AttendanceSessions.Remove(session);
+        var records = await _context.AttendanceRecords
+            .Where(record => record.AttendanceSessionId == sessionId)
+            .ToListAsync();
+        var now = DateTime.UtcNow;
+        foreach (var record in records)
+        {
+            record.IsDeleted = true;
+            record.UpdatedAt = now;
+        }
+
+        session.IsDeleted = true;
+        session.UpdatedAt = now;
         await _context.SaveChangesAsync();
         return true;
     }

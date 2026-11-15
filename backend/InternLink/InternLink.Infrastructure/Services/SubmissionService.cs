@@ -1070,6 +1070,7 @@ public class SubmissionService : ISubmissionService
     public async Task<bool> CancelAsync(Guid id, Guid studentUserId)
     {
         var submission = await _db.Submissions
+            .IgnoreQueryFilters()
             .Include(s => s.Internship)
                 .ThenInclude(i => i.Student)
             .Include(s => s.Assets)

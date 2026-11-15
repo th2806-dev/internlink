@@ -212,7 +212,7 @@ export const EditStudentModal = ({
 
           {/* INTERNSHIP PREFERENCES SECTION */}
           <div className="pt-3 border-t border-slate-100 space-y-3">
-            <h3 className="text-[11px] font-bold uppercase tracking-wider text-violet-600">Nguyện vọng thực tập</h3>
+            <h3 className="text-[11px] font-bold uppercase tracking-wider text-[#026aa7]">Nguyện vọng thực tập</h3>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Khoa</label>
@@ -221,7 +221,7 @@ export const EditStudentModal = ({
                   value={form.department}
                   onChange={(e) => setField("department", e.target.value)}
                   placeholder="Công nghệ thông tin"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-violet-500"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-[#026aa7]"
                 />
               </div>
               <div>
@@ -231,7 +231,7 @@ export const EditStudentModal = ({
                   value={form.desiredPosition}
                   onChange={(e) => setField("desiredPosition", e.target.value)}
                   placeholder="Backend Developer"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-violet-500"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-[#026aa7]"
                 />
               </div>
             </div>
@@ -243,7 +243,7 @@ export const EditStudentModal = ({
                   value={form.alternativePosition}
                   onChange={(e) => setField("alternativePosition", e.target.value)}
                   placeholder="QA/Tester"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-violet-500"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-[#026aa7]"
                 />
               </div>
               <div>
@@ -253,7 +253,7 @@ export const EditStudentModal = ({
                   value={form.skills}
                   onChange={(e) => setField("skills", e.target.value)}
                   placeholder="C#, .NET, React"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-violet-500"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-[#026aa7]"
                 />
               </div>
             </div>
@@ -265,7 +265,7 @@ export const EditStudentModal = ({
                   value={form.desiredLocation}
                   onChange={(e) => setField("desiredLocation", e.target.value)}
                   placeholder="Hà Nội, TP.HCM"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-violet-500"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-[#026aa7]"
                 />
               </div>
               <div>
@@ -273,7 +273,7 @@ export const EditStudentModal = ({
                 <select
                   value={form.workPreference}
                   onChange={(e) => setField("workPreference", e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-violet-500"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-[#026aa7]"
                 >
                   <option value="">— Chọn —</option>
                   <option value="Onsite">Onsite</option>
@@ -290,7 +290,7 @@ export const EditStudentModal = ({
                   value={form.preferredIndustry}
                   onChange={(e) => setField("preferredIndustry", e.target.value)}
                   placeholder="Fintech, AI"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-violet-500"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-[#026aa7]"
                 />
               </div>
               <div>
@@ -300,7 +300,7 @@ export const EditStudentModal = ({
                   value={form.resumeUrl}
                   onChange={(e) => setField("resumeUrl", e.target.value)}
                   placeholder="https://..."
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-violet-500"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:bg-white focus:border-[#026aa7]"
                 />
               </div>
             </div>

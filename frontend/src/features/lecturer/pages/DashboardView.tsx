@@ -479,19 +479,19 @@ export const DashboardView = ({
         {/* KPI 4: Tiến độ trung bình */}
         <div
           onClick={() => onNavigate("students")}
-          className="rounded-lg border border-slate-200/90 bg-white p-4 shadow-2xs flex flex-col justify-between transition-all hover:border-violet-300 cursor-pointer"
+          className="rounded-lg border border-slate-200/90 bg-white p-4 shadow-2xs flex flex-col justify-between transition-all hover:border-[#026aa7]/40 cursor-pointer"
         >
           <div>
             <div className="flex items-center justify-between text-xs mb-2">
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
                 Tiến độ trung bình
               </span>
-              <div className="w-7 h-7 rounded-lg bg-violet-50 text-violet-700 flex items-center justify-center">
+              <div className="w-7 h-7 rounded-lg bg-[#026aa7]/5 text-[#026aa7] flex items-center justify-center">
                 <Activity className="w-4 h-4" />
               </div>
             </div>
             <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-extrabold text-violet-700">
+              <span className="text-2xl font-extrabold text-[#026aa7]">
                 {stats.avgProg}%
               </span>
               <span className="text-xs text-slate-500 font-medium">hoàn thành</span>

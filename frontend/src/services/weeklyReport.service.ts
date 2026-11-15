@@ -62,12 +62,14 @@ export const weeklyReportService = {
     internshipId: string;
     weekNumber: number;
     title: string;
+    content?: string;
     file: File;
   }): Promise<WeeklyReportDto> {
     const form = new FormData();
     form.append("InternshipId", params.internshipId);
     form.append("WeekNumber", String(params.weekNumber));
     form.append("Title", params.title);
+    if (params.content) form.append("Content", params.content);
     form.append("File", params.file);
     return apiRequest<WeeklyReportDto>("/api/WeeklyReport/upload", {
       method: "POST",
@@ -75,9 +77,10 @@ export const weeklyReportService = {
     });
   },
 
-  uploadRevision(id: string, title: string, file: File): Promise<WeeklyReportDto> {
+  uploadRevision(id: string, title: string, file: File, content?: string): Promise<WeeklyReportDto> {
     const form = new FormData();
     form.append("Title", title);
+    if (content) form.append("Content", content);
     form.append("File", file);
     return apiRequest<WeeklyReportDto>(`/api/WeeklyReport/${id}/upload`, {
       method: "PUT",
