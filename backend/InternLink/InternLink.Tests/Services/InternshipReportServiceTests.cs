@@ -22,7 +22,9 @@ public class InternshipReportServiceTests
 
     private static async Task<(AppDbContext db, Guid semesterId)> SeedAsync(
         string studentDepartment = "CNTT",
-        string lecturerDepartment = "CNTT")
+        string lecturerDepartment = "CNTT",
+        DateTime? internshipStartDate = null,
+        DateTime? internshipEndDate = null)
     {
         var db = GetDb();
         var semester = new Semester
@@ -99,6 +101,8 @@ public class InternshipReportServiceTests
             Lecturer = lecturer,
             SemesterId = semester.Id,
             Status = InternshipStatus.Graded,
+            StartDate = internshipStartDate,
+            EndDate = internshipEndDate,
             Submissions =
             [
                 new Submission
@@ -218,6 +222,23 @@ public class InternshipReportServiceTests
             .First(row => row.InnerText.Contains("SV002"));
         studentRow.Elements<TableCell>().Should().HaveCount(5);
         studentRow.Elements<TableCell>().ElementAt(2).InnerText.Should().Contain("Lê Thị C");
+    }
+
+    [Fact]
+    public async Task ExportC22AWordReportAsync_ShouldUseInternshipDatesInsteadOfSemesterDates()
+    {
+        var (db, semesterId) = await SeedAsync(
+            internshipStartDate: new DateTime(2025, 9, 28),
+            internshipEndDate: new DateTime(2025, 11, 8));
+        var service = new InternshipReportService(db);
+
+        var bytes = await service.ExportC22AWordReportAsync(semesterId);
+
+        using var ms = new MemoryStream(bytes);
+        using var doc = WordprocessingDocument.Open(ms, false);
+        var text = doc.MainDocumentPart!.Document.Body!.InnerText;
+        text.Should().Contain("Thời gian thực tập: từ 28/09/2025 đến 08/11/2025");
+        text.Should().NotContain("Thời gian thực tập: từ 01/09/2025 đến 15/12/2025");
     }
 
     [Fact]
