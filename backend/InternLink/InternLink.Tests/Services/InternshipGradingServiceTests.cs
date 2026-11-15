@@ -305,6 +305,61 @@ public sealed class InternshipGradingServiceTests
     }
 
     [Fact]
+    public async Task GetSummaryAsync_AdminCountsUnregisteredStudentsInTheSameCohort()
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+        await using var db = new AppDbContext(options);
+        var semester = new Semester
+        {
+            Id = Guid.NewGuid(),
+            Name = "Kỳ thực tập",
+            Term = "Học kỳ I",
+            AcademicYear = "2026 - 2027",
+            TotalWeeks = 1,
+            StartDate = DateTime.UtcNow.Date,
+            EndDate = DateTime.UtcNow.Date.AddDays(30),
+        };
+        var assignedStudent = new Student
+        {
+            Id = Guid.NewGuid(),
+            StudentCode = "SV001",
+            FullName = "Sinh viên thực tập",
+            Class = "C23A",
+        };
+        var unregisteredStudent = new Student
+        {
+            Id = Guid.NewGuid(),
+            StudentCode = "SV002",
+            FullName = "Sinh viên chưa đăng ký",
+            Class = "C23A",
+        };
+        db.Semesters.Add(semester);
+        db.Students.AddRange(assignedStudent, unregisteredStudent);
+        db.Internships.Add(new Internship
+        {
+            Id = Guid.NewGuid(),
+            SemesterId = semester.Id,
+            StudentId = assignedStudent.Id,
+            Student = assignedStudent,
+            Status = InternshipStatus.InProgress,
+        });
+        await db.SaveChangesAsync();
+
+        var service = new InternshipGradingService(
+            db,
+            NullLogger<InternshipGradingService>.Instance,
+            new SemesterService(db));
+
+        var summary = await service.GetSummaryAsync(semester.Id, lecturerId: null, departmentId: null);
+
+        summary.Students.Should().ContainSingle();
+        summary.NotInterningStudentCount.Should().Be(1);
+        summary.TotalStudentCount.Should().Be(2);
+    }
+
+    [Fact]
     public async Task GetSummaryAsync_AdminUsesEachInternshipsLecturerScheduleOverride()
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()

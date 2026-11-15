@@ -22,7 +22,9 @@ public class InternshipReportServiceTests
 
     private static async Task<(AppDbContext db, Guid semesterId)> SeedAsync(
         string studentDepartment = "CNTT",
-        string lecturerDepartment = "CNTT")
+        string lecturerDepartment = "CNTT",
+        DateTime? internshipStartDate = null,
+        DateTime? internshipEndDate = null)
     {
         var db = GetDb();
         var semester = new Semester
@@ -99,6 +101,18 @@ public class InternshipReportServiceTests
             Lecturer = lecturer,
             SemesterId = semester.Id,
             Status = InternshipStatus.Graded,
+            StartDate = internshipStartDate,
+            EndDate = internshipEndDate,
+            Submissions =
+            [
+                new Submission
+                {
+                    Id = Guid.NewGuid(),
+                    Type = SubmissionType.FinalReport,
+                    Status = SubmissionStatus.Submitted,
+                    SubmittedAt = DateTime.UtcNow,
+                }
+            ],
         };
         var incompleteInternship = new Internship
         {
@@ -208,6 +222,106 @@ public class InternshipReportServiceTests
             .First(row => row.InnerText.Contains("SV002"));
         studentRow.Elements<TableCell>().Should().HaveCount(5);
         studentRow.Elements<TableCell>().ElementAt(2).InnerText.Should().Contain("Lê Thị C");
+    }
+
+    [Fact]
+    public async Task ExportC22AWordReportAsync_ShouldUseInternshipDatesInsteadOfSemesterDates()
+    {
+        var (db, semesterId) = await SeedAsync(
+            internshipStartDate: new DateTime(2025, 9, 28),
+            internshipEndDate: new DateTime(2025, 11, 8));
+        var service = new InternshipReportService(db);
+
+        var bytes = await service.ExportC22AWordReportAsync(semesterId);
+
+        using var ms = new MemoryStream(bytes);
+        using var doc = WordprocessingDocument.Open(ms, false);
+        var text = doc.MainDocumentPart!.Document.Body!.InnerText;
+        text.Should().Contain("Thời gian thực tập: từ 28/09/2025 đến 08/11/2025");
+        text.Should().NotContain("Thời gian thực tập: từ 01/09/2025 đến 15/12/2025");
+    }
+
+    [Fact]
+    public async Task ExportC22AWordReportAsync_UnifiesUnclassifiedAndCohortCounts()
+    {
+        await using var db = GetDb();
+        var semester = new Semester
+        {
+            Id = Guid.NewGuid(),
+            Name = "HK 1 2026-2027",
+            Term = "HK1",
+            AcademicYear = "2026-2027",
+            StartDate = new DateTime(2026, 9, 1),
+            EndDate = new DateTime(2026, 12, 15),
+        };
+        var company = new Company { Id = Guid.NewGuid(), CompanyName = "FPT Software" };
+        var assignedStudent = new Student
+        {
+            Id = Guid.NewGuid(),
+            StudentCode = "SV100",
+            FullName = "Nguyễn An",
+            Class = "C23A",
+            Department = "CNTT",
+        };
+        var notInterningStudent = new Student
+        {
+            Id = Guid.NewGuid(),
+            StudentCode = "SV101",
+            FullName = "Trần Bình",
+            Class = "C23A",
+            Department = "CNTT",
+        };
+        var internship = new Internship
+        {
+            Id = Guid.NewGuid(),
+            StudentId = assignedStudent.Id,
+            Student = assignedStudent,
+            CompanyId = company.Id,
+            Company = company,
+            SemesterId = semester.Id,
+            Status = InternshipStatus.Graded,
+            Submissions =
+            [
+                new Submission
+                {
+                    Id = Guid.NewGuid(),
+                    Type = SubmissionType.FinalReport,
+                    Status = SubmissionStatus.Submitted,
+                    SubmittedAt = DateTime.UtcNow,
+                }
+            ],
+        };
+        db.Semesters.Add(semester);
+        db.Companies.Add(company);
+        db.Students.AddRange(assignedStudent, notInterningStudent);
+        db.Internships.Add(internship);
+        db.Evaluations.Add(new Evaluation
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = internship.Id,
+            OralExamScore = null,
+            FinalGrade = 9.2m,
+        });
+        await db.SaveChangesAsync();
+
+        var bytes = await new InternshipReportService(db).ExportC22AWordReportAsync(semester.Id);
+
+        using var stream = new MemoryStream(bytes);
+        using var document = WordprocessingDocument.Open(stream, false);
+        var body = document.MainDocumentPart!.Document.Body!;
+        var statsTable = body.Descendants<Table>()
+            .First(table => table.InnerText.Contains("Chưa xếp loại") && table.InnerText.Contains("TỔNG"));
+        var counts = statsTable.Descendants<TableRow>()
+            .Select(row => row.Descendants<TableCell>().Select(cell => cell.InnerText.Trim()).ToList())
+            .Where(cells => cells.Count >= 3)
+            .ToDictionary(cells => cells[0], cells => cells[1]);
+
+        counts["Không hoàn thành"].Should().Be("0");
+        counts["Chưa xếp loại"].Should().Be("1");
+        counts["Không thực tập"].Should().Be("1");
+        counts["TỔNG"].Should().Be("2");
+        body.InnerText.Should().Contain("hoàn thành đợt thực tập: 1 sinh viên");
+        body.InnerText.Should().Contain("không hoàn thành thực tập: 0 sinh viên");
     }
 
     [Fact]

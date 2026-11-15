@@ -77,6 +77,8 @@ public class InternshipSummaryResponseDto
     public string SemesterName { get; set; } = string.Empty;
     public List<InternshipWeekStatusDto> Schedule { get; set; } = new(); // tuần T1..TN; cuối kỳ được biểu diễn riêng
     public List<InternshipStudentGradeDto> Students { get; set; } = new();
+    public int TotalStudentCount { get; set; }
+    public int NotInterningStudentCount { get; set; }
     public DateTime GeneratedAt { get; set; }
 }
 

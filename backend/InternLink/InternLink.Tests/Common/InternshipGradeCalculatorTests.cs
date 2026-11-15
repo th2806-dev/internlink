@@ -31,7 +31,7 @@ public sealed class InternshipGradeCalculatorTests
         isEligible.Should().BeFalse();
         reasons.Should().Contain(InternshipGradeCalculator.ReasonNoFinalReport);
         average.Should().Be(4m);
-        classification.Should().Be("Không đạt");
+        classification.Should().Be("Chưa xếp loại");
     }
 
     [Fact]
@@ -60,5 +60,25 @@ public sealed class InternshipGradeCalculatorTests
 
         average.Should().Be(8.7m);
         classification.Should().Be("Xuất sắc");
+    }
+
+    [Theory]
+    [InlineData(6.4, "Trung bình")]
+    [InlineData(6.5, "Trung bình khá")]
+    [InlineData(6.9, "Trung bình khá")]
+    [InlineData(7.0, "Khá")]
+    [InlineData(7.9, "Khá")]
+    public void Classify_UsesOfficialSevenTierBoundaries(double score, string expected) =>
+        InternshipGradeCalculator.Classify((decimal)score).Should().Be(expected);
+
+    [Fact]
+    public void ComputeAverage_WithoutOralExamScore_RemainsUnclassified()
+    {
+        var (average, classification) = InternshipGradeCalculator.ComputeAverage(
+            processScore: 10m,
+            oralExamScore: null);
+
+        average.Should().Be(4m);
+        classification.Should().Be("Chưa xếp loại");
     }
 }

@@ -19,12 +19,19 @@ public class InternshipReportService : IInternshipReportService
 {
     private const string ReportSectionsPrefix = "__INTERNLINK_REPORT_SECTIONS_V1__";
     private readonly AppDbContext _db;
+    private readonly IInternshipGradingService _gradingService;
 
     private sealed record ReportSectionContent(string Title, string Content);
 
-    public InternshipReportService(AppDbContext db)
+    public InternshipReportService(AppDbContext db, IInternshipGradingService gradingService)
     {
         _db = db;
+        _gradingService = gradingService;
+    }
+
+    public InternshipReportService(AppDbContext db)
+        : this(db, new InternshipGradingService(db, Microsoft.Extensions.Logging.Abstractions.NullLogger<InternshipGradingService>.Instance, new SemesterService(db)))
+    {
     }
 
     /// <inheritdoc />
@@ -97,64 +104,49 @@ public class InternshipReportService : IInternshipReportService
     /// <inheritdoc />
     public async Task<byte[]> ExportC22AWordReportAsync(Guid? semesterId = null, string? department = null, Guid? departmentId = null, Guid? lecturerId = null)
     {
-        // ── Load data ──────────────────────────────────────────────────────
-        var internshipsQuery = _db.Internships
-            .Include(i => i.Student)
-            .Include(i => i.Company)
-            .Include(i => i.Lecturer)
-            .Include(i => i.WeeklyReports)
-            .Include(i => i.Submissions)
-            .AsNoTracking();
+        var semester = semesterId.HasValue
+            ? await _db.Semesters.FirstOrDefaultAsync(s => s.Id == semesterId.Value)
+            : await _db.Semesters.OrderByDescending(s => s.StartDate).FirstOrDefaultAsync();
 
-        if (semesterId.HasValue)
-            internshipsQuery = internshipsQuery.Where(i => i.SemesterId == semesterId.Value);
+        var targetSemesterId = semesterId ?? semester?.Id;
+        if (!targetSemesterId.HasValue)
+            throw new InvalidOperationException("Không tìm thấy học kỳ.");
 
-        // Scope by the STUDENT's department: the report summarizes a khoa's students.
-        // Matching by lecturer's department would leak other departments' students
-        // whenever a lecturer supervises cross-department internships.
+        // Lấy toàn bộ kết quả chấm điểm chính thức từ gradingService (nguồn sự thật duy nhất của hệ thống)
+        var gradingSummary = await _gradingService.GetSummaryAsync(targetSemesterId.Value, lecturerId, departmentId);
+
+        var studentGrades = gradingSummary.Students;
         if (!string.IsNullOrWhiteSpace(department))
-            internshipsQuery = internshipsQuery.Where(i => i.Student.Department == department);
+        {
+            var deptStudentIds = await _db.Students.AsNoTracking()
+                .Where(s => s.Department == department)
+                .Select(s => s.Id)
+                .ToListAsync();
+            var deptStudentIdSet = deptStudentIds.ToHashSet();
+            studentGrades = studentGrades.Where(s => deptStudentIdSet.Contains(s.StudentId)).ToList();
+        }
 
-        // GUID filter overrides the legacy string filter when provided.
-        if (departmentId.HasValue)
-            internshipsQuery = internshipsQuery.Where(i => i.Student.DepartmentId == departmentId.Value);
-
-        // GV-scoped: chỉ internship do GV này hướng dẫn (controller ép lecturerId từ token).
-        if (lecturerId.HasValue)
-            internshipsQuery = internshipsQuery.Where(i => i.LecturerId == lecturerId.Value);
-
-        var internships = await internshipsQuery.ToListAsync();
-
-        var internshipIds = internships.Select(i => i.Id).ToHashSet();
-        // Lấy bản đánh giá mới nhất cho mỗi internship (1 internship có thể có nhiều lượt).
-        var evaluationRows = await _db.Set<Domain.Entities.Evaluation>()
-            .Where(e => internshipIds.Contains(e.InternshipId))
-            .AsNoTracking()
-            .ToListAsync();
-        var evaluations = evaluationRows
-            .GroupBy(e => e.InternshipId)
-            .ToDictionary(g => g.Key, g => g.First());
-
-        var (absentSessionsByInternship, weeklyQualityLevelsByInternship) = await LoadGradingContextAsync(internships, semesterId, evaluations);
-
-        var totalCompanies = internships
-            .Select(i => i.CompanyId)
-            .Where(c => c.HasValue).Distinct().Count();
+        var interning = studentGrades.Count;
+        var totalCompanies = studentGrades
+            .Select(s => s.CompanyName)
+            .Where(c => !string.IsNullOrWhiteSpace(c))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
 
         // Ưu tiên nội dung tổng kết CẤP KHOA (admin soạn); fallback sang nội dung tổng kết của giảng viên
         // khi xuất theo một GV cụ thể.
         // Ưu tiên bản ghi tổng kết CẤP KHOA nếu đã từng lưu (kể cả khi một số mục còn trống).
-        var facultySummary = semesterId.HasValue
+        var facultySummary = targetSemesterId.HasValue
             ? await _db.Set<SemesterFacultySummary>()
                 .AsNoTracking()
-                .FirstOrDefaultAsync(x => x.SemesterId == semesterId.Value && x.DepartmentId == departmentId)
+                .FirstOrDefaultAsync(x => x.SemesterId == targetSemesterId.Value && x.DepartmentId == departmentId)
             : null;
         LecturerSemesterSummary? lecturerSummary = null;
-        if (facultySummary == null && semesterId.HasValue && lecturerId.HasValue)
+        if (facultySummary == null && targetSemesterId.HasValue && lecturerId.HasValue)
         {
             lecturerSummary = await _db.Set<LecturerSemesterSummary>()
                 .AsNoTracking()
-                .FirstOrDefaultAsync(x => x.SemesterId == semesterId.Value && x.LecturerId == lecturerId.Value);
+                .FirstOrDefaultAsync(x => x.SemesterId == targetSemesterId.Value && x.LecturerId == lecturerId.Value);
         }
         var summaryResults = facultySummary?.Results ?? lecturerSummary?.Results;
         var summaryDifficulties = facultySummary?.Difficulties ?? lecturerSummary?.Difficulties;
@@ -162,104 +154,90 @@ public class InternshipReportService : IInternshipReportService
         var summaryConclusion = facultySummary?.Conclusion ?? lecturerSummary?.Conclusion;
         var reportSections = DeserializeReportSections(summaryResults);
 
-        var semester = semesterId.HasValue
-            ? await _db.Semesters.FirstOrDefaultAsync(s => s.Id == semesterId.Value)
-            : await _db.Semesters.OrderByDescending(s => s.StartDate).FirstOrDefaultAsync();
+        var internshipPeriodsQuery = _db.Internships
+            .AsNoTracking()
+            .Where(i => i.SemesterId == targetSemesterId.Value && !i.IsDeleted
+                && i.Student != null && !i.Student.IsDeleted);
+        if (lecturerId.HasValue)
+            internshipPeriodsQuery = internshipPeriodsQuery.Where(i => i.LecturerId == lecturerId.Value);
+        if (departmentId.HasValue)
+            internshipPeriodsQuery = internshipPeriodsQuery.Where(i => i.Student!.DepartmentId == departmentId.Value);
+        if (!string.IsNullOrWhiteSpace(department))
+            internshipPeriodsQuery = internshipPeriodsQuery.Where(i => i.Student!.Department == department);
 
-        // Lịch nộp báo cáo của kỳ — dùng để thống kê bài thiếu/trễ cho Điểm QT (khớp chuẩn chấm điểm).
-        var totalWeeks = Math.Max(semester?.TotalWeeks ?? 0, 0);
-        var reportScheduleByWeek = await LoadReportScheduleByWeekAsync(semesterId, totalWeeks);
-        var nowUtc = DateTime.UtcNow;
+        var internshipPeriods = await internshipPeriodsQuery
+            .Select(i => new { i.StartDate, i.EndDate })
+            .ToListAsync();
         var reportDate = DateTime.Now;
+        var startDate = internshipPeriods
+            .Where(period => period.StartDate.HasValue)
+            .Select(period => period.StartDate!.Value)
+            .DefaultIfEmpty(semester?.StartDate ?? reportDate)
+            .Min();
+        var endDate = internshipPeriods
+            .Where(period => period.EndDate.HasValue)
+            .Select(period => period.EndDate!.Value)
+            .DefaultIfEmpty(semester?.EndDate ?? reportDate.AddDays(45))
+            .Max();
+        var startDateStr = startDate.ToString("dd/MM/yyyy");
+        var endDateStr = endDate.ToString("dd/MM/yyyy");
 
-        var startDateStr = semester?.StartDate?.ToString("dd/MM/yyyy") ?? reportDate.ToString("dd/MM/yyyy");
-        var endDateStr = semester?.EndDate?.ToString("dd/MM/yyyy") ?? reportDate.AddDays(45).ToString("dd/MM/yyyy");
-
-        // ── Calculate statistics ────────────────────────────────────────────
-        var interning = internships.Count;
-
-        // Mốc % theo KHÓA THỰC TẬP CỦA KỲ (đề xuất P1): "Không thực tập" chỉ đếm SV cùng khóa
-        // (class) đang thực tập kỳ này nhưng chưa đăng ký — loại SV các khóa chưa đến kỳ thực tập.
-        var (totalStudents, notInterning) = await ComputeCohortStatsAsync(internships, department, departmentId);
-
-        // Trạng thái không phân bổ doanh nghiệp và không đủ điều kiện là hai nhóm riêng.
-        // Chuẩn chấm điểm hiện tại: ≥8.5 XS | ≥8 Giỏi | ≥6.5 Khá | ≥5 TB | <5 Không đạt.
-        // "Không đạt" map → "Yếu"; "Trung bình khá" giữ 0 (mẫu có dòng, quy chế chưa tách ngưỡng).
+        // ── Calculate statistics (khớp chuẩn hiển thị SummaryView) ──────────────
         var templateGradeRows = new[]
         {
             "Xuất sắc", "Giỏi", "Khá", "Trung bình khá", "Trung bình", "Yếu",
             "Không hoàn thành", "Chưa xếp loại", "Không thực tập"
         };
         var gradeCounts = templateGradeRows.ToDictionary(c => c, _ => 0);
-        var assignedInternships = internships.Where(i => i.CompanyId.HasValue).ToList();
-        var incompleteInternships = new List<Domain.Entities.Internship>();
+        var incompleteStudentRows = new List<(string Mssv, string HoTen, string Lop, string LyDo)>();
 
-        foreach (var intern in internships)
+        foreach (var student in studentGrades)
         {
-            if (!intern.CompanyId.HasValue)
+            if (string.IsNullOrWhiteSpace(student.CompanyName))
             {
                 gradeCounts["Không thực tập"]++;
                 continue;
             }
 
-            var hasFinalReport = intern.Submissions.Any(s =>
-                !s.IsDeleted && s.Type == SubmissionType.FinalReport
-                && s.Status != SubmissionStatus.Rejected);
-            var (isEligible, _) = InternshipGradeCalculator.EvaluateEligibility(
-                hasFinalReport,
-                absentSessionsByInternship.GetValueOrDefault(intern.Id));
-
-            if (!isEligible)
+            if (!student.IsEligible)
             {
                 gradeCounts["Không hoàn thành"]++;
-                incompleteInternships.Add(intern);
+                var lyDo = student.IneligibleReasons.Count > 0
+                    ? string.Join("; ", student.IneligibleReasons)
+                    : "Không đủ điều kiện dự thi";
+                incompleteStudentRows.Add((student.StudentCode ?? "", student.FullName ?? "", student.ClassName ?? "—", lyDo));
                 continue;
             }
-            if (!evaluations.TryGetValue(intern.Id, out var eval))
+
+            if (!student.OralExamScore.HasValue)
             {
                 gradeCounts["Chưa xếp loại"]++;
                 continue;
             }
 
-            var (missingCount, lateCount, submittedWeekCount) = CountSubmissionStats(intern, reportScheduleByWeek, nowUtc);
-            var hasApprovedProduct = intern.Submissions.Any(s =>
-                !s.IsDeleted && s.Type == SubmissionType.Product && s.Status == SubmissionStatus.Approved);
-            var processScore = InternshipGradeCalculator.ComputeProcessScore(
-                missingCount, lateCount, submittedWeekCount,
-                weeklyQualityLevelsByInternship.GetValueOrDefault(intern.Id) ?? new List<decimal?>(),
-                hasApprovedProduct,
-                reportScheduleByWeek.Count);
-            var (_, classification) = InternshipGradeCalculator.ComputeAverage(processScore, eval.OralExamScore);
-            var templateLabel = MapClassificationToTemplateRow(classification);
+            var templateLabel = MapClassificationToTemplateRow(student.Classification);
             if (templateLabel != null)
                 gradeCounts[templateLabel]++;
         }
-        // Include same-cohort students without an internship; students with an internship but
-        // no assigned company were counted separately above.
+
+        var notInterning = gradingSummary.NotInterningStudentCount;
+        if (!string.IsNullOrWhiteSpace(department))
+        {
+            var khoaStudentsQuery = _db.Students.AsNoTracking().Where(s => !s.IsDeleted && s.Department == department);
+            var khoaStudentClassRows = await khoaStudentsQuery.Select(s => new { s.Id, s.Class }).ToListAsync();
+            notInterning = InternshipCohortStatsCalculator.CountNotInterningStudents(
+                studentGrades.Select(s => (s.StudentId, (string?)s.ClassName)),
+                khoaStudentClassRows.Select(s => (s.Id, s.Class)));
+        }
+
         gradeCounts["Không thực tập"] += notInterning;
-        var incompleteCount = incompleteInternships.Count;
-        var completedCount = assignedInternships.Count - incompleteCount;
+        var totalStudents = interning + notInterning;
+        var incompleteCount = incompleteStudentRows.Count;
+        var completedCount = studentGrades.Count(s => !string.IsNullOrWhiteSpace(s.CompanyName) && s.IsEligible);
 
         int totalForPercent = totalStudents > 0 ? totalStudents : 1;
 
-        // "Không hoàn thành" means assigned to a company but not eligible to take the exam.
-        var incompleteStudentRows = incompleteInternships
-            .Select(i =>
-            {
-                var hasFinalReport = i.Submissions.Any(s =>
-                    !s.IsDeleted && s.Type == SubmissionType.FinalReport
-                    && s.Status != SubmissionStatus.Rejected);
-                var (_, reasons) = InternshipGradeCalculator.EvaluateEligibility(
-                    hasFinalReport,
-                    absentSessionsByInternship.GetValueOrDefault(i.Id));
-                var lyDo = reasons.Count > 0
-                    ? string.Join("; ", reasons)
-                    : "Không đủ điều kiện dự thi";
-                return (Mssv: i.Student.StudentCode ?? "", HoTen: i.Student.FullName ?? "", Lop: i.Student.Class ?? "—", LyDo: lyDo);
-            })
-            .ToList();
-
-        var tenKhoa = await ResolveDepartmentNameForTemplateAsync(department, departmentId, internships);
+        var tenKhoa = await ResolveDepartmentNameForTemplateAsync(department, departmentId, studentGrades.Select(s => s.StudentId));
         var noiDungBaoCaoChung = reportSections?.FirstOrDefault()?.Content ?? summaryResults ?? string.Empty;
         var noiDungDiemNoiBatHanChe = reportSections != null
             ? string.Join("\n\n", reportSections.Skip(1).Select((section, index) =>
@@ -362,6 +340,7 @@ public class InternshipReportService : IInternshipReportService
             "Trung bình" => "Trung bình",
             "Yếu" => "Yếu",
             "Không đạt" => "Yếu",
+            "Chưa xếp loại" => "Chưa xếp loại",
             "Không thực tập" => "Không thực tập",
             var s when string.Equals(s, InternshipGradeCalculator.IneligibleClassification, StringComparison.OrdinalIgnoreCase)
                 => "Không hoàn thành",
@@ -381,7 +360,7 @@ public class InternshipReportService : IInternshipReportService
     private async Task<string> ResolveDepartmentNameForTemplateAsync(
         string? department,
         Guid? departmentId,
-        List<Domain.Entities.Internship> internships)
+        IEnumerable<Guid>? studentIds = null)
     {
         string? raw = null;
         if (departmentId.HasValue)
@@ -392,9 +371,17 @@ public class InternshipReportService : IInternshipReportService
                 .FirstOrDefaultAsync();
         }
 
-        raw ??= !string.IsNullOrWhiteSpace(department)
-            ? department
-            : internships.Select(i => i.Student?.Department).FirstOrDefault(d => !string.IsNullOrWhiteSpace(d));
+        if (string.IsNullOrWhiteSpace(raw) && !string.IsNullOrWhiteSpace(department))
+            raw = department;
+
+        if (string.IsNullOrWhiteSpace(raw) && studentIds != null)
+        {
+            var ids = studentIds.ToList();
+            raw = await _db.Students.AsNoTracking()
+                .Where(s => ids.Contains(s.Id) && !string.IsNullOrWhiteSpace(s.Department))
+                .Select(s => s.Department)
+                .FirstOrDefaultAsync();
+        }
 
         if (string.IsNullOrWhiteSpace(raw))
             return "CÔNG NGHỆ THÔNG TIN";
@@ -1072,10 +1059,10 @@ public class InternshipReportService : IInternshipReportService
         WriteMerged("II. BẢNG TỔNG HỢP KẾT QUẢ XẾP LOẠI:");
         row++;
 
-        // Classification — DÙNG CHUẨN DUY NHẤT InternshipGradeCalculator (khớp màn hình chấm điểm + Excel C23):
-        // SV chưa có Điểm thi → "Chưa chốt"; không đủ điều kiện dự thi → "không thực tập".
-        const string pendingClassification = "Chưa chốt";
-        var gradeCategories = new[] { "Xuất sắc", "Giỏi", "Khá", "Trung bình", "Không đạt", pendingClassification, "Không thực tập" };
+        // Classification — DÙNG CHUẨN DUY NHẤT InternshipGradeCalculator.
+        // SV chưa có Điểm thi → "Chưa xếp loại"; không đủ điều kiện dự thi → "không thực tập".
+        const string pendingClassification = "Chưa xếp loại";
+        var gradeCategories = new[] { "Xuất sắc", "Giỏi", "Khá", "Trung bình khá", "Trung bình", "Không đạt", pendingClassification, "Không thực tập" };
         var gradeCounts = new Dictionary<string, int>();
         foreach (var cat in gradeCategories) gradeCounts[cat] = 0;
 
@@ -1266,13 +1253,6 @@ public class InternshipReportService : IInternshipReportService
         string? department,
         Guid? departmentId)
     {
-        var interningStudentIds = internships.Select(i => i.StudentId).ToHashSet();
-        var cohortClasses = internships
-            .Select(i => i.Student?.Class?.Trim())
-            .Where(c => !string.IsNullOrWhiteSpace(c))
-            .Select(c => c!)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
         var khoaStudentsQuery = _db.Students.AsNoTracking().Where(s => !s.IsDeleted);
         if (!string.IsNullOrWhiteSpace(department))
             khoaStudentsQuery = khoaStudentsQuery.Where(s => s.Department == department);
@@ -1283,10 +1263,9 @@ public class InternshipReportService : IInternshipReportService
             .Select(s => new { s.Id, s.Class })
             .ToListAsync();
 
-        var notInterning = khoaStudentClassRows.Count(s =>
-            !interningStudentIds.Contains(s.Id)
-            && !string.IsNullOrWhiteSpace(s.Class)
-            && cohortClasses.Contains(s.Class!.Trim()));
+        var notInterning = InternshipCohortStatsCalculator.CountNotInterningStudents(
+            internships.Select(internship => (internship.StudentId, internship.Student?.Class)),
+            khoaStudentClassRows.Select(student => (student.Id, student.Class)));
 
         return (internships.Count + notInterning, notInterning);
     }
