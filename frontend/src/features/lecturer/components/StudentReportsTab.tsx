@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import {
   CheckCircle2,
   Download,
@@ -21,7 +21,9 @@ import type {
   SubmissionDto,
   StudentWeeklyTimelineDto,
 } from "../../../types/api";
-import { PdfViewer } from "./PdfViewer";
+const PdfViewer = lazy(() =>
+  import("./PdfViewer").then(({ PdfViewer: component }) => ({ default: component })),
+);
 
 interface StudentReportsTabProps {
   internshipId: string;
@@ -521,13 +523,15 @@ export function StudentReportsTab({
               </button>
             </div>
             <div className="min-h-0 flex-1 overflow-auto bg-slate-100 p-3">
-              <PdfViewer
-                file={{ url: preview.url }}
-                pageNumber={previewPage}
-                scale={1}
-                onLoadSuccess={setPreviewPages}
-                onLoadError={(message) => onShowToast?.(message)}
-              />
+              <Suspense fallback={<div className="p-6 text-center text-sm text-slate-600">Đang tải trình xem PDF...</div>}>
+                <PdfViewer
+                  file={{ url: preview.url }}
+                  pageNumber={previewPage}
+                  scale={1}
+                  onLoadSuccess={setPreviewPages}
+                  onLoadError={(message) => onShowToast?.(message)}
+                />
+              </Suspense>
             </div>
             <div className="flex items-center justify-center gap-3 border-t border-slate-200 px-4 py-2 text-xs">
               <button

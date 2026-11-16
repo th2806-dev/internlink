@@ -62,9 +62,7 @@ public class CommercialFeatureControllerTests
         var result = await controller.Submit(new SubmitEmployerEvaluationRequest
         {
             Token = "valid-shaped-token",
-            AttendanceScore = 11,
-            SkillsScore = 8,
-            AttitudeScore = 9,
+            CriterionScores = [new EmployerEvaluationCriterionScoreRequest(Guid.NewGuid(), 5, null)],
             ConfirmedMentorName = "Mentor",
             Confirmed = true
         }, CancellationToken.None);

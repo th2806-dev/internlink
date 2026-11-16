@@ -1,8 +1,10 @@
 import { apiRequest } from "../lib/apiClient";
 import type {
   AuditLogPage,
+  EmployerRubricConfig,
   GradingRuleSet,
   RolePermissionRow,
+  SaveEmployerRubricConfig,
   SystemImpersonationContext,
   SystemImpersonationTarget,
   SysRole,
@@ -73,6 +75,28 @@ export const systemAdminService = {
         method: "PUT",
         body: rules,
       },
+    );
+  },
+
+  getEmployerRubric: (semesterId: string, departmentId: string | null) => {
+    const query = new URLSearchParams({ semesterId });
+    if (departmentId) query.set("departmentId", departmentId);
+    return apiRequest<EmployerRubricConfig | null>(
+      `/api/v1/system/employer-rubrics?${query.toString()}`,
+      { skipCache: true },
+    );
+  },
+
+  saveEmployerRubric: (
+    semesterId: string,
+    departmentId: string | null,
+    rubric: SaveEmployerRubricConfig,
+  ) => {
+    const query = new URLSearchParams({ semesterId });
+    if (departmentId) query.set("departmentId", departmentId);
+    return apiRequest<EmployerRubricConfig>(
+      `/api/v1/system/employer-rubrics?${query.toString()}`,
+      { method: "PUT", body: rubric },
     );
   },
 

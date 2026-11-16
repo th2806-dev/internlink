@@ -463,13 +463,19 @@ public class AppDbContext : DbContext
             b.HasKey(x => x.Id);
             b.Property(x => x.Id).HasColumnName("EvaluationRubricId");
             b.Property(x => x.Name).IsRequired().HasMaxLength(250);
+            b.Property(x => x.Version).HasDefaultValue(1);
             b.Property(x => x.ApplicationMode).HasDefaultValue(RubricApplicationMode.Required);
             b.Property(x => x.Status).HasDefaultValue(RubricStatus.Draft);
             b.Property(x => x.RejectionReason).HasMaxLength(1000);
             b.Property(x => x.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
-            b.HasOne(x => x.Semester).WithOne(s => s.EvaluationRubric).HasForeignKey<EvaluationRubric>(x => x.SemesterId).OnDelete(DeleteBehavior.NoAction);
+            b.Property(x => x.RatingLevelsJson).HasColumnType("nvarchar(max)");
+            b.HasOne(x => x.Semester).WithMany(s => s.EvaluationRubrics).HasForeignKey(x => x.SemesterId).OnDelete(DeleteBehavior.NoAction);
+            b.HasOne(x => x.Department).WithMany(d => d.EvaluationRubrics).HasForeignKey(x => x.DepartmentId).OnDelete(DeleteBehavior.NoAction);
             b.HasOne(x => x.SubmittedBy).WithMany().HasForeignKey(x => x.SubmittedById).OnDelete(DeleteBehavior.NoAction);
             b.HasOne(x => x.ApprovedBy).WithMany().HasForeignKey(x => x.ApprovedById).OnDelete(DeleteBehavior.NoAction);
+            b.HasIndex(x => new { x.SemesterId, x.DepartmentId })
+                .IsUnique()
+                .HasFilter("[IsDeleted] = 0");
         });
 
         modelBuilder.Entity<EvaluationRubricCriterion>(b =>
@@ -805,6 +811,7 @@ public class AppDbContext : DbContext
             b.Property(x => x.Token).IsRequired().HasMaxLength(64);
             b.Property(x => x.MentorEmail).IsRequired().HasMaxLength(200);
             b.Property(x => x.MentorName).IsRequired().HasMaxLength(200);
+            b.Property(x => x.RubricSnapshotJson).HasColumnType("nvarchar(max)");
             b.Property(x => x.IsUsed).HasDefaultValue(false);
             b.HasIndex(x => x.PublicId).IsUnique();
             b.HasIndex(x => x.Token).IsUnique();

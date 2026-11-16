@@ -30,6 +30,8 @@ vi.mock("../services/systemAdmin.service", () => ({
     resetRolePermissions: vi.fn(),
     getGradingRuleSet: vi.fn(),
     saveGradingRuleSet: vi.fn(),
+    getEmployerRubric: vi.fn(),
+    saveEmployerRubric: vi.fn(),
     getAuditLogs: vi.fn(),
   },
 }));
@@ -55,6 +57,7 @@ describe("GradingRulesConfigView", () => {
   beforeEach(() => {
     vi.mocked(systemAdminService.getGradingRuleSet).mockResolvedValue(rules);
     vi.mocked(systemAdminService.saveGradingRuleSet).mockImplementation(async (value) => value);
+    vi.mocked(systemAdminService.getEmployerRubric).mockResolvedValue(null);
   });
 
   it("loads the selected semester rule and saves valid weights and deadline settings", async () => {
@@ -100,6 +103,16 @@ describe("GradingRulesConfigView", () => {
 
     expect(screen.getByText(/Cần bằng 100%/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Áp dụng mặc định toàn trường" })).toBeDisabled();
+  });
+
+  it("loads the rubric editor with eight configurable criteria and five scale levels", async () => {
+    renderView(<GradingRulesConfigView onShowToast={vi.fn()} />);
+
+    expect(await screen.findByLabelText("Tên rubric")).toHaveValue("Rubric đánh giá doanh nghiệp");
+    expect(screen.getAllByLabelText(/Tiêu chí \d+/)).toHaveLength(8);
+    expect(screen.getAllByLabelText("Nhãn")).toHaveLength(5);
+    expect(screen.getAllByLabelText("Mô tả hành vi")).toHaveLength(5);
+    expect(await screen.findByText("Cần 8–10 tiêu chí có tên, trọng số tổng đúng 100% và đủ mô tả cho 5 mức đánh giá.")).toBeInTheDocument();
   });
 });
 

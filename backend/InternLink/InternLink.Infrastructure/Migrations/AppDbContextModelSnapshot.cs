@@ -1123,6 +1123,9 @@ namespace InternLink.Infrastructure.Migrations
                         .HasColumnType("nvarchar(100)")
                         .HasColumnName("Deleted_By");
 
+                    b.Property<Guid?>("DepartmentId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
@@ -1139,6 +1142,9 @@ namespace InternLink.Infrastructure.Migrations
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uniqueidentifier")
                         .HasColumnName("Public_ID");
+
+                    b.Property<string>("RatingLevelsJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("RejectionReason")
                         .HasMaxLength(1000)
@@ -1169,14 +1175,22 @@ namespace InternLink.Infrastructure.Migrations
                         .HasColumnType("nvarchar(100)")
                         .HasColumnName("Updated_By_Function");
 
+                    b.Property<int>("Version")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
+
                     b.HasKey("Id");
 
                     b.HasIndex("ApprovedById");
 
-                    b.HasIndex("SemesterId")
-                        .IsUnique();
+                    b.HasIndex("DepartmentId");
 
                     b.HasIndex("SubmittedById");
+
+                    b.HasIndex("SemesterId", "DepartmentId")
+                        .IsUnique()
+                        .HasFilter("[IsDeleted] = 0");
 
                     b.ToTable("EvaluationRubrics", (string)null);
                 });
@@ -2121,6 +2135,9 @@ namespace InternLink.Infrastructure.Migrations
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uniqueidentifier")
                         .HasColumnName("Public_ID");
+
+                    b.Property<string>("RubricSnapshotJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Token")
                         .IsRequired()
@@ -4759,9 +4776,14 @@ namespace InternLink.Infrastructure.Migrations
                         .HasForeignKey("ApprovedById")
                         .OnDelete(DeleteBehavior.NoAction);
 
+                    b.HasOne("InternLink.Domain.Entities.Department", "Department")
+                        .WithMany("EvaluationRubrics")
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("InternLink.Domain.Entities.Semester", "Semester")
-                        .WithOne("EvaluationRubric")
-                        .HasForeignKey("InternLink.Domain.Entities.EvaluationRubric", "SemesterId")
+                        .WithMany("EvaluationRubrics")
+                        .HasForeignKey("SemesterId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
@@ -4771,6 +4793,8 @@ namespace InternLink.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.NoAction);
 
                     b.Navigation("ApprovedBy");
+
+                    b.Navigation("Department");
 
                     b.Navigation("Semester");
 
@@ -5184,6 +5208,8 @@ namespace InternLink.Infrastructure.Migrations
 
             modelBuilder.Entity("InternLink.Domain.Entities.Department", b =>
                 {
+                    b.Navigation("EvaluationRubrics");
+
                     b.Navigation("Lecturers");
 
                     b.Navigation("Students");
@@ -5242,7 +5268,7 @@ namespace InternLink.Infrastructure.Migrations
                 {
                     b.Navigation("AttendanceSessions");
 
-                    b.Navigation("EvaluationRubric");
+                    b.Navigation("EvaluationRubrics");
 
                     b.Navigation("Internships");
 

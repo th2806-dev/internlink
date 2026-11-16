@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { useParams } from "react-router-dom";
-import { CheckCircle2, LoaderCircle, Printer, Star } from "lucide-react";
+import { CheckCircle2, LoaderCircle, Printer } from "lucide-react";
 import { apiRequestRaw } from "../../../lib/apiClient";
 
 type EvaluationContext = {
@@ -19,11 +19,18 @@ type EvaluationContext = {
     requiredWeeklyReportsCount: number;
   } | null;
   rubric: {
+    id: string;
+    version: number;
     name: string;
-    description: string | null;
-    maxScore: number;
-    weight: number;
-  }[];
+    ratingLevels: { value: number; label: string; description: string }[];
+    criteria: {
+      id: string;
+      name: string;
+      description: string | null;
+      weight: number;
+      orderIndex: number;
+    }[];
+  } | null;
 };
 
 type EvaluationReceipt = {
@@ -33,67 +40,14 @@ type EvaluationReceipt = {
   confirmedAt: string;
 };
 
-const SCORE_FIELDS = [
-  { key: "attendanceScore", label: "Chuyên cần", description: "Tuân thủ giờ giấc, nội quy và trách nhiệm trong công việc." },
-  { key: "skillsScore", label: "Kỹ năng", description: "Vận dụng kiến thức, kỹ năng chuyên môn và khả năng giải quyết công việc." },
-  { key: "attitudeScore", label: "Thái độ", description: "Tinh thần hợp tác, chủ động, cầu thị và giao tiếp tại nơi làm việc." },
-] as const;
-
-type ScoreField = (typeof SCORE_FIELDS)[number]["key"];
-type ScoreValues = Record<ScoreField, number>;
-
-const INITIAL_SCORES: ScoreValues = {
-  attendanceScore: 0,
-  skillsScore: 0,
-  attitudeScore: 0,
-};
-
-function ScorePicker({
-  label,
-  description,
-  value,
-  onChange,
-}: {
-  label: string;
-  description: string;
-  value: number;
-  onChange: (value: number) => void;
-}) {
-  return (
-    <fieldset className="space-y-3 rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs">
-      <legend className="px-1 text-base font-semibold text-slate-900">{label}</legend>
-      <p className="text-sm leading-6 text-slate-600">{description}</p>
-      <div className="flex flex-wrap items-center gap-1" role="group" aria-label={`Chọn điểm ${label.toLowerCase()}`}>
-        {Array.from({ length: 5 }, (_, index) => {
-          const starScore = (index + 1) * 2;
-          return (
-            <button
-              key={starScore}
-              type="button"
-              onClick={() => onChange(starScore)}
-              aria-label={`${starScore} trên 10 điểm`}
-              aria-pressed={value >= starScore}
-              className="flex h-11 w-11 items-center justify-center rounded-lg text-amber-500 transition-colors hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
-            >
-              <Star aria-hidden="true" className={`h-6 w-6 ${value >= starScore ? "fill-current" : ""}`} />
-            </button>
-          );
-        })}
-        <span className="ml-2 min-w-20 text-sm font-semibold tabular-nums text-slate-800">
-          {value === 0 ? "Chưa chấm" : `${value}/10`}
-        </span>
-      </div>
-    </fieldset>
-  );
-}
+type ScoreValues = Record<string, number | null | undefined>;
 
 export default function EmployerQuickEvaluationView() {
   const { token = "" } = useParams();
   const [context, setContext] = useState<EvaluationContext | null>(null);
   const [receipt, setReceipt] = useState<EvaluationReceipt | null>(null);
-  const [scores, setScores] = useState<ScoreValues>(INITIAL_SCORES);
-  const [strengths, setStrengths] = useState("");
-  const [areasForImprovement, setAreasForImprovement] = useState("");
+  const [scores, setScores] = useState<ScoreValues>({});
+  const [criterionComments, setCriterionComments] = useState<Record<string, string>>({});
   const [comments, setComments] = useState("");
   const [confirmedMentorName, setConfirmedMentorName] = useState("");
   const [confirmed, setConfirmed] = useState(false);
@@ -111,6 +65,7 @@ export default function EmployerQuickEvaluationView() {
         if (active) {
           setContext(data);
           setConfirmedMentorName(data.mentorName);
+          setScores(Object.fromEntries((data.rubric?.criteria ?? []).map((criterion) => [criterion.id, undefined])));
         }
       })
       .catch((cause: unknown) => {
@@ -124,13 +79,14 @@ export default function EmployerQuickEvaluationView() {
     };
   }, [token]);
 
-  const updateScore = (field: ScoreField, value: number) =>
-    setScores((current) => ({ ...current, [field]: value }));
-
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!SCORE_FIELDS.every(({ key }) => scores[key] > 0) || !confirmed || !confirmedMentorName.trim()) {
-      setError("Vui lòng chấm đủ 3 tiêu chí, nhập tên xác nhận và đồng ý gửi đánh giá.");
+    if (!context?.rubric
+      || context.rubric.criteria.some((criterion) => scores[criterion.id] === undefined)
+      || !context.rubric.criteria.some((criterion) => scores[criterion.id] !== null)
+      || !confirmed
+      || !confirmedMentorName.trim()) {
+      setError("Vui lòng đánh giá từng tiêu chí (chọn N/A nếu không áp dụng), nhập tên xác nhận và đồng ý gửi.");
       return;
     }
 
@@ -142,9 +98,11 @@ export default function EmployerQuickEvaluationView() {
         auth: false,
         body: {
           token,
-          ...scores,
-          strengths,
-          areasForImprovement,
+          criterionScores: context.rubric.criteria.map((criterion) => ({
+            criterionId: criterion.id,
+            score: scores[criterion.id],
+            comment: criterionComments[criterion.id] ?? "",
+          })),
           comments,
           confirmedMentorName,
           confirmed,
@@ -194,13 +152,15 @@ export default function EmployerQuickEvaluationView() {
     );
   }
 
-  if (!context || error) {
+  if (!context || error || !context.rubric) {
     return (
       <main className="flex min-h-dvh items-center justify-center bg-slate-50 px-4 py-10">
         <section className="max-w-lg rounded-xl border border-rose-200 bg-white p-6 text-center shadow-2xs">
           <h1 className="text-xl font-bold text-slate-900">Không thể mở biểu mẫu</h1>
           <p role="alert" className="mt-3 text-sm leading-6 text-rose-800">
-            {error ?? "Liên kết đánh giá không tồn tại hoặc đã hết hạn."}
+            {error ?? (!context
+              ? "Liên kết đánh giá không tồn tại hoặc đã hết hạn."
+              : "Chưa có rubric đánh giá được cấu hình cho học kỳ/khoa này. Vui lòng liên hệ giảng viên.")}
           </p>
           <p className="mt-3 text-sm text-slate-600">Vui lòng liên hệ giảng viên phụ trách để được cấp liên kết mới.</p>
         </section>
@@ -253,43 +213,67 @@ export default function EmployerQuickEvaluationView() {
           <section aria-labelledby="score-heading" className="space-y-3">
             <div>
               <h2 id="score-heading" className="text-lg font-bold text-slate-900">Tiêu chí đánh giá</h2>
-              <p className="mt-1 text-sm text-slate-600">Mỗi sao tương ứng 2 điểm trên thang 10.</p>
+              <p className="mt-1 text-sm leading-6 text-slate-600">
+                {context.rubric.name} · Phiên bản {context.rubric.version}. Điểm đánh giá được quy đổi theo trọng số về thang 10; N/A không tính vào trọng số áp dụng.
+              </p>
             </div>
-            {context.rubric.length > 0 && (
-              <div className="rounded-xl border border-slate-200 bg-white p-4">
-                <h3 className="text-sm font-semibold text-slate-900">Rubric học kỳ</h3>
-                <ul className="mt-2 space-y-2">
-                  {context.rubric.map((criterion, index) => (
-                    <li key={`${criterion.name}-${index}`} className="text-sm text-slate-700">
-                      <span className="font-medium">{criterion.name}</span>
-                      <span className="text-slate-500">
-                        {" "}· Tối đa {criterion.maxScore} điểm · Trọng số {criterion.weight}%
-                      </span>
-                      {criterion.description && (
-                        <p className="mt-0.5 text-xs leading-5 text-slate-600">{criterion.description}</p>
-                      )}
-                    </li>
+            {context.rubric.criteria.map((criterion) => (
+              <fieldset key={criterion.id} className="space-y-3 rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs">
+                <legend className="px-1 text-base font-semibold text-slate-900">
+                  {criterion.name} <span className="font-normal text-slate-600">· {criterion.weight}%</span>
+                </legend>
+                {criterion.description && <p className="text-sm leading-6 text-slate-600">{criterion.description}</p>}
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3" role="group" aria-label={`Đánh giá ${criterion.name}`}>
+                  {context.rubric.ratingLevels.map((level) => (
+                    <button
+                      key={level.value}
+                      type="button"
+                      onClick={() => setScores((current) => ({ ...current, [criterion.id]: level.value }))}
+                      aria-pressed={scores[criterion.id] === level.value}
+                      className={`min-h-11 rounded-lg border px-3 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] ${
+                        scores[criterion.id] === level.value
+                          ? "border-[#026aa7] bg-sky-50 text-slate-900"
+                          : "border-slate-300 text-slate-700 hover:bg-slate-50"
+                      }`}
+                    >
+                      <span className="font-semibold">{level.value} · {level.label}</span>
+                      <span className="mt-1 block text-xs leading-5 text-slate-600">{level.description}</span>
+                    </button>
                   ))}
-                </ul>
-              </div>
-            )}
-            {SCORE_FIELDS.map(({ key, label, description }) => (
-              <ScorePicker key={key} label={label} description={description} value={scores[key]} onChange={(value) => updateScore(key, value)} />
+                  <button
+                    type="button"
+                    onClick={() => setScores((current) => ({ ...current, [criterion.id]: null }))}
+                    aria-pressed={scores[criterion.id] === null}
+                    className={`min-h-11 rounded-lg border px-3 py-2 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] ${
+                      scores[criterion.id] === null
+                        ? "border-[#026aa7] bg-sky-50 text-slate-900"
+                        : "border-slate-300 text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    N/A · Không áp dụng
+                  </button>
+                </div>
+                <label className="block text-sm font-medium text-slate-700">
+                  Ghi chú (không bắt buộc)
+                  <textarea
+                    value={criterionComments[criterion.id] ?? ""}
+                    onChange={(event) => setCriterionComments((current) => ({
+                      ...current,
+                      [criterion.id]: event.target.value,
+                    }))}
+                    maxLength={2000}
+                    rows={2}
+                    className="mt-1 min-h-20 w-full rounded-lg border border-slate-300 p-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
+                  />
+                </label>
+              </fieldset>
             ))}
           </section>
 
           <section className="space-y-4 rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs sm:p-5">
             <h2 className="text-lg font-bold text-slate-900">Nhận xét</h2>
             <label className="block text-sm font-medium text-slate-800">
-              Điểm mạnh
-              <textarea value={strengths} onChange={(event) => setStrengths(event.target.value)} maxLength={2000} rows={3} className="mt-2 min-h-24 w-full rounded-lg border border-slate-300 p-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]" />
-            </label>
-            <label className="block text-sm font-medium text-slate-800">
-              Điểm cần cải thiện
-              <textarea value={areasForImprovement} onChange={(event) => setAreasForImprovement(event.target.value)} maxLength={2000} rows={3} className="mt-2 min-h-24 w-full rounded-lg border border-slate-300 p-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]" />
-            </label>
-            <label className="block text-sm font-medium text-slate-800">
-              Nhận xét thêm
+              Nhận xét chung (không bắt buộc)
               <textarea value={comments} onChange={(event) => setComments(event.target.value)} maxLength={3000} rows={3} className="mt-2 min-h-24 w-full rounded-lg border border-slate-300 p-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]" />
             </label>
           </section>

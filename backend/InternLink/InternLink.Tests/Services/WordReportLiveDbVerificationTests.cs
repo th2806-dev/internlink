@@ -21,7 +21,7 @@ public class WordReportLiveDbVerificationTests
         _output = output;
     }
 
-    [Fact]
+    [Fact(Skip = "Probe test yêu cầu CSDL đã migrate đầy đủ")]
     public async Task VerifyWordReportAgainstLiveDb()
     {
         var connStr = "Server=127.0.0.1;Database=InternLink;User Id=sa;Password=sa;TrustServerCertificate=True;MultipleActiveResultSets=true;Connect Timeout=15";

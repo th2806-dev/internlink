@@ -145,8 +145,28 @@ public class PublicPortalControllerTests
         document.RootElement.GetProperty("company").GetString().Should().Be(company.CompanyName);
         document.RootElement.GetProperty("gradingRules").GetProperty("RuleSetName").GetString()
             .Should().Be("Quy chế HK1");
-        document.RootElement.GetProperty("rubric")[0].GetProperty("Name").GetString()
+        document.RootElement.GetProperty("rubric").GetProperty("Criteria")[0].GetProperty("Name").GetString()
             .Should().Be("Kỹ năng chuyên môn");
+    }
+
+    [Fact]
+    public void EmployerEvaluationScoreCalculator_UsesRubricWeightsAndExcludesNotApplicableCriteria()
+    {
+        var criteria = Enumerable.Range(0, 8)
+            .Select(index => new EmployerEvaluationRubricCriterionSnapshot(
+                Guid.NewGuid(),
+                $"Tiêu chí {index + 1}",
+                null,
+                12.5m,
+                index + 1))
+            .ToList();
+        var scores = criteria.Select((criterion, index) => new EmployerEvaluationCriterionScoreRequest(
+                criterion.Id,
+                index == 0 ? 4 : index == 1 ? 0 : index == 7 ? null : 3,
+                index == 2 ? "Làm tốt phần này" : null))
+            .ToDictionary(score => score.CriterionId, score => score.Score);
+
+        EmployerEvaluationScoreCalculator.CalculateFinalScore(criteria, scores).Should().Be(6.79m);
     }
 
     [Fact]
@@ -213,6 +233,7 @@ public class PublicPortalControllerTests
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .ConfigureWarnings(warnings => warnings.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.InMemoryEventId.TransactionIgnoredWarning))
             .Options;
         return new AppDbContext(options);
     }

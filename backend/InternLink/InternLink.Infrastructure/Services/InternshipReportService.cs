@@ -4,6 +4,7 @@ using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
 using System.IO.Compression;
 using System.Text;
+using System.Text.Json;
 using InternLink.Domain.Entities;
 using InternLink.Domain.Entities.Rbac;
 using InternLink.Application.Common;
@@ -25,6 +26,14 @@ public class InternshipReportService : IInternshipReportService
     private readonly IInternshipGradingService _gradingService;
 
     private sealed record ReportSectionContent(string Title, string Content);
+    private sealed record EmployerScoreRatingLevel(int Value, string Label, string Description);
+    private sealed record EmployerScoreCriterion(Guid Id, string Name, string? Description, decimal Weight, int? Score, string? Comment);
+    private sealed record EmployerScoreSnapshot(
+        Guid RubricId,
+        int RubricVersion,
+        string RubricName,
+        IReadOnlyList<EmployerScoreRatingLevel> RatingLevels,
+        IReadOnlyList<EmployerScoreCriterion> Criteria);
 
     public InternshipReportService(AppDbContext db, IInternshipGradingService gradingService)
     {
@@ -115,9 +124,26 @@ public class InternshipReportService : IInternshipReportService
             body.Append(CreateParagraph(""));
             body.Append(CreateParagraph("KẾT QUẢ ĐÁNH GIÁ"));
             body.Append(CreateParagraph($"Điểm đánh giá của giảng viên: {academicEvaluation?.FinalGrade.ToString("0.00") ?? "Chưa có"} / 10"));
-            body.Append(CreateParagraph($"Điểm chuyên cần tại doanh nghiệp: {employerEvaluation?.AttendanceScore.ToString() ?? "Chưa có"} / 10"));
-            body.Append(CreateParagraph($"Điểm kỹ năng: {employerEvaluation?.SkillsScore.ToString() ?? "Chưa có"} / 10"));
-            body.Append(CreateParagraph($"Điểm thái độ: {employerEvaluation?.AttitudeScore.ToString() ?? "Chưa có"} / 10"));
+            var employerScoreSnapshot = DeserializeEmployerScoreSnapshot(employerEvaluation?.RubricScoresJson);
+            if (employerScoreSnapshot is { Criteria.Count: > 0 })
+            {
+                body.Append(CreateParagraph($"Rubric doanh nghiệp: {employerScoreSnapshot.RubricName} (phiên bản {employerScoreSnapshot.RubricVersion})"));
+                foreach (var criterion in employerScoreSnapshot.Criteria)
+                {
+                    var level = criterion.Score.HasValue
+                        ? employerScoreSnapshot.RatingLevels.FirstOrDefault(item => item.Value == criterion.Score.Value)?.Label
+                            ?? $"Mức {criterion.Score.Value}"
+                        : "N/A";
+                    body.Append(CreateParagraph(
+                        $"{criterion.Name}: {level} · Trọng số {criterion.Weight:0.##}%{(string.IsNullOrWhiteSpace(criterion.Comment) ? string.Empty : $" · {criterion.Comment}")}"));
+                }
+            }
+            else
+            {
+                body.Append(CreateParagraph($"Điểm chuyên cần tại doanh nghiệp: {employerEvaluation?.AttendanceScore.ToString() ?? "Chưa có"} / 10"));
+                body.Append(CreateParagraph($"Điểm kỹ năng: {employerEvaluation?.SkillsScore.ToString() ?? "Chưa có"} / 10"));
+                body.Append(CreateParagraph($"Điểm thái độ: {employerEvaluation?.AttitudeScore.ToString() ?? "Chưa có"} / 10"));
+            }
             body.Append(CreateParagraph($"Điểm tổng kết doanh nghiệp: {employerEvaluation?.FinalScore.ToString("0.00") ?? "Chưa có"} / 10"));
             body.Append(CreateParagraph($"Nhận xét điểm mạnh: {employerEvaluation?.Strengths ?? "—"}"));
             body.Append(CreateParagraph($"Nội dung cần cải thiện: {employerEvaluation?.AreasForImprovement ?? "—"}"));
@@ -152,6 +178,20 @@ public class InternshipReportService : IInternshipReportService
 
     private static Paragraph CreateParagraph(string value) =>
         new(new Run(new Text(value) { Space = SpaceProcessingModeValues.Preserve }));
+
+    private static EmployerScoreSnapshot? DeserializeEmployerScoreSnapshot(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return null;
+        try
+        {
+            return JsonSerializer.Deserialize<EmployerScoreSnapshot>(json);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
 
     private static Paragraph CreateCenteredParagraph(string value, bool bold)
     {

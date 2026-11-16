@@ -115,6 +115,7 @@ public static class DependencyInjection
         // Attendance & Meeting service
         services.AddScoped<IAttendanceService, InternLink.Infrastructure.Services.AttendanceService>();
         services.AddScoped<IInternshipGradingService, InternLink.Infrastructure.Services.InternshipGradingService>();
+        services.AddScoped<IRubricService, InternLink.Infrastructure.Services.RubricService>();
 
         // Faculty-level semester summary (admin khoa soạn báo cáo tổng kết theo kỳ)
         services.AddScoped<ISemesterSummaryService, InternLink.Infrastructure.Services.SemesterSummaryService>();

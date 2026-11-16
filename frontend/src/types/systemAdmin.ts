@@ -48,6 +48,37 @@ export interface GradingRuleSet {
   minimumPassingScore: number;
 }
 
+export interface EmployerRatingLevel {
+  value: number;
+  label: string;
+  description: string;
+}
+
+export interface EmployerRubricCriterion {
+  id: string;
+  name: string;
+  description: string | null;
+  weight: number;
+  orderIndex: number;
+}
+
+export interface EmployerRubricConfig {
+  id: string | null;
+  semesterId: string;
+  departmentId: string | null;
+  name: string;
+  version: number;
+  isInherited: boolean;
+  ratingLevels: EmployerRatingLevel[];
+  criteria: EmployerRubricCriterion[];
+}
+
+export interface SaveEmployerRubricConfig {
+  name: string;
+  ratingLevels: EmployerRatingLevel[];
+  criteria: Pick<EmployerRubricCriterion, "name" | "description" | "weight">[];
+}
+
 export interface AuditLogEntry {
   id: number;
   createdAt: string;

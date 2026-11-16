@@ -52,9 +52,9 @@ public class Semester : BaseEntity, IDepartmentScoped
     public ICollection<SemesterCompany> SemesterCompanies { get; set; } = new List<SemesterCompany>();
 
     /// <summary>
-    /// The evaluation rubric configured for this semester (at most one)
+    /// The evaluation rubrics configured for this semester, optionally scoped by department.
     /// </summary>
-    public EvaluationRubric? EvaluationRubric { get; set; }
+    public ICollection<EvaluationRubric> EvaluationRubrics { get; set; } = new List<EvaluationRubric>();
 
     /// <summary>
     /// Weekly report schedules and deadlines configured for this semester
