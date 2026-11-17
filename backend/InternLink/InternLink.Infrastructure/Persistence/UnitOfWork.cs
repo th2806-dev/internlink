@@ -1,6 +1,8 @@
+using System.Data;
 using System.Collections.Concurrent;
 using InternLink.Application.Interfaces;
 using InternLink.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 
 namespace InternLink.Infrastructure.Persistence;
@@ -40,6 +42,51 @@ public class UnitOfWork : IUnitOfWork
     public async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         return await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task ExecuteTransactionAsync(
+        Func<Task> action,
+        IsolationLevel isolationLevel = IsolationLevel.ReadCommitted,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        await ExecuteTransactionAsync(async () =>
+        {
+            await action();
+            return true;
+        }, isolationLevel, cancellationToken);
+    }
+
+    public Task<TResult> ExecuteTransactionAsync<TResult>(
+        Func<Task<TResult>> action,
+        IsolationLevel isolationLevel = IsolationLevel.ReadCommitted,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        var strategy = _context.Database.CreateExecutionStrategy();
+
+        return strategy.ExecuteAsync(
+            state: action,
+            operation: async (context, transactionAction, token) =>
+            {
+                await using var transaction = await context.Database.BeginTransactionAsync(
+                    isolationLevel,
+                    token);
+                try
+                {
+                    var result = await transactionAction();
+                    await context.SaveChangesAsync(token);
+                    await transaction.CommitAsync(token);
+                    return result;
+                }
+                catch
+                {
+                    await transaction.RollbackAsync(CancellationToken.None);
+                    throw;
+                }
+            },
+            verifySucceeded: null,
+            cancellationToken: cancellationToken);
     }
 
     public async Task BeginTransactionAsync(CancellationToken cancellationToken = default)

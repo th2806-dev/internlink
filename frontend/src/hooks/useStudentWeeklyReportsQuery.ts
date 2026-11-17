@@ -87,12 +87,14 @@ export function useStudentWeeklyReportsQuery({
       internshipId,
       weekNumber,
       title,
+      content,
       file,
       reportId,
     }: {
       internshipId: string;
       weekNumber: number;
       title: string;
+      content?: string;
       file: File;
       reportId?: string;
     }) => {
@@ -102,14 +104,18 @@ export function useStudentWeeklyReportsQuery({
           internshipId,
           weekNumber,
           title,
+          ...(content ? { content } : {}),
           file,
         });
-      } else {
+      } else if (content) {
         uploaded = await weeklyReportService.uploadRevision(
           reportId,
           title,
           file,
+          content,
         );
+      } else {
+        uploaded = await weeklyReportService.uploadRevision(reportId, title, file);
       }
 
       if (uploaded?.id) {

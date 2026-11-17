@@ -1,5 +1,7 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using InternLink.Domain.Entities;
+using InternLink.Domain.Entities.Rbac;
 using InternLink.Domain.Enums;
 
 namespace InternLink.Infrastructure.Persistence;
@@ -42,6 +44,19 @@ public class AppDbContext : DbContext
     public DbSet<LecturerSemesterSummary> LecturerSemesterSummaries { get; set; } = null!;
     public DbSet<LecturerActivityLog> LecturerActivityLogs { get; set; } = null!;
     public DbSet<SemesterFacultySummary> SemesterFacultySummaries { get; set; } = null!;
+    public DbSet<SysUser> SysUsers { get; set; } = null!;
+    public DbSet<SysRole> SysRoles { get; set; } = null!;
+    public DbSet<SysUserRole> SysUserRoles { get; set; } = null!;
+    public DbSet<SysFunction> SysFunctions { get; set; } = null!;
+    public DbSet<SysRolePermission> SysRolePermissions { get; set; } = null!;
+    public DbSet<SysGridConfig> SysGridConfigs { get; set; } = null!;
+    public DbSet<SysLoginLog> SysLoginLogs { get; set; } = null!;
+    public DbSet<SysGradingRuleSet> SysGradingRuleSets { get; set; } = null!;
+    public DbSet<EmployerEvaluation> EmployerEvaluations { get; set; } = null!;
+    public DbSet<EmployerEvaluationToken> EmployerEvaluationTokens { get; set; } = null!;
+    public DbSet<SysAuditLog> SysAuditLogs { get; set; } = null!;
+    public DbSet<SysWebhook> SysWebhooks { get; set; } = null!;
+    public DbSet<SysFieldPolicy> SysFieldPolicies { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -179,6 +194,9 @@ public class AppDbContext : DbContext
             b.Property(x => x.Id).HasColumnName("InternshipId");
             b.Property(x => x.Position).HasMaxLength(200);
             b.Property(x => x.SupervisorName).HasMaxLength(200);
+            b.Property(x => x.SupervisorPhone).HasMaxLength(50);
+            b.Property(x => x.SupervisorEmail).HasMaxLength(200);
+            b.Property(x => x.SupervisorDepartment).HasMaxLength(200);
             b.Property(x => x.Status).HasDefaultValue(InternshipStatus.NotStarted);
             b.Property(x => x.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
             b.Property(x => x.AssignedAt).HasColumnName("AssignedAt");
@@ -445,13 +463,19 @@ public class AppDbContext : DbContext
             b.HasKey(x => x.Id);
             b.Property(x => x.Id).HasColumnName("EvaluationRubricId");
             b.Property(x => x.Name).IsRequired().HasMaxLength(250);
+            b.Property(x => x.Version).HasDefaultValue(1);
             b.Property(x => x.ApplicationMode).HasDefaultValue(RubricApplicationMode.Required);
             b.Property(x => x.Status).HasDefaultValue(RubricStatus.Draft);
             b.Property(x => x.RejectionReason).HasMaxLength(1000);
             b.Property(x => x.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
-            b.HasOne(x => x.Semester).WithOne(s => s.EvaluationRubric).HasForeignKey<EvaluationRubric>(x => x.SemesterId).OnDelete(DeleteBehavior.NoAction);
+            b.Property(x => x.RatingLevelsJson).HasColumnType("nvarchar(max)");
+            b.HasOne(x => x.Semester).WithMany(s => s.EvaluationRubrics).HasForeignKey(x => x.SemesterId).OnDelete(DeleteBehavior.NoAction);
+            b.HasOne(x => x.Department).WithMany(d => d.EvaluationRubrics).HasForeignKey(x => x.DepartmentId).OnDelete(DeleteBehavior.NoAction);
             b.HasOne(x => x.SubmittedBy).WithMany().HasForeignKey(x => x.SubmittedById).OnDelete(DeleteBehavior.NoAction);
             b.HasOne(x => x.ApprovedBy).WithMany().HasForeignKey(x => x.ApprovedById).OnDelete(DeleteBehavior.NoAction);
+            b.HasIndex(x => new { x.SemesterId, x.DepartmentId })
+                .IsUnique()
+                .HasFilter("[IsDeleted] = 0");
         });
 
         modelBuilder.Entity<EvaluationRubricCriterion>(b =>
@@ -637,5 +661,366 @@ public class AppDbContext : DbContext
 
             b.HasIndex(x => new { x.AttendanceSessionId, x.StudentId }).IsUnique();
         });
+
+        modelBuilder.Entity<SysUser>(b =>
+        {
+            b.ToTable("Sys_Users");
+            b.HasKey(x => x.AutoId);
+            b.HasAlternateKey(x => x.PublicId);
+            b.Property(x => x.UserName).IsRequired().HasMaxLength(100);
+            b.Property(x => x.DisplayName).HasMaxLength(200);
+            b.HasIndex(x => x.UserName)
+                .IsUnique()
+                .HasFilter("[IsDeleted] = 0");
+            b.HasOne(x => x.LegacyUser)
+                .WithOne()
+                .HasForeignKey<SysUser>(x => x.PublicId)
+                .HasPrincipalKey<User>(x => x.PublicId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<SysRole>(b =>
+        {
+            b.ToTable("Sys_Roles");
+            b.HasKey(x => x.AutoId);
+            b.Property(x => x.Code).IsRequired().HasMaxLength(100);
+            b.Property(x => x.Name).IsRequired().HasMaxLength(150);
+            b.Property(x => x.Description).HasMaxLength(500);
+            b.HasIndex(x => x.Code).IsUnique();
+        });
+
+        modelBuilder.Entity<SysUserRole>(b =>
+        {
+            b.ToTable("Sys_UserRoles");
+            b.HasKey(x => x.AutoId);
+            b.HasOne(x => x.User).WithMany(x => x.Roles).HasForeignKey(x => x.SysUserId);
+            b.HasOne(x => x.Role).WithMany(x => x.Users).HasForeignKey(x => x.SysRoleId);
+            b.HasIndex(x => new { x.SysUserId, x.SysRoleId }).IsUnique();
+        });
+
+        modelBuilder.Entity<SysFunction>(b =>
+        {
+            b.ToTable("Sys_Functions");
+            b.HasKey(x => x.AutoId);
+            b.Property(x => x.Code).IsRequired().HasMaxLength(100);
+            b.Property(x => x.Name).IsRequired().HasMaxLength(200);
+            b.Property(x => x.ModuleCode).IsRequired().HasMaxLength(100);
+            b.Property(x => x.Description).HasMaxLength(500);
+            b.Property(x => x.FuncUrl).HasMaxLength(500);
+            b.Property(x => x.IconName).HasMaxLength(100).HasDefaultValue("Folder");
+            b.Property(x => x.BadgeText).HasMaxLength(50);
+            b.Property(x => x.IsVisibleInMenu).HasDefaultValue(true);
+            b.Property(x => x.IsView).HasDefaultValue(true);
+            b.Property(x => x.IsNew).HasDefaultValue(true);
+            b.Property(x => x.IsEdit).HasDefaultValue(true);
+            b.Property(x => x.IsDelete).HasDefaultValue(true);
+            b.Property(x => x.IsExport).HasDefaultValue(true);
+            b.HasIndex(x => x.Code).IsUnique();
+            b.HasOne(x => x.Parent)
+                .WithMany(x => x.Children)
+                .HasForeignKey(x => x.ParentId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<SysRolePermission>(b =>
+        {
+            b.ToTable("Sys_RolePermissions");
+            b.HasKey(x => x.AutoId);
+            b.HasOne(x => x.Role).WithMany(x => x.Permissions).HasForeignKey(x => x.SysRoleId);
+            b.HasOne(x => x.Function).WithMany(x => x.RolePermissions).HasForeignKey(x => x.SysFunctionId);
+            b.HasIndex(x => new { x.SysRoleId, x.SysFunctionId }).IsUnique();
+        });
+
+        modelBuilder.Entity<SysGridConfig>(b =>
+        {
+            b.ToTable("Sys_GridConfigs");
+            b.HasKey(x => x.AutoId);
+            b.Property(x => x.FeatureCode).IsRequired().HasMaxLength(100);
+            b.Property(x => x.FieldCode).IsRequired().HasMaxLength(100);
+            b.Property(x => x.HeaderTitle).IsRequired().HasMaxLength(200);
+            b.Property(x => x.ColumnWidth).HasDefaultValue(120);
+            b.Property(x => x.IsVisible).HasDefaultValue(true);
+            b.Property(x => x.FrozenSide).IsRequired().HasMaxLength(5).HasDefaultValue("left");
+            b.Property(x => x.TenantId).HasMaxLength(50);
+            b.Property(x => x.HeaderBgColor).HasMaxLength(9);
+            b.Property(x => x.HeaderTextColor).HasMaxLength(9);
+            b.Property(x => x.CellFormatType).IsRequired().HasMaxLength(30).HasDefaultValue("text");
+            b.Property(x => x.CellColorRuleJson).HasMaxLength(4000);
+            b.HasIndex(x => x.PublicId).IsUnique();
+            b.HasIndex(x => new { x.FeatureCode, x.RoleId, x.TenantId, x.FieldCode }).IsUnique();
+        });
+
+        modelBuilder.Entity<SysLoginLog>(b =>
+        {
+            b.ToTable("Sys_LoginLogs");
+            b.HasKey(x => x.AutoId);
+            b.Property(x => x.Username).IsRequired().HasMaxLength(200);
+            b.Property(x => x.IpAddress).HasMaxLength(45);
+            b.Property(x => x.Status).IsRequired().HasMaxLength(20);
+            b.HasIndex(x => x.PublicId).IsUnique();
+            b.HasIndex(x => new { x.Username, x.LoginAt });
+        });
+
+        modelBuilder.Entity<SysGradingRuleSet>(b =>
+        {
+            b.ToTable("Sys_GradingRuleSets");
+            b.HasKey(x => x.AutoId);
+            b.Property(x => x.RuleSetName).IsRequired().HasMaxLength(200);
+            b.Property(x => x.ProcessScoreWeight).HasPrecision(5, 2).HasDefaultValue(0.40m);
+            b.Property(x => x.ExamScoreWeight).HasPrecision(5, 2).HasDefaultValue(0.60m);
+            b.Property(x => x.EmployerScoreWeight).HasPrecision(5, 2).HasDefaultValue(0.00m);
+            b.Property(x => x.RequiredWeeklyReportsCount).HasDefaultValue(6);
+            b.Property(x => x.StepPenaltyPerLateReport).HasPrecision(5, 2).HasDefaultValue(0.5m);
+            b.Property(x => x.StepPenaltyPerMissingReport).HasPrecision(5, 2).HasDefaultValue(2.0m);
+            b.Property(x => x.RequireFinalReportForExamEligibility).HasDefaultValue(true);
+            b.Property(x => x.WeeklyDeadlineDay).HasDefaultValue(5);
+            b.Property(x => x.LatePenaltyPointsPerDay).HasPrecision(5, 2);
+            b.Property(x => x.MinimumPassingScore).HasPrecision(4, 2).HasDefaultValue(5.0m);
+            b.HasIndex(x => x.PublicId).IsUnique();
+            b.HasIndex(x => new { x.SemesterId, x.DepartmentId })
+                .IsUnique()
+                .HasFilter("[IsDeleted] = 0");
+        });
+
+        modelBuilder.Entity<EmployerEvaluation>(b =>
+        {
+            b.ToTable("EmployerEvaluations");
+            b.HasKey(x => x.AutoId);
+            b.Property(x => x.RubricScoresJson).HasColumnType("nvarchar(max)");
+            b.Property(x => x.Strengths).HasMaxLength(2000);
+            b.Property(x => x.AreasForImprovement).HasMaxLength(2000);
+            b.Property(x => x.Comments).HasMaxLength(3000);
+            b.Property(x => x.ConfirmedMentorName).IsRequired().HasMaxLength(200);
+            b.Property(x => x.FinalScore).HasPrecision(4, 2);
+            b.HasIndex(x => x.PublicId).IsUnique();
+            b.HasIndex(x => x.InternshipId);
+            b.HasIndex(x => x.TokenId);
+            b.HasOne(x => x.Internship).WithMany().HasForeignKey(x => x.InternshipId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne(x => x.Token)
+                .WithMany()
+                .HasForeignKey(x => x.TokenId)
+                .HasPrincipalKey(x => x.PublicId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<EmployerEvaluationToken>(b =>
+        {
+            b.ToTable("EmployerEvaluationTokens");
+            b.HasKey(x => x.AutoId);
+            b.HasAlternateKey(x => x.PublicId);
+            b.Property(x => x.Token).IsRequired().HasMaxLength(64);
+            b.Property(x => x.MentorEmail).IsRequired().HasMaxLength(200);
+            b.Property(x => x.MentorName).IsRequired().HasMaxLength(200);
+            b.Property(x => x.RubricSnapshotJson).HasColumnType("nvarchar(max)");
+            b.Property(x => x.IsUsed).HasDefaultValue(false);
+            b.HasIndex(x => x.PublicId).IsUnique();
+            b.HasIndex(x => x.Token).IsUnique();
+            b.HasOne(x => x.Internship).WithMany().HasForeignKey(x => x.InternshipId);
+        });
+
+        modelBuilder.Entity<SysAuditLog>(b =>
+        {
+            b.ToTable("Sys_AuditLogs");
+            b.HasKey(x => x.AutoId);
+            b.Property(x => x.TableName).IsRequired().HasMaxLength(200);
+            b.Property(x => x.ActionType).IsRequired().HasMaxLength(30);
+            b.Property(x => x.RecordId).IsRequired().HasMaxLength(100);
+            b.Property(x => x.FunctionCode).HasMaxLength(100);
+            b.Property(x => x.IpAddress).HasMaxLength(45);
+            b.Property(x => x.Username).HasMaxLength(200);
+            b.HasIndex(x => x.PublicId).IsUnique();
+            b.HasIndex(x => new { x.UserId, x.CreatedAt });
+            b.HasIndex(x => new { x.TableName, x.RecordId, x.CreatedAt });
+        });
+
+        modelBuilder.Entity<SysWebhook>(b =>
+        {
+            b.ToTable("Sys_Webhooks");
+            b.HasKey(x => x.AutoId);
+            b.Property(x => x.WebhookUrl).IsRequired().HasMaxLength(2048);
+            b.Property(x => x.EventType).IsRequired().HasMaxLength(100);
+            b.Property(x => x.SecretKey).IsRequired().HasMaxLength(512);
+            b.Property(x => x.IsActive).HasDefaultValue(true);
+            b.Property(x => x.LastStatus).HasMaxLength(1000);
+            b.HasIndex(x => x.PublicId).IsUnique();
+            b.HasQueryFilter(x => !x.IsDeleted);
+        });
+
+        modelBuilder.Entity<SysFieldPolicy>(b =>
+        {
+            b.ToTable("Sys_FieldPolicies");
+            b.HasKey(x => x.AutoId);
+            b.Property(x => x.FormCode).IsRequired().HasMaxLength(100);
+            b.Property(x => x.FieldKey).IsRequired().HasMaxLength(100);
+            b.Property(x => x.CustomLabel).HasMaxLength(200);
+            b.Property(x => x.DefaultValue).HasMaxLength(1000);
+            b.Property(x => x.ValidationRegex).HasMaxLength(500);
+            b.Property(x => x.ErrorMessage).HasMaxLength(500);
+            b.HasIndex(x => x.PublicId).IsUnique();
+            b.HasIndex(x => new { x.FormCode, x.FieldKey, x.RoleId })
+                .IsUnique()
+                .HasFilter("[IsDeleted] = 0");
+            b.HasOne(x => x.Role)
+                .WithMany()
+                .HasForeignKey(x => x.RoleId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+    }
+
+    private static readonly HashSet<string> SensitivePropertyNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "SecretKey",
+        "PasswordHash",
+        "Password",
+        "RefreshToken",
+        "Token"
+    };
+
+    public override int SaveChanges()
+    {
+        ProcessAuditLogs();
+        return base.SaveChanges();
+    }
+
+    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        ProcessAuditLogs();
+        return base.SaveChangesAsync(cancellationToken);
+    }
+
+    private void ProcessAuditLogs()
+    {
+        var entries = ChangeTracker.Entries()
+            .Where(e => e.Entity is not SysAuditLog && e.Entity is not SysLoginLog && (e.State == EntityState.Added || e.State == EntityState.Modified || e.State == EntityState.Deleted))
+            .ToList();
+
+        if (entries.Count == 0) return;
+
+        var logsToAdd = new List<SysAuditLog>();
+        var now = DateTime.UtcNow;
+
+        foreach (var entry in entries)
+        {
+            var tableName = entry.Metadata.GetTableName() ?? entry.Metadata.ClrType.Name;
+            var recordId = entry.Entity is BaseEntity baseEntity
+                ? (baseEntity.PublicId != Guid.Empty ? baseEntity.PublicId.ToString() : baseEntity.AutoId.ToString())
+                : entry.Properties.FirstOrDefault(p => p.Metadata.IsPrimaryKey())?.CurrentValue?.ToString() ?? string.Empty;
+
+            if (entry.Entity is BaseEntity be)
+            {
+                if (entry.State == EntityState.Added)
+                {
+                    if (be.PublicId == Guid.Empty) be.PublicId = Guid.NewGuid();
+                    recordId = be.PublicId.ToString();
+                    if (be.CreatedAt == default)
+                    {
+                        be.CreatedAt = now;
+                    }
+                }
+                else if (entry.State == EntityState.Modified)
+                {
+                    be.UpdatedAt = now;
+                }
+            }
+
+            if (entry.State == EntityState.Added)
+            {
+                var newValues = new Dictionary<string, object?>();
+                foreach (var prop in entry.Properties)
+                {
+                    if (!SensitivePropertyNames.Contains(prop.Metadata.Name))
+                    {
+                        newValues[prop.Metadata.Name] = prop.CurrentValue;
+                    }
+                }
+
+                logsToAdd.Add(new SysAuditLog
+                {
+                    TableName = tableName,
+                    ActionType = "CREATE",
+                    RecordId = recordId,
+                    NewValuesJson = JsonSerializer.Serialize(newValues),
+                    CreatedAt = now
+                });
+            }
+            else if (entry.State == EntityState.Modified)
+            {
+                var oldValues = new Dictionary<string, object?>();
+                var newValues = new Dictionary<string, object?>();
+                foreach (var prop in entry.Properties)
+                {
+                    if (prop.IsModified && !SensitivePropertyNames.Contains(prop.Metadata.Name))
+                    {
+                        oldValues[prop.Metadata.Name] = prop.OriginalValue;
+                        newValues[prop.Metadata.Name] = prop.CurrentValue;
+                    }
+                }
+
+                logsToAdd.Add(new SysAuditLog
+                {
+                    TableName = tableName,
+                    ActionType = "UPDATE",
+                    RecordId = recordId,
+                    OldValuesJson = JsonSerializer.Serialize(oldValues),
+                    NewValuesJson = JsonSerializer.Serialize(newValues),
+                    CreatedAt = now
+                });
+            }
+            else if (entry.State == EntityState.Deleted)
+            {
+                if (entry.Entity is SysWebhook)
+                {
+                    entry.State = EntityState.Modified;
+                    if (entry.Entity is BaseEntity softEntity)
+                    {
+                        softEntity.IsDeleted = true;
+                        softEntity.DeletedAt = now;
+                    }
+
+                    var oldValues = new Dictionary<string, object?>();
+                    foreach (var prop in entry.Properties)
+                    {
+                        if (!SensitivePropertyNames.Contains(prop.Metadata.Name))
+                        {
+                            oldValues[prop.Metadata.Name] = prop.OriginalValue ?? prop.CurrentValue;
+                        }
+                    }
+
+                    logsToAdd.Add(new SysAuditLog
+                    {
+                        TableName = tableName,
+                        ActionType = "SOFT_DELETE",
+                        RecordId = recordId,
+                        OldValuesJson = JsonSerializer.Serialize(oldValues),
+                        CreatedAt = now
+                    });
+                }
+                else
+                {
+                    var oldValues = new Dictionary<string, object?>();
+                    foreach (var prop in entry.Properties)
+                    {
+                        if (!SensitivePropertyNames.Contains(prop.Metadata.Name))
+                        {
+                            oldValues[prop.Metadata.Name] = prop.OriginalValue ?? prop.CurrentValue;
+                        }
+                    }
+
+                    logsToAdd.Add(new SysAuditLog
+                    {
+                        TableName = tableName,
+                        ActionType = "DELETE",
+                        RecordId = recordId,
+                        OldValuesJson = JsonSerializer.Serialize(oldValues),
+                        CreatedAt = now
+                    });
+                }
+            }
+        }
+
+        if (logsToAdd.Count > 0)
+        {
+            SysAuditLogs.AddRange(logsToAdd);
+        }
     }
 }

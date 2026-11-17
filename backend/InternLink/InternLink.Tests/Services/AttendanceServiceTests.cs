@@ -266,7 +266,7 @@ public class AttendanceServiceTests
         var ok = await service.DeleteSessionAsync(session.Id, lecturer.Id);
         ok.Should().BeTrue();
 
-        db.AttendanceSessions.Count().Should().Be(0);
-        db.AttendanceRecords.Count().Should().Be(0);
+        db.AttendanceSessions.Count(s => !s.IsDeleted).Should().Be(0);
+        db.AttendanceRecords.Count(r => !r.IsDeleted).Should().Be(0);
     }
 }

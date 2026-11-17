@@ -178,6 +178,100 @@ public class LecturerServiceTests
     }
 
     [Fact]
+    public async Task GetStudentWeeklyTimelineAsync_CombinesLecturerScheduleAndReportDetails()
+    {
+        await using var db = GetDb();
+        var (lecturerUser, lecturer, internship, _) = await SeedLecturerDataAsync(db);
+        var weekOneReport = await db.WeeklyReports.SingleAsync(report => report.InternshipId == internship.Id);
+        weekOneReport.SubmittedAt = new DateTime(2026, 9, 12, 12, 0, 0, DateTimeKind.Utc);
+        weekOneReport.FileName = "week-1.pdf";
+        weekOneReport.FileSize = 1024;
+        weekOneReport.MimeType = "application/pdf";
+        weekOneReport.LecturerComment = "Nội dung rõ ràng.";
+
+        db.WeeklyReports.Add(new WeeklyReport
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = internship.Id,
+            WeekNumber = 2,
+            Version = 1,
+            Status = WeeklyReportStatus.Approved,
+            Title = "Báo cáo tuần 2",
+            Content = "Nội dung tuần 2",
+            SubmittedAt = new DateTime(2026, 9, 13, 12, 0, 0, DateTimeKind.Utc),
+            LecturerComment = "Đã duyệt.",
+            CreatedAt = DateTime.UtcNow
+        });
+        db.SemesterReportSchedules.AddRange(
+            new SemesterReportSchedule
+            {
+                Id = Guid.NewGuid(),
+                SemesterId = internship.SemesterId!.Value,
+                WeekNumber = 1,
+                Title = "Lịch mặc định tuần 1",
+                DueDate = new DateTime(2026, 9, 11, 0, 0, 0, DateTimeKind.Utc),
+                CreatedAt = DateTime.UtcNow
+            },
+            new SemesterReportSchedule
+            {
+                Id = Guid.NewGuid(),
+                SemesterId = internship.SemesterId.Value,
+                LecturerId = lecturer.Id,
+                WeekNumber = 1,
+                Title = "Lịch riêng tuần 1",
+                DueDate = new DateTime(2026, 9, 13, 0, 0, 0, DateTimeKind.Utc),
+                CreatedAt = DateTime.UtcNow
+            });
+        db.Evaluations.Add(new Evaluation
+        {
+            Id = Guid.NewGuid(),
+            InternshipId = internship.Id,
+            EvaluatedById = lecturerUser.Id,
+            WeeklyQualityJson = """{"1":4.5,"2":3.5}""",
+            CreatedAt = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
+
+        var service = new LecturerService(db, _mapper, Mock.Of<INotificationService>());
+        var result = await service.GetStudentWeeklyTimelineAsync(
+            lecturerUser.Id,
+            internship.StudentId,
+            internship.SemesterId,
+            CancellationToken.None);
+
+        result.Should().NotBeNull();
+        result!.TotalWeeks.Should().Be(6);
+        result.SubmittedWeeks.Should().Be(2);
+        result.ApprovedWeeks.Should().Be(1);
+        result.AverageWeeklyScore.Should().Be(4m);
+        result.Weeks.Should().HaveCount(6);
+        result.Weeks[0].Title.Should().Be("Lịch riêng tuần 1");
+        result.Weeks[0].Status.Should().Be("Submitted");
+        result.Weeks[0].Feedback.Should().Be("Nội dung rõ ràng.");
+        result.Weeks[0].Attachments.Should().ContainSingle()
+            .Which.FileName.Should().Be("week-1.pdf");
+        result.Weeks[1].Status.Should().Be("Approved");
+        result.Weeks[1].Score.Should().Be(3.5m);
+        result.Weeks[2].Status.Should().Be("NotSubmitted");
+    }
+
+    [Fact]
+    public async Task GetStudentWeeklyTimelineAsync_DoesNotReturnStudentsOutsideLecturerAssignment()
+    {
+        await using var db = GetDb();
+        var (lecturerUser, _, _, _) = await SeedLecturerDataAsync(db);
+        var service = new LecturerService(db, _mapper, Mock.Of<INotificationService>());
+
+        var result = await service.GetStudentWeeklyTimelineAsync(
+            lecturerUser.Id,
+            Guid.NewGuid(),
+            null,
+            CancellationToken.None);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public async Task GetAssignedWeeklyReportsAsync_FiltersByWeekNumber()
     {
         await using var db = GetDb();
@@ -741,6 +835,31 @@ public class LecturerServiceTests
         var filteredStatus = await service.GetAssignedStudentsAsync(lecturerUser.Id, status: "Completed");
         filteredStatus.Should().ContainSingle();
         filteredStatus.First().StudentCode.Should().Be("SV002");
+    }
+
+    [Fact]
+    public async Task GetAssignedStudentsPageAsync_AppliesPaginationAfterFilteringAndReturnsTotal()
+    {
+        await using var db = GetDb();
+        var (lecturerUser, _, _, _) = await SeedLecturerDataAsync(db);
+        var service = new LecturerService(db, _mapper, Mock.Of<INotificationService>());
+
+        var page = await service.GetAssignedStudentsPageAsync(
+            lecturerUser.Id,
+            new LecturerStudentFilterRequest
+            {
+                SearchTerm = "SV",
+                Skip = 1,
+                Take = 1,
+                SortBy = "name"
+            },
+            CancellationToken.None);
+
+        page.Total.Should().Be(2);
+        page.Skip.Should().Be(1);
+        page.Take.Should().Be(1);
+        page.Items.Should().ContainSingle()
+            .Which.StudentCode.Should().Be("SV001");
     }
 
     [Fact]

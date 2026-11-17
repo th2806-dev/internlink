@@ -15,6 +15,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { Panel } from "../../../components/common/Panel";
+import { DynamicFormField } from "../../../components/common/DynamicFormField";
 import { mapWeeklyReportStatusToUi } from "../../../lib/portalMappers";
 import type { WeeklyReportDto } from "../../../types/api";
 import { weeklyReportService } from "../../../services/weeklyReport.service";
@@ -59,6 +60,7 @@ export function WeeklyReportsReviewPanel({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ url: string; fileName: string } | null>(null);
   const [previewLoadingId, setPreviewLoadingId] = useState<string | null>(null);
+  const [selectedReportByInternship, setSelectedReportByInternship] = useState<Record<string, string>>({});
 
   // Modal hỏi giảng viên đánh giá mức độ chất lượng khi nhấn Duyệt
   const [evalModalReport, setEvalModalReport] = useState<WeeklyReportDto | null>(null);
@@ -185,7 +187,7 @@ export function WeeklyReportsReviewPanel({
     <Panel className="space-y-3">
       {showHeading && <div className="flex items-center justify-between border-b border-slate-100 pb-3">
         <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-          <FileCheck2 className="w-4 h-4 text-blue-600" />
+          <FileCheck2 className="w-4 h-4 text-[#026aa7]" />
           Danh sách báo cáo tuần
         </h2>
         <div className="flex items-center gap-2">
@@ -201,7 +203,16 @@ export function WeeklyReportsReviewPanel({
       </div>}
 
       <div className="space-y-3">
-        {groupedReports.map((group) => (
+        {groupedReports.map((group) => {
+          const sortedReports = [...group.reports].sort((first, second) =>
+            first.weekNumber - second.weekNumber);
+          const requestedReportId = selectedReportByInternship[group.internshipId];
+          const selectedReportId = requestedReportId
+            && sortedReports.some((report) => report.id === requestedReportId)
+              ? requestedReportId
+              : sortedReports.find((report) => report.status === "Submitted")?.id
+                ?? sortedReports[sortedReports.length - 1]?.id;
+          return (
           <details
             key={group.internshipId}
             open={group.reports.some((report) => report.status === "Submitted")}
@@ -234,8 +245,42 @@ export function WeeklyReportsReviewPanel({
               </span>
               <ChevronDown className="h-4 w-4 shrink-0 text-slate-500 transition-transform group-open:rotate-180" aria-hidden="true" />
             </summary>
+            <nav
+              aria-label={`Chọn tuần báo cáo của ${group.student?.studentName || "sinh viên"}`}
+              className="flex gap-2 overflow-x-auto border-b border-slate-100 px-4 py-3"
+            >
+              {sortedReports.map((report) => {
+                const isSelected = selectedReportId === report.id;
+                const isApproved = report.status === "Approved";
+                return (
+                  <button
+                    key={report.id}
+                    type="button"
+                    aria-pressed={isSelected}
+                    onClick={() => setSelectedReportByInternship((current) => ({
+                      ...current,
+                      [group.internshipId]: report.id,
+                    }))}
+                    className={`min-h-11 shrink-0 rounded-lg border px-3 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] ${
+                      isSelected
+                        ? "border-[#026aa7] bg-[#026aa7]/5 text-[#026aa7]"
+                        : isApproved
+                          ? "border-[#7bc043]/40 bg-[#7bc043]/10 text-[#426f20]"
+                          : report.status === "Submitted"
+                            ? "border-[#026aa7]/25 bg-[#026aa7]/5 text-[#025a8e]"
+                            : "border-slate-200 bg-slate-50 text-slate-600"
+                    }`}
+                  >
+                    Tuần {report.weekNumber}
+                    <span className="ml-1.5 text-[10px] font-medium">
+                      {mapWeeklyReportStatusToUi(report.status)}
+                    </span>
+                  </button>
+                );
+              })}
+            </nav>
             <ul className="divide-y divide-slate-100 px-4">
-        {group.reports.map((r) => {
+        {sortedReports.filter((report) => report.id === selectedReportId).map((r) => {
           const isPendingItem = r.status === "Submitted";
           const isApprovedItem = r.status === "Approved";
           const isReadOnly = isSemesterClosed;
@@ -262,7 +307,7 @@ export function WeeklyReportsReviewPanel({
                     <span
                       className={`text-[11px] font-semibold px-2 py-0.5 rounded-md border ${
                         isApprovedItem
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          ? "bg-[#7bc043]/10 text-[#426f20] border-[#7bc043]/40"
                           : isPendingItem
                           ? "bg-amber-50 text-amber-700 border-amber-200"
                           : r.status === "RevisionRequested"
@@ -273,7 +318,7 @@ export function WeeklyReportsReviewPanel({
                       {mapWeeklyReportStatusToUi(r.status)}
                     </span>
                     {qualityObj && (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">
+                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#025a8e] bg-[#026aa7]/5 border border-[#026aa7]/20 px-2 py-0.5 rounded-md">
                         <Star className="w-3 h-3 text-amber-500 fill-amber-400" />
                         Xếp loại: {r.qualityScore?.toFixed(1)}đ ({qualityObj.label})
                       </span>
@@ -340,10 +385,10 @@ export function WeeklyReportsReviewPanel({
                       type="button"
                       disabled={busyId === r.id || isReviewing || isPlaceholderData || isReadOnly}
                       onClick={() => handleOpenApproveModal(r)}
-                      className="il-btn il-btn-secondary text-xs flex items-center gap-1 text-blue-700 hover:text-blue-800"
+                      className="il-btn il-btn-secondary text-xs flex items-center gap-1 text-[#026aa7] hover:text-[#025a8e]"
                       title="Chỉnh sửa mức đánh giá chất lượng hoặc nhận xét"
                     >
-                      <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                      <Sparkles className="w-3.5 h-3.5 text-[#026aa7]" />
                       {r.qualityScore != null ? "Chấm lại" : "Đánh giá mức độ"}
                     </button>
                   )}
@@ -359,7 +404,7 @@ export function WeeklyReportsReviewPanel({
                   onChange={(e) =>
                     setCommentById((prev) => ({ ...prev, [r.id]: e.target.value }))
                   }
-                  className="w-full text-sm border border-slate-200 rounded-md p-2.5 outline-none focus:border-blue-500"
+                  className="w-full text-sm border border-slate-200 rounded-md p-2.5 outline-none focus:border-[#026aa7]"
                 />
               )}
 
@@ -373,7 +418,8 @@ export function WeeklyReportsReviewPanel({
         })}
             </ul>
           </details>
-        ))}
+          );
+        })}
       </div>
 
       {/* Modal xem trước file */}
@@ -409,7 +455,7 @@ export function WeeklyReportsReviewPanel({
             <div className="bg-white rounded-xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col border border-slate-100">
               <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50/50">
                 <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-lg bg-blue-100/70 text-blue-700">
+                  <div className="p-2 rounded-lg bg-[#026aa7]/5 text-[#026aa7]">
                     <CheckCircle2 className="w-5 h-5" />
                   </div>
                   <div>
@@ -432,74 +478,45 @@ export function WeeklyReportsReviewPanel({
               </div>
 
               <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
-                    Đánh giá mức độ chất lượng báo cáo <span className="text-red-500">*</span>
-                  </label>
-                  <p className="text-xs text-slate-500 mb-3">
-                    Chọn mức xếp loại theo Rubric chất lượng quy định (tối đa 5 điểm):
-                  </p>
-                  <div className="grid grid-cols-1 gap-2">
-                    {GR_QUALITY_RUBRIC_LEVELS.map((level) => {
-                      const isSelected = selectedQuality === level.value;
-                      return (
-                        <button
-                          type="button"
-                          key={level.value}
-                          onClick={() => setSelectedQuality(level.value)}
-                          className={`flex items-center justify-between p-3 rounded-lg border text-left transition-all ${
-                            isSelected
-                              ? "border-blue-600 bg-blue-50/80 text-blue-900 ring-2 ring-blue-500/20 shadow-xs"
-                              : "border-slate-200 bg-white hover:border-slate-300 text-slate-700"
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <span
-                              className={`inline-flex items-center justify-center w-12 py-1 rounded text-xs font-bold ${
-                                isSelected
-                                  ? "bg-blue-600 text-white"
-                                  : "bg-slate-100 text-slate-700"
-                              }`}
-                            >
-                              {level.value.toFixed(1)}đ
-                            </span>
-                            <div>
-                              <p className="font-semibold text-sm leading-snug">{level.label}</p>
-                              <p className="text-xs text-slate-500">
-                                {level.value === 5.0 && "Nội dung xuất sắc, chi tiết, vượt mục tiêu"}
-                                {level.value === 4.0 && "Nội dung rõ ràng, hoàn thành đầy đủ mục tiêu"}
-                                {level.value === 3.5 && "Nội dung đạt yêu cầu, tiến độ tốt"}
-                                {level.value === 2.0 && "Nội dung cơ bản, cần bổ sung cải thiện"}
-                                {level.value === 1.0 && "Nội dung sơ sài, chưa đạt yêu cầu"}
-                              </p>
-                            </div>
-                          </div>
-                          {isSelected && (
-                            <div className="h-5 w-5 rounded-full bg-blue-600 text-white flex items-center justify-center shrink-0">
-                              <Check className="w-3 h-3 stroke-[3]" />
-                            </div>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+                <DynamicFormField
+                  formCode="FORM_WEEKLY_REPORT"
+                  roleId={null}
+                  fieldKey="QualityScore"
+                  label="Đánh giá chất lượng báo cáo"
+                  name="qualityScore"
+                  type="select"
+                  required
+                  value={String(selectedQuality)}
+                  onChange={(value) => setSelectedQuality(Number(value))}
+                  options={GR_QUALITY_RUBRIC_LEVELS.map((level) => ({
+                      value: String(level.value),
+                      label: `${level.value.toFixed(1)} điểm — ${level.label}`,
+                    }))}
+                />
+                <p className="text-xs text-slate-500">
+                  {GR_QUALITY_RUBRIC_LEVELS.find((level) => level.value === selectedQuality)?.label ?? "Chọn mức rubric"}
+                  {" · "}
+                  {selectedQuality === 5 && "Nội dung xuất sắc, chi tiết, vượt mục tiêu"}
+                  {selectedQuality === 4 && "Nội dung rõ ràng, hoàn thành đầy đủ mục tiêu"}
+                  {selectedQuality === 3.5 && "Nội dung đạt yêu cầu, tiến độ tốt"}
+                  {selectedQuality === 2 && "Nội dung cơ bản, cần bổ sung cải thiện"}
+                  {selectedQuality === 1 && "Nội dung sơ sài, chưa đạt yêu cầu"}
+                </p>
 
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                    Nhận xét cho sinh viên (tuỳ chọn)
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={evalComment}
-                    onChange={(e) => setEvalComment(e.target.value)}
-                    placeholder="Nhập nhận xét, hướng dẫn hoặc góp ý cho sinh viên…"
-                    className="w-full text-sm border border-slate-200 rounded-lg p-3 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                  />
-                </div>
+                <DynamicFormField
+                  formCode="FORM_WEEKLY_REPORT"
+                  roleId={null}
+                  fieldKey="LecturerComment"
+                  label="Nhận xét cho sinh viên"
+                  name="lecturerComment"
+                  type="textarea"
+                  value={evalComment}
+                  onChange={setEvalComment}
+                  placeholder="Nhập nhận xét, hướng dẫn hoặc góp ý cho sinh viên…"
+                />
 
-                <div className="rounded-lg bg-blue-50/70 p-3 border border-blue-100 text-xs text-blue-800 flex items-start gap-2.5">
-                  <Sparkles className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                <div className="rounded-lg bg-[#026aa7]/5 p-3 border border-[#026aa7]/20 text-xs text-[#025a8e] flex items-start gap-2.5">
+                  <Sparkles className="w-4 h-4 text-[#026aa7] shrink-0 mt-0.5" />
                   <div className="leading-relaxed">
                     Kết quả đánh giá chất lượng này sẽ tự động được đồng bộ vào trang{" "}
                     <strong className="font-semibold">Đánh giá & Chấm điểm (/lecturer/evaluations)</strong>{" "}

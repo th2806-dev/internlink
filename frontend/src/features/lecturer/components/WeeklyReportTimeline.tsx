@@ -2,11 +2,12 @@ import { CheckCircle2, Clock, Circle, AlertTriangle, Edit3, RefreshCw } from "lu
 import { INTERNSHIP_WEEKS } from "../../../config/internship";
 import { Panel } from "../../../components/common/Panel";
 import type { WeeklyReportDto } from "../../../types/api";
-import type { EvaluationDetailDto } from "../../../types/api";
+import type { EvaluationDetailDto, StudentWeeklyTimelineDto } from "../../../types/api";
 
 interface WeeklyReportTimelineProps {
   internshipId: string;
   weeklyReports: WeeklyReportDto[];
+  weeklyTimeline?: StudentWeeklyTimelineDto | null;
   isLoading: boolean;
   onRefresh?: () => Promise<void>;
   onShowToast?: (msg: string) => void;
@@ -29,6 +30,9 @@ const STATUS_CONFIG: Record<
   Reviewed: { icon: CheckCircle2, color: "text-emerald-600", bgColor: "bg-emerald-50/50", borderColor: "border-emerald-200", label: "Đã xem" },
   RevisionRequested: { icon: AlertTriangle, color: "text-rose-600", bgColor: "bg-rose-50/50", borderColor: "border-rose-200", label: "Cần chỉnh sửa" },
   Approved: { icon: CheckCircle2, color: "text-emerald-700", bgColor: "bg-emerald-50", borderColor: "border-emerald-200", label: "Đã duyệt" },
+  NotSubmitted: { icon: Circle, color: "text-slate-400", bgColor: "bg-slate-50", borderColor: "border-slate-200", label: "Chưa nộp" },
+  Late: { icon: Clock, color: "text-amber-700", bgColor: "bg-amber-50", borderColor: "border-amber-200", label: "Nộp muộn" },
+  Rejected: { icon: AlertTriangle, color: "text-rose-600", bgColor: "bg-rose-50", borderColor: "border-rose-200", label: "Cần nộp lại" },
 };
 
 function getWeekConfig(status: string | undefined) {
@@ -39,6 +43,7 @@ function getWeekConfig(status: string | undefined) {
 export function WeeklyReportTimeline({
   internshipId,
   weeklyReports,
+  weeklyTimeline,
   isLoading,
   onRefresh,
   onShowToast,
@@ -48,21 +53,40 @@ export function WeeklyReportTimeline({
   internshipStartWeek = 1,
 }: WeeklyReportTimelineProps) {
   void internshipId; // kept for API-parity with workspace hooks
-  const totalWeeks = totalWeeksProp || INTERNSHIP_WEEKS;
+  const totalWeeks = weeklyTimeline?.totalWeeks || totalWeeksProp || INTERNSHIP_WEEKS;
   // Nhãn tuần học kỳ: hiển thị khi kỳ đã cấu hình lệch tuần (start > 1).
   const offset = (internshipStartWeek || 1) - 1;
   const showSemesterWeek = offset > 0;
   const semesterWeekLabel = (weekNum: number) => `HK tuần ${weekNum + offset}`;
 
   // Build weeks + defense milestone
-  const weeks = Array.from({ length: totalWeeks }, (_, i) => {
+  const weeks = weeklyTimeline?.weeks.map((week) => ({
+    weekNum: week.weekNumber,
+    report: week.reports[week.reports.length - 1],
+    config: getWeekConfig(week.status),
+    status: week.status,
+    dueDate: week.dueDate,
+    title: week.title,
+    reportContent: week.reportContent,
+    feedback: week.feedback,
+  })) ?? Array.from({ length: totalWeeks }, (_, i) => {
     const weekNum = i + 1;
     const report = weeklyReports.find((r) => r.weekNumber === weekNum);
-    const config = getWeekConfig(report?.status);
-    return { weekNum, report, config };
+    const config = getWeekConfig(report?.status ?? "NotSubmitted");
+    return {
+      weekNum,
+      report,
+      config,
+      status: report?.status,
+      dueDate: report?.dueDate,
+      title: report?.title ?? `Báo cáo tuần ${weekNum}`,
+      reportContent: report?.content,
+      feedback: report?.lecturerComment,
+    };
   });
 
-  const approvedCount = weeklyReports.filter((r) => r.status === "Approved").length;
+  const approvedCount = weeklyTimeline?.approvedWeeks
+    ?? weeklyReports.filter((r) => r.status === "Approved").length;
 
   if (isLoading) {
     return (
@@ -109,10 +133,14 @@ export function WeeklyReportTimeline({
         <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-slate-200" />
 
         <div className="space-y-3">
-          {weeks.map(({ weekNum, report, config }) => {
+          {weeks.map(({ weekNum, report, config, status, dueDate, title, reportContent, feedback }) => {
             const Icon = config.icon;
-            const isDone = report?.status === "Approved";
-            const isActive = report?.status === "Submitted" || report?.status === "RevisionRequested";
+            const isDone = status === "Approved" || report?.status === "Approved";
+            const isActive = status === "Submitted"
+              || status === "Late"
+              || status === "Rejected"
+              || report?.status === "Submitted"
+              || report?.status === "RevisionRequested";
             return (
               <div key={weekNum} className="relative flex items-start gap-4">
                 {/* Timeline dot */}
@@ -163,24 +191,39 @@ export function WeeklyReportTimeline({
                       {report ? (
                         <div className="mt-1.5 space-y-1">
                           <p className="text-xs text-slate-600 font-medium">
-                            {report.title}
+                            {title}
                           </p>
-                          {report.submittedAt && (
+                            {(report?.submittedAt || dueDate) && (
                             <p className="text-[10px] text-slate-400">
-                              Nộp: {new Date(report.submittedAt).toLocaleDateString("vi-VN")}
+                                {report?.submittedAt
+                                  ? `Nộp: ${new Date(report.submittedAt).toLocaleDateString("vi-VN")}`
+                                  : null}
+                                {report?.submittedAt && dueDate ? " · " : null}
+                                {dueDate ? `Hạn: ${new Date(dueDate).toLocaleDateString("vi-VN")}` : null}
                             </p>
                           )}
-                          {report.lecturerComment && (
+                            {reportContent && (
+                              <p className="text-[11px] text-slate-600 mt-1 line-clamp-3">
+                                <span className="font-bold">Nội dung: </span>
+                                {reportContent}
+                              </p>
+                            )}
+                            {feedback && (
                             <p className="text-[11px] text-blue-700 bg-blue-50 p-2 rounded border border-blue-100 mt-1">
                               <span className="font-bold">Nhận xét: </span>
-                              {report.lecturerComment}
+                                {feedback}
                             </p>
                           )}
                         </div>
                       ) : (
-                        <p className="text-xs text-slate-400 mt-1 italic">
-                          Chưa có báo cáo
-                        </p>
+                          <>
+                            <p className="text-xs text-slate-400 mt-1 italic">Chưa có báo cáo</p>
+                            {dueDate && (
+                              <p className="text-[10px] text-slate-400 mt-1">
+                                Hạn: {new Date(dueDate).toLocaleDateString("vi-VN")}
+                              </p>
+                            )}
+                          </>
                       )}
                     </div>
                   </div>
@@ -191,13 +234,13 @@ export function WeeklyReportTimeline({
 
           {/* Defense milestone */}
           <div className="relative flex items-start gap-4">
-            <div className="relative z-10 w-12 h-12 rounded-full bg-indigo-100 border-2 border-indigo-300 flex items-center justify-center text-indigo-600 shrink-0">
+            <div className="relative z-10 w-12 h-12 rounded-full bg-[#026aa7]/10 border-2 border-[#026aa7]/30 flex items-center justify-center text-[#026aa7] shrink-0">
               <span className="text-[10px] font-bold">QK</span>
             </div>
-            <div className="flex-1 p-4 rounded-lg border border-indigo-200 bg-indigo-50/50">
+            <div className="flex-1 p-4 rounded-lg border border-[#026aa7]/20 bg-[#026aa7]/5">
               <div className="flex items-center gap-2">
                 <h4 className="text-sm font-bold text-slate-900">Bảo vệ thực tập tốt nghiệp</h4>
-                <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-indigo-100 text-indigo-700 border border-indigo-200">
+                <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-[#026aa7]/10 text-[#025a8e] border border-[#026aa7]/20">
                   {evaluation?.initiativeScore != null ? `Điểm ${evaluation.initiativeScore}/10` : "Chưa cập nhật"}
                 </span>
               </div>
@@ -209,7 +252,7 @@ export function WeeklyReportTimeline({
                     : "Chưa xếp lịch bảo vệ"}
               </p>
               {(evaluation?.defenseCouncilName || evaluation?.defenseExaminerName) && (
-                <p className="mt-1 text-[11px] text-indigo-700">
+                <p className="mt-1 text-[11px] text-[#025a8e]">
                   {evaluation.defenseCouncilName ?? "Chưa có hội đồng"}
                   {evaluation.defenseExaminerName ? ` · Phản biện: ${evaluation.defenseExaminerName}` : ""}
                 </p>

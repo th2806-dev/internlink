@@ -1,9 +1,15 @@
 using InternLink.API.Extensions;
+using InternLink.API.Helpers;
 using InternLink.Application.DTOs;
 using InternLink.Application.Interfaces;
 using InternLink.Shared.Responses;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.WebUtilities;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 
 namespace InternLink.API.Controllers;
 
@@ -14,28 +20,98 @@ public class StudentPortalController : ControllerBase
 {
     private readonly IStudentService _studentService;
     private readonly IPdfExportService _pdfExportService;
+    private readonly IDataProtector _acceptanceTokenProtector;
 
-    public StudentPortalController(IStudentService studentService, IPdfExportService pdfExportService)
+    public StudentPortalController(
+        IStudentService studentService,
+        IPdfExportService pdfExportService,
+        IDataProtectionProvider dataProtectionProvider)
     {
         _studentService = studentService;
         _pdfExportService = pdfExportService;
+        _acceptanceTokenProtector = dataProtectionProvider.CreateProtector(
+            "InternLink.StudentInternshipAcceptance.v1");
     }
 
     /// <summary>
     /// Current student's profile and active internship.
     /// </summary>
     [HttpGet("me")]
-    public async Task<IActionResult> GetMe()
+    public async Task<IActionResult> GetMe(CancellationToken cancellationToken)
     {
         var userId = User.GetUserId();
         if (userId == null)
             return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
-        var profile = await _studentService.GetPortalProfileByUserIdAsync(userId.Value);
+        var profile = await _studentService.GetPortalProfileByUserIdAsync(userId.Value, cancellationToken);
         if (profile == null)
             return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.StudentProfileNotFound }));
 
         return Ok(ApiResponse<StudentPortalProfileDto>.Ok(profile));
+    }
+
+    /// <summary>Returns semester-configured progress and weekly deadlines for the current student.</summary>
+    [HttpGet("/api/v1/student/dashboard-progress")]
+    [ProducesResponseType(typeof(ApiResponse<StudentDashboardProgressResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetDashboardProgress(CancellationToken cancellationToken)
+    {
+        var userId = User.GetUserId();
+        if (userId == null)
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
+
+        var result = await _studentService.GetDashboardProgressByUserIdAsync(userId.Value, cancellationToken);
+        if (result == null)
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.StudentProfileNotFound }));
+
+        return Ok(ApiResponse<StudentDashboardProgressResponse>.Ok(result));
+    }
+
+    /// <summary>Issues a time-limited, protected magic link for the student's internship introduction.</summary>
+    [HttpGet("/api/v1/student/introduction-letter")]
+    [ProducesResponseType(typeof(ApiResponse<StudentIntroductionLetterResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetIntroductionLetter(CancellationToken cancellationToken)
+    {
+        var userId = User.GetUserId();
+        if (userId == null)
+            return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
+
+        var profile = await _studentService.GetPortalProfileByUserIdAsync(userId.Value, cancellationToken);
+        if (profile == null)
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.StudentProfileNotFound }));
+        if (profile.Internship == null)
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Bạn chưa được phân công đợt thực tập." }));
+        if (profile.Internship.CompanyId == null)
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Bạn cần được phân công doanh nghiệp trước khi tạo giấy giới thiệu." }));
+
+        var expiresAt = DateTimeOffset.UtcNow.AddDays(15);
+        var payload = new StudentAcceptanceTokenPayload(
+            profile.Internship.Id,
+            profile.Student.Id,
+            expiresAt.ToUnixTimeSeconds(),
+            WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(16)));
+        var protectedToken = _acceptanceTokenProtector.Protect(JsonSerializer.Serialize(payload));
+        var token = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(protectedToken));
+        var year = profile.Internship.StartDate?.Year ?? DateTime.UtcNow.Year;
+        var referenceCode = PublicReferenceCodes.CreateAcceptance(profile.Internship.Id, year);
+
+        return Ok(ApiResponse<StudentIntroductionLetterResponse>.Ok(new StudentIntroductionLetterResponse(
+            referenceCode,
+            token,
+            expiresAt,
+            profile.Student.FullName,
+            profile.Student.StudentCode,
+            profile.Student.Class,
+            profile.Student.Major,
+            profile.Student.Department,
+            profile.Internship.Company?.CompanyName,
+            profile.Internship.Position,
+            profile.LecturerName,
+            profile.Internship.SemesterName,
+            profile.Internship.StartDate.HasValue ? AsUtcOffset(profile.Internship.StartDate.Value) : null,
+            profile.Internship.EndDate.HasValue ? AsUtcOffset(profile.Internship.EndDate.Value) : null)));
     }
 
     [HttpPut("me")]
@@ -108,4 +184,7 @@ public class StudentPortalController : ControllerBase
             return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = ex.Message }));
         }
     }
+
+    private static DateTimeOffset AsUtcOffset(DateTime value) =>
+        new(DateTime.SpecifyKind(value, DateTimeKind.Utc));
 }

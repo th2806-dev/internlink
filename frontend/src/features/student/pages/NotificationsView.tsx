@@ -183,10 +183,10 @@ export const NotificationsView = ({
     switch (category) {
       case "Giảng viên":
         return {
-          bg: "bg-indigo-50",
-          text: "text-indigo-700",
-          border: "border-indigo-200",
-          badgeBg: "bg-indigo-50 text-indigo-700 border-indigo-200",
+          bg: "bg-[#026aa7]/5",
+          text: "text-[#026aa7]",
+          border: "border-[#026aa7]/20",
+          badgeBg: "bg-[#026aa7]/5 text-[#026aa7] border-[#026aa7]/20",
         };
       case "Doanh nghiệp":
         return {

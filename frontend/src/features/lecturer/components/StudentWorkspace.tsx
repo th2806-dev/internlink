@@ -50,6 +50,7 @@ export function StudentWorkspace({
     detail,
     assignment,
     weeklyReports,
+    weeklyTimeline,
     submissions,
     evaluation,
     isLoading,
@@ -58,7 +59,7 @@ export function StudentWorkspace({
     refresh,
   } = useStudentWorkspace(id);
 
-  const totalWeeks = selectedSemester?.totalWeeks || INTERNSHIP_WEEKS;
+  const totalWeeks = weeklyTimeline?.totalWeeks || selectedSemester?.totalWeeks || INTERNSHIP_WEEKS;
   // Tuần HK nơi Tuần thực tập 1 bắt đầu (vd 14 → TT 1..6 = HK 14..19) — dùng cho timeline.
   const internshipStartWeek = selectedSemester?.internshipStartWeek || 1;
   const requiredWeeks = assignment?.progressBreakdown?.requiredWeeksCount ?? totalWeeks;
@@ -74,7 +75,8 @@ export function StudentWorkspace({
     : "Chưa chấm";
 
   const weeklyReportCount = weeklyReports.length;
-  const approvedReportCount = weeklyReports.filter((r) => r.status === "Approved").length;
+  const approvedReportCount = weeklyTimeline?.approvedWeeks
+    ?? weeklyReports.filter((report) => report.status === "Approved").length;
   const pendingReportCount = assignment?.pendingReportCount ?? 0;
   const submissionCount = submissions.length;
   const progressPercent = assignment?.progressPercent ?? 0;
@@ -248,6 +250,7 @@ export function StudentWorkspace({
             studentName={student.fullName}
             studentCode={student.studentCode}
             weeklyReports={weeklyReports}
+            weeklyTimeline={weeklyTimeline}
             submissions={submissions}
             isLoading={isLoading}
             onRefresh={handleRefreshAndNotify}
@@ -322,6 +325,7 @@ export function StudentWorkspace({
           <WeeklyReportTimeline
             internshipId={id!}
             weeklyReports={weeklyReports}
+            weeklyTimeline={weeklyTimeline}
             isLoading={isLoading}
             onRefresh={handleRefreshAndNotify}
             onShowToast={onShowToast}

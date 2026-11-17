@@ -95,8 +95,8 @@ export const StudentDocumentLibrary = ({
       case "RAR":
       case "7Z":
         return {
-          bg: "bg-violet-50 text-violet-700 border-violet-200",
-          icon: <FileArchive className="w-5 h-5 text-violet-600" />,
+          bg: "bg-slate-100 text-slate-700 border-slate-200",
+          icon: <FileArchive className="w-5 h-5 text-slate-600" />,
         };
       default:
         return {

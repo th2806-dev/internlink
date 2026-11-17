@@ -10,10 +10,9 @@ using InternLink.Application.Interfaces;
 using InternLink.Domain.Entities;
 
 using InternLink.Domain.Enums;
-
 using InternLink.Infrastructure.Persistence;
-
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 
 
@@ -186,49 +185,104 @@ public class LecturerService : ILecturerService
 
     public async Task<IEnumerable<LecturerStudentListItemDto>> GetAssignedStudentsAsync(Guid userId, string? search = null, string? status = null, Guid? semesterId = null)
     {
+        var page = await GetAssignedStudentsPageAsync(userId, new LecturerStudentFilterRequest
+        {
+            Skip = 0,
+            Take = int.MaxValue,
+            SearchTerm = search,
+            Status = status,
+            SemesterId = semesterId
+        }, CancellationToken.None);
+        return page.Items;
+    }
+
+    public async Task<PaginatedResponse<LecturerStudentListItemDto>> GetAssignedStudentsPageAsync(
+        Guid userId,
+        LecturerStudentFilterRequest filter,
+        CancellationToken cancellationToken)
+    {
         var lecturerId = await ResolveLecturerIdAsync(userId);
         if (lecturerId == null)
-            return Array.Empty<LecturerStudentListItemDto>();
+        {
+            return new PaginatedResponse<LecturerStudentListItemDto>
+            {
+                Items = Array.Empty<LecturerStudentListItemDto>(),
+                Total = 0,
+                Skip = filter.Skip,
+                Take = filter.Take
+            };
+        }
 
         var query = _db.Internships
             .Where(i => i.LecturerId == lecturerId.Value && !i.IsDeleted)
             .AsQueryable();
 
-        if (semesterId.HasValue)
-            query = query.Where(i => i.SemesterId == semesterId.Value);
+        if (filter.SemesterId.HasValue)
+            query = query.Where(i => i.SemesterId == filter.SemesterId.Value);
 
-        query = query
-            .Include(i => i.Student)
-                .ThenInclude(s => s.User)
-            .Include(i => i.Company)
-            .Include(i => i.Semester)
-            .Include(i => i.Submissions)
-            .Include(i => i.WeeklyReports);
-
-        if (!string.IsNullOrWhiteSpace(search))
+        if (!string.IsNullOrWhiteSpace(filter.SearchTerm))
         {
-            var s = search.Trim().ToLower();
+            var s = filter.SearchTerm.Trim().ToLower();
             query = query.Where(i =>
                 (i.Student != null && (i.Student.FullName.ToLower().Contains(s) || i.Student.StudentCode.ToLower().Contains(s) || (i.Student.Class != null && i.Student.Class.ToLower().Contains(s)))) ||
                 (i.Company != null && i.Company.CompanyName.ToLower().Contains(s)) ||
                 (i.Position != null && i.Position.ToLower().Contains(s)));
         }
 
-        if (!string.IsNullOrWhiteSpace(status) && Enum.TryParse<InternshipStatus>(status, true, out var parsedStatus))
+        if (!string.IsNullOrWhiteSpace(filter.Status) && Enum.TryParse<InternshipStatus>(filter.Status, true, out var parsedStatus))
         {
-            query = query.Where(i => i.Status == parsedStatus);
+            query = parsedStatus switch
+            {
+                InternshipStatus.InProgress => query.Where(i =>
+                    i.Status == InternshipStatus.InProgress
+                    || (i.Status == InternshipStatus.NotStarted && i.CompanyId.HasValue)),
+                InternshipStatus.Completed => query.Where(i =>
+                    i.Status == InternshipStatus.Completed || i.Status == InternshipStatus.Graded),
+                _ => query.Where(i => i.Status == parsedStatus)
+            };
         }
 
+        if (!string.IsNullOrWhiteSpace(filter.ClassName))
+            query = query.Where(i => i.Student != null && i.Student.Class == filter.ClassName);
+
+        if (filter.UnassignedCompany)
+            query = query.Where(i => !i.CompanyId.HasValue);
+        else if (!string.IsNullOrWhiteSpace(filter.CompanyName))
+            query = query.Where(i => i.Company != null && i.Company.CompanyName == filter.CompanyName);
+
+        var total = await query.CountAsync(cancellationToken);
+        query = filter.SortBy?.ToLowerInvariant() switch
+        {
+            "class" => query
+                .OrderBy(i => i.Student != null ? i.Student.Class : string.Empty)
+                .ThenBy(i => i.Student != null ? i.Student.FullName : string.Empty),
+            "progress" => query
+                .OrderByDescending(i => i.WeeklyReports.Count(report =>
+                    !report.IsDeleted && report.Status != WeeklyReportStatus.Draft))
+                .ThenByDescending(i => _db.Evaluations.Any(evaluation =>
+                    evaluation.InternshipId == i.Id && !evaluation.IsDeleted))
+                .ThenBy(i => i.Student != null ? i.Student.FullName : string.Empty),
+            _ => query.OrderBy(i => i.Student != null ? i.Student.FullName : string.Empty)
+        };
+
         var internships = await query
-            .OrderBy(i => i.Student != null ? i.Student.FullName : string.Empty)
-            .ToListAsync();
+            .Skip(filter.Skip)
+            .Take(filter.Take)
+            .Include(i => i.Student)
+                .ThenInclude(s => s.User)
+            .Include(i => i.Company)
+            .Include(i => i.Semester)
+            .Include(i => i.Submissions)
+            .Include(i => i.WeeklyReports)
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
 
         var internshipIds = internships.Select(i => i.Id).ToList();
 
         // Lấy bản đánh giá mới nhất cho mỗi internship (1 internship có thể có nhiều lượt).
         var evaluationRows = await _db.Evaluations
             .Where(e => !e.IsDeleted && internshipIds.Contains(e.InternshipId))
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
         var evaluations = evaluationRows
             .GroupBy(e => e.InternshipId)
             .ToDictionary(g => g.Key, g => g.First());
@@ -291,7 +345,182 @@ public class LecturerService : ILecturerService
             });
         }
 
-        return result;
+        return new PaginatedResponse<LecturerStudentListItemDto>
+        {
+            Items = result,
+            Total = total,
+            Skip = filter.Skip,
+            Take = filter.Take
+        };
+    }
+
+    public async Task<StudentWeeklyTimelineDto?> GetStudentWeeklyTimelineAsync(
+        Guid userId,
+        Guid studentId,
+        Guid? semesterId,
+        CancellationToken cancellationToken)
+    {
+        var lecturerId = await _db.Lecturers
+            .AsNoTracking()
+            .Where(lecturer => lecturer.UserId == userId && !lecturer.IsDeleted)
+            .Select(lecturer => (Guid?)lecturer.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (lecturerId is null)
+            return null;
+
+        var internshipQuery = _db.Internships
+            .AsNoTracking()
+            .Where(internship =>
+                internship.StudentId == studentId
+                && internship.LecturerId == lecturerId
+                && !internship.IsDeleted);
+
+        if (semesterId.HasValue)
+            internshipQuery = internshipQuery.Where(internship => internship.SemesterId == semesterId);
+
+        var internship = await internshipQuery
+            .AsSplitQuery()
+            .Include(item => item.Student)
+            .Include(item => item.Company)
+            .Include(item => item.Semester)
+            .Include(item => item.WeeklyReports.Where(report => !report.IsDeleted))
+                .ThenInclude(report => report.Versions.Where(version => !version.IsDeleted))
+            .Include(item => item.WeeklyReports.Where(report => !report.IsDeleted))
+                .ThenInclude(report => report.Feedbacks.Where(feedback => !feedback.IsDeleted))
+            .OrderByDescending(item => item.AssignedAt ?? item.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (internship?.SemesterId is not Guid resolvedSemesterId)
+            return null;
+
+        var totalWeeks = Math.Clamp(internship.Semester?.TotalWeeks > 0
+            ? internship.Semester.TotalWeeks
+            : Math.Max(6, internship.WeeklyReports.Select(report => report.WeekNumber).DefaultIfEmpty(0).Max()), 1, 52);
+        var schedules = await _db.SemesterReportSchedules
+            .AsNoTracking()
+            .Where(schedule =>
+                schedule.SemesterId == resolvedSemesterId
+                && !schedule.IsDeleted
+                && schedule.WeekNumber >= 1
+                && schedule.WeekNumber <= totalWeeks
+                && (schedule.LecturerId == lecturerId || schedule.LecturerId == null))
+            .ToListAsync(cancellationToken);
+
+        var scheduleByWeek = schedules
+            .GroupBy(schedule => schedule.WeekNumber)
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .OrderByDescending(schedule => schedule.LecturerId == lecturerId)
+                    .ThenByDescending(schedule => schedule.UpdatedAt ?? schedule.CreatedAt)
+                    .First());
+        var reportsByWeek = internship.WeeklyReports
+            .Where(report => report.WeekNumber >= 1 && report.WeekNumber <= totalWeeks)
+            .GroupBy(report => report.WeekNumber)
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .OrderByDescending(report => report.Version)
+                    .ThenByDescending(report => report.SubmittedAt ?? report.CreatedAt)
+                    .ToList());
+        var reportByWeek = reportsByWeek.ToDictionary(group => group.Key, group => group.Value[0]);
+
+        var evaluationJson = await _db.Evaluations
+            .AsNoTracking()
+            .Where(evaluation => evaluation.InternshipId == internship.Id && !evaluation.IsDeleted)
+            .OrderByDescending(evaluation => evaluation.UpdatedAt ?? evaluation.CreatedAt)
+            .Select(evaluation => evaluation.WeeklyQualityJson)
+            .FirstOrDefaultAsync(cancellationToken);
+        var qualityByWeek = string.IsNullOrWhiteSpace(evaluationJson)
+            ? new Dictionary<string, decimal>()
+            : JsonSerializer.Deserialize<Dictionary<string, decimal>>(evaluationJson) ?? new Dictionary<string, decimal>();
+        var weeks = Enumerable.Range(1, totalWeeks)
+            .Select(weekNumber =>
+            {
+                scheduleByWeek.TryGetValue(weekNumber, out var schedule);
+                reportByWeek.TryGetValue(weekNumber, out var report);
+                DateTimeOffset? dueDate = schedule is null ? null : ToUtcDateTimeOffset(schedule.DueDate);
+                DateTimeOffset? submittedAt = report?.SubmittedAt is DateTime reportSubmittedAt
+                    ? ToUtcDateTimeOffset(reportSubmittedAt)
+                    : null;
+                var isLate = dueDate.HasValue && submittedAt.HasValue && submittedAt.Value > dueDate.Value;
+                var status = report is null || report.Status == WeeklyReportStatus.Draft
+                    ? "NotSubmitted"
+                    : report.Status switch
+                    {
+                        WeeklyReportStatus.Approved => "Approved",
+                        WeeklyReportStatus.RevisionRequested => "Rejected",
+                        WeeklyReportStatus.Submitted when isLate => "Late",
+                        _ => "Submitted"
+                    };
+                var attachments = report?.FileName is { Length: > 0 } fileName
+                    ? new[]
+                    {
+                        new StudentWeeklyTimelineAttachmentDto(
+                            report.Id,
+                            fileName,
+                            report.FileSize,
+                            report.MimeType,
+                            report.Version)
+                    }
+                    : Array.Empty<StudentWeeklyTimelineAttachmentDto>();
+                var qualityScore = report is not null && qualityByWeek.TryGetValue(weekNumber.ToString(), out var score)
+                    ? score
+                    : (decimal?)null;
+                var reportDtos = reportsByWeek.TryGetValue(weekNumber, out var weekReports)
+                    ? weekReports.Select(item =>
+                    {
+                        var reportDto = _mapper.Map<WeeklyReportDto>(item);
+                        reportDto.QualityScore = qualityScore;
+                        return reportDto;
+                    }).ToList()
+                    : new List<WeeklyReportDto>();
+                return new StudentWeeklyTimelineWeekDto(
+                    weekNumber,
+                    schedule?.Title ?? report?.Title ?? $"Báo cáo tuần {weekNumber}",
+                    dueDate,
+                    status,
+                    submittedAt,
+                    report?.Content,
+                    attachments,
+                    qualityScore,
+                    report?.LecturerComment,
+                    qualityScore is null || report?.UpdatedAt is null
+                        ? null
+                        : ToUtcDateTimeOffset(report.UpdatedAt.Value),
+                    reportDtos);
+            })
+            .ToList();
+        var scoredReports = reportByWeek.Keys
+            .Select(weekNumber => qualityByWeek.TryGetValue(weekNumber.ToString(), out var qualityScore)
+                ? qualityScore
+                : (decimal?)null)
+            .Where(qualityScore => qualityScore.HasValue)
+            .Select(qualityScore => qualityScore!.Value)
+            .ToList();
+
+        return new StudentWeeklyTimelineDto(
+            internship.StudentId,
+            internship.Student?.StudentCode ?? string.Empty,
+            internship.Student?.FullName ?? string.Empty,
+            internship.Company?.CompanyName ?? string.Empty,
+            internship.SupervisorName,
+            totalWeeks,
+            reportByWeek.Values.Count(report => report.Status != WeeklyReportStatus.Draft),
+            reportByWeek.Values.Count(report => report.Status == WeeklyReportStatus.Approved),
+            scoredReports.Count == 0 ? null : Math.Round(scoredReports.Average(), 2),
+            weeks);
+    }
+
+    private static DateTimeOffset ToUtcDateTimeOffset(DateTime value)
+    {
+        var utcValue = value.Kind == DateTimeKind.Utc
+            ? value
+            : value.Kind == DateTimeKind.Local
+                ? value.ToUniversalTime()
+                : DateTime.SpecifyKind(value, DateTimeKind.Utc);
+        return new DateTimeOffset(utcValue);
     }
 
     public async Task<IEnumerable<LecturerCompanySummaryDto>> GetAssignedCompaniesAsync(Guid userId, Guid? semesterId = null)

@@ -13,6 +13,18 @@ public interface IRubricService
     /// </summary>
     Task<RubricDto?> GetBySemesterAsync(Guid semesterId);
 
+    Task<EmployerRubricConfigDto?> GetEmployerConfigAsync(
+        Guid semesterId,
+        Guid? departmentId,
+        CancellationToken cancellationToken);
+
+    Task<EmployerRubricConfigDto> SaveEmployerConfigAsync(
+        Guid semesterId,
+        Guid? departmentId,
+        SaveEmployerRubricRequest request,
+        Guid updatedByUserId,
+        CancellationToken cancellationToken);
+
     /// <summary>
     /// Create a new rubric for a semester (status = Approved for Admin-created rubrics)
     /// </summary>

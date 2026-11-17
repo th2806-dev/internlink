@@ -24,7 +24,8 @@ public class LecturerProfile : Profile
         CreateMap<Company, CompanySummaryDto>().MaxDepth(64);
 
         CreateMap<Internship, InternshipDto>().MaxDepth(64)
-            .ForMember(d => d.Status, o => o.MapFrom(s => s.Status.ToString()));
+            .ForMember(d => d.Status, o => o.MapFrom(s => s.Status.ToString()))
+            .ForMember(d => d.SemesterName, o => o.MapFrom(s => s.Semester == null ? null : s.Semester.Name));
 
         CreateMap<Internship, InternshipDetailDto>().MaxDepth(64)
             .IncludeBase<Internship, InternshipDto>();

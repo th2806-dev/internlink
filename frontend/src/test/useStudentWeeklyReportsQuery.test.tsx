@@ -173,4 +173,31 @@ describe("useStudentWeeklyReportsQuery", () => {
     );
     expect(weeklyReportService.submit).toHaveBeenCalledWith("rep-1");
   });
+
+  it("persists dynamic report fields with the uploaded attachment", async () => {
+    vi.mocked(weeklyReportService.getMine).mockResolvedValue([]);
+    vi.mocked(semesterReportScheduleService.getSchedules).mockResolvedValue([]);
+    vi.mocked(weeklyReportService.upload).mockResolvedValue(mockReports[0]);
+    vi.mocked(weeklyReportService.submit).mockResolvedValue(mockReports[0]);
+
+    const { result } = renderHook(
+      () => useStudentWeeklyReportsQuery({ semesterId: "sem-1" }),
+      { wrapper },
+    );
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await act(async () => {
+      await result.current.submitReport({
+        internshipId: "int-1",
+        weekNumber: 1,
+        title: "Báo cáo tuần 1",
+        content: "Nội dung công việc: Hoàn thành API.",
+        file: new File(["report"], "report.pdf", { type: "application/pdf" }),
+      });
+    });
+
+    expect(weeklyReportService.upload).toHaveBeenCalledWith(
+      expect.objectContaining({ content: "Nội dung công việc: Hoàn thành API." }),
+    );
+  });
 });

@@ -31,4 +31,5 @@ public class Department : BaseEntity
     public ICollection<User> Users { get; set; } = new List<User>();
     public ICollection<Student> Students { get; set; } = new List<Student>();
     public ICollection<Lecturer> Lecturers { get; set; } = new List<Lecturer>();
+    public ICollection<EvaluationRubric> EvaluationRubrics { get; set; } = new List<EvaluationRubric>();
 }

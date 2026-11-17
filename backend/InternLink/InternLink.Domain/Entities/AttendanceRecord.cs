@@ -14,7 +14,6 @@ public class AttendanceRecord : BaseEntity
     public Internship? Internship { get; set; }
 
     public AttendanceStatus Status { get; set; } = AttendanceStatus.Present;
-    public string? Notes { get; set; }
     public DateTime? MarkedAt { get; set; }
     public string? MarkedBy { get; set; }
 }

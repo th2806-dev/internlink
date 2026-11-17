@@ -1,6 +1,8 @@
 using InternLink.Application.DTOs;
 using InternLink.Application.Interfaces;
 using InternLink.API.Extensions;
+using InternLink.API.Authorization;
+using InternLink.Shared.Authorization;
 using InternLink.Shared.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -108,6 +110,7 @@ public class InternshipGradingController : ControllerBase
     /// gồm điểm QT/thi/TB, xếp loại và điều kiện dự thi. Lecturer: nhóm của mình; Admin: theo khoa.
     /// </summary>
     [HttpGet("grades-excel")]
+    [RequirePermission(SystemPermissionCodes.LecturerExport)]
     public async Task<IActionResult> ExportGradesExcel(
         [FromQuery] Guid semesterId,
         [FromQuery] string? className = null,
@@ -143,6 +146,7 @@ public class InternshipGradingController : ControllerBase
 
     /// <summary>Exports oral exam scores into column I of the school's official template.</summary>
     [HttpGet("exam-scores-excel")]
+    [RequirePermission(SystemPermissionCodes.LecturerExport)]
     public async Task<IActionResult> ExportExamScoresExcel(
         [FromQuery] Guid semesterId,
         CancellationToken cancellationToken = default)
@@ -177,6 +181,7 @@ public class InternshipGradingController : ControllerBase
 
     /// <summary>Exports process scores into column K of the official course grade template.</summary>
     [HttpGet("process-scores-excel")]
+    [RequirePermission(SystemPermissionCodes.LecturerExport)]
     public async Task<IActionResult> ExportProcessScoresExcel(
         [FromQuery] Guid semesterId,
         CancellationToken cancellationToken = default)

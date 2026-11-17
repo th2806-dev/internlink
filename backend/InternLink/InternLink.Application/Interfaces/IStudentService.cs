@@ -40,8 +40,13 @@ public interface IStudentService
     /// <summary>
     /// Student portal: profile + active internship for the logged-in student.
     /// </summary>
-    Task<StudentPortalProfileDto?> GetPortalProfileByUserIdAsync(Guid userId);
-    Task<bool> IsArchiveReadOnlyAsync(Guid userId);
+    Task<StudentPortalProfileDto?> GetPortalProfileByUserIdAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default);
+    Task<StudentDashboardProgressResponse?> GetDashboardProgressByUserIdAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default);
+    Task<bool> IsArchiveReadOnlyAsync(Guid userId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Create a new student. departmentId scopes the record to the creating admin's department.

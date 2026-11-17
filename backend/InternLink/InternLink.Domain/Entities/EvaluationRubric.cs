@@ -10,15 +10,19 @@ namespace InternLink.Domain.Entities;
 public class EvaluationRubric : BaseEntity
 {
     /// <summary>
-    /// The semester this rubric belongs to
+    /// The semester and optional department this rubric belongs to.
     /// </summary>
     public Guid SemesterId { get; set; }
     public Semester Semester { get; set; } = null!;
+    public Guid? DepartmentId { get; set; }
+    public Department? Department { get; set; }
 
     /// <summary>
     /// Human-readable name, e.g. "Rubric thực tập Tốt nghiệp K20"
     /// </summary>
     public string Name { get; set; } = null!;
+    public int Version { get; set; } = 1;
+    public string? RatingLevelsJson { get; set; }
 
     /// <summary>
     /// Whether this rubric is required for all lecturers, or lecturer may customize.

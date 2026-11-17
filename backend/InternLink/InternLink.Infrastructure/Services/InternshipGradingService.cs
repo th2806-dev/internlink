@@ -163,6 +163,11 @@ public class InternshipGradingService : IInternshipGradingService
 
         var evalByInternship = evaluations.GroupBy(e => e.InternshipId)
             .ToDictionary(g => g.Key, g => g.First());
+        var employerScores = await _context.EmployerEvaluations
+            .AsNoTracking()
+            .Where(item => internshipIds.Contains(item.InternshipId) && !item.IsDeleted)
+            .Select(item => new { item.InternshipId, item.FinalScore })
+            .ToDictionaryAsync(item => item.InternshipId, item => item.FinalScore);
 
         var totalWeeks = Math.Max(semester.TotalWeeks, 1);
         var finalReportWeek = totalWeeks + 1;
@@ -307,6 +312,7 @@ public class InternshipGradingService : IInternshipGradingService
                 finalStatus = finalSubmission!.SubmittedAt > (finalSchedule?.DueDate ?? DateTime.MaxValue) ? "late" : "on_time";
 
             evalByInternship.TryGetValue(internship.Id, out var eval);
+            var hasEmployerEvaluation = employerScores.TryGetValue(internship.Id, out var employerScore);
             var productSubmissions = internship.Submissions
                 .Where(s => !s.IsDeleted && s.Type == SubmissionType.Product)
                 .OrderByDescending(s => s.SubmittedAt)
@@ -370,7 +376,7 @@ public class InternshipGradingService : IInternshipGradingService
                 ProductStatus = productStatus,
                 HasCreativeProduct = creative,
                 ProcessScore = processScore,
-                EmployerScore = employerEvidence?.EmployerScore,
+                EmployerScore = hasEmployerEvaluation ? employerScore : employerEvidence?.EmployerScore,
                 EmployerEvidenceSubmissionId = employerEvidence?.Id,
                 EmployerEvidenceAssetId = employerEvidenceAsset?.Id,
                 EmployerEvidenceFileName = employerEvidenceAsset?.FileName ?? employerEvidence?.FileName,

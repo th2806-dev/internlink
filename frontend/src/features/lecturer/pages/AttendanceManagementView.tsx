@@ -587,7 +587,7 @@ export const AttendanceManagementView: React.FC<{
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-1.5">
                         {session.weekNumber <= 0 ? (
-                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-violet-50 text-violet-700 border border-violet-200">
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
                             {weekLabel(session.weekNumber)}
                           </span>
                         ) : (

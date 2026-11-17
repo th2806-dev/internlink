@@ -43,6 +43,11 @@ public class AuthServiceTests
         var jwt = new Mock<IJwtService>();
         jwt.Setup(j => j.CreateToken(It.IsAny<string>(), It.IsAny<IEnumerable<string>>()))
             .Returns("test-jwt");
+        jwt.Setup(j => j.CreateTokenWithMetadata(
+                It.IsAny<string>(),
+                It.IsAny<IEnumerable<string>?>(),
+                It.IsAny<Guid?>()))
+            .Returns(("test-jwt", "test-jwt-id", DateTime.UtcNow.AddHours(1)));
 
         var emailSettings = Options.Create(new EmailSettings
         {
@@ -61,6 +66,49 @@ public class AuthServiceTests
             emailSettings,
             NullLogger<AuthService>.Instance,
             Options.Create(new JwtSettings { ExpiresInMinutes = 60 }));
+    }
+
+    [Fact]
+    public async Task LoginAsync_WithUnknownUser_ShouldPersistFailedLoginLog()
+    {
+        await using var db = GetDb();
+        var service = CreateService(db);
+
+        await service.Invoking(auth => auth.LoginAsync(
+                new LoginRequest { Username = "missing-user", Password = "invalid" },
+                "192.0.2.10"))
+            .Should().ThrowAsync<UnauthorizedAccessException>();
+
+        var loginLog = await db.SysLoginLogs.SingleAsync();
+        loginLog.Username.Should().Be("missing-user");
+        loginLog.IpAddress.Should().Be("192.0.2.10");
+        loginLog.Status.Should().Be("FAILED");
+        loginLog.LoginAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromMinutes(1));
+    }
+
+    [Fact]
+    public async Task LoginAsync_WithValidCredentials_ShouldPersistSuccessfulLoginLog()
+    {
+        await using var db = GetDb();
+        var user = new User
+        {
+            Username = "login-user",
+            Role = Role.Student,
+            IsActive = true
+        };
+        user.PasswordHash = new PasswordHasher<User>().HashPassword(user, "valid-password");
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+
+        await CreateService(db).LoginAsync(
+            new LoginRequest { Username = user.Username, Password = "valid-password" },
+            "192.0.2.11");
+
+        var loginLog = await db.SysLoginLogs.SingleAsync();
+        loginLog.Username.Should().Be(user.Username);
+        loginLog.IpAddress.Should().Be("192.0.2.11");
+        loginLog.Status.Should().Be("SUCCESS");
+        loginLog.LoginAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromMinutes(1));
     }
 
     [Fact]

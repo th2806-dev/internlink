@@ -36,7 +36,10 @@ public class RubricDto
 {
     public Guid Id { get; set; }
     public Guid SemesterId { get; set; }
+    public Guid? DepartmentId { get; set; }
     public string Name { get; set; } = null!;
+    public int Version { get; set; } = 1;
+    public List<EmployerRatingLevelDto> RatingLevels { get; set; } = new();
     public string ApplicationMode { get; set; } = "Required";
     public string Status { get; set; } = "Draft";
     public List<RubricCriterionDto> Criteria { get; set; } = new();
@@ -47,6 +50,39 @@ public class RubricDto
     public DateTime? ApprovedAt { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
+}
+
+public sealed record EmployerRatingLevelDto(int Value, string Label, string Description);
+
+public sealed record EmployerRubricCriterionDto(
+    Guid Id,
+    string Name,
+    string? Description,
+    decimal Weight,
+    int OrderIndex);
+
+public sealed record EmployerRubricConfigDto(
+    Guid? Id,
+    Guid SemesterId,
+    Guid? DepartmentId,
+    string Name,
+    int Version,
+    bool IsInherited,
+    IReadOnlyList<EmployerRatingLevelDto> RatingLevels,
+    IReadOnlyList<EmployerRubricCriterionDto> Criteria);
+
+public sealed record SaveEmployerRubricRequest
+{
+    public required string Name { get; init; }
+    public required IReadOnlyList<EmployerRatingLevelDto> RatingLevels { get; init; }
+    public required IReadOnlyList<SaveEmployerRubricCriterionRequest> Criteria { get; init; }
+}
+
+public sealed record SaveEmployerRubricCriterionRequest
+{
+    public required string Name { get; init; }
+    public string? Description { get; init; }
+    public required decimal Weight { get; init; }
 }
 
 public class CreateRubricRequest

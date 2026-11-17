@@ -2,7 +2,11 @@ using ClosedXML.Excel;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
+using System.IO.Compression;
+using System.Text;
+using System.Text.Json;
 using InternLink.Domain.Entities;
+using InternLink.Domain.Entities.Rbac;
 using InternLink.Application.Common;
 using InternLink.Application.Interfaces;
 using InternLink.Domain.Enums;
@@ -22,6 +26,14 @@ public class InternshipReportService : IInternshipReportService
     private readonly IInternshipGradingService _gradingService;
 
     private sealed record ReportSectionContent(string Title, string Content);
+    private sealed record EmployerScoreRatingLevel(int Value, string Label, string Description);
+    private sealed record EmployerScoreCriterion(Guid Id, string Name, string? Description, decimal Weight, int? Score, string? Comment);
+    private sealed record EmployerScoreSnapshot(
+        Guid RubricId,
+        int RubricVersion,
+        string RubricName,
+        IReadOnlyList<EmployerScoreRatingLevel> RatingLevels,
+        IReadOnlyList<EmployerScoreCriterion> Criteria);
 
     public InternshipReportService(AppDbContext db, IInternshipGradingService gradingService)
     {
@@ -32,6 +44,171 @@ public class InternshipReportService : IInternshipReportService
     public InternshipReportService(AppDbContext db)
         : this(db, new InternshipGradingService(db, Microsoft.Extensions.Logging.Abstractions.NullLogger<InternshipGradingService>.Instance, new SemesterService(db)))
     {
+    }
+
+    public async Task<byte[]> ExportC22BatchZipAsync(
+        Guid semesterId,
+        Guid? departmentId = null,
+        Guid? lecturerId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var internshipsQuery = _db.Internships
+            .AsNoTracking()
+            .Include(item => item.Student)
+                .ThenInclude(student => student.DepartmentRef)
+            .Include(item => item.Company)
+            .Include(item => item.Semester)
+            .Include(item => item.Lecturer)
+            .Where(item => item.SemesterId == semesterId);
+
+        if (departmentId.HasValue)
+            internshipsQuery = internshipsQuery.Where(item => item.Student.DepartmentId == departmentId.Value);
+        if (lecturerId.HasValue)
+            internshipsQuery = internshipsQuery.Where(item => item.LecturerId == lecturerId.Value);
+
+        var internships = await internshipsQuery
+            .OrderBy(item => item.Student.StudentCode)
+            .ToListAsync(cancellationToken);
+        if (internships.Count == 0)
+            throw new InvalidOperationException("Không có sinh viên thực tập trong phạm vi đã chọn.");
+
+        var internshipIds = internships.Select(item => item.PublicId).ToArray();
+        var evaluations = await _db.Evaluations
+            .AsNoTracking()
+            .Where(item => internshipIds.Contains(item.InternshipId))
+            .ToDictionaryAsync(item => item.InternshipId, cancellationToken);
+        var employerEvaluations = await _db.EmployerEvaluations
+            .AsNoTracking()
+            .Where(item => internshipIds.Contains(item.InternshipId))
+            .ToDictionaryAsync(item => item.InternshipId, cancellationToken);
+
+        using var output = new MemoryStream();
+        using (var archive = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true, Encoding.UTF8))
+        {
+            foreach (var internship in internships)
+            {
+                evaluations.TryGetValue(internship.PublicId, out var academicEvaluation);
+                employerEvaluations.TryGetValue(internship.PublicId, out var employerEvaluation);
+                var filename = $"{SanitizeFileName(internship.Student.StudentCode)}_C22.docx";
+                var entry = archive.CreateEntry(filename, CompressionLevel.Fastest);
+                await using var entryStream = entry.Open();
+                var documentBytes = BuildIndividualC22Document(internship, academicEvaluation, employerEvaluation);
+                await entryStream.WriteAsync(documentBytes, cancellationToken);
+            }
+        }
+
+        return output.ToArray();
+    }
+
+    private static byte[] BuildIndividualC22Document(
+        Internship internship,
+        Domain.Entities.Evaluation? academicEvaluation,
+        EmployerEvaluation? employerEvaluation)
+    {
+        using var stream = new MemoryStream();
+        using (var document = WordprocessingDocument.Create(stream, WordprocessingDocumentType.Document, true))
+        {
+            var mainPart = document.AddMainDocumentPart();
+            var body = new Body();
+            body.Append(CreateCenteredParagraph("CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM", true));
+            body.Append(CreateCenteredParagraph("Độc lập - Tự do - Hạnh phúc", true));
+            body.Append(CreateCenteredParagraph("PHIẾU ĐÁNH GIÁ CÁ NHÂN - MẪU C22", true));
+            body.Append(CreateParagraph($"Học kỳ: {internship.Semester?.Name ?? "Chưa cập nhật"}"));
+            body.Append(CreateParagraph($"Khoa: {internship.Student.DepartmentRef?.Name ?? internship.Student.Department ?? "Chưa cập nhật"}"));
+            body.Append(CreateParagraph($"Mã sinh viên: {internship.Student.StudentCode}"));
+            body.Append(CreateParagraph($"Họ và tên: {internship.Student.FullName}"));
+            body.Append(CreateParagraph($"Lớp / Ngành: {internship.Student.Class ?? "—"} / {internship.Student.Major ?? "—"}"));
+            body.Append(CreateParagraph($"Đơn vị thực tập: {internship.Company?.CompanyName ?? "Chưa phân công"}"));
+            body.Append(CreateParagraph($"Vị trí: {internship.Position ?? "—"}"));
+            body.Append(CreateParagraph($"Giảng viên hướng dẫn: {internship.Lecturer?.FullName ?? "Chưa phân công"}"));
+            body.Append(CreateParagraph(""));
+            body.Append(CreateParagraph("KẾT QUẢ ĐÁNH GIÁ"));
+            body.Append(CreateParagraph($"Điểm đánh giá của giảng viên: {academicEvaluation?.FinalGrade.ToString("0.00") ?? "Chưa có"} / 10"));
+            var employerScoreSnapshot = DeserializeEmployerScoreSnapshot(employerEvaluation?.RubricScoresJson);
+            if (employerScoreSnapshot is { Criteria.Count: > 0 })
+            {
+                body.Append(CreateParagraph($"Rubric doanh nghiệp: {employerScoreSnapshot.RubricName} (phiên bản {employerScoreSnapshot.RubricVersion})"));
+                foreach (var criterion in employerScoreSnapshot.Criteria)
+                {
+                    var level = criterion.Score.HasValue
+                        ? employerScoreSnapshot.RatingLevels.FirstOrDefault(item => item.Value == criterion.Score.Value)?.Label
+                            ?? $"Mức {criterion.Score.Value}"
+                        : "N/A";
+                    body.Append(CreateParagraph(
+                        $"{criterion.Name}: {level} · Trọng số {criterion.Weight:0.##}%{(string.IsNullOrWhiteSpace(criterion.Comment) ? string.Empty : $" · {criterion.Comment}")}"));
+                }
+            }
+            else
+            {
+                body.Append(CreateParagraph($"Điểm chuyên cần tại doanh nghiệp: {employerEvaluation?.AttendanceScore.ToString() ?? "Chưa có"} / 10"));
+                body.Append(CreateParagraph($"Điểm kỹ năng: {employerEvaluation?.SkillsScore.ToString() ?? "Chưa có"} / 10"));
+                body.Append(CreateParagraph($"Điểm thái độ: {employerEvaluation?.AttitudeScore.ToString() ?? "Chưa có"} / 10"));
+            }
+            body.Append(CreateParagraph($"Điểm tổng kết doanh nghiệp: {employerEvaluation?.FinalScore.ToString("0.00") ?? "Chưa có"} / 10"));
+            body.Append(CreateParagraph($"Nhận xét điểm mạnh: {employerEvaluation?.Strengths ?? "—"}"));
+            body.Append(CreateParagraph($"Nội dung cần cải thiện: {employerEvaluation?.AreasForImprovement ?? "—"}"));
+            body.Append(CreateParagraph($"Nhận xét khác: {employerEvaluation?.Comments ?? "—"}"));
+            body.Append(CreateParagraph(""));
+            body.Append(CreateCenteredParagraph("XÁC NHẬN", true));
+            body.Append(CreateCenteredParagraph("Người hướng dẫn doanh nghiệp                         Giảng viên hướng dẫn", true));
+            body.Append(CreateCenteredParagraph(
+                employerEvaluation == null
+                    ? "(Chưa xác nhận điện tử)                                      (Ký và ghi rõ họ tên)"
+                    : $"(Đã xác nhận điện tử bởi {employerEvaluation.ConfirmedMentorName} lúc {employerEvaluation.ConfirmedAt:dd/MM/yyyy HH:mm} UTC)     (Ký và ghi rõ họ tên)",
+                false));
+            body.Append(CreateParagraph(""));
+            body.Append(CreateCenteredParagraph("Ban Chủ nhiệm Khoa", true));
+            body.Append(CreateCenteredParagraph("(Ký, ghi rõ họ tên và đóng dấu)", false));
+            body.Append(new SectionProperties(new PageSize { Width = 11906, Height = 16838 }, new PageMargin
+            {
+                Top = 850,
+                Right = 850,
+                Bottom = 850,
+                Left = 850,
+                Header = 425,
+                Footer = 425,
+                Gutter = 0
+            }));
+            mainPart.Document = new DocumentFormat.OpenXml.Wordprocessing.Document(body);
+            mainPart.Document.Save();
+        }
+
+        return stream.ToArray();
+    }
+
+    private static Paragraph CreateParagraph(string value) =>
+        new(new Run(new Text(value) { Space = SpaceProcessingModeValues.Preserve }));
+
+    private static EmployerScoreSnapshot? DeserializeEmployerScoreSnapshot(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return null;
+        try
+        {
+            return JsonSerializer.Deserialize<EmployerScoreSnapshot>(json);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static Paragraph CreateCenteredParagraph(string value, bool bold)
+    {
+        var run = new Run();
+        if (bold)
+            run.Append(new RunProperties(new Bold()));
+        run.Append(new Text(value) { Space = SpaceProcessingModeValues.Preserve });
+        return new Paragraph(
+            new ParagraphProperties(new Justification { Val = JustificationValues.Center }),
+            run);
+    }
+
+    private static string SanitizeFileName(string value)
+    {
+        var invalidCharacters = Path.GetInvalidFileNameChars().ToHashSet();
+        var safeValue = new string(value.Where(character => !invalidCharacters.Contains(character)).ToArray());
+        return string.IsNullOrWhiteSpace(safeValue) ? "SinhVien" : safeValue;
     }
 
     /// <inheritdoc />
@@ -67,6 +244,7 @@ public class InternshipReportService : IInternshipReportService
             internshipsQuery = internshipsQuery.Where(i => i.LecturerId == lecturerId.Value);
 
         var internships = await internshipsQuery.ToListAsync();
+        var gradingRuleSets = await GradingRuleResolver.LoadAllAsync(_db);
 
         var internshipIds = internships.Select(i => i.Id).ToHashSet();
         // Lấy bản đánh giá mới nhất cho mỗi internship (1 internship có thể có nhiều lượt).
@@ -94,7 +272,7 @@ public class InternshipReportService : IInternshipReportService
             .DefaultIfEmpty(0)
             .Max();
         var reportScheduleByWeek = await LoadReportScheduleByWeekAsync(semesterId, totalWeeks);
-        BuildC22ASummarySheet(ws, internships, evaluations, totalStudents, totalCompanies, absentSessionsByInternship, weeklyQualityLevelsByInternship, reportScheduleByWeek, DateTime.UtcNow);
+        BuildC22ASummarySheet(ws, internships, evaluations, totalStudents, totalCompanies, absentSessionsByInternship, weeklyQualityLevelsByInternship, reportScheduleByWeek, gradingRuleSets, DateTime.UtcNow);
 
         using var ms = new MemoryStream();
         workbook.SaveAs(ms);
@@ -1001,6 +1179,7 @@ public class InternshipReportService : IInternshipReportService
         Dictionary<Guid, int> absentSessionsByInternship,
         Dictionary<Guid, List<decimal?>> weeklyQualityLevelsByInternship,
         Dictionary<int, Domain.Entities.SemesterReportSchedule> reportScheduleByWeek,
+        IReadOnlyList<SysGradingRuleSet> gradingRuleSets,
         DateTime nowUtc)
     {
         ws.Style.Font.FontName = "Times New Roman";
@@ -1068,12 +1247,17 @@ public class InternshipReportService : IInternshipReportService
 
         foreach (var intern in internships)
         {
+            var gradingRules = GradingRuleResolver.Resolve(
+                gradingRuleSets,
+                intern.SemesterId,
+                intern.Student.DepartmentId ?? intern.Semester?.DepartmentId);
             var hasFinalReport = intern.Submissions.Any(s =>
                 !s.IsDeleted && s.Type == SubmissionType.FinalReport
                 && s.Status != SubmissionStatus.Rejected);
             var (isEligible, _) = InternshipGradeCalculator.EvaluateEligibility(
                 hasFinalReport,
-                absentSessionsByInternship.GetValueOrDefault(intern.Id));
+                absentSessionsByInternship.GetValueOrDefault(intern.Id),
+                gradingRules.RequireFinalReportForExamEligibility);
 
             if (!isEligible)
             {
@@ -1086,16 +1270,40 @@ public class InternshipReportService : IInternshipReportService
                 gradeCounts[pendingClassification]++;
                 continue;
             }
+            if (!eval.OralExamScore.HasValue)
+            {
+                gradeCounts[pendingClassification]++;
+                continue;
+            }
 
-            var (missingCount, lateCount, submittedWeekCount) = CountSubmissionStats(intern, reportScheduleByWeek, nowUtc);
+            var (missingCount, lateCount, submittedWeekCount, latePenaltyDays) = CountSubmissionStats(
+                intern, reportScheduleByWeek, nowUtc, gradingRules);
             var hasApprovedProduct = intern.Submissions.Any(s =>
                 !s.IsDeleted && s.Type == SubmissionType.Product && s.Status == SubmissionStatus.Approved);
             var processScore = InternshipGradeCalculator.ComputeProcessScore(
                 missingCount, lateCount, submittedWeekCount,
                 weeklyQualityLevelsByInternship.GetValueOrDefault(intern.Id) ?? new List<decimal?>(),
                 hasApprovedProduct,
-                reportScheduleByWeek.Count);
-            var (_, classification) = InternshipGradeCalculator.ComputeAverage(processScore, eval.OralExamScore);
+                Math.Min(reportScheduleByWeek.Count, gradingRules.RequiredWeeklyReportsCount),
+                gradingRules.StepPenaltyPerMissingReport,
+                gradingRules.StepPenaltyPerLateReport,
+                latePenaltyDays,
+                gradingRules.LatePenaltyPointsPerDay);
+            var employerScore = intern.Submissions
+                .Where(submission => !submission.IsDeleted
+                    && submission.Type == SubmissionType.Evidence
+                    && submission.Status != SubmissionStatus.Rejected)
+                .OrderByDescending(submission => submission.SubmittedAt)
+                .Select(submission => submission.EmployerScore)
+                .FirstOrDefault();
+            var (_, classification) = InternshipGradeCalculator.ComputeAverage(
+                processScore,
+                eval.OralExamScore,
+                processWeight: gradingRules.ProcessScoreWeight,
+                oralWeight: gradingRules.ExamScoreWeight,
+                employerScore: employerScore,
+                employerWeight: gradingRules.EmployerScoreWeight,
+                minimumPassingScore: gradingRules.MinimumPassingScore);
             gradeCounts[classification]++;
         }
         // "Không thực tập" = SV không đủ điều kiện dự thi + SV không có kỳ thực tập.
@@ -1271,20 +1479,24 @@ public class InternshipReportService : IInternshipReportService
     }
 
     /// <summary>
-    /// Thống kê nộp bài của một internship: (số tuần thiếu, số tuần trễ, số tuần đã nộp).
+    /// Thống kê số tuần thiếu/trễ/đã nộp và số ngày trễ theo lịch báo cáo.
     /// Chỉ tính từ NỘP BÀI theo lịch báo cáo của kỳ — không liên quan điểm danh.
     /// </summary>
-    private static (int MissingCount, int LateCount, int SubmittedWeekCount) CountSubmissionStats(
+    private static (int MissingCount, int LateCount, int SubmittedWeekCount, int LatePenaltyDays) CountSubmissionStats(
         Domain.Entities.Internship intern,
         Dictionary<int, Domain.Entities.SemesterReportSchedule> reportScheduleByWeek,
-        DateTime nowUtc)
+        DateTime nowUtc,
+        InternshipGradingRules gradingRules)
     {
         var reports = intern.WeeklyReports?
             .Where(r => !r.IsDeleted && r.Status != WeeklyReportStatus.Draft)
             .ToList() ?? new List<WeeklyReport>();
 
         // Chỉ đếm tuần đang bật trong cấu hình — không tính tuần đóng / tuần cuối kỳ.
-        var requiredWeeks = reportScheduleByWeek.Keys.ToHashSet();
+        var requiredWeeks = reportScheduleByWeek.Keys
+            .Order()
+            .Take(Math.Max(0, gradingRules.RequiredWeeklyReportsCount))
+            .ToHashSet();
         var submittedWeekCount = reports
             .Where(r => r.SubmittedAt.HasValue && requiredWeeks.Contains(r.WeekNumber))
             .Select(r => r.WeekNumber)
@@ -1293,7 +1505,8 @@ public class InternshipReportService : IInternshipReportService
 
         var missingCount = 0;
         var lateCount = 0;
-        foreach (var (week, schedule) in reportScheduleByWeek)
+        var latePenaltyDays = 0;
+        foreach (var (week, schedule) in reportScheduleByWeek.Where(pair => requiredWeeks.Contains(pair.Key)))
         {
             var report = reports.FirstOrDefault(r => r.WeekNumber == week && r.SubmittedAt.HasValue);
             if (report == null)
@@ -1305,10 +1518,11 @@ public class InternshipReportService : IInternshipReportService
             else if (report.SubmittedAt!.Value > schedule.DueDate)
             {
                 lateCount++;
+                latePenaltyDays += (int)Math.Ceiling((report.SubmittedAt.Value - schedule.DueDate).TotalDays);
             }
         }
 
-        return (missingCount, lateCount, submittedWeekCount);
+        return (missingCount, lateCount, submittedWeekCount, latePenaltyDays);
     }
 
     private static void StyleHeaderCell(IXLCell cell)

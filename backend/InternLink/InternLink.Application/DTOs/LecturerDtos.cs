@@ -121,6 +121,7 @@ public class InternshipDto
     public string Status { get; set; } = null!;
     public string? Position { get; set; }
     public string? SupervisorName { get; set; }
+    public string? SemesterName { get; set; }
     public string? Notes { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? AssignedAt { get; set; }

@@ -405,6 +405,7 @@ public class LecturerProfileService : ILecturerProfileService
             }
 
             var existingLecturer = await _db.Lecturers
+                .IgnoreQueryFilters()
                 .Include(l => l.User)
                 .FirstOrDefaultAsync(l => l.StaffCode == staffCode);
 

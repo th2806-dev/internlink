@@ -260,21 +260,23 @@ public class StudentService : IStudentService
         return student == null ? null : _mapper.Map<StudentDto>(student);
     }
 
-    public async Task<StudentPortalProfileDto?> GetPortalProfileByUserIdAsync(Guid userId)
+    public async Task<StudentPortalProfileDto?> GetPortalProfileByUserIdAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default)
     {
         var student = await _db.Students
-            .FirstOrDefaultAsync(s => s.UserId == userId && !s.IsDeleted);
+            .FirstOrDefaultAsync(s => s.UserId == userId && !s.IsDeleted, cancellationToken);
 
         if (student == null)
             return null;
 
         var user = await _db.Users
-            .FirstOrDefaultAsync(u => u.Id == userId && !u.IsDeleted);
+            .FirstOrDefaultAsync(u => u.Id == userId && !u.IsDeleted, cancellationToken);
 
         var activeSemester = await _db.Semesters
             .Where(s => !s.IsDeleted && s.Status == SemesterStatus.Active)
             .OrderByDescending(s => s.CreatedAt)
-            .FirstOrDefaultAsync();
+            .FirstOrDefaultAsync(cancellationToken);
 
         var internshipQuery = _db.Internships
             .Include(i => i.Company)
@@ -291,7 +293,7 @@ public class StudentService : IStudentService
         var internship = await internshipQuery
             .OrderByDescending(i => i.CreatedAt)
             .ThenByDescending(i => i.Id)
-            .FirstOrDefaultAsync();
+            .FirstOrDefaultAsync(cancellationToken);
 
         List<WeeklyReport> weeklyReports = new();
         Evaluation? evaluation = null;
@@ -299,12 +301,12 @@ public class StudentService : IStudentService
         {
             weeklyReports = await _db.WeeklyReports
                 .Where(r => !r.IsDeleted && r.InternshipId == internship.Id)
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
             evaluation = await _db.Evaluations
                 .Where(e => !e.IsDeleted && e.InternshipId == internship.Id)
                 .OrderByDescending(e => e.CreatedAt)
-                .FirstOrDefaultAsync();
+                .FirstOrDefaultAsync(cancellationToken);
         }
 
         var totalWeeks = internship?.Semester?.TotalWeeks ?? activeSemester?.TotalWeeks;
@@ -318,7 +320,7 @@ public class StudentService : IStudentService
                 .AsNoTracking()
                 .Where(s => s.SemesterId == scheduleSemesterId.Value && !s.IsDeleted
                     && (s.LecturerId == null || (ownLecturerId != null && s.LecturerId == ownLecturerId)))
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
             schedules = schedules
                 .GroupBy(s => s.WeekNumber)
                 .Select(g => g
@@ -341,7 +343,7 @@ public class StudentService : IStudentService
             totalWeeks,
             requiredWeeks);
 
-        var isArchiveReadOnly = await IsArchiveReadOnlyAsync(userId);
+        var isArchiveReadOnly = await IsArchiveReadOnlyAsync(userId, cancellationToken);
 
         return new StudentPortalProfileDto
         {
@@ -356,7 +358,78 @@ public class StudentService : IStudentService
         };
     }
 
-    public async Task<bool> IsArchiveReadOnlyAsync(Guid userId)
+    public async Task<StudentDashboardProgressResponse?> GetDashboardProgressByUserIdAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default)
+    {
+        var profile = await GetPortalProfileByUserIdAsync(userId, cancellationToken);
+        if (profile == null)
+            return null;
+
+        var semesterId = profile.Internship?.SemesterId;
+        var semester = semesterId.HasValue
+            ? await _db.Semesters.AsNoTracking()
+                .FirstOrDefaultAsync(item => item.Id == semesterId.Value && !item.IsDeleted, cancellationToken)
+            : await _db.Semesters.AsNoTracking()
+                .Where(item => !item.IsDeleted && item.Status == SemesterStatus.Active
+                    && (item.DepartmentId == profile.Student.DepartmentId || item.DepartmentId == null))
+                .OrderByDescending(item => item.DepartmentId.HasValue)
+                .ThenByDescending(item => item.CreatedAt)
+                .FirstOrDefaultAsync(cancellationToken);
+
+        if (semester == null)
+            return new StudentDashboardProgressResponse(
+                profile, null, null, null, 0, null, null, null, Array.Empty<StudentDashboardWeekResponse>());
+
+        var lecturerId = profile.Internship?.LecturerId;
+        var schedules = await _db.SemesterReportSchedules.AsNoTracking()
+            .Where(item => item.SemesterId == semester.Id && !item.IsDeleted
+                && (item.LecturerId == null
+                    || (lecturerId != null && item.LecturerId == lecturerId)))
+            .ToListAsync(cancellationToken);
+        var resolvedSchedules = schedules
+            .GroupBy(item => item.WeekNumber)
+            .Select(group => group
+                .OrderByDescending(item => lecturerId.HasValue && item.LecturerId == lecturerId)
+                .ThenByDescending(item => item.UpdatedAt ?? item.CreatedAt)
+                .ThenByDescending(item => item.CreatedAt)
+                .First())
+            .OrderBy(item => item.WeekNumber)
+            .ToList();
+
+        var rules = await _db.SysGradingRuleSets.AsNoTracking()
+            .Where(rule => rule.SemesterId == semester.Id
+                && (rule.DepartmentId == profile.Student.DepartmentId || rule.DepartmentId == null))
+            .OrderByDescending(rule => rule.DepartmentId.HasValue)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var weeks = resolvedSchedules.Select(schedule => new StudentDashboardWeekResponse(
+            schedule.WeekNumber,
+            schedule.Title,
+            schedule.IsSubmissionOpen,
+            schedule.AllowLateSubmission,
+            schedule.WeekNumber > semester.TotalWeeks,
+            schedule.StartDate.HasValue ? AsUtcOffset(schedule.StartDate.Value) : null,
+            AsUtcOffset(schedule.DueDate))).ToList();
+
+        return new StudentDashboardProgressResponse(
+            profile,
+            semester.Id,
+            semester.Name,
+            semester.Status.ToString(),
+            semester.TotalWeeks,
+            rules?.RequiredWeeklyReportsCount,
+            rules?.WeeklyDeadlineDay,
+            rules?.LatePenaltyPointsPerDay,
+            weeks);
+    }
+
+    private static DateTimeOffset AsUtcOffset(DateTime value) =>
+        new(DateTime.SpecifyKind(value, DateTimeKind.Utc));
+
+    public async Task<bool> IsArchiveReadOnlyAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default)
     {
         var semesterStatuses = await _db.Internships
             .AsNoTracking()
@@ -366,7 +439,7 @@ public class StudentService : IStudentService
                 && !i.Semester!.IsDeleted)
             .Select(i => i.Semester!.Status)
             .Distinct()
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         return semesterStatuses.Count > 0
             && semesterStatuses.All(status => status == SemesterStatus.Completed);

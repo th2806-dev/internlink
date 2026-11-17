@@ -20,6 +20,11 @@ public interface IExcelExportService
     Task<byte[]> GenerateInternshipExportExcelAsync(Guid? semesterId = null, Guid? lecturerId = null, string? department = null, Guid? departmentId = null, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Generates the C23 workbook and appends the department/lecturer signature page.
+    /// </summary>
+    Task<byte[]> GenerateC23AccreditationExcelAsync(Guid semesterId, Guid? departmentId = null, Guid? lecturerId = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Generates the Excel file given an already-constructed InternshipExportDataDto and an optional custom template path.
     /// </summary>
     byte[] GenerateFromData(InternshipExportDataDto data, string? templatePath = null);

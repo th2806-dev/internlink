@@ -3,7 +3,9 @@ using System.Text;
 using System.Text.RegularExpressions;
 using InternLink.Application.Interfaces;
 using InternLink.API.Extensions;
+using InternLink.API.Authorization;
 using InternLink.Infrastructure.Persistence;
+using InternLink.Shared.Authorization;
 using InternLink.Shared.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -47,6 +49,7 @@ public class ExportController : ControllerBase
     /// (Sheets: DANH SÁCH THỰC TẬP, DANH SÁCH DOANH NGHIỆP, DANH SÁCH GIẢNG VIÊN PHÂN CÔNG).
     /// </summary>
     [HttpGet("internship-excel")]
+    [RequirePermission(SystemPermissionCodes.LecturerExport)]
     public async Task<IActionResult> ExportInternshipExcel(
         [FromQuery] Guid? semesterId = null,
         [FromQuery] Guid? lecturerId = null,
@@ -85,6 +88,7 @@ public class ExportController : ControllerBase
     }
 
     [HttpGet("lecturer-internship-excel")]
+    [RequirePermission(SystemPermissionCodes.LecturerExport)]
     public async Task<IActionResult> ExportLecturerInternshipExcel([FromQuery] Guid? semesterId = null, CancellationToken cancellationToken = default)
     {
         var userId = User.GetUserId();
@@ -103,6 +107,7 @@ public class ExportController : ControllerBase
     /// Exports the official academic summary report (C22A template) for the faculty.
     /// </summary>
     [HttpGet("summary-report")]
+    [RequirePermission(SystemPermissionCodes.LecturerExport)]
     public async Task<IActionResult> ExportSummaryReport(
         [FromQuery] Guid? semesterId = null,
         [FromQuery] string? department = null,
@@ -144,6 +149,7 @@ public class ExportController : ControllerBase
     /// based on the C22A template with dynamic data from the database.
     /// </summary>
     [HttpGet("summary-report/word")]
+    [RequirePermission(SystemPermissionCodes.LecturerExport)]
     public async Task<IActionResult> ExportSummaryReportWord(
         [FromQuery] Guid? semesterId = null,
         [FromQuery] string? department = null,
@@ -192,6 +198,7 @@ public class ExportController : ControllerBase
     /// for the specified lecturer and semester.
     /// </summary>
     [HttpGet("guidance-schedule")]
+    [RequirePermission(SystemPermissionCodes.LecturerExport)]
     public async Task<IActionResult> ExportGuidanceSchedule(
         [FromQuery] Guid semesterId,
         [FromQuery] Guid? lecturerId = null,

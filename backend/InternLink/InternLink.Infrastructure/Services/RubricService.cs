@@ -4,11 +4,21 @@ using InternLink.Domain.Entities;
 using InternLink.Domain.Enums;
 using InternLink.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace InternLink.Infrastructure.Services;
 
 public class RubricService : IRubricService
 {
+    private static readonly IReadOnlyList<EmployerRatingLevelDto> DefaultEmployerRatingLevels =
+    [
+        new(0, "Chưa đáp ứng", "Chưa thể hiện được năng lực hoặc yêu cầu của tiêu chí."),
+        new(1, "Cần cải thiện", "Thể hiện chưa ổn định, cần hướng dẫn thường xuyên."),
+        new(2, "Đạt một phần", "Đáp ứng một phần yêu cầu, cần cải thiện thêm."),
+        new(3, "Đạt yêu cầu", "Đáp ứng đầy đủ yêu cầu trong công việc."),
+        new(4, "Vượt yêu cầu", "Thể hiện tốt, chủ động và vượt kỳ vọng."),
+    ];
+
     private readonly AppDbContext _context;
 
     public RubricService(AppDbContext context)
@@ -19,13 +29,114 @@ public class RubricService : IRubricService
     public async Task<RubricDto?> GetBySemesterAsync(Guid semesterId)
     {
         var rubric = await _context.Set<EvaluationRubric>()
-            .Where(r => r.SemesterId == semesterId && !r.IsDeleted)
+            .Where(r => r.SemesterId == semesterId && r.DepartmentId == null && !r.IsDeleted)
             .Include(r => r.Criteria.OrderBy(c => c.OrderIndex))
             .Include(r => r.SubmittedBy)
             .Include(r => r.ApprovedBy)
             .FirstOrDefaultAsync();
 
         return rubric == null ? null : MapToDto(rubric);
+    }
+
+    public async Task<EmployerRubricConfigDto?> GetEmployerConfigAsync(
+        Guid semesterId,
+        Guid? departmentId,
+        CancellationToken cancellationToken)
+    {
+        var rubrics = _context.EvaluationRubrics
+            .AsNoTracking()
+            .Where(rubric => rubric.SemesterId == semesterId
+                && !rubric.IsDeleted
+                && (rubric.Status == RubricStatus.Approved || rubric.Status == RubricStatus.Locked));
+
+        var rubric = departmentId.HasValue
+            ? await rubrics
+                .Where(item => item.DepartmentId == departmentId)
+                .Include(item => item.Criteria.OrderBy(criterion => criterion.OrderIndex))
+                .FirstOrDefaultAsync(cancellationToken)
+            : null;
+        var isInherited = departmentId.HasValue && rubric == null;
+
+        rubric ??= await rubrics
+            .Where(item => item.DepartmentId == null)
+            .Include(item => item.Criteria.OrderBy(criterion => criterion.OrderIndex))
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return rubric == null
+            ? null
+            : MapEmployerConfig(rubric, isInherited);
+    }
+
+    public async Task<EmployerRubricConfigDto> SaveEmployerConfigAsync(
+        Guid semesterId,
+        Guid? departmentId,
+        SaveEmployerRubricRequest request,
+        Guid updatedByUserId,
+        CancellationToken cancellationToken)
+    {
+        ValidateEmployerRubric(request);
+
+        var semester = await _context.Semesters
+            .AsNoTracking()
+            .FirstOrDefaultAsync(item => item.Id == semesterId && !item.IsDeleted, cancellationToken)
+            ?? throw new KeyNotFoundException("Không tìm thấy học kỳ.");
+
+        if (departmentId.HasValue)
+        {
+            var departmentExists = await _context.Departments
+                .AnyAsync(item => item.Id == departmentId.Value && !item.IsDeleted, cancellationToken);
+            if (!departmentExists)
+                throw new KeyNotFoundException("Không tìm thấy khoa đã chọn.");
+            if (semester.DepartmentId.HasValue && semester.DepartmentId != departmentId)
+                throw new InvalidOperationException("Học kỳ không thuộc khoa đã chọn.");
+        }
+
+        var now = DateTime.UtcNow;
+        var previousVersions = await _context.EvaluationRubrics
+            .Where(item => item.SemesterId == semesterId && item.DepartmentId == departmentId)
+            .ToListAsync(cancellationToken);
+        foreach (var previous in previousVersions.Where(item => !item.IsDeleted))
+        {
+            previous.IsDeleted = true;
+            previous.DeletedAt = now;
+            previous.DeletedBy = updatedByUserId.ToString();
+            previous.UpdatedAt = now;
+        }
+
+        var rubric = new EvaluationRubric
+        {
+            Id = Guid.NewGuid(),
+            SemesterId = semesterId,
+            DepartmentId = departmentId,
+            Name = request.Name.Trim(),
+            Version = previousVersions.Count == 0 ? 1 : previousVersions.Max(item => item.Version) + 1,
+            RatingLevelsJson = JsonSerializer.Serialize(request.RatingLevels.OrderBy(level => level.Value)),
+            ApplicationMode = RubricApplicationMode.Required,
+            Status = RubricStatus.Approved,
+            SubmittedById = updatedByUserId,
+            SubmittedAt = now,
+            ApprovedById = updatedByUserId,
+            ApprovedAt = now,
+            CreatedAt = now,
+            CreatedBy = updatedByUserId.ToString(),
+            CreatedByFunction = "SAVE_EMPLOYER_EVALUATION_RUBRIC",
+            Criteria = request.Criteria.Select((criterion, index) => new EvaluationRubricCriterion
+            {
+                Id = Guid.NewGuid(),
+                Name = criterion.Name.Trim(),
+                Description = NullIfWhiteSpace(criterion.Description),
+                Weight = criterion.Weight,
+                MaxScore = 10,
+                OrderIndex = index + 1,
+                CreatedAt = now
+            }).ToList()
+        };
+
+        _context.EvaluationRubrics.Add(rubric);
+        await _context.SaveChangesAsync(cancellationToken);
+
+        return await GetEmployerConfigAsync(semesterId, departmentId, cancellationToken)
+            ?? throw new InvalidOperationException("Không thể tải cấu hình rubric vừa lưu.");
     }
 
     public async Task<RubricDto> CreateAsync(Guid semesterId, CreateRubricRequest request, Guid createdByUserId)
@@ -39,7 +150,7 @@ public class RubricService : IRubricService
         // Treat create as an idempotent Admin save. This also handles a stale UI
         // that has not loaded the existing rubric yet.
         var existing = await _context.Set<EvaluationRubric>()
-            .Where(r => r.SemesterId == semesterId && !r.IsDeleted)
+            .Where(r => r.SemesterId == semesterId && r.DepartmentId == null && !r.IsDeleted)
             .Select(r => r.Id)
             .FirstOrDefaultAsync();
         if (existing != Guid.Empty)
@@ -262,7 +373,7 @@ public class RubricService : IRubricService
     public async Task<RubricDto?> GetApprovedRubricAsync(Guid semesterId)
     {
         var rubric = await _context.Set<EvaluationRubric>()
-            .Where(r => r.SemesterId == semesterId && !r.IsDeleted
+            .Where(r => r.SemesterId == semesterId && r.DepartmentId == null && !r.IsDeleted
                 && (r.Status == RubricStatus.Approved || r.Status == RubricStatus.Locked))
             .Include(r => r.Criteria.OrderBy(c => c.OrderIndex))
             .FirstOrDefaultAsync();
@@ -276,7 +387,10 @@ public class RubricService : IRubricService
         {
             Id = rubric.Id,
             SemesterId = rubric.SemesterId,
+            DepartmentId = rubric.DepartmentId,
             Name = rubric.Name,
+            Version = rubric.Version,
+            RatingLevels = ParseRatingLevels(rubric.RatingLevelsJson).ToList(),
             ApplicationMode = rubric.ApplicationMode.ToString(),
             Status = rubric.Status.ToString(),
             Criteria = rubric.Criteria
@@ -299,4 +413,71 @@ public class RubricService : IRubricService
             UpdatedAt = rubric.UpdatedAt
         };
     }
+
+    private static EmployerRubricConfigDto MapEmployerConfig(EvaluationRubric rubric, bool isInherited) =>
+        new(
+            rubric.Id,
+            rubric.SemesterId,
+            rubric.DepartmentId,
+            rubric.Name,
+            rubric.Version,
+            isInherited,
+            ParseRatingLevels(rubric.RatingLevelsJson),
+            rubric.Criteria
+                .OrderBy(criterion => criterion.OrderIndex)
+                .Select(criterion => new EmployerRubricCriterionDto(
+                    criterion.Id,
+                    criterion.Name,
+                    criterion.Description,
+                    criterion.Weight,
+                    criterion.OrderIndex))
+                .ToList());
+
+    private static IReadOnlyList<EmployerRatingLevelDto> ParseRatingLevels(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return DefaultEmployerRatingLevels;
+        try
+        {
+            var levels = JsonSerializer.Deserialize<List<EmployerRatingLevelDto>>(json);
+            return levels is { Count: 5 }
+                ? levels.OrderBy(level => level.Value).ToList()
+                : DefaultEmployerRatingLevels;
+        }
+        catch (JsonException)
+        {
+            return DefaultEmployerRatingLevels;
+        }
+    }
+
+    private static void ValidateEmployerRubric(SaveEmployerRubricRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name) || request.Name.Trim().Length > 250)
+            throw new InvalidOperationException("Tên rubric phải có từ 1 đến 250 ký tự.");
+        if (request.Criteria is null || request.Criteria.Count is < 8 or > 10)
+            throw new InvalidOperationException("Rubric phải có từ 8 đến 10 tiêu chí.");
+        if (request.Criteria.Any(criterion =>
+                string.IsNullOrWhiteSpace(criterion.Name)
+                || criterion.Name.Trim().Length > 200
+                || criterion.Description?.Length > 500
+                || criterion.Weight <= 0))
+            throw new InvalidOperationException("Mỗi tiêu chí cần tên hợp lệ, trọng số dương và mô tả không quá 500 ký tự.");
+        if (request.Criteria.GroupBy(criterion => criterion.Name.Trim(), StringComparer.OrdinalIgnoreCase)
+            .Any(group => group.Count() > 1))
+            throw new InvalidOperationException("Tên tiêu chí không được trùng nhau.");
+        if (Math.Abs(request.Criteria.Sum(criterion => criterion.Weight) - 100m) > 0.01m)
+            throw new InvalidOperationException("Tổng trọng số các tiêu chí phải bằng 100%.");
+        if (request.RatingLevels is null
+            || request.RatingLevels.Count != 5
+            || request.RatingLevels.Select(level => level.Value).Order().Where((value, index) => value != index).Any()
+            || request.RatingLevels.Any(level =>
+                string.IsNullOrWhiteSpace(level.Label)
+                || level.Label.Trim().Length > 100
+                || string.IsNullOrWhiteSpace(level.Description)
+                || level.Description.Trim().Length > 500))
+            throw new InvalidOperationException("Cần cấu hình đủ 5 mức đánh giá từ 0 đến 4, mỗi mức có nhãn và mô tả hợp lệ.");
+    }
+
+    private static string? NullIfWhiteSpace(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

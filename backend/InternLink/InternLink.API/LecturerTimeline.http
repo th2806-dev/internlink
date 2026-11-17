@@ -1,0 +1,16 @@
+@baseUrl = http://localhost:7109
+@accessToken = replace-with-a-valid-access-token
+@studentId = 00000000-0000-0000-0000-000000000001
+@semesterId = 00000000-0000-0000-0000-000000000002
+
+### Get a filtered page of assigned students
+GET {{baseUrl}}/api/v1/lecturer/students?semesterId={{semesterId}}&skip=0&take=20&sortBy=name
+Authorization: Bearer {{accessToken}}
+
+### Get weekly timeline for an assigned student
+GET {{baseUrl}}/api/v1/lecturer/students/{{studentId}}/timeline?semesterId={{semesterId}}
+Authorization: Bearer {{accessToken}}
+
+### An unassigned or missing student returns 404
+GET {{baseUrl}}/api/v1/lecturer/students/00000000-0000-0000-0000-000000000099/timeline?semesterId={{semesterId}}
+Authorization: Bearer {{accessToken}}

@@ -2,9 +2,11 @@ import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import {
   apiRequest,
   ApiClientError,
+  clearApiCache,
   downloadAuthenticatedFile,
   getApiErrorMessage,
   getStoredToken,
+  setImpersonatedRoleCode,
   setStoredToken,
 } from "../lib/apiClient";
 import { TOKEN_STORAGE_KEY } from "../config/env";
@@ -12,6 +14,8 @@ import { TOKEN_STORAGE_KEY } from "../config/env";
 describe("apiClient", () => {
   beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
+    clearApiCache();
     vi.restoreAllMocks();
   });
 
@@ -106,6 +110,35 @@ describe("apiClient", () => {
       const callArgs = fetchSpy.mock.calls[0];
       const headers = callArgs[1]?.headers as Headers;
       expect(headers.get("Authorization")).toBeNull();
+    });
+
+    it("attaches the visual-only impersonation role header for authenticated requests", async () => {
+      setStoredToken("valid-token-123");
+      setImpersonatedRoleCode("Lecturer");
+      vi.spyOn(globalThis, "fetch").mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: vi.fn().mockResolvedValue(JSON.stringify({ success: true, data: [] })),
+      } as unknown as Response);
+
+      await apiRequest("/api/test", { skipCache: true });
+
+      const headers = vi.mocked(globalThis.fetch).mock.calls[0][1]?.headers as Headers;
+      expect(headers.get("X-Impersonate-Role")).toBe("Lecturer");
+    });
+
+    it("does not attach an impersonation header to unauthenticated requests", async () => {
+      setImpersonatedRoleCode("Lecturer");
+      vi.spyOn(globalThis, "fetch").mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: vi.fn().mockResolvedValue(JSON.stringify({ success: true, data: [] })),
+      } as unknown as Response);
+
+      await apiRequest("/api/public", { auth: false, skipCache: true });
+
+      const headers = vi.mocked(globalThis.fetch).mock.calls[0][1]?.headers as Headers;
+      expect(headers.get("X-Impersonate-Role")).toBeNull();
     });
 
     it("sends Content-Type application/json when body is provided", async () => {

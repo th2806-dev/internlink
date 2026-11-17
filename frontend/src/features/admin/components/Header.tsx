@@ -1,6 +1,8 @@
 import { useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
+  Eye,
   Search,
   User,
   Settings,
@@ -9,10 +11,14 @@ import {
   ChevronDown,
   Menu,
 } from "lucide-react";
+import { AdminMegaMenu } from "./AdminMegaMenu";
 import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
 import { useSemester } from "../../../contexts/SemesterContext";
 import { NotificationDropdown } from "../../../components/common/NotificationDropdown";
 import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
+import { getApiErrorMessage } from "../../../lib/apiClient";
+import { useImpersonation } from "../../../contexts/ImpersonationContext";
+import { systemAdminService } from "../../../services/systemAdmin.service";
 import type { AuthUser } from "../../../contexts/AuthContext";
 
 export const Header = ({
@@ -34,6 +40,7 @@ export const Header = ({
 }) => {
   const navigate = useNavigate();
   const { isSuperAdmin, roleDisplayLabel } = useAdminCapabilities();
+  const { impersonation, startImpersonation } = useImpersonation();
   const {
     semesters,
     selectedSemesterId,
@@ -47,7 +54,22 @@ export const Header = ({
   const [showSemesterMenu, setShowSemesterMenu] = useState(false);
   const [showDepartmentMenu, setShowDepartmentMenu] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showImpersonationMenu, setShowImpersonationMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const impersonationTargetsQuery = useQuery({
+    queryKey: ["system-admin", "impersonation-targets"],
+    queryFn: systemAdminService.getImpersonationTargets,
+    enabled: isSuperAdmin,
+    retry: false,
+  });
+  const impersonationMutation = useMutation({
+    mutationFn: startImpersonation,
+    onSuccess: () => {
+      setShowImpersonationMenu(false);
+      onShowToast("Đã bật chế độ xem trước vai trò.");
+    },
+    onError: (error) => onShowToast(`Không thể bật chế độ mô phỏng. ${getApiErrorMessage(error)}`),
+  });
 
   const displayName = user?.name || user?.username || roleDisplayLabel;
   const displayEmail = user?.email ?? user?.username ?? "—";
@@ -83,6 +105,12 @@ export const Header = ({
         return "Người dùng";
       case "admin-settings":
         return "Cài đặt";
+      case "admin-config":
+        return "Cấu hình bảng";
+      case "admin-functions":
+        return "Quản lý chức năng";
+      case "admin-config/field-policies":
+        return "Chính sách trường dữ liệu";
       case "admin-backups":
         return "Sao lưu & Khôi phục";
       case "admin-account":
@@ -334,6 +362,62 @@ export const Header = ({
             backendRole={user?.backendRole}
             onNavigate={onNavigate}
             onShowToast={onShowToast}
+          />
+
+          {isSuperAdmin && (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowImpersonationMenu((open) => !open)}
+                aria-expanded={showImpersonationMenu}
+                aria-controls="superadmin-impersonation-menu"
+                className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 text-xs font-semibold text-slate-800 transition-colors hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
+              >
+                <Eye aria-hidden="true" className="h-4 w-4 text-amber-800" />
+                <span className="hidden 2xl:inline">
+                  {impersonation ? `Đang xem: ${impersonation.roleName}` : "Mô phỏng góc nhìn"}
+                </span>
+                <span className="2xl:hidden">Mô phỏng</span>
+              </button>
+              {showImpersonationMenu && (
+                <div
+                  id="superadmin-impersonation-menu"
+                  aria-label="Chọn vai trò xem trước"
+                  className="absolute right-0 z-50 mt-2 w-72 rounded-xl border border-slate-200 bg-white p-2 shadow-lg"
+                >
+                  <p className="px-2 py-2 text-[11px] leading-5 text-slate-600">
+                    Chế độ này chỉ xem menu và bố cục theo vai trò, không thay đổi quyền truy cập dữ liệu.
+                  </p>
+                  {impersonationTargetsQuery.isPending ? (
+                    <p role="status" className="px-2 py-3 text-xs text-slate-500">Đang tải vai trò...</p>
+                  ) : impersonationTargetsQuery.isError ? (
+                    <p role="alert" className="px-2 py-3 text-xs text-rose-700">
+                      Không tải được danh sách vai trò. {getApiErrorMessage(impersonationTargetsQuery.error)}
+                    </p>
+                  ) : (
+                    <div className="max-h-64 space-y-1 overflow-y-auto">
+                      {impersonationTargetsQuery.data?.map((target) => (
+                        <button
+                          key={target.roleId}
+                          type="button"
+                          disabled={impersonationMutation.isPending}
+                          onClick={() => impersonationMutation.mutate(target.roleCode)}
+                          className="flex min-h-11 w-full items-center rounded-lg px-3 text-left text-xs font-semibold text-slate-700 hover:bg-[#026aa7]/5 hover:text-[#026aa7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] disabled:opacity-50"
+                        >
+                          {target.roleName}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          <AdminMegaMenu
+            onNavigate={onNavigate}
+            onShowToast={onShowToast}
+            onLogout={onLogout}
           />
 
           <div className="relative">

@@ -18,6 +18,7 @@ export interface Student {
   email?: string;
   phone?: string;
   studentId?: string;
+  finalGrade?: number | null;
   absentCount?: number;
   hasFinalReport?: boolean;
   /** Internship period (ISO dates), when known. */

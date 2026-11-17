@@ -11,6 +11,14 @@ interface WeeklyReportProgressSchedule {
   isFinalReport?: boolean;
 }
 
+export function getStudentDashboardWeeks<T extends WeeklyReportProgressSchedule>(
+  schedules: T[],
+): T[] {
+  return schedules
+    .filter((schedule) => !schedule.isFinalReport)
+    .sort((left, right) => left.weekNumber - right.weekNumber);
+}
+
 export function getOpenWeeklyReportWeeks(
   schedules: WeeklyReportProgressSchedule[],
   totalSemesterWeeks: number,

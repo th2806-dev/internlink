@@ -56,6 +56,12 @@ public class InternshipStudentGradeDto
     // Cột J-K: Thi & TB
     public decimal? OralExamScore { get; set; }
     public decimal? AverageScore { get; set; }
+    public decimal? Score4 => AverageScore.HasValue
+        ? InternshipGradeCalculator.ConvertToFourPointScale(AverageScore.Value).Score4
+        : null;
+    public string? LetterGrade => AverageScore.HasValue
+        ? InternshipGradeCalculator.ConvertToFourPointScale(AverageScore.Value).LetterGrade
+        : null;
     public bool IsFinalized { get; set; }
 
     // Cột L: Xếp loại

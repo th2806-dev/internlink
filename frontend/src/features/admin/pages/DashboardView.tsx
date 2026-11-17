@@ -7,6 +7,7 @@ import {
   BarChart3,
   Download,
   LineChart as LineChartIcon,
+  Loader2,
   RefreshCw,
   ArrowUpRight,
   AlertTriangle,
@@ -44,6 +45,7 @@ import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
 import { useAuth } from "../../../hooks/useAuth";
 import { queryKeys } from "../../../lib/queryKeys";
 import { internshipGradingService, type GradingSummaryResponse } from "../../../services/internshipGrading.service";
+import { lecturerExportService } from "../../../services/lecturerExport.service";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 
 type SemesterChartMode = "table" | "line" | "bar";
@@ -61,7 +63,7 @@ const formatSemesterShortLabel = (label: string, academicYear?: string, term?: s
 };
 
 const getInternshipStatusColor = (label: string) => {
-  if (label === "Đã chấm" || label === "Hoàn thành") return "bg-emerald-500";
+  if (label === "Đã chấm" || label === "Hoàn thành") return "bg-[#7bc043]";
   if (label === "Đang TT") return "bg-[#026aa7]";
   if (label === "Chậm tiến độ" || label === "Cần sửa") return "bg-amber-500";
   if (label === "Chờ duyệt") return "bg-sky-500";
@@ -78,6 +80,8 @@ export const DashboardView = ({
   const { user } = useAuth();
   const { isSuperAdmin, roleDisplayLabel } = useAdminCapabilities();
   const [semesterChartMode, setSemesterChartMode] = useState<SemesterChartMode>("bar");
+  const [accreditationExport, setAccreditationExport] = useState<"c22" | "c23" | null>(null);
+  const [accreditationProgress, setAccreditationProgress] = useState<number | null>(null);
   const {
     semesters,
     selectedSemester,
@@ -113,6 +117,32 @@ export const DashboardView = ({
           semester.term === selectedSemester.term,
       ) ?? semesters.find((semester) => semester.academicYear === academicYear);
     if (matchingSemester) selectSemester(matchingSemester.id);
+  };
+
+  const handleAccreditationExport = async (kind: "c22" | "c23") => {
+    if (!reportSemesterId || reportSemesterId === "all") {
+      onShowToast("Vui lòng chọn một học kỳ cụ thể trước khi xuất hồ sơ.");
+      return;
+    }
+
+    setAccreditationExport(kind);
+    setAccreditationProgress(null);
+    try {
+      const departmentId = departmentIdFilter && departmentIdFilter !== "all"
+        ? departmentIdFilter
+        : undefined;
+      if (kind === "c22") {
+        await lecturerExportService.downloadC22Batch(reportSemesterId, departmentId, setAccreditationProgress);
+      } else {
+        await lecturerExportService.downloadC23Excel(reportSemesterId, departmentId, setAccreditationProgress);
+      }
+      onShowToast("Đã tải hồ sơ kiểm định thành công.");
+    } catch (error) {
+      onShowToast(error instanceof Error ? error.message : "Không thể xuất hồ sơ kiểm định.");
+    } finally {
+      setAccreditationExport(null);
+      setAccreditationProgress(null);
+    }
   };
 
   const handleTermChange = (term: string) => {
@@ -281,6 +311,29 @@ export const DashboardView = ({
               Làm mới
             </button>
           </div>
+        </div>
+
+        <div className="flex flex-col gap-3 border-b border-slate-100 px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4">
+          <div>
+            <p className="text-sm font-semibold text-slate-900">Hồ sơ kiểm định chất lượng</p>
+            <p className="mt-0.5 text-xs text-slate-600">Xuất hồ sơ đánh giá sinh viên (ZIP) hoặc bảng tổng hợp kết quả (Excel).</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" disabled={Boolean(accreditationExport) || !reportSemesterId || reportSemesterId === "all"} onClick={() => void handleAccreditationExport("c22")} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
+              {accreditationExport === "c22" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Download className="h-4 w-4" aria-hidden="true" />}
+              Hồ sơ đánh giá SV (ZIP)
+            </button>
+            <button type="button" disabled={Boolean(accreditationExport) || !reportSemesterId || reportSemesterId === "all"} onClick={() => void handleAccreditationExport("c23")} className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-[#026aa7] px-3 text-xs font-bold text-white hover:bg-[#025a8e] disabled:cursor-not-allowed disabled:opacity-50">
+              {accreditationExport === "c23" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Download className="h-4 w-4" aria-hidden="true" />}
+              Bảng tổng hợp kết quả (Excel)
+            </button>
+          </div>
+          {accreditationExport && (
+            <div className="w-full text-xs text-slate-600 sm:max-w-52">
+              <span>{accreditationProgress == null ? "Đang tạo tệp..." : `Đang tải ${Math.round(accreditationProgress * 100)}%`}</span>
+              <progress aria-label="Tiến trình tải báo cáo" value={accreditationProgress == null ? undefined : Math.round(accreditationProgress * 100)} max={100} className="mt-1 block h-2 w-full accent-[#026aa7]" />
+            </div>
+          )}
         </div>
 
         <div className="space-y-3 p-3.5 sm:p-4">
@@ -654,7 +707,7 @@ export const DashboardView = ({
                         </p>
                       </div>
                       {assignedRate === 100 && (
-                        <p className="col-span-2 rounded-md bg-emerald-50 px-3 py-2 text-center text-[11px] font-semibold text-emerald-800">
+                        <p className="col-span-2 rounded-md bg-[#7bc043]/10 px-3 py-2 text-center text-[11px] font-semibold text-[#7bc043]">
                           <ShieldCheck className="mr-1 inline h-3.5 w-3.5" aria-hidden="true" />
                           Hoàn tất phân công hướng dẫn
                         </p>
@@ -702,9 +755,9 @@ export const DashboardView = ({
                     <p className="flex items-center gap-1.5 text-xs text-slate-500"><Building2 className="h-3.5 w-3.5" aria-hidden="true" /> Doanh nghiệp</p>
                     <p className="mt-2 text-2xl font-bold text-slate-900">{semesterReportMetrics.companyCount}</p>
                   </div>
-                  <div className="rounded-lg border border-slate-100 bg-emerald-50/60 p-3">
+                  <div className="rounded-lg border border-slate-100 bg-[#7bc043]/10 p-3">
                     <p className="flex items-center gap-1.5 text-xs text-slate-600"><CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" /> Đúng hạn</p>
-                    <p className="mt-2 text-2xl font-bold text-emerald-800">{semesterReportMetrics.onTimeRate == null ? "—" : `${semesterReportMetrics.onTimeRate}%`}</p>
+                    <p className="mt-2 text-2xl font-bold text-[#7bc043]">{semesterReportMetrics.onTimeRate == null ? "—" : `${semesterReportMetrics.onTimeRate}%`}</p>
                     <p className="mt-0.5 text-[10px] text-slate-500">{semesterReportMetrics.onTime}/{semesterReportMetrics.dueCount} báo cáo</p>
                   </div>
                   <div className="rounded-lg border border-slate-100 bg-amber-50/60 p-3">
@@ -721,14 +774,14 @@ export const DashboardView = ({
                   >
                     {semesterReportMetrics.dueCount > 0 && (
                       <>
-                        <div className="bg-emerald-500" style={{ width: `${(semesterReportMetrics.onTime / semesterReportMetrics.dueCount) * 100}%` }} />
+                        <div className="bg-[#7bc043]" style={{ width: `${(semesterReportMetrics.onTime / semesterReportMetrics.dueCount) * 100}%` }} />
                         <div className="bg-amber-400" style={{ width: `${(semesterReportMetrics.late / semesterReportMetrics.dueCount) * 100}%` }} />
                         <div className="bg-slate-300" style={{ width: `${(semesterReportMetrics.missing / semesterReportMetrics.dueCount) * 100}%` }} />
                       </>
                     )}
                   </div>
                   <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-slate-600">
-                    <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-emerald-500" />Đúng hạn ({semesterReportMetrics.onTime})</span>
+                    <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-[#7bc043]" />Đúng hạn ({semesterReportMetrics.onTime})</span>
                     <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-amber-400" />Trễ ({semesterReportMetrics.late})</span>
                     <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-slate-300" />Thiếu ({semesterReportMetrics.missing})</span>
                   </div>
@@ -798,8 +851,8 @@ export const DashboardView = ({
             <p className="py-3 text-xs text-slate-500">Đang tải dữ liệu API…</p>
           ) : actionItems.length === 0 ? (
             <div className="flex items-center gap-2 py-3">
-              <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-600" aria-hidden="true" />
-              <p className="text-xs font-semibold text-emerald-800">Dữ liệu kỳ hiện tại đã đồng bộ và tối ưu</p>
+              <ShieldCheck className="h-4 w-4 shrink-0 text-[#7bc043]" aria-hidden="true" />
+              <p className="text-xs font-semibold text-[#7bc043]">Dữ liệu kỳ hiện tại đã đồng bộ và tối ưu</p>
             </div>
           ) : (
             <ul className="divide-y divide-slate-100">

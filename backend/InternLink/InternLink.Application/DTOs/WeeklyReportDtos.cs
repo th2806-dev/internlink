@@ -54,6 +54,7 @@ public sealed class UploadWeeklyReportFormRequest
     public Guid InternshipId { get; set; }
     public int WeekNumber { get; set; }
     public string Title { get; set; } = null!;
+    public string? Content { get; set; }
     public IFormFile? File { get; set; }
 }
 

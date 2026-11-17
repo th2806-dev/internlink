@@ -738,7 +738,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
       {/* Modal: Create Template */}
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto">
+          <div className="w-full max-w-xl rounded-xl border border-slate-200/90 bg-white p-6 shadow-2xs max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <span className="p-2 rounded-xl bg-[#026aa7]/5 text-[#026aa7]">
@@ -947,7 +947,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
       {/* Modal: Edit Template */}
       {editingTemplate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto">
+          <div className="w-full max-w-xl rounded-xl border border-slate-200/90 bg-white p-6 shadow-2xs max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <span className="p-2 rounded-xl bg-amber-50 text-amber-600">
@@ -1150,7 +1150,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
       {/* Modal: Delete Confirmation */}
       {deletingTemplate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100">
+          <div className="w-full max-w-md rounded-xl border border-slate-200/90 bg-white p-6 shadow-2xs">
             <div className="flex items-center gap-3 text-rose-600 mb-3">
               <span className="p-2 rounded-xl bg-rose-50">
                 <AlertCircle className="w-6 h-6" />

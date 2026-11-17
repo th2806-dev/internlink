@@ -17,4 +17,9 @@ public interface IInternshipReportService
     /// using the C22A template with placeholder replacement and dynamic table population.
     /// </summary>
     Task<byte[]> ExportC22AWordReportAsync(Guid? semesterId = null, string? department = null, Guid? departmentId = null, Guid? lecturerId = null);
+
+    /// <summary>
+    /// Exports one individual C22 evaluation document per internship in a ZIP archive.
+    /// </summary>
+    Task<byte[]> ExportC22BatchZipAsync(Guid semesterId, Guid? departmentId = null, Guid? lecturerId = null, CancellationToken cancellationToken = default);
 }

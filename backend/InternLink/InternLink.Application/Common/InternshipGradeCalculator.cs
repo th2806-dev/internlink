@@ -10,13 +10,13 @@ namespace InternLink.Application.Common;
 ///   - Vắng (V) chỉ được ghi nhận từ ĐIỂM DANH buổi hẹn tại trang Điểm danh.
 ///
 /// Điểm QT = MIN(10, Nộp_Đủ(max 2) + Đúng_Hạn(max 2) + Chất_Lượng(max 5) + Sáng_Tạo(+1))
-///   - Nộp đủ   = 2.0 - (số bài thiếu * 0.5)          [chỉ từ nộp bài]
-///   - Đúng hạn = 2.0 - (số bài trễ * 0.5)            [chỉ từ nộp bài]
+///   - Mức trừ bài thiếu/trễ được truyền từ quy chế điểm.
 ///   - Chất lượng: tổng mức rubric từng tuần chia cho tổng deadline tuần đang mở;
 ///     tuần chưa chấm được tính 0.
 ///   - Sáng tạo: +1.0 khi has_creative_product = true.
 ///
-/// Điểm TB = ROUND(QT * 0.4 + Thi * 0.6, 1)
+/// Điểm TB = ROUND(QT * trọng số QT + Thi * trọng số thi + điểm DN * trọng số DN, 1)
+/// Trọng số mặc định: QT 0.4, thi 0.6, doanh nghiệp 0.
 /// Không đủ điều kiện dự thi (vi phạm 1 trong 2):
 ///   1. Chưa nộp báo cáo cuối kỳ
 ///   2. Số buổi VẮNG theo điểm danh >= 2
@@ -32,6 +32,7 @@ public static class InternshipGradeCalculator
     public const decimal QualityMax = 5.0m;
     public const decimal CreativeBonus = 1.0m;
     public const decimal StepPenalty = 0.5m;
+    public const decimal MissingReportPenalty = 2.0m;
     public const decimal ProcessWeight = 0.4m;
     public const decimal OralWeight = 0.6m;
     public const int MaxAbsences = 2;
@@ -51,13 +52,26 @@ public static class InternshipGradeCalculator
     public static bool IsValidQualityLevel(decimal? level) =>
         level.HasValue && QualityLevels.Contains(level.Value);
 
-    public static string Classify(decimal score) =>
+    public static string Classify(decimal score, decimal minimumPassingScore = 5m) =>
+        score < minimumPassingScore ? "Không đạt" :
         score >= 8.5m ? "Xuất sắc" :
         score >= 8.0m ? "Giỏi" :
         score >= 7.0m ? "Khá" :
         score >= 6.5m ? "Trung bình khá" :
-        score >= 5.0m ? "Trung bình" : "Không đạt";
+        "Trung bình";
 
+    public static (decimal Score4, string LetterGrade) ConvertToFourPointScale(decimal score)
+    {
+        var boundedScore = Math.Clamp(score, 0m, 10m);
+        return boundedScore switch
+        {
+            >= 8.5m => (4.0m, "A"),
+            >= 7.0m => (3.0m, "B"),
+            >= 5.5m => (2.0m, "C"),
+            >= 4.0m => (1.0m, "D"),
+            _ => (0.0m, "F")
+        };
+    }
     /// <summary>
     /// Cột I — Điểm QT.
     /// missingCount/lateCount chỉ tính từ NỘP BÀI (không liên quan điểm danh).
@@ -65,13 +79,19 @@ public static class InternshipGradeCalculator
     /// </summary>
     public static decimal ComputeProcessScore(
         int missingCount, int lateCount, int submittedCount,
-        IEnumerable<decimal?> weeklyQualityLevels, bool hasCreativeProduct, int totalOpenWeeks = 0)
+        IEnumerable<decimal?> weeklyQualityLevels, bool hasCreativeProduct, int totalOpenWeeks = 0,
+        decimal missingReportPenalty = MissingReportPenalty,
+        decimal lateReportPenalty = StepPenalty,
+        int latePenaltyDays = 0,
+        decimal latePenaltyPointsPerDay = 0m)
     {
         var submission = submittedCount > 0
-            ? Math.Max(0m, SubmissionMax - missingCount * StepPenalty)
+            ? Math.Max(0m, SubmissionMax - missingCount * missingReportPenalty)
             : 0m;
         var punctuality = submittedCount > 0
-            ? Math.Max(0m, PunctualityMax - lateCount * StepPenalty)
+            ? Math.Max(0m, PunctualityMax - (latePenaltyPointsPerDay > 0m
+                ? latePenaltyDays * latePenaltyPointsPerDay
+                : lateCount * lateReportPenalty))
             : 0m;
 
         var rated = weeklyQualityLevels?.Where(l => IsValidQualityLevel(l)).Select(l => l!.Value).ToList()
@@ -90,16 +110,24 @@ public static class InternshipGradeCalculator
     public static (decimal? Average, string Classification) ComputeAverage(
         decimal processScore,
         decimal? oralExamScore,
-        bool isDisqualifiedByAbsence = false)
+        bool isDisqualifiedByAbsence = false,
+        decimal processWeight = ProcessWeight,
+        decimal oralWeight = OralWeight,
+        decimal? employerScore = null,
+        decimal employerWeight = 0m,
+        decimal minimumPassingScore = 5m)
     {
         if (isDisqualifiedByAbsence) return (0m, IneligibleClassification);
-        if (!oralExamScore.HasValue)
-        {
-            var accumulatedAverage = Round1(processScore * ProcessWeight);
-            return (accumulatedAverage, "Chưa xếp loại");
-        }
-        var average = Round1(processScore * ProcessWeight + Math.Clamp(oralExamScore.Value, 0m, 10m) * OralWeight);
-        return (average, Classify(average));
+        var weightedScore = processScore * processWeight;
+        if (oralExamScore.HasValue)
+            weightedScore += Math.Clamp(oralExamScore.Value, 0m, 10m) * oralWeight;
+        if (employerScore.HasValue)
+            weightedScore += Math.Clamp(employerScore.Value, 0m, 10m) * employerWeight;
+        var average = Round1(weightedScore);
+        var classification = oralExamScore.HasValue
+            ? Classify(average, minimumPassingScore)
+            : "Chưa xếp loại";
+        return (average, classification);
     }
 
     /// <summary>
@@ -109,10 +137,11 @@ public static class InternshipGradeCalculator
     /// </summary>
     public static (bool IsEligible, List<string> Reasons) EvaluateEligibility(
         bool finalReportSubmitted,
-        int absentSessionCount)
+        int absentSessionCount,
+        bool requireFinalReport = true)
     {
         var reasons = new List<string>();
-        if (!finalReportSubmitted) reasons.Add(ReasonNoFinalReport);
+        if (requireFinalReport && !finalReportSubmitted) reasons.Add(ReasonNoFinalReport);
         if (absentSessionCount >= MaxAbsences) reasons.Add(ReasonAbsence);
         return (reasons.Count == 0, reasons);
     }

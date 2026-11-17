@@ -1,5 +1,10 @@
 import { apiRequest, downloadAuthenticatedFile } from "../lib/apiClient";
-import type { StudentDto, StudentPortalProfileDto } from "../types/api";
+import type {
+  StudentDashboardProgressDto,
+  StudentDto,
+  StudentIntroductionLetterDto,
+  StudentPortalProfileDto,
+} from "../types/api";
 
 export interface UpdateStudentProfilePayload {
   fullName: string;
@@ -18,6 +23,14 @@ export interface UpdateStudentProfilePayload {
 export const studentPortalService = {
   getMe(): Promise<StudentPortalProfileDto> {
     return apiRequest<StudentPortalProfileDto>("/api/StudentPortal/me");
+  },
+
+  getDashboardProgress(): Promise<StudentDashboardProgressDto> {
+    return apiRequest<StudentDashboardProgressDto>("/api/v1/student/dashboard-progress");
+  },
+
+  getIntroductionLetter(): Promise<StudentIntroductionLetterDto> {
+    return apiRequest<StudentIntroductionLetterDto>("/api/v1/student/introduction-letter");
   },
 
   updateMe(payload: UpdateStudentProfilePayload): Promise<StudentDto> {

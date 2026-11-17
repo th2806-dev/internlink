@@ -895,7 +895,8 @@ public class CompanyServiceTests
 
         // Assert
         result.Should().BeTrue();
-        var pos = await db.CompanyPositions.FirstOrDefaultAsync(p => p.Id == position.Id);
+        var pos = await db.CompanyPositions.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(p => p.Id == position.Id);
         pos!.IsDeleted.Should().BeTrue();
     }
 

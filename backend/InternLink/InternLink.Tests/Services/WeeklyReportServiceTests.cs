@@ -622,8 +622,10 @@ public class WeeklyReportServiceTests
                 .SoftDeleteAsync(report.Id, studentUser.Id);
 
             deleted.Should().BeTrue();
-            (await db.WeeklyReports.SingleAsync(item => item.Id == report.Id)).IsDeleted.Should().BeTrue();
+            (await db.WeeklyReports.IgnoreQueryFilters()
+                .SingleAsync(item => item.Id == report.Id)).IsDeleted.Should().BeTrue();
             var versions = db.WeeklyReportVersions
+                .IgnoreQueryFilters()
                 .Where(item => item.WeeklyReportId == report.Id)
                 .ToList();
             versions.Should().OnlyContain(item => item.IsDeleted);

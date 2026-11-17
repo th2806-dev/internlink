@@ -8,6 +8,8 @@ public interface ILecturerService
     Task<IEnumerable<LecturerSemesterOptionDto>> GetAssignedSemestersAsync(Guid userId);
     Task<LecturerDashboardStatsDto> GetDashboardStatsAsync(Guid userId, Guid? semesterId = null);
     Task<IEnumerable<LecturerStudentListItemDto>> GetAssignedStudentsAsync(Guid userId, string? search = null, string? status = null, Guid? semesterId = null);
+    Task<PaginatedResponse<LecturerStudentListItemDto>> GetAssignedStudentsPageAsync(Guid userId, LecturerStudentFilterRequest filter, CancellationToken cancellationToken);
+    Task<StudentWeeklyTimelineDto?> GetStudentWeeklyTimelineAsync(Guid userId, Guid studentId, Guid? semesterId, CancellationToken cancellationToken);
     Task<IEnumerable<LecturerCompanySummaryDto>> GetAssignedCompaniesAsync(Guid userId, Guid? semesterId = null);
     Task<IEnumerable<InternshipDto>> GetInternshipsAsync(Guid userId, Guid? semesterId = null);
     Task<InternshipDetailDto?> GetInternshipAsync(Guid internshipId, Guid userId);

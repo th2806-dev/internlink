@@ -384,11 +384,11 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
       case "grade":
         return <Award className="w-4 h-4 text-amber-600" />;
       case "enterprise":
-        return <Building2 className="w-4 h-4 text-emerald-600" />;
+        return <Building2 className="w-4 h-4 text-[#7bc043]" />;
       case "deadline":
         return <Clock className="w-4 h-4 text-rose-600" />;
       case "announcement":
-        return <Send className="w-4 h-4 text-indigo-600" />;
+        return <Send className="w-4 h-4 text-[#026aa7]" />;
       case "system":
         return <ShieldAlert className="w-4 h-4 text-purple-600" />;
       default:

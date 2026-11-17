@@ -6,6 +6,7 @@ import { useToast } from "../hooks/useToast";
 import { useAuth } from "../hooks/useAuth";
 import { useAdminNavStats } from "../hooks/useAdminNavStats";
 import { useSemester } from "../contexts/SemesterContext";
+import { SuperAdminImpersonationBanner } from "../features/admin/components/SuperAdminImpersonationBanner";
 
 import type { UserRole } from "../types/common";
 
@@ -61,6 +62,7 @@ export default function AdminLayout({
         onClose={() => setIsSidebarOpen(false)}
       />
       <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-y-auto">
+        <SuperAdminImpersonationBanner />
         <AdminHeader
           activeTab={activeTab}
           onNavigate={onNavigate}

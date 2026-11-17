@@ -175,6 +175,7 @@ public class UserManagementService : IUserManagementService
         };
         await _db.Notifications.AddAsync(welcomeNotif);
 
+        await SystemRbacSeeder.EnsureUserMappingAsync(_db, user);
         await _db.SaveChangesAsync();
 
         if (!string.IsNullOrWhiteSpace(user.Email))

@@ -1,0 +1,17 @@
+@baseUrl = http://localhost:7109
+@studentToken = replace-with-a-student-access-token
+
+# Production deployments must persist/share the ASP.NET Core Data Protection key ring.
+# Phase 4 must Base64Url-decode and unprotect with purpose InternLink.StudentInternshipAcceptance.v1.
+
+### Student dashboard progress and semester-configured deadlines
+GET {{baseUrl}}/api/v1/student/dashboard-progress
+Authorization: Bearer {{studentToken}}
+
+### Issue a protected, time-limited introduction acceptance link
+GET {{baseUrl}}/api/v1/student/introduction-letter
+Authorization: Bearer {{studentToken}}
+
+### Load field policies for the authenticated student's role
+GET {{baseUrl}}/api/v1/system/field-policies/STUDENT_WEEKLY_REPORT?currentUserRole=true
+Authorization: Bearer {{studentToken}}

@@ -1,5 +1,6 @@
 using InternLink.Application.DTOs;
 using InternLink.Application.Interfaces;
+using InternLink.API.Authorization;
 using InternLink.Shared.Authorization;
 using InternLink.Shared.Responses;
 using Microsoft.AspNetCore.Authorization;
@@ -28,6 +29,7 @@ public class AdminUsersController : ControllerBase
     }
 
     [HttpGet]
+    [RequirePermission(SystemPermissionCodes.AccountsView)]
     public async Task<IActionResult> GetAll([FromQuery] UserFilterRequest filter)
     {
         if (filter.Skip < 0)
@@ -41,6 +43,7 @@ public class AdminUsersController : ControllerBase
     }
 
     [HttpGet("{id:guid}")]
+    [RequirePermission(SystemPermissionCodes.AccountsView)]
     public async Task<IActionResult> GetById(Guid id)
     {
         var user = await _userManagementService.GetUserByIdAsync(id);
@@ -54,6 +57,7 @@ public class AdminUsersController : ControllerBase
     }
 
     [HttpPost]
+    [RequirePermission(SystemPermissionCodes.AccountsCreate)]
     public async Task<IActionResult> Create([FromBody] CreateUserRequest request)
     {
         try
@@ -72,6 +76,7 @@ public class AdminUsersController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
+    [RequirePermission(SystemPermissionCodes.AccountsUpdate)]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateUserRequest request)
     {
         try
@@ -97,6 +102,7 @@ public class AdminUsersController : ControllerBase
     }
 
     [HttpPost("{id:guid}/reset-password")]
+    [RequirePermission(SystemPermissionCodes.AccountsResetPassword)]
     public async Task<IActionResult> ResetPassword(Guid id)
     {
         var target = await _userManagementService.GetUserByIdAsync(id);
@@ -118,6 +124,7 @@ public class AdminUsersController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
+    [RequirePermission(SystemPermissionCodes.AccountsDelete)]
     public async Task<IActionResult> Delete(Guid id)
     {
         var target = await _userManagementService.GetUserByIdAsync(id);

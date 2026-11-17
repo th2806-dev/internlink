@@ -144,11 +144,12 @@ describe("ReportsView (lát dọc tiên phong /lecturer/reports)", () => {
   });
 
   it("groups pending weekly reports under the assigned student", async () => {
+    const user = userEvent.setup();
     getAllForLecturer.mockImplementation(async (params) => {
       if ((params?.take ?? 0) === 1) return totalsResponse(params?.status);
       return makePage([
-        makeReport("r1", "Submitted", "int-shared"),
-        makeReport("r2", "Submitted", "int-shared"),
+        { ...makeReport("r1", "Submitted", "int-shared"), weekNumber: 1 },
+        { ...makeReport("r2", "Submitted", "int-shared"), weekNumber: 2 },
       ], 2);
     });
 
@@ -159,7 +160,11 @@ describe("ReportsView (lát dọc tiên phong /lecturer/reports)", () => {
     if (!studentGroup) throw new Error("Missing student report group");
     expect(within(studentGroup).getByText("2 bài chờ duyệt")).toBeInTheDocument();
     expect(within(studentGroup).getByText(/Tuần 1 — Báo cáo r1/)).toBeInTheDocument();
-    expect(within(studentGroup).getByText(/Tuần 1 — Báo cáo r2/)).toBeInTheDocument();
+    expect(within(studentGroup).queryByText(/Tuần 1 — Báo cáo r2/)).not.toBeInTheDocument();
+    const laterWeekReport = within(studentGroup).getByRole("button", { name: /Tuần 2.*Đã nộp/ });
+    await user.click(laterWeekReport);
+    expect(within(studentGroup).getByText(/Tuần 2 — Báo cáo r2/)).toBeInTheDocument();
+    expect(within(studentGroup).queryByText(/Tuần 1 — Báo cáo r1/)).not.toBeInTheDocument();
   });
 
   it("applies the selected week on the paged reports API query", async () => {
