@@ -23,6 +23,7 @@ public class CommercialFeatureControllerTests
         using var db = new AppDbContext(options);
 
         db.Database.GetMigrations().Should().Contain("20261108170000_AddEmployerEvaluationTokens");
+        db.Database.GetMigrations().Should().Contain("20261117124146_AddSmartExcelMappings");
         db.Database.HasPendingModelChanges().Should().BeFalse();
     }
 
@@ -75,10 +76,11 @@ public class CommercialFeatureControllerTests
     {
         var controller = new ExcelImportController(
             CreateDb(),
-            Mock.Of<IDepartmentScopeService>());
+            Mock.Of<IDepartmentScopeService>(),
+            Mock.Of<ISmartExcelImportService>());
         var file = new FormFile(new MemoryStream([1, 2, 3]), 0, 3, "file", "students.csv");
 
-        var result = await controller.Preview(file, null, CancellationToken.None);
+        var result = await controller.Preview(file, null, null, CancellationToken.None);
 
         result.Should().BeOfType<BadRequestObjectResult>();
     }

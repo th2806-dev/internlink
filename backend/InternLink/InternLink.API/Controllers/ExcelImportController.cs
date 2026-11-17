@@ -2,11 +2,14 @@ using System.Net.Mail;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using InternLink.API.Authorization;
 using InternLink.API.Extensions;
+using InternLink.Application.DTOs;
 using InternLink.Application.Interfaces;
 using InternLink.Domain.Entities;
 using InternLink.Domain.Entities.Rbac;
 using InternLink.Infrastructure.Persistence;
+using InternLink.Infrastructure.Services;
 using InternLink.Shared.Authorization;
 using ExcelDataReader;
 using Microsoft.AspNetCore.Authorization;
@@ -26,11 +29,16 @@ public sealed class ExcelImportController : ControllerBase
     private const int BatchSize = 500;
     private readonly AppDbContext _db;
     private readonly IDepartmentScopeService _departmentScope;
+    private readonly ISmartExcelImportService _smartExcelImportService;
 
-    public ExcelImportController(AppDbContext db, IDepartmentScopeService departmentScope)
+    public ExcelImportController(
+        AppDbContext db,
+        IDepartmentScopeService departmentScope,
+        ISmartExcelImportService smartExcelImportService)
     {
         _db = db;
         _departmentScope = departmentScope;
+        _smartExcelImportService = smartExcelImportService;
     }
 
     [HttpPost("preview")]
@@ -38,42 +46,150 @@ public sealed class ExcelImportController : ControllerBase
     public async Task<IActionResult> Preview(
         IFormFile? file,
         [FromForm] string? mapping,
+        [FromForm] string? sheetName,
         CancellationToken cancellationToken)
     {
         if (!TryValidateFile(file, out var error))
             return BadRequest(new { message = error });
 
-        SpreadsheetData spreadsheet;
-        try
-        {
-            using var inputStream = file!.OpenReadStream();
-            spreadsheet = ReadSpreadsheet(inputStream);
-        }
-        catch (Exception exception) when (IsSpreadsheetException(exception))
-        {
-            return BadRequest(new { message = "Không đọc được tệp Excel. Hãy kiểm tra định dạng và thử lại." });
-        }
-
-        if (spreadsheet.Headers.Count == 0)
-            return BadRequest(new { message = "Tệp Excel không có dòng tiêu đề." });
-
-        var validationErrors = new List<ImportRowError>();
         if (!string.IsNullOrWhiteSpace(mapping))
         {
             if (!TryParseMapping(mapping, out var columnMap))
                 return BadRequest(new { message = "Cấu hình ánh xạ cột không hợp lệ." });
 
-            var parsedRows = MapRows(spreadsheet, columnMap);
-            validationErrors = await ValidateRowsAsync(parsedRows, cancellationToken);
+            SpreadsheetData legacySpreadsheet;
+            try
+            {
+                using var inputStream = file!.OpenReadStream();
+                legacySpreadsheet = ReadSpreadsheet(inputStream, sheetName);
+            }
+            catch (Exception exception) when (IsSpreadsheetException(exception))
+            {
+                return BadRequest(new { message = "Không đọc được tệp Excel. Hãy kiểm tra định dạng và thử lại." });
+            }
+
+            var legacyRows = MapRows(legacySpreadsheet, columnMap);
+            var legacyErrors = await ValidateRowsAsync(legacyRows, cancellationToken);
+            return Ok(new
+            {
+                headers = legacySpreadsheet.Headers.Select(header => new
+                {
+                    column = header.Column,
+                    title = header.Title
+                }),
+                sampleRows = legacySpreadsheet.Rows.Take(5).Select(row => row.Values).ToList(),
+                validationErrors = legacyErrors,
+                dataRowCount = legacySpreadsheet.Rows.Count,
+                headerRowIndex = legacySpreadsheet.HeaderRowIndex
+            });
         }
 
-        return Ok(new
+        try
         {
-            headers = spreadsheet.Headers,
-            sampleRows = spreadsheet.Rows.Take(5).Select(row => row.Values).ToList(),
-            validationErrors,
-            dataRowCount = spreadsheet.Rows.Count
-        });
+            using var inputStream = file!.OpenReadStream();
+            var preview = await _smartExcelImportService.AnalyzeExcelAsync(
+                inputStream, file.FileName, sheetName, cancellationToken);
+            var headerColumns = preview.Columns
+                .Select(column => new
+                {
+                    column = ToColumnLetter(column.ExcelColumnIndex + 1),
+                    title = column.ExcelColumnName
+                })
+                .ToArray();
+            var sampleRows = preview.SampleRows
+                .Select(row => preview.Columns
+                    .Select(column => row[column.ExcelColumnName])
+                    .ToArray())
+                .ToArray();
+            return Ok(new
+            {
+                headers = headerColumns,
+                sampleRows,
+                validationErrors = Array.Empty<ImportRowError>(),
+                dataRowCount = preview.TotalRows,
+                preview.FileName,
+                preview.SheetNames,
+                preview.SelectedSheetName,
+                preview.HeaderRowIndex,
+                preview.Columns
+            });
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return NotFound(new { message = exception.Message });
+        }
+        catch (Exception exception) when (IsSpreadsheetException(exception))
+        {
+            return BadRequest(new { message = "Không đọc được tệp Excel hoặc không tìm thấy dòng tiêu đề phù hợp." });
+        }
+    }
+
+    [HttpGet("mappings")]
+    public async Task<ActionResult<IReadOnlyList<ExcelMappingPresetDto>>> GetPresets(
+        [FromQuery] Guid? departmentId,
+        [FromQuery] string? tenantId,
+        CancellationToken cancellationToken)
+    {
+        if (!TryResolveTenantId(tenantId, out var effectiveTenantId))
+            return Forbid();
+
+        var effectiveDepartmentId = _departmentScope.ResolveEffectiveDepartmentId(User, departmentId);
+        var presets = await _smartExcelImportService.GetPresetsAsync(
+            effectiveDepartmentId, effectiveTenantId, cancellationToken);
+        return Ok(presets);
+    }
+
+    [HttpGet("mappings/{id:guid}")]
+    public async Task<ActionResult<ExcelMappingPresetDto>> GetPreset(
+        Guid id,
+        [FromQuery] Guid? departmentId,
+        [FromQuery] string? tenantId,
+        CancellationToken cancellationToken)
+    {
+        if (!TryResolveTenantId(tenantId, out var effectiveTenantId))
+            return Forbid();
+
+        var effectiveDepartmentId = _departmentScope.ResolveEffectiveDepartmentId(User, departmentId);
+        var preset = await _smartExcelImportService.GetPresetAsync(
+            id, effectiveDepartmentId, effectiveTenantId, cancellationToken);
+        return preset == null ? NotFound() : Ok(preset);
+    }
+
+    [HttpPost("mappings")]
+    [RequirePermission(SystemPermissionCodes.ConfigurationUpdate)]
+    public async Task<ActionResult<ExcelMappingPresetDto>> SavePreset(
+        [FromBody] SaveExcelPresetRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!TryResolveTenantId(request.TenantId, out var effectiveTenantId))
+            return Forbid();
+
+        var effectiveDepartmentId = _departmentScope.ResolveEffectiveDepartmentId(User, request.DepartmentId);
+        try
+        {
+            var preset = await _smartExcelImportService.SavePresetAsync(
+                request,
+                effectiveDepartmentId,
+                effectiveTenantId,
+                User.Identity?.Name,
+                cancellationToken);
+            return CreatedAtAction(
+                nameof(GetPreset),
+                new { id = preset.Id, departmentId = effectiveDepartmentId, tenantId = effectiveTenantId },
+                preset);
+        }
+        catch (ArgumentException exception)
+        {
+            return BadRequest(new { message = exception.Message });
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return NotFound(new { message = exception.Message });
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Conflict(new { message = exception.Message });
+        }
     }
 
     [HttpPost("import-students")]
@@ -82,6 +198,7 @@ public sealed class ExcelImportController : ControllerBase
         IFormFile? file,
         [FromForm] string? mapping,
         [FromForm] Guid? departmentId,
+        [FromForm] string? sheetName,
         CancellationToken cancellationToken)
     {
         if (!TryValidateFile(file, out var error))
@@ -103,7 +220,7 @@ public sealed class ExcelImportController : ControllerBase
         try
         {
             using var fileStream = file!.OpenReadStream();
-            parsedRows = MapRows(ReadSpreadsheet(fileStream), columnMap);
+            parsedRows = MapRows(ReadSpreadsheet(fileStream, sheetName), columnMap);
         }
         catch (Exception exception) when (IsSpreadsheetException(exception))
         {
@@ -208,32 +325,65 @@ public sealed class ExcelImportController : ControllerBase
         return errors;
     }
 
-    private static SpreadsheetData ReadSpreadsheet(Stream stream)
+    private static SpreadsheetData ReadSpreadsheet(Stream stream, string? sheetName = null)
     {
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         using var reader = ExcelReaderFactory.CreateReader(stream);
-        if (!reader.Read())
-            return new([], []);
+        do
+        {
+            if (string.IsNullOrWhiteSpace(sheetName)
+                || string.Equals(reader.Name, sheetName.Trim(), StringComparison.Ordinal))
+                return ReadSpreadsheetSheet(reader);
+        }
+        while (reader.NextResult());
 
-        var headers = Enumerable.Range(0, reader.FieldCount)
-            .Select(index => new ImportHeader(ToColumnLetter(index + 1), FormatCellValue(reader, index)))
+        throw new KeyNotFoundException("Không tìm thấy trang tính được chọn trong tệp Excel.");
+    }
+
+    private static SpreadsheetData ReadSpreadsheetSheet(IExcelDataReader reader)
+    {
+        var leadingRows = new List<string[]>();
+        while (leadingRows.Count < 20 && reader.Read())
+            leadingRows.Add(Enumerable.Range(0, reader.FieldCount)
+                .Select(index => FormatCellValue(reader, index))
+                .ToArray());
+        var headerRowIndex = ExcelHeaderDetector.FindHeaderRow(leadingRows);
+        if (headerRowIndex < 0)
+            return new([], [], -1);
+
+        var headerNames = ExcelHeaderDetector.MakeUniqueHeaders(leadingRows[headerRowIndex]);
+        var headers = headerNames
+            .Select((name, index) => new ImportHeader(ToColumnLetter(index + 1), name))
             .ToList();
         var rows = new List<SpreadsheetRow>();
-        var rowNumber = 1;
+        var rowNumber = headerRowIndex + 1;
+        for (var index = headerRowIndex + 1; index < leadingRows.Count; index++)
+        {
+            rowNumber++;
+            AddSpreadsheetRow(leadingRows[index], rowNumber, rows);
+        }
+
         while (reader.Read())
         {
             rowNumber++;
-            if (rows.Count >= MaxDataRows)
-                throw new InvalidDataException($"Workbook exceeds {MaxDataRows} data rows.");
             var values = Enumerable.Range(0, reader.FieldCount)
                 .Select(index => FormatCellValue(reader, index))
                 .ToArray();
-            if (values.All(string.IsNullOrWhiteSpace))
-                continue;
-            rows.Add(new SpreadsheetRow(rowNumber, values));
+            AddSpreadsheetRow(values, rowNumber, rows);
         }
 
-        return new SpreadsheetData(headers, rows);
+        if (rows.Count > MaxDataRows)
+            throw new InvalidDataException($"Workbook exceeds {MaxDataRows} data rows.");
+        return new SpreadsheetData(headers, rows, headerRowIndex);
+    }
+
+    private static void AddSpreadsheetRow(IReadOnlyList<string> values, int rowNumber, ICollection<SpreadsheetRow> rows)
+    {
+        if (values.All(string.IsNullOrWhiteSpace))
+            return;
+        if (rows.Count >= MaxDataRows)
+            throw new InvalidDataException($"Workbook exceeds {MaxDataRows} data rows.");
+        rows.Add(new SpreadsheetRow(rowNumber, values.ToArray()));
     }
 
     private static string FormatCellValue(IExcelDataReader reader, int columnIndex)
@@ -296,7 +446,8 @@ public sealed class ExcelImportController : ControllerBase
         exception is IOException
             or ArgumentException
             or ExcelDataReader.Exceptions.ExcelReaderException
-            or ExcelDataReader.Exceptions.InvalidPasswordException;
+            or ExcelDataReader.Exceptions.InvalidPasswordException
+            or KeyNotFoundException;
 
     private static bool TryParseMapping(string json, out Dictionary<string, int> mapping)
     {
@@ -349,6 +500,22 @@ public sealed class ExcelImportController : ControllerBase
         return true;
     }
 
+    private bool TryResolveTenantId(string? requestedTenantId, out string? effectiveTenantId)
+    {
+        var claimedTenantId = User.FindFirst("TenantId")?.Value;
+        if (User.IsInRole("SuperAdmin"))
+        {
+            effectiveTenantId = string.IsNullOrWhiteSpace(requestedTenantId)
+                ? claimedTenantId
+                : requestedTenantId.Trim();
+            return effectiveTenantId?.Length <= 50;
+        }
+
+        effectiveTenantId = claimedTenantId;
+        return requestedTenantId == null
+            || string.Equals(requestedTenantId.Trim(), claimedTenantId, StringComparison.Ordinal);
+    }
+
     private static string ToColumnLetter(int column)
     {
         var result = "";
@@ -358,6 +525,7 @@ public sealed class ExcelImportController : ControllerBase
             result = (char)('A' + column % 26) + result;
             column /= 26;
         }
+
         return result;
     }
 
@@ -374,6 +542,6 @@ public sealed class ExcelImportController : ControllerBase
 
     private sealed record ImportHeader(string Column, string Title);
     private sealed record SpreadsheetRow(int RowNumber, string[] Values);
-    private sealed record SpreadsheetData(List<ImportHeader> Headers, List<SpreadsheetRow> Rows);
+    private sealed record SpreadsheetData(List<ImportHeader> Headers, List<SpreadsheetRow> Rows, int HeaderRowIndex);
     private sealed record ImportRowError(int RowNumber, string Field, string Message);
 }

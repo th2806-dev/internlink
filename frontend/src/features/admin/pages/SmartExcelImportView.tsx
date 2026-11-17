@@ -9,6 +9,7 @@ type ImportPreview = {
   sampleRows: string[][];
   validationErrors: ImportError[];
   dataRowCount: number;
+  headerRowIndex?: number;
 };
 type ImportError = { rowNumber: number; field: string; message: string };
 type ImportMapping = { mssv: string; name: string; class: string; email: string; phone: string };
@@ -121,7 +122,7 @@ export default function SmartExcelImportView() {
   };
 
   const hasRowError = (sampleIndex: number, field: string) => {
-    const rowNumber = sampleIndex + 2;
+    const rowNumber = (preview?.headerRowIndex ?? 0) + sampleIndex + 2;
     return validationErrors.some((item) => item.rowNumber === rowNumber && item.field === field);
   };
 
@@ -209,8 +210,9 @@ export default function SmartExcelImportView() {
                     <tr key={rowIndex}>
                       {preview.headers.map((header, columnIndex) => {
                         const field = mappedColumns.get(header.column);
+                        const rowNumber = (preview.headerRowIndex ?? 0) + rowIndex + 2;
                         const invalid = field ? hasRowError(rowIndex, field) : false;
-                        const message = validationErrors.find((item) => item.rowNumber === rowIndex + 2 && item.field === field)?.message;
+                        const message = validationErrors.find((item) => item.rowNumber === rowNumber && item.field === field)?.message;
                         return <td key={header.column} className={`max-w-64 px-4 py-3 ${invalid ? "bg-rose-50 text-rose-900" : "text-slate-700"}`} title={message}>{row[columnIndex] || "—"}{invalid && <span className="sr-only">Lỗi: {message}</span>}</td>;
                       })}
                     </tr>

@@ -128,6 +128,7 @@ public static class DependencyInjection
 
         // Excel processing & export engine
         services.AddScoped<IExcelService, InternLink.Infrastructure.Services.ExcelService>();
+        services.AddScoped<ISmartExcelImportService, SmartExcelImportService>();
         services.AddScoped<IExcelExportService, InternLink.Infrastructure.Services.ExcelExportService>();
         services.AddScoped<IInternshipReportService, InternLink.Infrastructure.Services.InternshipReportService>();
 
