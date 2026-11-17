@@ -38,6 +38,9 @@ public class SystemRbacTests
         (await context.SysUsers.CountAsync()).Should().Be(1);
         (await context.SysUserRoles.CountAsync()).Should().Be(1);
         (await context.SysRolePermissions.CountAsync(permission => permission.IsGranted)).Should().BeGreaterThan(20);
+        (await context.SysRolePermissions
+            .GroupBy(permission => new { permission.SysRoleId, permission.SysFunctionId })
+            .AnyAsync(group => group.Count() > 1)).Should().BeFalse();
         (await context.SysFieldPolicies.CountAsync()).Should().Be(23);
         var lecturerRole = await context.SysRoles.SingleAsync(role => role.Code == nameof(Role.Lecturer));
         var lecturerGrid = await context.SysGridConfigs

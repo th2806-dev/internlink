@@ -339,6 +339,32 @@ public static class SystemRbacSeeder
         var functions = await context.SysFunctions
             .Where(function => function.IsActive)
             .ToListAsync(cancellationToken);
+        var permissionsByRoleAndFunction = await context.SysRolePermissions
+            .IgnoreQueryFilters()
+            .ToDictionaryAsync(
+                permission => (permission.SysRoleId, permission.SysFunctionId),
+                cancellationToken);
+
+        void EnsurePermission(SysRole role, SysFunction function)
+        {
+            var key = (role.AutoId, function.AutoId);
+            if (!permissionsByRoleAndFunction.TryGetValue(key, out var permission))
+            {
+                permission = new SysRolePermission
+                {
+                    SysRoleId = role.AutoId,
+                    SysFunctionId = function.AutoId,
+                    IsGranted = true
+                };
+                context.SysRolePermissions.Add(permission);
+                permissionsByRoleAndFunction.Add(key, permission);
+            }
+            else if (permission.IsDeleted)
+            {
+                permission.IsDeleted = false;
+                permission.IsGranted = true;
+            }
+        }
 
         foreach (var role in roles.Where(item => !item.DefaultPermissionsApplied))
         {
@@ -358,13 +384,7 @@ public static class SystemRbacSeeder
             };
 
             foreach (var function in grantedFunctions)
-            {
-                role.Permissions.Add(new SysRolePermission
-                {
-                    Function = function,
-                    IsGranted = true
-                });
-            }
+                EnsurePermission(role, function);
 
             role.DefaultPermissionsApplied = true;
         }
@@ -373,20 +393,8 @@ public static class SystemRbacSeeder
             role.Code.Equals(nameof(Role.SuperAdmin), StringComparison.OrdinalIgnoreCase));
         if (superAdmin != null)
         {
-            var existingFunctionIds = await context.SysRolePermissions
-                .Where(permission => permission.SysRoleId == superAdmin.AutoId)
-                .Select(permission => permission.SysFunctionId)
-                .ToHashSetAsync(cancellationToken);
-
-            foreach (var function in functions.Where(function => !existingFunctionIds.Contains(function.AutoId)))
-            {
-                context.SysRolePermissions.Add(new SysRolePermission
-                {
-                    SysRoleId = superAdmin.AutoId,
-                    SysFunctionId = function.AutoId,
-                    IsGranted = true
-                });
-            }
+            foreach (var function in functions)
+                EnsurePermission(superAdmin, function);
         }
 
         var departmentAdmin = roles.FirstOrDefault(role =>
@@ -396,20 +404,8 @@ public static class SystemRbacSeeder
             var configurableFunctions = functions.Where(function =>
                 function.Code is SystemPermissionCodes.ConfigurationView
                     or SystemPermissionCodes.ConfigurationUpdate);
-            var existingFunctionIds = await context.SysRolePermissions
-                .Where(permission => permission.SysRoleId == departmentAdmin.AutoId)
-                .Select(permission => permission.SysFunctionId)
-                .ToHashSetAsync(cancellationToken);
-
-            foreach (var function in configurableFunctions.Where(function => !existingFunctionIds.Contains(function.AutoId)))
-            {
-                context.SysRolePermissions.Add(new SysRolePermission
-                {
-                    SysRoleId = departmentAdmin.AutoId,
-                    SysFunctionId = function.AutoId,
-                    IsGranted = true
-                });
-            }
+            foreach (var function in configurableFunctions)
+                EnsurePermission(departmentAdmin, function);
         }
 
         var exportPermission = functions.FirstOrDefault(function =>
@@ -420,24 +416,7 @@ public static class SystemRbacSeeder
                          role.Code.Equals(nameof(Role.Lecturer), StringComparison.OrdinalIgnoreCase)
                          || role.Code.Equals(nameof(Role.DepartmentAdmin), StringComparison.OrdinalIgnoreCase)))
             {
-                var existing = await context.SysRolePermissions
-                    .FirstOrDefaultAsync(permission =>
-                        permission.SysRoleId == role.AutoId
-                        && permission.SysFunctionId == exportPermission.AutoId,
-                        cancellationToken);
-                if (existing == null)
-                {
-                    context.SysRolePermissions.Add(new SysRolePermission
-                    {
-                        SysRoleId = role.AutoId,
-                        SysFunctionId = exportPermission.AutoId,
-                        IsGranted = true
-                    });
-                }
-                else
-                {
-                    existing.IsGranted = true;
-                }
+                EnsurePermission(role, exportPermission);
             }
         }
 

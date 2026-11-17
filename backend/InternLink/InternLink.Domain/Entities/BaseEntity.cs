@@ -5,6 +5,7 @@ namespace InternLink.Domain.Entities;
 
 public abstract class BaseEntity
 {
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     [Column("Auto_ID")]
     public long AutoId { get; set; }
 

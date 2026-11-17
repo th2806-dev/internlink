@@ -243,9 +243,6 @@ namespace InternLink.Infrastructure.Migrations
                 name: "FK_WeeklyReportVersions_WeeklyReports_WeeklyReportId",
                 table: "WeeklyReportVersions");
 
-            migrationBuilder.DropTable(
-                name: "Sys_DailyJobs");
-
             migrationBuilder.DropIndex(
                 name: "UX_WeeklyReportVersions_Auto_ID",
                 table: "WeeklyReportVersions");
@@ -279,8 +276,29 @@ namespace InternLink.Infrastructure.Migrations
                 table: "Sys_RolePermissions");
 
             migrationBuilder.DropIndex(
-                name: "IX_Sys_GridConfigs_FeatureCode_RoleId_TenantId_FieldCode",
+                name: "IX_Sys_GridConfigs_FeatureCode_FieldCode",
                 table: "Sys_GridConfigs");
+
+            migrationBuilder.AddColumn<long>(
+                name: "RoleId",
+                table: "Sys_GridConfigs",
+                type: "bigint",
+                nullable: true);
+
+            migrationBuilder.AddColumn<string>(
+                name: "TenantId",
+                table: "Sys_GridConfigs",
+                type: "nvarchar(50)",
+                maxLength: 50,
+                nullable: true);
+
+            migrationBuilder.AddColumn<string>(
+                name: "FrozenSide",
+                table: "Sys_GridConfigs",
+                type: "nvarchar(5)",
+                maxLength: 5,
+                nullable: false,
+                defaultValue: "left");
 
             migrationBuilder.DropIndex(
                 name: "IX_Sys_GradingRuleSets_DepartmentId",
@@ -406,69 +424,46 @@ namespace InternLink.Infrastructure.Migrations
                 name: "UX_AccountRequests_Auto_ID",
                 table: "AccountRequests");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "WeeklyReportVersions",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .OldAnnotation("SqlServer:Identity", "1, 1");
 
             migrationBuilder.AddColumn<Guid>(
                 name: "Public_ID",
                 table: "WeeklyReportVersions",
                 type: "uniqueidentifier",
                 nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
+                defaultValueSql: "NEWID()");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "WeeklyReports",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .OldAnnotation("SqlServer:Identity", "1, 1");
+            // Preserve each legacy GUID key as its new Public_ID so existing FK/report lookups remain stable.
+            migrationBuilder.Sql("UPDATE [WeeklyReportVersions] SET [Public_ID] = [WeeklyReportVersionId];");
+
 
             migrationBuilder.AddColumn<Guid>(
                 name: "Public_ID",
                 table: "WeeklyReports",
                 type: "uniqueidentifier",
                 nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
+                defaultValueSql: "NEWID()");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "Users",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .OldAnnotation("SqlServer:Identity", "1, 1");
+            migrationBuilder.Sql("UPDATE [WeeklyReports] SET [Public_ID] = [WeeklyReportId];");
+
 
             migrationBuilder.AddColumn<Guid>(
                 name: "Public_ID",
                 table: "Users",
                 type: "uniqueidentifier",
                 nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
+                defaultValueSql: "NEWID()");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "SystemSettings",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .OldAnnotation("SqlServer:Identity", "1, 1");
+            migrationBuilder.Sql("UPDATE [Users] SET [Public_ID] = [UserId];");
+
 
             migrationBuilder.AddColumn<Guid>(
                 name: "Public_ID",
                 table: "SystemSettings",
                 type: "uniqueidentifier",
                 nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
+                defaultValueSql: "NEWID()");
+
+            migrationBuilder.Sql("UPDATE [SystemSettings] SET [Public_ID] = [SystemSettingId];");
 
             migrationBuilder.AlterColumn<bool>(
                 name: "DefaultPermissionsApplied",
@@ -558,325 +553,205 @@ namespace InternLink.Infrastructure.Migrations
                 oldType: "nvarchar(150)",
                 oldMaxLength: 150);
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "Submissions",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .OldAnnotation("SqlServer:Identity", "1, 1");
 
             migrationBuilder.AddColumn<Guid>(
                 name: "Public_ID",
                 table: "Submissions",
                 type: "uniqueidentifier",
                 nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
+                defaultValueSql: "NEWID()");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "SubmissionAssets",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .OldAnnotation("SqlServer:Identity", "1, 1");
+            migrationBuilder.Sql("UPDATE [Submissions] SET [Public_ID] = [SubmissionId];");
+
 
             migrationBuilder.AddColumn<Guid>(
                 name: "Public_ID",
                 table: "SubmissionAssets",
                 type: "uniqueidentifier",
                 nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
+                defaultValueSql: "NEWID()");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "Students",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .OldAnnotation("SqlServer:Identity", "1, 1");
+            migrationBuilder.Sql("UPDATE [SubmissionAssets] SET [Public_ID] = [SubmissionAssetId];");
+
 
             migrationBuilder.AddColumn<Guid>(
                 name: "Public_ID",
                 table: "Students",
                 type: "uniqueidentifier",
                 nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
+                defaultValueSql: "NEWID()");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "Semesters",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .OldAnnotation("SqlServer:Identity", "1, 1");
+            migrationBuilder.Sql("UPDATE [Students] SET [Public_ID] = [StudentId];");
+
 
             migrationBuilder.AddColumn<Guid>(
                 name: "Public_ID",
                 table: "Semesters",
                 type: "uniqueidentifier",
                 nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
+                defaultValueSql: "NEWID()");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "SemesterReportSchedules",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .OldAnnotation("SqlServer:Identity", "1, 1");
+            migrationBuilder.Sql("UPDATE [Semesters] SET [Public_ID] = [SemesterId];");
+
 
             migrationBuilder.AddColumn<Guid>(
                 name: "Public_ID",
                 table: "SemesterReportSchedules",
                 type: "uniqueidentifier",
                 nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
+                defaultValueSql: "NEWID()");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "SemesterLecturers",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .OldAnnotation("SqlServer:Identity", "1, 1");
+            migrationBuilder.Sql("UPDATE [SemesterReportSchedules] SET [Public_ID] = [SemesterReportScheduleId];");
+
 
             migrationBuilder.AddColumn<Guid>(
                 name: "Public_ID",
                 table: "SemesterLecturers",
                 type: "uniqueidentifier",
                 nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
+                defaultValueSql: "NEWID()");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "SemesterFacultySummaries",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .OldAnnotation("SqlServer:Identity", "1, 1");
+            migrationBuilder.Sql("UPDATE [SemesterLecturers] SET [Public_ID] = [SemesterLecturerId];");
+
 
             migrationBuilder.AddColumn<Guid>(
                 name: "Public_ID",
                 table: "SemesterFacultySummaries",
                 type: "uniqueidentifier",
                 nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
+                defaultValueSql: "NEWID()");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "SemesterCompanies",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .OldAnnotation("SqlServer:Identity", "1, 1");
+            migrationBuilder.Sql("UPDATE [SemesterFacultySummaries] SET [Public_ID] = [SemesterFacultySummaryId];");
+
 
             migrationBuilder.AddColumn<Guid>(
                 name: "Public_ID",
                 table: "SemesterCompanies",
                 type: "uniqueidentifier",
                 nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
+                defaultValueSql: "NEWID()");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "SchoolAcademicTerms",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .OldAnnotation("SqlServer:Identity", "1, 1");
+            migrationBuilder.Sql("UPDATE [SemesterCompanies] SET [Public_ID] = [SemesterCompanyId];");
+
 
             migrationBuilder.AddColumn<Guid>(
                 name: "Public_ID",
                 table: "SchoolAcademicTerms",
                 type: "uniqueidentifier",
                 nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
+                defaultValueSql: "NEWID()");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "RefreshTokens",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .OldAnnotation("SqlServer:Identity", "1, 1");
+            migrationBuilder.Sql("UPDATE [SchoolAcademicTerms] SET [Public_ID] = [SchoolAcademicTermId];");
+
 
             migrationBuilder.AddColumn<Guid>(
                 name: "Public_ID",
                 table: "RefreshTokens",
                 type: "uniqueidentifier",
                 nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
+                defaultValueSql: "NEWID()");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "PasswordResetTokens",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .OldAnnotation("SqlServer:Identity", "1, 1");
+            migrationBuilder.Sql("UPDATE [RefreshTokens] SET [Public_ID] = [RefreshTokenId];");
+
 
             migrationBuilder.AddColumn<Guid>(
                 name: "Public_ID",
                 table: "PasswordResetTokens",
                 type: "uniqueidentifier",
                 nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
+                defaultValueSql: "NEWID()");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "Notifications",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .OldAnnotation("SqlServer:Identity", "1, 1");
+            migrationBuilder.Sql("UPDATE [PasswordResetTokens] SET [Public_ID] = [PasswordResetTokenId];");
+
 
             migrationBuilder.AddColumn<Guid>(
                 name: "Public_ID",
                 table: "Notifications",
                 type: "uniqueidentifier",
                 nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
+                defaultValueSql: "NEWID()");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "LecturerSemesterSummaries",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .OldAnnotation("SqlServer:Identity", "1, 1");
+            migrationBuilder.Sql("UPDATE [Notifications] SET [Public_ID] = [NotificationId];");
+
 
             migrationBuilder.AddColumn<Guid>(
                 name: "Public_ID",
                 table: "LecturerSemesterSummaries",
                 type: "uniqueidentifier",
                 nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
+                defaultValueSql: "NEWID()");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "Lecturers",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .OldAnnotation("SqlServer:Identity", "1, 1");
+            migrationBuilder.Sql("UPDATE [LecturerSemesterSummaries] SET [Public_ID] = [LecturerSemesterSummaryId];");
+
 
             migrationBuilder.AddColumn<Guid>(
                 name: "Public_ID",
                 table: "Lecturers",
                 type: "uniqueidentifier",
                 nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
+                defaultValueSql: "NEWID()");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "LecturerActivityLogs",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .OldAnnotation("SqlServer:Identity", "1, 1");
+            migrationBuilder.Sql("UPDATE [Lecturers] SET [Public_ID] = [LecturerId];");
+
 
             migrationBuilder.AddColumn<Guid>(
                 name: "Public_ID",
                 table: "LecturerActivityLogs",
                 type: "uniqueidentifier",
                 nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
+                defaultValueSql: "NEWID()");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "Internships",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .OldAnnotation("SqlServer:Identity", "1, 1");
+            migrationBuilder.Sql("UPDATE [LecturerActivityLogs] SET [Public_ID] = [LecturerActivityLogId];");
+
 
             migrationBuilder.AddColumn<Guid>(
                 name: "Public_ID",
                 table: "Internships",
                 type: "uniqueidentifier",
                 nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
+                defaultValueSql: "NEWID()");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "Feedbacks",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .OldAnnotation("SqlServer:Identity", "1, 1");
+            migrationBuilder.Sql("UPDATE [Internships] SET [Public_ID] = [InternshipId];");
+
 
             migrationBuilder.AddColumn<Guid>(
                 name: "Public_ID",
                 table: "Feedbacks",
                 type: "uniqueidentifier",
                 nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
+                defaultValueSql: "NEWID()");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "Evaluations",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .OldAnnotation("SqlServer:Identity", "1, 1");
+            migrationBuilder.Sql("UPDATE [Feedbacks] SET [Public_ID] = [FeedbackId];");
+
 
             migrationBuilder.AddColumn<Guid>(
                 name: "Public_ID",
                 table: "Evaluations",
                 type: "uniqueidentifier",
                 nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
+                defaultValueSql: "NEWID()");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "EvaluationRubrics",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .OldAnnotation("SqlServer:Identity", "1, 1");
+            migrationBuilder.Sql("UPDATE [Evaluations] SET [Public_ID] = [EvaluationId];");
+
 
             migrationBuilder.AddColumn<Guid>(
                 name: "Public_ID",
                 table: "EvaluationRubrics",
                 type: "uniqueidentifier",
                 nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
+                defaultValueSql: "NEWID()");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "EvaluationRubricCriteria",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .OldAnnotation("SqlServer:Identity", "1, 1");
+            migrationBuilder.Sql("UPDATE [EvaluationRubrics] SET [Public_ID] = [EvaluationRubricId];");
+
 
             migrationBuilder.AddColumn<Guid>(
                 name: "Public_ID",
                 table: "EvaluationRubricCriteria",
                 type: "uniqueidentifier",
                 nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
+                defaultValueSql: "NEWID()");
+
+            migrationBuilder.Sql("UPDATE [EvaluationRubricCriteria] SET [Public_ID] = [EvaluationRubricCriterionId];");
 
             migrationBuilder.AlterColumn<string>(
                 name: "RubricScoresJson",
@@ -900,133 +775,85 @@ namespace InternLink.Infrastructure.Migrations
                 oldPrecision: 5,
                 oldScale: 2);
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "DocumentVersions",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .OldAnnotation("SqlServer:Identity", "1, 1");
 
             migrationBuilder.AddColumn<Guid>(
                 name: "Public_ID",
                 table: "DocumentVersions",
                 type: "uniqueidentifier",
                 nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
+                defaultValueSql: "NEWID()");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "Documents",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .OldAnnotation("SqlServer:Identity", "1, 1");
+            migrationBuilder.Sql("UPDATE [DocumentVersions] SET [Public_ID] = [DocumentVersionId];");
+
 
             migrationBuilder.AddColumn<Guid>(
                 name: "Public_ID",
                 table: "Documents",
                 type: "uniqueidentifier",
                 nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
+                defaultValueSql: "NEWID()");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "Departments",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .OldAnnotation("SqlServer:Identity", "1, 1");
+            migrationBuilder.Sql("UPDATE [Documents] SET [Public_ID] = [DocumentId];");
+
 
             migrationBuilder.AddColumn<Guid>(
                 name: "Public_ID",
                 table: "Departments",
                 type: "uniqueidentifier",
                 nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
+                defaultValueSql: "NEWID()");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "CompanyPositions",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .OldAnnotation("SqlServer:Identity", "1, 1");
+            migrationBuilder.Sql("UPDATE [Departments] SET [Public_ID] = [DepartmentId];");
+
 
             migrationBuilder.AddColumn<Guid>(
                 name: "Public_ID",
                 table: "CompanyPositions",
                 type: "uniqueidentifier",
                 nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
+                defaultValueSql: "NEWID()");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "Companies",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .OldAnnotation("SqlServer:Identity", "1, 1");
+            migrationBuilder.Sql("UPDATE [CompanyPositions] SET [Public_ID] = [CompanyPositionId];");
+
 
             migrationBuilder.AddColumn<Guid>(
                 name: "Public_ID",
                 table: "Companies",
                 type: "uniqueidentifier",
                 nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
+                defaultValueSql: "NEWID()");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "AttendanceSessions",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .OldAnnotation("SqlServer:Identity", "1, 1");
+            migrationBuilder.Sql("UPDATE [Companies] SET [Public_ID] = [CompanyId];");
+
 
             migrationBuilder.AddColumn<Guid>(
                 name: "Public_ID",
                 table: "AttendanceSessions",
                 type: "uniqueidentifier",
                 nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
+                defaultValueSql: "NEWID()");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "AttendanceRecords",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .OldAnnotation("SqlServer:Identity", "1, 1");
+            migrationBuilder.Sql("UPDATE [AttendanceSessions] SET [Public_ID] = [AttendanceSessionId];");
+
 
             migrationBuilder.AddColumn<Guid>(
                 name: "Public_ID",
                 table: "AttendanceRecords",
                 type: "uniqueidentifier",
                 nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
+                defaultValueSql: "NEWID()");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "AccountRequests",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .OldAnnotation("SqlServer:Identity", "1, 1");
+            migrationBuilder.Sql("UPDATE [AttendanceRecords] SET [Public_ID] = [AttendanceRecordId];");
+
 
             migrationBuilder.AddColumn<Guid>(
                 name: "Public_ID",
                 table: "AccountRequests",
                 type: "uniqueidentifier",
                 nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
+                defaultValueSql: "NEWID()");
+
+            migrationBuilder.Sql("UPDATE [AccountRequests] SET [Public_ID] = [AccountRequestId];");
 
             migrationBuilder.AddUniqueConstraint(
                 name: "AK_Users_Public_ID",
@@ -1732,6 +1559,18 @@ namespace InternLink.Infrastructure.Migrations
                 name: "IX_Sys_GridConfigs_FeatureCode_RoleId_TenantId_FieldCode",
                 table: "Sys_GridConfigs");
 
+            migrationBuilder.DropColumn(
+                name: "FrozenSide",
+                table: "Sys_GridConfigs");
+
+            migrationBuilder.DropColumn(
+                name: "TenantId",
+                table: "Sys_GridConfigs");
+
+            migrationBuilder.DropColumn(
+                name: "RoleId",
+                table: "Sys_GridConfigs");
+
             migrationBuilder.DropIndex(
                 name: "IX_EmployerEvaluations_InternshipId",
                 table: "EmployerEvaluations");
@@ -1864,41 +1703,9 @@ namespace InternLink.Infrastructure.Migrations
                 name: "Public_ID",
                 table: "AccountRequests");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "WeeklyReportVersions",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .Annotation("SqlServer:Identity", "1, 1");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "WeeklyReports",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .Annotation("SqlServer:Identity", "1, 1");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "Users",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .Annotation("SqlServer:Identity", "1, 1");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "SystemSettings",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .Annotation("SqlServer:Identity", "1, 1");
 
             migrationBuilder.AlterColumn<bool>(
                 name: "DefaultPermissionsApplied",
@@ -1988,185 +1795,25 @@ namespace InternLink.Infrastructure.Migrations
                 oldType: "nvarchar(100)",
                 oldMaxLength: 100);
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "Submissions",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .Annotation("SqlServer:Identity", "1, 1");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "SubmissionAssets",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .Annotation("SqlServer:Identity", "1, 1");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "Students",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .Annotation("SqlServer:Identity", "1, 1");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "Semesters",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .Annotation("SqlServer:Identity", "1, 1");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "SemesterReportSchedules",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .Annotation("SqlServer:Identity", "1, 1");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "SemesterLecturers",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .Annotation("SqlServer:Identity", "1, 1");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "SemesterFacultySummaries",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .Annotation("SqlServer:Identity", "1, 1");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "SemesterCompanies",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .Annotation("SqlServer:Identity", "1, 1");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "SchoolAcademicTerms",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .Annotation("SqlServer:Identity", "1, 1");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "RefreshTokens",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .Annotation("SqlServer:Identity", "1, 1");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "PasswordResetTokens",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .Annotation("SqlServer:Identity", "1, 1");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "Notifications",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .Annotation("SqlServer:Identity", "1, 1");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "LecturerSemesterSummaries",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .Annotation("SqlServer:Identity", "1, 1");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "Lecturers",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .Annotation("SqlServer:Identity", "1, 1");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "LecturerActivityLogs",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .Annotation("SqlServer:Identity", "1, 1");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "Internships",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .Annotation("SqlServer:Identity", "1, 1");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "Feedbacks",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .Annotation("SqlServer:Identity", "1, 1");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "Evaluations",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .Annotation("SqlServer:Identity", "1, 1");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "EvaluationRubrics",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .Annotation("SqlServer:Identity", "1, 1");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "EvaluationRubricCriteria",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .Annotation("SqlServer:Identity", "1, 1");
 
             migrationBuilder.AlterColumn<string>(
                 name: "RubricScoresJson",
@@ -2190,106 +1837,13 @@ namespace InternLink.Infrastructure.Migrations
                 oldPrecision: 4,
                 oldScale: 2);
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "DocumentVersions",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .Annotation("SqlServer:Identity", "1, 1");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "Documents",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .Annotation("SqlServer:Identity", "1, 1");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "Departments",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .Annotation("SqlServer:Identity", "1, 1");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "CompanyPositions",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .Annotation("SqlServer:Identity", "1, 1");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "Companies",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .Annotation("SqlServer:Identity", "1, 1");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "AttendanceSessions",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .Annotation("SqlServer:Identity", "1, 1");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "AttendanceRecords",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .Annotation("SqlServer:Identity", "1, 1");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "Auto_ID",
-                table: "AccountRequests",
-                type: "bigint",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "bigint")
-                .Annotation("SqlServer:Identity", "1, 1");
-
-            migrationBuilder.CreateTable(
-                name: "Sys_DailyJobs",
-                columns: table => new
-                {
-                    Auto_ID = table.Column<long>(type: "bigint", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    CreatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    Created_By_Function = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
-                    CronExpression = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
-                    Deleted_At = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    Deleted_By = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
-                    IsDeleted = table.Column<bool>(type: "bit", nullable: false),
-                    JobCode = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
-                    JobName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
-                    LastRunAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    NextRunAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    Ghi_Chu = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
-                    Public_ID = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    Status = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    Updated_By_Function = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Sys_DailyJobs", x => x.Auto_ID);
-                });
 
             migrationBuilder.CreateIndex(
                 name: "UX_WeeklyReportVersions_Auto_ID",
@@ -2340,9 +1894,9 @@ namespace InternLink.Infrastructure.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_Sys_GridConfigs_FeatureCode_RoleId_TenantId_FieldCode",
+                name: "IX_Sys_GridConfigs_FeatureCode_FieldCode",
                 table: "Sys_GridConfigs",
-                columns: new[] { "FeatureCode", "RoleId", "TenantId", "FieldCode" },
+                columns: new[] { "FeatureCode", "FieldCode" },
                 unique: true);
 
             migrationBuilder.CreateIndex(
@@ -2528,18 +2082,6 @@ namespace InternLink.Infrastructure.Migrations
                 name: "UX_AccountRequests_Auto_ID",
                 table: "AccountRequests",
                 column: "Auto_ID",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Sys_DailyJobs_JobCode",
-                table: "Sys_DailyJobs",
-                column: "JobCode",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Sys_DailyJobs_Public_ID",
-                table: "Sys_DailyJobs",
-                column: "Public_ID",
                 unique: true);
 
             migrationBuilder.AddForeignKey(

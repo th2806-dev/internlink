@@ -42,8 +42,11 @@ namespace InternLink.Infrastructure.Migrations
                         .HasColumnType("nvarchar(1000)");
 
                     b.Property<long>("AutoId")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
                         .HasColumnName("Auto_ID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("AutoId"));
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -170,8 +173,11 @@ namespace InternLink.Infrastructure.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<long>("AutoId")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
                         .HasColumnName("Auto_ID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("AutoId"));
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -258,8 +264,11 @@ namespace InternLink.Infrastructure.Migrations
                         .HasColumnName("AttendanceSessionId");
 
                     b.Property<long>("AutoId")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
                         .HasColumnName("Auto_ID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("AutoId"));
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -374,8 +383,11 @@ namespace InternLink.Infrastructure.Migrations
                         .HasColumnType("nvarchar(500)");
 
                     b.Property<long>("AutoId")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
                         .HasColumnName("Auto_ID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("AutoId"));
 
                     b.Property<int?>("Capacity")
                         .HasColumnType("int");
@@ -481,8 +493,11 @@ namespace InternLink.Infrastructure.Migrations
                         .HasColumnName("CompanyPositionId");
 
                     b.Property<long>("AutoId")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
                         .HasColumnName("Auto_ID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("AutoId"));
 
                     b.Property<Guid>("CompanyId")
                         .HasColumnType("uniqueidentifier");
@@ -595,8 +610,11 @@ namespace InternLink.Infrastructure.Migrations
                         .HasColumnName("DepartmentId");
 
                     b.Property<long>("AutoId")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
                         .HasColumnName("Auto_ID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("AutoId"));
 
                     b.Property<string>("Code")
                         .IsRequired()
@@ -689,8 +707,11 @@ namespace InternLink.Infrastructure.Migrations
                         .HasColumnType("nvarchar(200)");
 
                     b.Property<long>("AutoId")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
                         .HasColumnName("Auto_ID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("AutoId"));
 
                     b.Property<string>("Category")
                         .HasMaxLength(100)
@@ -834,8 +855,11 @@ namespace InternLink.Infrastructure.Migrations
                         .HasColumnName("DocumentVersionId");
 
                     b.Property<long>("AutoId")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
                         .HasColumnName("Auto_ID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("AutoId"));
 
                     b.Property<string>("ChangeNote")
                         .HasMaxLength(500)
@@ -940,8 +964,11 @@ namespace InternLink.Infrastructure.Migrations
                         .HasColumnType("nvarchar(2000)");
 
                     b.Property<long>("AutoId")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
                         .HasColumnName("Auto_ID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("AutoId"));
 
                     b.Property<string>("Comments")
                         .HasMaxLength(3000)
@@ -1098,8 +1125,11 @@ namespace InternLink.Infrastructure.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<long>("AutoId")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
                         .HasColumnName("Auto_ID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("AutoId"));
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -1203,8 +1233,11 @@ namespace InternLink.Infrastructure.Migrations
                         .HasColumnName("EvaluationRubricCriterionId");
 
                     b.Property<long>("AutoId")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
                         .HasColumnName("Auto_ID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("AutoId"));
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -1290,8 +1323,11 @@ namespace InternLink.Infrastructure.Migrations
                         .HasColumnName("FeedbackId");
 
                     b.Property<long>("AutoId")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
                         .HasColumnName("Auto_ID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("AutoId"));
 
                     b.Property<string>("Comment")
                         .IsRequired()
@@ -1388,8 +1424,11 @@ namespace InternLink.Infrastructure.Migrations
                         .HasColumnName("AssignedAt");
 
                     b.Property<long>("AutoId")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
                         .HasColumnName("Auto_ID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("AutoId"));
 
                     b.Property<Guid?>("CompanyId")
                         .HasColumnType("uniqueidentifier");
@@ -1502,8 +1541,11 @@ namespace InternLink.Infrastructure.Migrations
                         .HasColumnName("LecturerId");
 
                     b.Property<long>("AutoId")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
                         .HasColumnName("Auto_ID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("AutoId"));
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -1605,8 +1647,11 @@ namespace InternLink.Infrastructure.Migrations
                         .HasColumnType("nvarchar(50)");
 
                     b.Property<long>("AutoId")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
                         .HasColumnName("Auto_ID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("AutoId"));
 
                     b.Property<string>("CompanyName")
                         .HasMaxLength(250)
@@ -1708,8 +1753,11 @@ namespace InternLink.Infrastructure.Migrations
                         .HasColumnName("LecturerSemesterSummaryId");
 
                     b.Property<long>("AutoId")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
                         .HasColumnName("Auto_ID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("AutoId"));
 
                     b.Property<string>("Conclusion")
                         .IsRequired()
@@ -1808,8 +1856,11 @@ namespace InternLink.Infrastructure.Migrations
                         .HasColumnType("nvarchar(1000)");
 
                     b.Property<long>("AutoId")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
                         .HasColumnName("Auto_ID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("AutoId"));
 
                     b.Property<string>("Content")
                         .IsRequired()
@@ -1896,8 +1947,11 @@ namespace InternLink.Infrastructure.Migrations
                         .HasColumnName("PasswordResetTokenId");
 
                     b.Property<long>("AutoId")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
                         .HasColumnName("Auto_ID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("AutoId"));
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -3140,8 +3194,11 @@ namespace InternLink.Infrastructure.Migrations
                         .HasColumnName("RefreshTokenId");
 
                     b.Property<long>("AutoId")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
                         .HasColumnName("Auto_ID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("AutoId"));
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -3252,8 +3309,11 @@ namespace InternLink.Infrastructure.Migrations
                         .HasColumnType("nvarchar(50)");
 
                     b.Property<long>("AutoId")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
                         .HasColumnName("Auto_ID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("AutoId"));
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -3333,8 +3393,11 @@ namespace InternLink.Infrastructure.Migrations
                         .HasColumnType("nvarchar(50)");
 
                     b.Property<long>("AutoId")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
                         .HasColumnName("Auto_ID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("AutoId"));
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -3442,8 +3505,11 @@ namespace InternLink.Infrastructure.Migrations
                         .HasColumnName("SemesterCompanyId");
 
                     b.Property<long>("AutoId")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
                         .HasColumnName("Auto_ID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("AutoId"));
 
                     b.Property<Guid>("CompanyId")
                         .HasColumnType("uniqueidentifier");
@@ -3519,8 +3585,11 @@ namespace InternLink.Infrastructure.Migrations
                         .HasColumnName("SemesterFacultySummaryId");
 
                     b.Property<long>("AutoId")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
                         .HasColumnName("Auto_ID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("AutoId"));
 
                     b.Property<string>("Conclusion")
                         .IsRequired()
@@ -3610,8 +3679,11 @@ namespace InternLink.Infrastructure.Migrations
                         .HasColumnName("SemesterLecturerId");
 
                     b.Property<long>("AutoId")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
                         .HasColumnName("Auto_ID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("AutoId"));
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -3687,8 +3759,11 @@ namespace InternLink.Infrastructure.Migrations
                         .HasDefaultValue(true);
 
                     b.Property<long>("AutoId")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
                         .HasColumnName("Auto_ID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("AutoId"));
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -3791,8 +3866,11 @@ namespace InternLink.Infrastructure.Migrations
                         .HasColumnType("nvarchar(200)");
 
                     b.Property<long>("AutoId")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
                         .HasColumnName("Auto_ID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("AutoId"));
 
                     b.Property<string>("Class")
                         .HasMaxLength(100)
@@ -3922,8 +4000,11 @@ namespace InternLink.Infrastructure.Migrations
                         .HasColumnName("SubmissionId");
 
                     b.Property<long>("AutoId")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
                         .HasColumnName("Auto_ID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("AutoId"));
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -4035,8 +4116,11 @@ namespace InternLink.Infrastructure.Migrations
                         .HasColumnType("nvarchar(30)");
 
                     b.Property<long>("AutoId")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
                         .HasColumnName("Auto_ID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("AutoId"));
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -4236,8 +4320,11 @@ namespace InternLink.Infrastructure.Migrations
                         .HasColumnName("SystemSettingId");
 
                     b.Property<long>("AutoId")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
                         .HasColumnName("Auto_ID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("AutoId"));
 
                     b.Property<string>("Category")
                         .HasMaxLength(50)
@@ -4318,8 +4405,11 @@ namespace InternLink.Infrastructure.Migrations
                         .HasColumnName("UserId");
 
                     b.Property<long>("AutoId")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
                         .HasColumnName("Auto_ID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("AutoId"));
 
                     b.Property<string>("AvatarUrl")
                         .HasColumnType("nvarchar(max)");
@@ -4420,8 +4510,11 @@ namespace InternLink.Infrastructure.Migrations
                         .HasColumnName("WeeklyReportId");
 
                     b.Property<long>("AutoId")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
                         .HasColumnName("Auto_ID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("AutoId"));
 
                     b.Property<string>("Content")
                         .IsRequired()
@@ -4537,8 +4630,11 @@ namespace InternLink.Infrastructure.Migrations
                         .HasColumnName("WeeklyReportVersionId");
 
                     b.Property<long>("AutoId")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
                         .HasColumnName("Auto_ID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("AutoId"));
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
