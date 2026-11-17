@@ -80,7 +80,7 @@ public class CommercialFeatureControllerTests
             Mock.Of<ISmartExcelImportService>());
         var file = new FormFile(new MemoryStream([1, 2, 3]), 0, 3, "file", "students.csv");
 
-        var result = await controller.Preview(file, null, null, CancellationToken.None);
+        var result = await controller.Preview(file, null, null, null, null, CancellationToken.None);
 
         result.Should().BeOfType<BadRequestObjectResult>();
     }

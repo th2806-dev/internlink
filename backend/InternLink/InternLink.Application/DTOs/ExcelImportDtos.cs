@@ -25,17 +25,68 @@ public sealed record ExcelPreviewResponse(
 /// <summary>Row-level issue found while validating an Excel import.</summary>
 public sealed record ExcelRowValidationError(
     int RowIndex,
-    string ColumnField,
+    string FieldCode,
     string ErrorMessage,
-    string RawValue);
+    string RawValue,
+    string Severity = "Error");
 
 /// <summary>Summary of validation results for an Excel import.</summary>
 public sealed record ExcelValidationResult(
     bool IsValid,
     int TotalRecords,
     int ValidRecordsCount,
+    int WarningRecordsCount,
     int ErrorRecordsCount,
-    IReadOnlyList<ExcelRowValidationError> Errors);
+    IReadOnlyList<ExcelValidationRowDto> Rows,
+    IReadOnlyList<ExcelRowValidationError> Errors,
+    Guid? ErrorReportId,
+    string? ErrorReportUrl = null);
+
+/// <summary>Validation status and issues for a single source row.</summary>
+public sealed record ExcelValidationRowDto(
+    int RowIndex,
+    string Status,
+    IReadOnlyList<ExcelRowValidationError> Issues);
+
+/// <summary>Import mapping, file, and department scope submitted for validation.</summary>
+public sealed record ExcelImportMappingConfig(
+    string TargetEntity,
+    int StartRowIndex,
+    Guid? DepartmentId,
+    string? TenantId,
+    string? SheetName,
+    IReadOnlyList<ExcelColumnMappingDto> Mappings);
+
+/// <summary>Request to validate a previously uploaded workbook.</summary>
+public sealed record ExcelImportRequest(
+    Guid FileId,
+    ExcelImportMappingConfig MappingConfig);
+
+/// <summary>Request to commit a previously validated workbook.</summary>
+public sealed record ExecuteExcelImportRequest(
+    Guid FileId,
+    ExcelImportMappingConfig MappingConfig,
+    bool ConfirmImport);
+
+/// <summary>Result of importing rows into the target entities.</summary>
+public sealed record ImportCommitResult(
+    int TotalProcessed,
+    int SuccessCount,
+    int UpdatedCount,
+    int ErrorCount,
+    Guid? ErrorReportId,
+    string? ErrorReportUrl = null,
+    IReadOnlyList<string>? AccountProvisioningWarnings = null);
+
+/// <summary>Workbook preview and its opaque, short-lived server-side file identifier.</summary>
+public sealed record StagedExcelPreviewResponse(
+    Guid FileId,
+    ExcelPreviewResponse Preview);
+
+/// <summary>Authorized file path and download name for an import error report.</summary>
+public sealed record ExcelErrorReportFile(
+    string FilePath,
+    string FileName);
 
 /// <summary>Payload for saving a reusable Excel column-mapping preset.</summary>
 public sealed record SaveExcelPresetRequest

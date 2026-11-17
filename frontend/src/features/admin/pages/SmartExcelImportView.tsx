@@ -4,7 +4,6 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
-  CheckCircle2,
   FileSpreadsheet,
   FileUp,
   LoaderCircle,
@@ -13,10 +12,11 @@ import {
 } from "lucide-react";
 import { PageHeader } from "../../../components/common/PageHeader";
 import { useSemester, toApiDepartmentId } from "../../../contexts/SemesterContext";
-import { apiRequestRaw, getApiErrorMessage } from "../../../lib/apiClient";
+import { apiRequestRaw, downloadAuthenticatedFile, getApiErrorMessage } from "../../../lib/apiClient";
 
 type ImportHeader = { column: string; title: string };
 type ImportPreview = {
+  fileId: string;
   headers: ImportHeader[];
   sampleRows: string[][];
   validationErrors: ImportError[];
@@ -45,6 +45,37 @@ type PresetColumnMapping = {
   defaultValue: string | null;
   transformRule: string | null;
 };
+type ValidationIssue = {
+  rowIndex: number;
+  fieldCode: string;
+  errorMessage: string;
+  rawValue: string;
+  severity: "Error" | "Warning";
+};
+type ValidationRow = {
+  rowIndex: number;
+  status: "Valid" | "Warning" | "Error";
+  issues: ValidationIssue[];
+};
+type ImportValidation = {
+  isValid: boolean;
+  totalRecords: number;
+  validRecordsCount: number;
+  warningRecordsCount: number;
+  errorRecordsCount: number;
+  rows: ValidationRow[];
+  errorReportId: string | null;
+  errorReportUrl: string | null;
+};
+type ImportCommitResult = {
+  totalProcessed: number;
+  successCount: number;
+  updatedCount: number;
+  errorCount: number;
+  errorReportId: string | null;
+  errorReportUrl: string | null;
+  accountProvisioningWarnings?: string[];
+};
 type FieldCode = "StudentCode" | "FullName" | "Email" | "PhoneNumber" | "ClassName" | "MajorName";
 type MappingState = Record<FieldCode, string>;
 type ImportField = {
@@ -56,6 +87,8 @@ type ImportField = {
 
 const PREVIEW_ENDPOINT = "/api/v1/system/excel/preview";
 const PRESETS_ENDPOINT = "/api/v1/system/excel/mappings";
+const VALIDATE_ENDPOINT = "/api/v1/system/excel/validate";
+const EXECUTE_ENDPOINT = "/api/v1/system/excel/execute-import";
 const EMPTY_MAPPING: MappingState = {
   StudentCode: "",
   FullName: "",
@@ -93,10 +126,11 @@ const STEPS = [
   { number: 3, title: "Xem trước" },
 ];
 
-function createFormData(file: File, sheetName?: string) {
+function createFormData(file: File, sheetName?: string, departmentId?: string) {
   const formData = new FormData();
   formData.append("file", file);
   if (sheetName) formData.append("sheetName", sheetName);
+  if (departmentId) formData.append("departmentId", departmentId);
   return formData;
 }
 
@@ -191,8 +225,10 @@ export default function SmartExcelImportView() {
   const [presetName, setPresetName] = useState("");
   const [showSavePreset, setShowSavePreset] = useState(false);
   const [step, setStep] = useState(1);
-  const [busy, setBusy] = useState<"preview" | "presets" | "save" | null>(null);
+  const [busy, setBusy] = useState<"preview" | "presets" | "save" | "validate" | "import" | "report" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [validation, setValidation] = useState<ImportValidation | null>(null);
+  const [commitResult, setCommitResult] = useState<ImportCommitResult | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
   const mappingIsValid = Boolean(mapping.StudentCode && mapping.FullName);
@@ -233,7 +269,7 @@ export default function SmartExcelImportView() {
     try {
       const result = await apiRequestRaw<ImportPreview>(PREVIEW_ENDPOINT, {
         method: "POST",
-        body: createFormData(selectedFile, sheetName),
+        body: createFormData(selectedFile, sheetName, departmentId),
       });
       if (currentRequestId !== requestId.current) return;
 
@@ -245,7 +281,7 @@ export default function SmartExcelImportView() {
         setSelectedSheet(firstSheet);
         const firstSheetPreview = await apiRequestRaw<ImportPreview>(PREVIEW_ENDPOINT, {
           method: "POST",
-          body: createFormData(selectedFile, firstSheet),
+          body: createFormData(selectedFile, firstSheet, departmentId),
         });
         if (currentRequestId !== requestId.current) return;
         setPreview(firstSheetPreview);
@@ -257,6 +293,8 @@ export default function SmartExcelImportView() {
         setMapping(suggestMappings(result.headers));
       }
       setSelectedPresetId("");
+      setValidation(null);
+      setCommitResult(null);
       setStep(1);
     } catch (cause) {
       if (currentRequestId === requestId.current) {
@@ -271,7 +309,7 @@ export default function SmartExcelImportView() {
     } finally {
       if (currentRequestId === requestId.current) setBusy(null);
     }
-  }, []);
+  }, [departmentId]);
 
   const loadFile = (selectedFile?: File) => {
     if (!selectedFile) return;
@@ -288,6 +326,8 @@ export default function SmartExcelImportView() {
     setPreview(null);
     setSelectedSheet("");
     setMapping(EMPTY_MAPPING);
+    setValidation(null);
+    setCommitResult(null);
     setStep(1);
     void analyzeFile(selectedFile);
   };
@@ -302,6 +342,8 @@ export default function SmartExcelImportView() {
 
   const loadPreset = (presetId: string) => {
     setSelectedPresetId(presetId);
+    setValidation(null);
+    setCommitResult(null);
     const preset = presets.find((item) => item.id === presetId);
     if (!preset || !preview) return;
 
@@ -325,6 +367,8 @@ export default function SmartExcelImportView() {
       return next;
     });
     setSelectedPresetId("");
+    setValidation(null);
+    setCommitResult(null);
   };
 
   const savePreset = async () => {
@@ -357,6 +401,80 @@ export default function SmartExcelImportView() {
       setSelectedPresetId(saved.id);
       setShowSavePreset(false);
       setPresetName("");
+    } catch (cause) {
+      setError(getApiErrorMessage(cause));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const buildMappingConfig = () => ({
+    targetEntity: "Students",
+    startRowIndex: (preview?.headerRowIndex ?? 0) + 2,
+    departmentId: departmentId ?? null,
+    tenantId: null,
+    sheetName: selectedSheet,
+    mappings: mappedFields.map((field) => {
+      const column = mapping[field.code];
+      const header = preview?.headers.find((item) => item.column === column);
+      return {
+        systemFieldCode: field.code,
+        excelColumnName: header?.title ?? column,
+        excelColumnIndex: columnLetterToIndex(column),
+        isRequired: field.required,
+        defaultValue: null,
+        transformRule: "TRIM",
+      };
+    }),
+  });
+
+  const validateImport = async () => {
+    if (!preview?.fileId || !mappingIsValid) return;
+    setBusy("validate");
+    setError(null);
+    setValidation(null);
+    setCommitResult(null);
+    try {
+      const result = await apiRequestRaw<ImportValidation>(VALIDATE_ENDPOINT, {
+        method: "POST",
+        body: { fileId: preview.fileId, mappingConfig: buildMappingConfig() },
+      });
+      setValidation(result);
+      setStep(3);
+    } catch (cause) {
+      setError(getApiErrorMessage(cause));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const executeImport = async () => {
+    if (!preview?.fileId || !validation?.isValid || validation.errorRecordsCount > 0) return;
+    setBusy("import");
+    setError(null);
+    try {
+      const result = await apiRequestRaw<ImportCommitResult>(EXECUTE_ENDPOINT, {
+        method: "POST",
+        body: {
+          fileId: preview.fileId,
+          mappingConfig: buildMappingConfig(),
+          confirmImport: true,
+        },
+      });
+      setCommitResult(result);
+      if (result.errorCount > 0) setValidation(null);
+    } catch (cause) {
+      setError(getApiErrorMessage(cause));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const downloadErrorReport = async (url: string) => {
+    setBusy("report");
+    setError(null);
+    try {
+      await downloadAuthenticatedFile(url, "bao-cao-loi-nap-excel.xlsx");
     } catch (cause) {
       setError(getApiErrorMessage(cause));
     } finally {
@@ -606,12 +724,12 @@ export default function SmartExcelImportView() {
               </button>
               <button
                 type="button"
-                disabled={!mappingIsValid}
-                onClick={() => setStep(3)}
+                disabled={!mappingIsValid || busy !== null}
+                onClick={() => void validateImport()}
                 className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-[#026aa7] px-4 font-semibold text-white hover:bg-[#025a8e] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Xem trước dữ liệu
-                <ArrowRight aria-hidden="true" className="h-4 w-4" />
+                {busy === "validate" ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : <ArrowRight aria-hidden="true" className="h-4 w-4" />}
+                {busy === "validate" ? "Đang kiểm tra dữ liệu..." : "Kiểm tra dữ liệu"}
               </button>
             </div>
           </div>
@@ -698,21 +816,98 @@ export default function SmartExcelImportView() {
             </table>
           </div>
 
-          <div className="flex flex-col gap-3 rounded-lg border border-[#7bc043]/40 bg-[#7bc043]/10 p-4 sm:flex-row sm:items-center sm:justify-between">
-            <p className="flex items-start gap-2 text-sm text-slate-800">
-              <CheckCircle2 aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-[#4f8d20]" />
-              Cấu hình đã sẵn sàng. Bước xác thực và nạp dữ liệu sẽ được bổ sung trong Sprint 5.3.
-            </p>
-            <button
-              type="button"
-              disabled
-              title="Execute Commit sẽ được triển khai trong Sprint 5.3."
-              className="inline-flex min-h-11 shrink-0 cursor-not-allowed items-center justify-center gap-2 rounded-lg bg-[#026aa7] px-4 font-semibold text-white opacity-50"
-            >
-              <FileUp aria-hidden="true" className="h-4 w-4" />
-              Nạp dữ liệu (Sprint 5.3)
-            </button>
-          </div>
+          {validation && (
+            <section aria-label="Kết quả kiểm tra dữ liệu" className="space-y-4 rounded-lg border border-slate-200 bg-slate-50/70 p-4">
+              <div className="flex flex-wrap gap-2 text-sm font-semibold">
+                <span className="rounded-full bg-white px-3 py-1.5 text-slate-800">Tổng: {validation.totalRecords.toLocaleString("vi-VN")}</span>
+                <span className="rounded-full bg-[#7bc043]/15 px-3 py-1.5 text-[#315d12]">Hợp lệ: {validation.validRecordsCount.toLocaleString("vi-VN")}</span>
+                <span className="rounded-full bg-[#f0ad4e]/20 px-3 py-1.5 text-[#805000]">Cập nhật: {validation.warningRecordsCount.toLocaleString("vi-VN")}</span>
+                <span className="rounded-full bg-[#e74c3c]/10 px-3 py-1.5 text-[#a5281d]">Lỗi: {validation.errorRecordsCount.toLocaleString("vi-VN")}</span>
+              </div>
+
+              <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+                <table className="min-w-full text-left text-sm">
+                  <thead className="bg-slate-100 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                    <tr>
+                      <th scope="col" className="whitespace-nowrap px-4 py-3">Dòng Excel</th>
+                      <th scope="col" className="whitespace-nowrap px-4 py-3">Kết quả</th>
+                      <th scope="col" className="px-4 py-3">Chi tiết</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {validation.rows.slice(0, 100).map((row) => {
+                      const statusLabel = row.status === "Valid" ? "Hợp lệ" : row.status === "Warning" ? "Sẽ cập nhật" : "Lỗi";
+                      const statusStyle = row.status === "Valid"
+                        ? "bg-[#7bc043]/15 text-[#315d12]"
+                        : row.status === "Warning"
+                          ? "bg-[#f0ad4e]/20 text-[#805000]"
+                          : "bg-[#e74c3c]/10 text-[#a5281d]";
+                      return (
+                        <tr key={row.rowIndex}>
+                          <th scope="row" className="whitespace-nowrap px-4 py-3 font-medium text-slate-700">{row.rowIndex}</th>
+                          <td className="px-4 py-3">
+                            <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusStyle}`}>{statusLabel}</span>
+                          </td>
+                          <td className="px-4 py-3 text-slate-700">
+                            {row.issues.length
+                              ? row.issues.map((issue) => `${issue.fieldCode}: ${issue.errorMessage}`).join("; ")
+                              : "Sẵn sàng nạp"}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {validation.rows.length === 0 && (
+                      <tr><td colSpan={3} className="px-4 py-6 text-center text-slate-500">Không có dòng dữ liệu để nạp.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              {validation.rows.length > 100 && (
+                <p className="text-sm text-slate-600">Đang hiển thị 100/{validation.rows.length.toLocaleString("vi-VN")} dòng đầu tiên; tổng hợp phía trên bao gồm toàn bộ tệp.</p>
+              )}
+              {validation.errorReportUrl && (
+                <button
+                  type="button"
+                  onClick={() => void downloadErrorReport(validation.errorReportUrl!)}
+                  disabled={busy !== null}
+                  className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-[#e74c3c]/40 bg-white px-3 font-semibold text-[#a5281d] hover:bg-red-50 disabled:opacity-50"
+                >
+                  {busy === "report" ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : <FileSpreadsheet aria-hidden="true" className="h-4 w-4" />}
+                  Tải báo cáo lỗi Excel
+                </button>
+              )}
+            </section>
+          )}
+
+          {commitResult && (
+            <div role="status" className={`rounded-lg border p-4 ${commitResult.errorCount > 0 ? "border-[#e74c3c]/30 bg-red-50" : "border-[#7bc043]/40 bg-[#7bc043]/10"}`}>
+              <p className="font-semibold text-slate-900">
+                {commitResult.errorCount > 0 ? "Chưa thể nạp dữ liệu do phát sinh lỗi." : "Nạp dữ liệu thành công."}
+              </p>
+              <p className="mt-1 text-sm text-slate-700">
+                Tổng: {commitResult.totalProcessed} · Đã tạo: {commitResult.successCount} · Đã cập nhật: {commitResult.updatedCount} · Lỗi: {commitResult.errorCount}
+              </p>
+              {!!commitResult.accountProvisioningWarnings?.length && (
+                <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-amber-900">
+                  {commitResult.accountProvisioningWarnings.map((warning) => <li key={warning}>{warning}</li>)}
+                </ul>
+              )}
+              {commitResult.errorReportUrl && (
+                <button
+                  type="button"
+                  onClick={() => void downloadErrorReport(commitResult.errorReportUrl!)}
+                  disabled={busy !== null}
+                  className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  <FileSpreadsheet aria-hidden="true" className="h-4 w-4" />
+                  Tải báo cáo lỗi Excel
+                </button>
+              )}
+            </div>
+          )}
+
+          {error && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{error}</p>}
+
           <div className="flex justify-start border-t border-slate-100 pt-4">
             <button
               type="button"
@@ -721,6 +916,15 @@ export default function SmartExcelImportView() {
             >
               <ArrowLeft aria-hidden="true" className="h-4 w-4" />
               Quay lại chỉnh mapping
+            </button>
+            <button
+              type="button"
+              onClick={() => void executeImport()}
+              disabled={!validation?.isValid || validation.errorRecordsCount > 0 || busy !== null || commitResult !== null}
+              className="ml-auto inline-flex min-h-11 items-center gap-2 rounded-lg bg-[#026aa7] px-4 font-semibold text-white hover:bg-[#025a8e] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {busy === "import" ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : <FileUp aria-hidden="true" className="h-4 w-4" />}
+              {busy === "import" ? "Đang nạp..." : "Xác nhận nạp vào hệ thống"}
             </button>
           </div>
         </section>

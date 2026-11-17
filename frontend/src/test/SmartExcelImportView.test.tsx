@@ -1,10 +1,11 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import SmartExcelImportView from "../features/admin/pages/SmartExcelImportView";
-import { apiRequestRaw } from "../lib/apiClient";
+import { apiRequestRaw, downloadAuthenticatedFile } from "../lib/apiClient";
 
 vi.mock("../lib/apiClient", () => ({
   apiRequestRaw: vi.fn(),
+  downloadAuthenticatedFile: vi.fn(),
   getApiErrorMessage: (error: unknown) => error instanceof Error ? error.message : "API error",
 }));
 
@@ -14,6 +15,7 @@ vi.mock("../contexts/SemesterContext", () => ({
 }));
 
 const preview = {
+  fileId: "file-1",
   headers: [
     { column: "A", title: "Mã số SV (MSSV)" },
     { column: "B", title: "Họ, tên sinh viên" },
@@ -44,6 +46,16 @@ const preset = {
     { systemFieldCode: "FullName", excelColumnName: "Họ và tên", excelColumnIndex: 1, isRequired: true, defaultValue: null, transformRule: "TRIM" },
   ],
 };
+const validImport = {
+  isValid: true,
+  totalRecords: 1,
+  validRecordsCount: 1,
+  warningRecordsCount: 0,
+  errorRecordsCount: 0,
+  rows: [{ rowIndex: 4, status: "Valid", issues: [] }],
+  errorReportId: null,
+  errorReportUrl: null,
+};
 
 function createFile(name = "students.xlsx") {
   return new File(["excel"], name, {
@@ -63,7 +75,8 @@ async function goToMappingStep() {
 
 describe("SmartExcelImportView", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.mocked(apiRequestRaw).mockReset();
+    vi.mocked(downloadAuthenticatedFile).mockReset();
     vi.mocked(apiRequestRaw).mockResolvedValue([]);
   });
 
@@ -90,10 +103,19 @@ describe("SmartExcelImportView", () => {
     expect(screen.getByRole("combobox", { name: "Chọn sheet" })).toHaveValue("Sheet2");
   });
 
-  it("suggests student field mappings and renders the mapped preview without importing data", async () => {
+  it("validates the mapped workbook and commits only after confirmation", async () => {
     vi.mocked(apiRequestRaw)
       .mockResolvedValueOnce([])
-      .mockResolvedValueOnce(preview);
+      .mockResolvedValueOnce(preview)
+      .mockResolvedValueOnce(validImport)
+      .mockResolvedValueOnce({
+        totalProcessed: 1,
+        successCount: 1,
+        updatedCount: 0,
+        errorCount: 0,
+        errorReportId: null,
+        errorReportUrl: null,
+      });
     render(<SmartExcelImportView />);
     await uploadFile();
     await goToMappingStep();
@@ -105,20 +127,69 @@ describe("SmartExcelImportView", () => {
     expect(screen.getByRole("combobox", { name: "Ghép cột Ngành" })).toHaveValue("F");
 
     fireEvent.change(screen.getByRole("combobox", { name: "Ghép cột Mã số sinh viên" }), { target: { value: "" } });
-    expect(screen.getByRole("button", { name: /Xem trước dữ liệu/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Kiểm tra dữ liệu" })).toBeDisabled();
     fireEvent.change(screen.getByRole("combobox", { name: "Ghép cột Mã số sinh viên" }), { target: { value: "A" } });
-    fireEvent.click(screen.getByRole("button", { name: /Xem trước dữ liệu/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Kiểm tra dữ liệu" }));
 
-    const table = screen.getByRole("table");
+    expect(await screen.findByRole("region", { name: "Kết quả kiểm tra dữ liệu" })).toBeInTheDocument();
+    const table = screen.getAllByRole("table")[0];
     expect(within(table).getByRole("columnheader", { name: /Mã số sinh viên/ })).toBeInTheDocument();
     expect(within(table).getByRole("columnheader", { name: /Điện thoại/ })).toBeInTheDocument();
     expect(within(table).getByRole("cell", { name: "SV001" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Nạp dữ liệu \(Sprint 5.3\)/ })).toBeDisabled();
-    expect(apiRequestRaw).toHaveBeenCalledTimes(2);
-    expect(apiRequestRaw).not.toHaveBeenCalledWith(
-      expect.stringContaining("import-students"),
-      expect.anything(),
-    );
+    const importButton = screen.getByRole("button", { name: "Xác nhận nạp vào hệ thống" });
+    expect(importButton).toBeEnabled();
+    expect(apiRequestRaw).toHaveBeenNthCalledWith(3, "/api/v1/system/excel/validate", expect.objectContaining({
+      method: "POST",
+      body: expect.objectContaining({
+        fileId: "file-1",
+        mappingConfig: expect.objectContaining({
+          targetEntity: "Students",
+          mappings: expect.arrayContaining([
+            expect.objectContaining({ systemFieldCode: "StudentCode", excelColumnIndex: 0 }),
+            expect.objectContaining({ systemFieldCode: "FullName", excelColumnIndex: 1 }),
+          ]),
+        }),
+      }),
+    }));
+
+    fireEvent.click(importButton);
+    expect(await screen.findByText("Nạp dữ liệu thành công.")).toBeInTheDocument();
+    expect(apiRequestRaw).toHaveBeenNthCalledWith(4, "/api/v1/system/excel/execute-import", expect.objectContaining({
+      method: "POST",
+      body: expect.objectContaining({ fileId: "file-1", confirmImport: true }),
+    }));
+  });
+
+  it("keeps commit disabled when validation reports errors and offers an error workbook", async () => {
+    vi.mocked(apiRequestRaw)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(preview)
+      .mockResolvedValueOnce({
+        ...validImport,
+        isValid: false,
+        validRecordsCount: 0,
+        errorRecordsCount: 1,
+        rows: [{
+          rowIndex: 4,
+          status: "Error",
+          issues: [{ rowIndex: 4, fieldCode: "Email", errorMessage: "Email không đúng định dạng.", rawValue: "bad", severity: "Error" }],
+        }],
+        errorReportId: "report-1",
+        errorReportUrl: "/api/v1/system/excel/error-reports/report-1",
+      });
+    vi.mocked(downloadAuthenticatedFile).mockResolvedValue({ blob: new Blob(), filename: "errors.xlsx" });
+    render(<SmartExcelImportView />);
+    await uploadFile();
+    await goToMappingStep();
+    fireEvent.click(screen.getByRole("button", { name: "Kiểm tra dữ liệu" }));
+
+    expect(await screen.findByRole("button", { name: "Xác nhận nạp vào hệ thống" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Tải báo cáo lỗi Excel" }));
+    await waitFor(() => expect(downloadAuthenticatedFile).toHaveBeenCalledWith(
+      "/api/v1/system/excel/error-reports/report-1",
+      "bao-cao-loi-nap-excel.xlsx",
+    ));
+    expect(apiRequestRaw).not.toHaveBeenCalledWith("/api/v1/system/excel/execute-import", expect.anything());
   });
 
   it("loads a department preset into the mapping studio", async () => {
@@ -135,7 +206,7 @@ describe("SmartExcelImportView", () => {
     fireEvent.change(screen.getByRole("combobox", { name: "Chọn cấu hình mẫu" }), { target: { value: preset.id } });
     expect(screen.getByRole("combobox", { name: "Ghép cột Mã số sinh viên" })).toHaveValue("A");
     expect(screen.getByRole("combobox", { name: "Ghép cột Họ và tên" })).toHaveValue("B");
-    expect(screen.getByRole("button", { name: /Xem trước dữ liệu/ })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Kiểm tra dữ liệu" })).toBeEnabled();
   });
 
   it("saves the selected mappings as a reusable preset", async () => {

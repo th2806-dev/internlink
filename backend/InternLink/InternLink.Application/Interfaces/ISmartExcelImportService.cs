@@ -10,6 +10,37 @@ public interface ISmartExcelImportService
         string? sheetName,
         CancellationToken cancellationToken);
 
+    Task<StagedExcelPreviewResponse> StageAndAnalyzeExcelAsync(
+        Stream fileStream,
+        string fileName,
+        string? sheetName,
+        string ownerKey,
+        Guid? departmentId,
+        string? tenantId,
+        CancellationToken cancellationToken);
+
+    Task<ExcelValidationResult> ValidateImportAsync(
+        ExcelImportRequest request,
+        string ownerKey,
+        Guid? departmentId,
+        string? tenantId,
+        CancellationToken cancellationToken);
+
+    Task<ImportCommitResult> ExecuteImportAsync(
+        ExecuteExcelImportRequest request,
+        string ownerKey,
+        Guid? departmentId,
+        string? tenantId,
+        string? userName,
+        CancellationToken cancellationToken);
+
+    Task<ExcelErrorReportFile?> GetErrorReportAsync(
+        Guid reportId,
+        string ownerKey,
+        Guid? departmentId,
+        string? tenantId,
+        CancellationToken cancellationToken);
+
     Task<IReadOnlyList<ExcelMappingPresetDto>> GetPresetsAsync(
         Guid? departmentId,
         string? tenantId,

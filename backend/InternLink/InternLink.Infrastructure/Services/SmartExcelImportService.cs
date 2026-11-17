@@ -5,18 +5,41 @@ using InternLink.Application.Interfaces;
 using InternLink.Domain.Entities.Rbac;
 using InternLink.Infrastructure.Persistence;
 using ExcelDataReader;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace InternLink.Infrastructure.Services;
 
-public sealed class SmartExcelImportService : ISmartExcelImportService
+public sealed partial class SmartExcelImportService : ISmartExcelImportService
 {
     private const int HeaderSearchLimit = 20;
     private const int SampleRowLimit = 5;
     private const int MaxDataRows = 50000;
     private readonly AppDbContext _db;
+    private readonly PasswordHasher<InternLink.Domain.Entities.User> _passwordHasher;
+    private readonly ExcelImportFileStore _fileStore;
+    private readonly IEmailService? _emailService;
+    private readonly ILogger<SmartExcelImportService>? _logger;
 
-    public SmartExcelImportService(AppDbContext db) => _db = db;
+    public SmartExcelImportService(AppDbContext db)
+        : this(db, new PasswordHasher<InternLink.Domain.Entities.User>(), new ExcelImportFileStore(), null, null)
+    {
+    }
+
+    public SmartExcelImportService(
+        AppDbContext db,
+        PasswordHasher<InternLink.Domain.Entities.User> passwordHasher,
+        ExcelImportFileStore fileStore,
+        IEmailService? emailService = null,
+        ILogger<SmartExcelImportService>? logger = null)
+    {
+        _db = db;
+        _passwordHasher = passwordHasher;
+        _fileStore = fileStore;
+        _emailService = emailService;
+        _logger = logger;
+    }
 
     public Task<ExcelPreviewResponse> AnalyzeExcelAsync(
         Stream fileStream,

@@ -1,5 +1,6 @@
 using System.Net.Mail;
 using System.Globalization;
+using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
 using InternLink.API.Authorization;
@@ -47,6 +48,8 @@ public sealed class ExcelImportController : ControllerBase
         IFormFile? file,
         [FromForm] string? mapping,
         [FromForm] string? sheetName,
+        [FromForm] Guid? departmentId,
+        [FromForm] string? tenantId,
         CancellationToken cancellationToken)
     {
         if (!TryValidateFile(file, out var error))
@@ -84,11 +87,22 @@ public sealed class ExcelImportController : ControllerBase
             });
         }
 
+        if (!TryResolveTenantId(tenantId, out var effectiveTenantId))
+            return Forbid();
+        var effectiveDepartmentId = _departmentScope.ResolveEffectiveDepartmentId(User, departmentId);
+
         try
         {
             using var inputStream = file!.OpenReadStream();
-            var preview = await _smartExcelImportService.AnalyzeExcelAsync(
-                inputStream, file.FileName, sheetName, cancellationToken);
+            var staged = await _smartExcelImportService.StageAndAnalyzeExcelAsync(
+                inputStream,
+                file.FileName,
+                sheetName,
+                GetOwnerKey(),
+                effectiveDepartmentId,
+                effectiveTenantId,
+                cancellationToken);
+            var preview = staged.Preview;
             var headerColumns = preview.Columns
                 .Select(column => new
                 {
@@ -103,6 +117,7 @@ public sealed class ExcelImportController : ControllerBase
                 .ToArray();
             return Ok(new
             {
+                fileId = staged.FileId,
                 headers = headerColumns,
                 sampleRows,
                 validationErrors = Array.Empty<ImportRowError>(),
@@ -114,6 +129,10 @@ public sealed class ExcelImportController : ControllerBase
                 preview.Columns
             });
         }
+        catch (InvalidDataException exception)
+        {
+            return BadRequest(new { message = exception.Message });
+        }
         catch (KeyNotFoundException exception)
         {
             return NotFound(new { message = exception.Message });
@@ -122,6 +141,116 @@ public sealed class ExcelImportController : ControllerBase
         {
             return BadRequest(new { message = "Không đọc được tệp Excel hoặc không tìm thấy dòng tiêu đề phù hợp." });
         }
+    }
+
+    [HttpPost("validate")]
+    public async Task<ActionResult<ExcelValidationResult>> ValidateImport(
+        [FromBody] ExcelImportRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!TryResolveTenantId(request.MappingConfig.TenantId, out var effectiveTenantId))
+            return Forbid();
+        var effectiveDepartmentId = _departmentScope.ResolveEffectiveDepartmentId(
+            User, request.MappingConfig.DepartmentId);
+        var scopedRequest = request with
+        {
+            MappingConfig = request.MappingConfig with
+            {
+                DepartmentId = effectiveDepartmentId,
+                TenantId = effectiveTenantId
+            }
+        };
+        try
+        {
+            var result = await _smartExcelImportService.ValidateImportAsync(
+                scopedRequest, GetOwnerKey(), effectiveDepartmentId, effectiveTenantId, cancellationToken);
+            return Ok(result with
+            {
+                ErrorReportUrl = result.ErrorReportId.HasValue
+                    ? CreateErrorReportUrl(result.ErrorReportId.Value, effectiveDepartmentId, effectiveTenantId)
+                    : null
+            });
+        }
+        catch (ArgumentException exception)
+        {
+            return BadRequest(new { message = exception.Message });
+        }
+        catch (InvalidDataException exception)
+        {
+            return BadRequest(new { message = exception.Message });
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return NotFound(new { message = exception.Message });
+        }
+    }
+
+    [HttpPost("execute-import")]
+    [RequirePermission(SystemPermissionCodes.ConfigurationUpdate)]
+    public async Task<ActionResult<ImportCommitResult>> ExecuteImport(
+        [FromBody] ExecuteExcelImportRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!TryResolveTenantId(request.MappingConfig.TenantId, out var effectiveTenantId))
+            return Forbid();
+        var effectiveDepartmentId = _departmentScope.ResolveEffectiveDepartmentId(
+            User, request.MappingConfig.DepartmentId);
+        var scopedRequest = request with
+        {
+            MappingConfig = request.MappingConfig with
+            {
+                DepartmentId = effectiveDepartmentId,
+                TenantId = effectiveTenantId
+            }
+        };
+        try
+        {
+            var result = await _smartExcelImportService.ExecuteImportAsync(
+                scopedRequest,
+                GetOwnerKey(),
+                effectiveDepartmentId,
+                effectiveTenantId,
+                User.Identity?.Name,
+                cancellationToken);
+            return Ok(result with
+            {
+                ErrorReportUrl = result.ErrorReportId.HasValue
+                    ? CreateErrorReportUrl(result.ErrorReportId.Value, effectiveDepartmentId, effectiveTenantId)
+                    : null
+            });
+        }
+        catch (ArgumentException exception)
+        {
+            return BadRequest(new { message = exception.Message });
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return NotFound(new { message = exception.Message });
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Conflict(new { message = exception.Message });
+        }
+    }
+
+    [HttpGet("error-reports/{id:guid}")]
+    public async Task<IActionResult> DownloadErrorReport(
+        Guid id,
+        [FromQuery] string? tenantId,
+        [FromQuery] Guid? departmentId,
+        CancellationToken cancellationToken)
+    {
+        if (!TryResolveTenantId(tenantId, out var effectiveTenantId))
+            return Forbid();
+        var effectiveDepartmentId = _departmentScope.ResolveEffectiveDepartmentId(User, departmentId);
+        var report = await _smartExcelImportService.GetErrorReportAsync(
+            id, GetOwnerKey(), effectiveDepartmentId, effectiveTenantId, cancellationToken);
+        if (report == null)
+            return NotFound();
+        return PhysicalFile(
+            report.FilePath,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            report.FileName);
     }
 
     [HttpGet("mappings")]
@@ -514,6 +643,23 @@ public sealed class ExcelImportController : ControllerBase
         effectiveTenantId = claimedTenantId;
         return requestedTenantId == null
             || string.Equals(requestedTenantId.Trim(), claimedTenantId, StringComparison.Ordinal);
+    }
+
+    private string GetOwnerKey() =>
+        User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+        ?? User.FindFirst("sub")?.Value
+        ?? User.Identity?.Name
+        ?? throw new UnauthorizedAccessException("The authenticated user identity is missing.");
+
+    private static string CreateErrorReportUrl(Guid reportId, Guid? departmentId, string? tenantId)
+    {
+        var query = new List<string>();
+        if (departmentId.HasValue)
+            query.Add($"departmentId={departmentId.Value}");
+        if (!string.IsNullOrWhiteSpace(tenantId))
+            query.Add($"tenantId={Uri.EscapeDataString(tenantId)}");
+        var path = $"/api/v1/system/excel/error-reports/{reportId}";
+        return query.Count == 0 ? path : $"{path}?{string.Join("&", query)}";
     }
 
     private static string ToColumnLetter(int column)
