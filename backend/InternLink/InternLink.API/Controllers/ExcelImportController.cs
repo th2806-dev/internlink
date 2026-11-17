@@ -22,6 +22,7 @@ namespace InternLink.API.Controllers;
 [ApiController]
 [Route("api/v1/system/excel")]
 [Authorize(Policy = AdminPolicies.LegacyAdmin)]
+[RequirePermission(SystemPermissionCodes.ExcelImport)]
 [RequestSizeLimit(MaxFileBytes)]
 public sealed class ExcelImportController : ControllerBase
 {
@@ -186,7 +187,6 @@ public sealed class ExcelImportController : ControllerBase
     }
 
     [HttpPost("execute-import")]
-    [RequirePermission(SystemPermissionCodes.ConfigurationUpdate)]
     public async Task<ActionResult<ImportCommitResult>> ExecuteImport(
         [FromBody] ExecuteExcelImportRequest request,
         CancellationToken cancellationToken)
@@ -285,7 +285,6 @@ public sealed class ExcelImportController : ControllerBase
     }
 
     [HttpPost("mappings")]
-    [RequirePermission(SystemPermissionCodes.ConfigurationUpdate)]
     public async Task<ActionResult<ExcelMappingPresetDto>> SavePreset(
         [FromBody] SaveExcelPresetRequest request,
         CancellationToken cancellationToken)

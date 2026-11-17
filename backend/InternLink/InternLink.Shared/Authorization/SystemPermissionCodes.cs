@@ -22,6 +22,7 @@ public static class SystemPermissionCodes
     public const string ItConfigurationView = "IT_CONFIG.VIEW";
     public const string ItConfigurationUpdate = "IT_CONFIG.UPDATE";
     public const string ItConfigurationTestConnection = "IT_CONFIG.TEST_CONNECTION";
+    public const string ExcelImport = "IT_CONFIG.EXCEL_IMPORT";
 
     public const string ApiWebhookView = "API_WEBHOOK.VIEW";
     public const string ApiWebhookCreate = "API_WEBHOOK.CREATE";

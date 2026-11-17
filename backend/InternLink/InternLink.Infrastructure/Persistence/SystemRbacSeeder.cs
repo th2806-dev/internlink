@@ -71,7 +71,7 @@ public static class SystemRbacSeeder
         yield return new("CONFIG.FIELD_POLICIES", "Chính sách trường dữ liệu", "CONFIG", 11, false, "CONFIG", "/admin/config/field-policies", "FileSliders", IsMenuEntry: true);
         yield return new("CONFIG.GRADING_RULES", "Quy chế điểm & deadline", "CONFIG", 12, false, "CONFIG", "/admin/config/grading-rules", "ClipboardList", IsMenuEntry: true);
         yield return new("AUDIT.LOGS", "Nhật ký kiểm toán", "AUDIT", 10, false, "AUDIT", "/admin/logs/audit", "ScrollText", IsMenuEntry: true);
-        yield return new("IT_CONFIG.EXCEL_IMPORT", "Nhập sinh viên từ Excel", "IT_CONFIG", 10, false, "IT_CONFIG", "/admin/config/import-excel", "FileSpreadsheet", IsMenuEntry: true);
+        yield return new(SystemPermissionCodes.ExcelImport, "Nhập sinh viên từ Excel", "IT_CONFIG", 10, false, "IT_CONFIG", "/admin/config/import-excel", "FileSpreadsheet", IsMenuEntry: true);
         yield return new("API_WEBHOOK.SETTINGS", "Cấu hình kết nối", "API_WEBHOOK", 10, false, "API_WEBHOOK", "/admin/settings", "Settings", IsMenuEntry: true);
     }
 
@@ -379,7 +379,8 @@ public static class SystemRbacSeeder
                         or SystemPermissionCodes.AccountsDelete
                         or SystemPermissionCodes.AccountsResetPassword
                         or SystemPermissionCodes.ConfigurationView
-                        or SystemPermissionCodes.ConfigurationUpdate),
+                        or SystemPermissionCodes.ConfigurationUpdate
+                        or SystemPermissionCodes.ExcelImport),
                 _ => []
             };
 
@@ -406,6 +407,11 @@ public static class SystemRbacSeeder
                     or SystemPermissionCodes.ConfigurationUpdate);
             foreach (var function in configurableFunctions)
                 EnsurePermission(departmentAdmin, function);
+
+            var excelImportFunction = functions.FirstOrDefault(function =>
+                function.Code == SystemPermissionCodes.ExcelImport);
+            if (excelImportFunction != null)
+                EnsurePermission(departmentAdmin, excelImportFunction);
         }
 
         var exportPermission = functions.FirstOrDefault(function =>

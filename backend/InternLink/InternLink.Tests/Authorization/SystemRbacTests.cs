@@ -162,7 +162,14 @@ public class SystemRbacTests
             PasswordHash = "hash",
             Role = Role.Lecturer
         };
-        context.Users.AddRange(admin, student, lecturer);
+        var departmentAdmin = new User
+        {
+            Id = Guid.NewGuid(),
+            Username = "department-admin",
+            PasswordHash = "hash",
+            Role = Role.DepartmentAdmin
+        };
+        context.Users.AddRange(admin, student, lecturer, departmentAdmin);
         await context.SaveChangesAsync();
         await SystemRbacSeeder.SeedAsync(context);
 
@@ -185,6 +192,15 @@ public class SystemRbacTests
         var studentExportContext = CreateAuthorizationContext(student.Id, exportRequirement);
         await handler.HandleAsync(studentExportContext);
         studentExportContext.HasSucceeded.Should().BeFalse();
+
+        var excelImportRequirement = new PermissionRequirement(SystemPermissionCodes.ExcelImport);
+        var departmentAdminContext = CreateAuthorizationContext(departmentAdmin.Id, excelImportRequirement);
+        await handler.HandleAsync(departmentAdminContext);
+        departmentAdminContext.HasSucceeded.Should().BeTrue();
+
+        var studentImportContext = CreateAuthorizationContext(student.Id, excelImportRequirement);
+        await handler.HandleAsync(studentImportContext);
+        studentImportContext.HasSucceeded.Should().BeFalse();
     }
 
     [Fact]
