@@ -2325,6 +2325,223 @@ namespace InternLink.Infrastructure.Migrations
                     b.ToTable("Sys_AuditLogs", (string)null);
                 });
 
+            modelBuilder.Entity("InternLink.Domain.Entities.Rbac.SysExcelMapping", b =>
+                {
+                    b.Property<long>("AutoId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("Auto_ID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("AutoId"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("CreatedByFunction")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("Created_By_Function");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("Deleted_At");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("Deleted_By");
+
+                    b.Property<Guid?>("DepartmentId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("Department_ID");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("MappingCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("Mapping_Code");
+
+                    b.Property<string>("MappingName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasColumnName("Mapping_Name");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)")
+                        .HasColumnName("Ghi_Chu");
+
+                    b.Property<Guid>("PublicId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("Public_ID")
+                        .HasDefaultValueSql("NEWID()");
+
+                    b.Property<int>("StartRowIndex")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(2)
+                        .HasColumnName("Start_Row_Index");
+
+                    b.Property<string>("TargetEntity")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("Target_Entity");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("Tenant_ID");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("UpdatedByFunction")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("Updated_By_Function");
+
+                    b.HasKey("AutoId");
+
+                    b.HasIndex("DepartmentId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("MappingCode", "TenantId", "DepartmentId")
+                        .IsUnique()
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("Sys_Excel_Mappings", (string)null);
+                });
+
+            modelBuilder.Entity("InternLink.Domain.Entities.Rbac.SysExcelMappingDetail", b =>
+                {
+                    b.Property<long>("AutoId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("Auto_ID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("AutoId"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("CreatedByFunction")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("Created_By_Function");
+
+                    b.Property<string>("DefaultValue")
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)")
+                        .HasColumnName("Default_Value");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("Deleted_At");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("Deleted_By");
+
+                    b.Property<int>("ExcelColumnIndex")
+                        .HasColumnType("int")
+                        .HasColumnName("Excel_Column_Index");
+
+                    b.Property<string>("ExcelColumnName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("Excel_Column_Name");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsRequired")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false)
+                        .HasColumnName("Is_Required");
+
+                    b.Property<long>("MappingId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("Mapping_ID");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)")
+                        .HasColumnName("Ghi_Chu");
+
+                    b.Property<Guid>("PublicId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("Public_ID")
+                        .HasDefaultValueSql("NEWID()");
+
+                    b.Property<string>("SystemFieldCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("System_Field_Code");
+
+                    b.Property<string>("TransformRule")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("Transform_Rule");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("UpdatedByFunction")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("Updated_By_Function");
+
+                    b.HasKey("AutoId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("MappingId", "ExcelColumnIndex")
+                        .IsUnique();
+
+                    b.HasIndex("MappingId", "SystemFieldCode")
+                        .IsUnique();
+
+                    b.ToTable("Sys_Excel_Mapping_Details", (string)null);
+                });
+
             modelBuilder.Entity("InternLink.Domain.Entities.Rbac.SysFunction", b =>
                 {
                     b.Property<long>("AutoId")
@@ -5052,6 +5269,27 @@ namespace InternLink.Infrastructure.Migrations
                     b.Navigation("Internship");
                 });
 
+            modelBuilder.Entity("InternLink.Domain.Entities.Rbac.SysExcelMapping", b =>
+                {
+                    b.HasOne("InternLink.Domain.Entities.Department", "Department")
+                        .WithMany()
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Department");
+                });
+
+            modelBuilder.Entity("InternLink.Domain.Entities.Rbac.SysExcelMappingDetail", b =>
+                {
+                    b.HasOne("InternLink.Domain.Entities.Rbac.SysExcelMapping", "Mapping")
+                        .WithMany("Details")
+                        .HasForeignKey("MappingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Mapping");
+                });
+
             modelBuilder.Entity("InternLink.Domain.Entities.Rbac.SysFunction", b =>
                 {
                     b.HasOne("InternLink.Domain.Entities.Rbac.SysFunction", "Parent")
@@ -5339,6 +5577,11 @@ namespace InternLink.Infrastructure.Migrations
                     b.Navigation("Internships");
 
                     b.Navigation("SemesterLecturers");
+                });
+
+            modelBuilder.Entity("InternLink.Domain.Entities.Rbac.SysExcelMapping", b =>
+                {
+                    b.Navigation("Details");
                 });
 
             modelBuilder.Entity("InternLink.Domain.Entities.Rbac.SysFunction", b =>

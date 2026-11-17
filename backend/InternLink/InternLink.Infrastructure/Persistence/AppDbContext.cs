@@ -50,6 +50,8 @@ public class AppDbContext : DbContext
     public DbSet<SysFunction> SysFunctions { get; set; } = null!;
     public DbSet<SysRolePermission> SysRolePermissions { get; set; } = null!;
     public DbSet<SysGridConfig> SysGridConfigs { get; set; } = null!;
+    public DbSet<SysExcelMapping> SysExcelMappings { get; set; } = null!;
+    public DbSet<SysExcelMappingDetail> SysExcelMappingDetails { get; set; } = null!;
     public DbSet<SysLoginLog> SysLoginLogs { get; set; } = null!;
     public DbSet<SysGradingRuleSet> SysGradingRuleSets { get; set; } = null!;
     public DbSet<EmployerEvaluation> EmployerEvaluations { get; set; } = null!;
@@ -748,6 +750,57 @@ public class AppDbContext : DbContext
             b.Property(x => x.CellColorRuleJson).HasMaxLength(4000);
             b.HasIndex(x => x.PublicId).IsUnique();
             b.HasIndex(x => new { x.FeatureCode, x.RoleId, x.TenantId, x.FieldCode }).IsUnique();
+        });
+
+        modelBuilder.Entity<SysExcelMapping>(b =>
+        {
+            b.ToTable("Sys_Excel_Mappings");
+            b.HasKey(x => x.AutoId);
+            b.Property(x => x.MappingCode).HasColumnName("Mapping_Code").IsRequired().HasMaxLength(50);
+            b.Property(x => x.MappingName).HasColumnName("Mapping_Name").IsRequired().HasMaxLength(200);
+            b.Property(x => x.TargetEntity).HasColumnName("Target_Entity").IsRequired().HasMaxLength(100);
+            b.Property(x => x.StartRowIndex).HasColumnName("Start_Row_Index").HasDefaultValue(2);
+            b.Property(x => x.TenantId).HasColumnName("Tenant_ID").HasMaxLength(50);
+            b.Property(x => x.DepartmentId).HasColumnName("Department_ID");
+            b.Property(x => x.PublicId).HasDefaultValueSql("NEWID()");
+            b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+            b.Property(x => x.CreatedBy).HasMaxLength(100);
+            b.Property(x => x.UpdatedBy).HasMaxLength(100);
+            b.Property(x => x.IsDeleted).HasDefaultValue(false);
+            b.HasIndex(x => x.PublicId).IsUnique();
+            b.HasIndex(x => new { x.MappingCode, x.TenantId, x.DepartmentId })
+                .IsUnique()
+                .HasFilter("[IsDeleted] = 0");
+            b.HasOne(x => x.Department)
+                .WithMany()
+                .HasForeignKey(x => x.DepartmentId)
+                .OnDelete(DeleteBehavior.SetNull);
+            b.HasMany(x => x.Details)
+                .WithOne(x => x.Mapping)
+                .HasForeignKey(x => x.MappingId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<SysExcelMappingDetail>(b =>
+        {
+            b.ToTable("Sys_Excel_Mapping_Details");
+            b.HasKey(x => x.AutoId);
+            b.Property(x => x.MappingId).HasColumnName("Mapping_ID");
+            b.Property(x => x.SystemFieldCode).HasColumnName("System_Field_Code").IsRequired().HasMaxLength(50);
+            b.Property(x => x.ExcelColumnName).HasColumnName("Excel_Column_Name").IsRequired().HasMaxLength(100);
+            b.Property(x => x.ExcelColumnIndex).HasColumnName("Excel_Column_Index");
+            b.Property(x => x.IsRequired).HasColumnName("Is_Required");
+            b.Property(x => x.DefaultValue).HasColumnName("Default_Value").HasMaxLength(250);
+            b.Property(x => x.TransformRule).HasColumnName("Transform_Rule").HasMaxLength(100);
+            b.Property(x => x.PublicId).HasDefaultValueSql("NEWID()");
+            b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+            b.Property(x => x.CreatedBy).HasMaxLength(100);
+            b.Property(x => x.UpdatedBy).HasMaxLength(100);
+            b.Property(x => x.IsRequired).HasDefaultValue(false);
+            b.Property(x => x.IsDeleted).HasDefaultValue(false);
+            b.HasIndex(x => x.PublicId).IsUnique();
+            b.HasIndex(x => new { x.MappingId, x.SystemFieldCode }).IsUnique();
+            b.HasIndex(x => new { x.MappingId, x.ExcelColumnIndex }).IsUnique();
         });
 
         modelBuilder.Entity<SysLoginLog>(b =>

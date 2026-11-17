@@ -1,0 +1,148 @@
+@baseUrl = http://localhost:7109
+@token = replace-with-admin-jwt
+@departmentId = 00000000-0000-0000-0000-000000000001
+@presetId = 00000000-0000-0000-0000-000000000002
+@fileId = replace-with-fileId-from-preview
+@sheetName = replace-with-a-name-from-the-preview-response
+@workbookPath = E:\Downloads\TTTN_C24ATH\Import\danh-sach-SV.xlsx
+
+### Analyze workbook and preview the first worksheet
+POST {{baseUrl}}/api/v1/system/excel/preview
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=excel-preview
+
+--excel-preview
+Content-Disposition: form-data; name="file"; filename="danh-sach-SV.xlsx"
+Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+
+< {{workbookPath}}
+--excel-preview--
+
+### Analyze a selected worksheet
+POST {{baseUrl}}/api/v1/system/excel/preview
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=excel-preview-sheet
+
+--excel-preview-sheet
+Content-Disposition: form-data; name="file"; filename="danh-sach-SV.xlsx"
+Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+
+< {{workbookPath}}
+--excel-preview-sheet
+Content-Disposition: form-data; name="sheetName"
+
+{{sheetName}}
+--excel-preview-sheet--
+
+### List presets for a department
+GET {{baseUrl}}/api/v1/system/excel/mappings?departmentId={{departmentId}}
+Authorization: Bearer {{token}}
+
+### Get a preset
+GET {{baseUrl}}/api/v1/system/excel/mappings/{{presetId}}?departmentId={{departmentId}}
+Authorization: Bearer {{token}}
+
+### Save a mapping preset
+POST {{baseUrl}}/api/v1/system/excel/mappings
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "mappingCode": "C24ATH_STUDENTS",
+  "mappingName": "Danh sách sinh viên C24ATH",
+  "targetEntity": "Students",
+  "startRowIndex": 2,
+  "departmentId": "{{departmentId}}",
+  "notes": "Mẫu nhập sinh viên đã ánh xạ từ file danh sách C24ATH.",
+  "mappings": [
+    {
+      "systemFieldCode": "StudentCode",
+      "excelColumnName": "MSSV",
+      "excelColumnIndex": 0,
+      "isRequired": true,
+      "defaultValue": null,
+      "transformRule": "TRIM"
+    },
+    {
+      "systemFieldCode": "FullName",
+      "excelColumnName": "Họ và tên",
+      "excelColumnIndex": 1,
+      "isRequired": true,
+      "defaultValue": null,
+      "transformRule": "TRIM"
+    }
+
+    ### Validate a staged workbook before import
+    POST {{baseUrl}}/api/v1/system/excel/validate
+    Authorization: Bearer {{token}}
+    Content-Type: application/json
+
+    {
+      "fileId": "{{fileId}}",
+      "mappingConfig": {
+        "targetEntity": "Students",
+        "startRowIndex": 2,
+        "departmentId": "{{departmentId}}",
+        "tenantId": null,
+        "sheetName": "{{sheetName}}",
+        "mappings": [
+          {
+            "systemFieldCode": "StudentCode",
+            "excelColumnName": "MSSV",
+            "excelColumnIndex": 0,
+            "isRequired": true,
+            "defaultValue": null,
+            "transformRule": "TRIM"
+          },
+          {
+            "systemFieldCode": "FullName",
+            "excelColumnName": "Họ và tên",
+            "excelColumnIndex": 1,
+            "isRequired": true,
+            "defaultValue": null,
+            "transformRule": "TRIM"
+          }
+        ]
+      }
+    }
+
+    ### Execute a validated import (only when validation has no errors)
+    POST {{baseUrl}}/api/v1/system/excel/execute-import
+    Authorization: Bearer {{token}}
+    Content-Type: application/json
+
+    {
+      "fileId": "{{fileId}}",
+      "confirmImport": true,
+      "mappingConfig": {
+        "targetEntity": "Students",
+        "startRowIndex": 2,
+        "departmentId": "{{departmentId}}",
+        "tenantId": null,
+        "sheetName": "{{sheetName}}",
+        "mappings": [
+          {
+            "systemFieldCode": "StudentCode",
+            "excelColumnName": "MSSV",
+            "excelColumnIndex": 0,
+            "isRequired": true,
+            "defaultValue": null,
+            "transformRule": "TRIM"
+          },
+          {
+            "systemFieldCode": "FullName",
+            "excelColumnName": "Họ và tên",
+            "excelColumnIndex": 1,
+            "isRequired": true,
+            "defaultValue": null,
+            "transformRule": "TRIM"
+          }
+        ]
+      }
+    }
+
+    ### Download an authorized validation error report
+    GET {{baseUrl}}/api/v1/system/excel/error-reports/00000000-0000-0000-0000-000000000003?departmentId={{departmentId}}
+    Authorization: Bearer {{token}}
+  ]
+}
