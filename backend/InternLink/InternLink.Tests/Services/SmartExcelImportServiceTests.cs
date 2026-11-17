@@ -174,6 +174,48 @@ public class SmartExcelImportServiceTests
     }
 
     [Fact]
+    public async Task ValidateImportAsync_SkipsRowsWithOnlyUnmappedSequenceNumbers()
+    {
+        await using var db = CreateDb();
+        using var tempDirectory = new TemporaryTestDirectory();
+        var service = new SmartExcelImportService(
+            db, new PasswordHasher<User>(), new ExcelImportFileStore(tempDirectory.Path));
+        using var workbook = new XLWorkbook();
+        var sheet = workbook.AddWorksheet("Students");
+        sheet.Cell(1, 1).Value = "STT";
+        sheet.Cell(1, 2).Value = "MSSV";
+        sheet.Cell(1, 3).Value = "Họ tên";
+        sheet.Cell(2, 1).Value = 1;
+        sheet.Cell(3, 1).Value = 2;
+        sheet.Cell(3, 2).Value = "SV001";
+        sheet.Cell(3, 3).Value = "Student One";
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        stream.Position = 0;
+        var staged = await service.StageAndAnalyzeExcelAsync(
+            stream, "students.xlsx", "Students", "admin", null, null, CancellationToken.None);
+        var request = new ExcelImportRequest(
+            staged.FileId,
+            new ExcelImportMappingConfig(
+                "Students",
+                2,
+                null,
+                null,
+                "Students",
+                [
+                    new ExcelColumnMappingDto("StudentCode", "MSSV", 1, true, null, "TRIM"),
+                    new ExcelColumnMappingDto("FullName", "Họ tên", 2, true, null, "TRIM")
+                ]));
+
+        var result = await service.ValidateImportAsync(
+            request, "admin", null, null, CancellationToken.None);
+
+        result.TotalRecords.Should().Be(1);
+        result.Rows.Should().ContainSingle().Which.RowIndex.Should().Be(3);
+        result.ErrorRecordsCount.Should().Be(0);
+    }
+
+    [Fact]
     public async Task ExecuteImportAsync_UpsertsStudentAndCreatesHashedStudentAccountAndRole()
     {
         await using var db = CreateDb();

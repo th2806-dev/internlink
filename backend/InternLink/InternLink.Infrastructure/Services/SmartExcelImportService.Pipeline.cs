@@ -815,7 +815,7 @@ public sealed partial class SmartExcelImportService
             for (var index = headerOffset + 1; index < leadingRows.Count; index++)
             {
                 var row = rawRows[index];
-                if (row.RowIndex >= config.StartRowIndex && row.Values.Any(value => !string.IsNullOrWhiteSpace(value)))
+                if (row.RowIndex >= config.StartRowIndex && HasMappedSourceData(row, config.Mappings))
                     importRows.Add(row);
             }
 
@@ -826,7 +826,7 @@ public sealed partial class SmartExcelImportService
                 var values = ReadValues(reader);
                 var row = new RawImportRow(worksheetRow, values);
                 rawRows.Add(row);
-                if (worksheetRow >= config.StartRowIndex && values.Any(value => !string.IsNullOrWhiteSpace(value)))
+                if (worksheetRow >= config.StartRowIndex && HasMappedSourceData(row, config.Mappings))
                     importRows.Add(row);
                 if (importRows.Count > MaxDataRows)
                     throw new InvalidDataException($"Workbook exceeds {MaxDataRows} data rows.");
@@ -840,6 +840,13 @@ public sealed partial class SmartExcelImportService
 
         throw new KeyNotFoundException("The selected worksheet does not exist in this workbook.");
     }
+
+    private static bool HasMappedSourceData(
+        RawImportRow row,
+        IReadOnlyList<ExcelColumnMappingDto> mappings) =>
+        mappings.Any(mapping =>
+            mapping.ExcelColumnIndex < row.Values.Length
+            && !string.IsNullOrWhiteSpace(row.Values[mapping.ExcelColumnIndex]));
 
     private static IReadOnlyDictionary<string, string> MapValues(
         RawImportRow row,
