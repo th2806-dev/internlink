@@ -50,7 +50,7 @@ describe("PermissionMatrixView", () => {
     renderView(<PermissionMatrixView onShowToast={onShowToast} />);
 
     expect(await screen.findByText("Tài khoản")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("checkbox", { name: "Tài khoản: Thêm" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Tài khoản: Thêm" }));
     fireEvent.click(screen.getByRole("button", { name: "Lưu ma trận quyền" }));
 
     await waitFor(() => {
@@ -69,37 +69,73 @@ describe("PermissionMatrixView", () => {
     ]);
     renderView(<PermissionMatrixView onShowToast={vi.fn()} />);
 
-    await screen.findByRole("checkbox", { name: "Tài khoản: Xem" });
-    const allView = await screen.findByRole("checkbox", {
+    await screen.findByRole("switch", { name: "Tài khoản: Xem" });
+    const allView = await screen.findByRole("switch", {
       name: "Cấp quyền cột Xem cho tất cả phân hệ",
     });
     fireEvent.click(allView);
 
     await waitFor(() => {
-      expect(screen.getByRole("checkbox", { name: "Tài khoản: Xem" })).toBeChecked();
-      expect(screen.getByRole("checkbox", { name: "Cấu hình: Xem" })).toBeChecked();
+      expect(screen.getByRole("switch", { name: "Tài khoản: Xem" })).toBeChecked();
+      expect(screen.getByRole("switch", { name: "Cấu hình: Xem" })).toBeChecked();
     });
 
-    fireEvent.click(screen.getByRole("checkbox", {
+    fireEvent.click(screen.getByRole("switch", {
       name: "Cấp quyền cột Xuất Excel cho tất cả phân hệ",
     }));
     await waitFor(() => {
-      expect(screen.getByRole("checkbox", { name: "Tài khoản: Xuất Excel" })).toBeChecked();
-      expect(screen.getByRole("checkbox", { name: "Cấu hình: Xuất Excel" })).toBeChecked();
+      expect(screen.getByRole("switch", { name: "Tài khoản: Xuất Excel" })).toBeChecked();
+      expect(screen.getByRole("switch", { name: "Cấu hình: Xuất Excel" })).toBeChecked();
     });
   });
 
   it("grants every action for a function with one control", async () => {
     renderView(<PermissionMatrixView onShowToast={vi.fn()} />);
 
-    const grantAll = await screen.findByRole("checkbox", {
+    const grantAll = await screen.findByRole("switch", {
       name: "Cấp toàn quyền chức năng cho Tài khoản",
     });
     fireEvent.click(grantAll);
 
     for (const action of ["Xem", "Thêm", "Sửa", "Xóa", "Xuất Excel", "Nhập Excel", "In phiếu", "Phê duyệt"]) {
-      expect(screen.getByRole("checkbox", { name: `Tài khoản: ${action}` })).toBeChecked();
+      expect(screen.getByRole("switch", { name: `Tài khoản: ${action}` })).toBeChecked();
     }
+  });
+
+  it("toggles every permission in a function group and shows its sort order", async () => {
+    renderView(<PermissionMatrixView onShowToast={vi.fn()} />);
+
+    const groupToggle = await screen.findByRole("switch", {
+      name: "Cấp toàn quyền nhóm QUẢN LÝ TÀI KHOẢN",
+    });
+    expect(screen.getByLabelText("Thứ tự 2")).toHaveTextContent("2");
+    fireEvent.click(groupToggle);
+
+    for (const action of ["Xem", "Thêm", "Sửa", "Xóa", "Xuất Excel", "Nhập Excel", "In phiếu", "Phê duyệt"]) {
+      expect(screen.getByRole("switch", { name: `Tài khoản: ${action}` })).toBeChecked();
+    }
+  });
+
+  it("filters permission rows by function group", async () => {
+    vi.mocked(systemAdminService.getRolePermissions).mockResolvedValue([
+      ...permissions,
+      {
+        ...permissions[0],
+        moduleCode: "SYSTEM",
+        featureCode: "SYSTEM",
+        functionName: "Hệ thống",
+        sortOrder: 1,
+      },
+    ]);
+    renderView(<PermissionMatrixView onShowToast={vi.fn()} />);
+
+    await screen.findByRole("switch", { name: "Tài khoản: Xem" });
+    fireEvent.change(screen.getByRole("combobox", { name: "Nhóm chức năng" }), {
+      target: { value: "SYSTEM" },
+    });
+
+    expect(screen.getByRole("switch", { name: "Hệ thống: Xem" })).toBeInTheDocument();
+    expect(screen.queryByRole("switch", { name: "Tài khoản: Xem" })).not.toBeInTheDocument();
   });
 });
 
