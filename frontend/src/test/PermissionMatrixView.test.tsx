@@ -50,8 +50,14 @@ describe("PermissionMatrixView", () => {
     renderView(<PermissionMatrixView onShowToast={onShowToast} />);
 
     expect(await screen.findByText("Tài khoản")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("switch", { name: "Tài khoản: Thêm" }));
-    fireEvent.click(screen.getByRole("button", { name: "Lưu ma trận quyền" }));
+    const addSwitch = screen.getByRole("switch", { name: "Tài khoản: Thêm" });
+    expect(addSwitch).toHaveClass("h-7", "w-8", "rounded-[4px]");
+    expect(addSwitch.firstElementChild).toHaveClass("h-4", "w-7", "rounded-full");
+    expect(addSwitch.firstElementChild?.firstElementChild).toHaveClass("h-3", "w-3");
+    fireEvent.click(addSwitch);
+    const saveButton = screen.getByRole("button", { name: "Lưu ma trận quyền" });
+    expect(saveButton).toHaveClass("h-8", "rounded-[4px]", "bg-[#026aa7]");
+    fireEvent.click(saveButton);
 
     await waitFor(() => {
       expect(systemAdminService.saveRolePermissions).toHaveBeenCalledWith(
@@ -108,6 +114,8 @@ describe("PermissionMatrixView", () => {
     const groupToggle = await screen.findByRole("switch", {
       name: "Cấp toàn quyền nhóm QUẢN LÝ TÀI KHOẢN",
     });
+    expect(screen.getByLabelText("Thứ tự 2"))
+      .toHaveClass("rounded-[3px]", "bg-amber-50", "border-amber-200", "font-mono", "text-[10px]");
     expect(screen.getByLabelText("Thứ tự 2")).toHaveTextContent("2");
     fireEvent.click(groupToggle);
 
@@ -117,19 +125,48 @@ describe("PermissionMatrixView", () => {
   });
 
   it("filters permission rows by function group", async () => {
+    const moduleLabels = [
+      ["DASHBOARD", "TỔNG QUAN"],
+      ["SEMESTERS", "KỲ THỰC TẬP"],
+      ["STUDENTS", "SINH VIÊN"],
+      ["LECTURER", "GIẢNG VIÊN"],
+      ["COMPANIES", "DOANH NGHIỆP"],
+      ["ASSIGNMENTS", "PHÂN CÔNG GVHD"],
+      ["WEEKLY_REPORTS", "BÁO CÁO TUẦN"],
+      ["ATTENDANCE", "ĐIỂM DANH & NHẬT KÝ"],
+      ["EVALUATIONS", "CHẤM ĐIỂM & ĐÁNH GIÁ"],
+      ["SUMMARY", "BẢNG ĐIỂM TỔNG HỢP"],
+      ["TEMPLATES", "BIỂU MẪU & TÀI LIỆU"],
+      ["NOTIFICATIONS", "THÔNG BÁO"],
+      ["DEPARTMENTS", "QUẢN LÝ KHOA"],
+      ["GRID_CONFIG", "CẤU HÌNH BẢNG"],
+      ["FIELD_POLICIES", "CHÍNH SÁCH TRƯỜNG"],
+      ["SYSTEM", "HỆ THỐNG"],
+      ["ACCOUNTS", "QUẢN LÝ TÀI KHOẢN"],
+      ["CONFIG", "CẤU HÌNH"],
+      ["AUDIT", "NHẬT KÝ & BÁO CÁO"],
+      ["IT_CONFIG", "CẤU HÌNH KỸ THUẬT"],
+      ["API_WEBHOOK", "TÍCH HỢP API & WEBHOOK"],
+    ] as const;
     vi.mocked(systemAdminService.getRolePermissions).mockResolvedValue([
-      ...permissions,
-      {
+      ...moduleLabels.map(([moduleCode], sortOrder) => ({
         ...permissions[0],
-        moduleCode: "SYSTEM",
-        featureCode: "SYSTEM",
-        functionName: "Hệ thống",
-        sortOrder: 1,
-      },
+        moduleCode,
+        featureCode: moduleCode,
+        functionName: moduleCode === "SYSTEM"
+          ? "Hệ thống"
+          : moduleCode === "ACCOUNTS"
+            ? "Tài khoản"
+            : `Chức năng ${moduleCode}`,
+        sortOrder,
+      })),
     ]);
     renderView(<PermissionMatrixView onShowToast={vi.fn()} />);
 
     await screen.findByRole("switch", { name: "Tài khoản: Xem" });
+    for (const [, label] of moduleLabels) {
+      expect(screen.getAllByText(label).length).toBeGreaterThan(0);
+    }
     fireEvent.change(screen.getByRole("combobox", { name: "Nhóm chức năng" }), {
       target: { value: "SYSTEM" },
     });

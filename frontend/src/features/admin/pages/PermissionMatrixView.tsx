@@ -1,14 +1,28 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Award,
+  Bell,
+  Building,
+  Building2,
+  Calendar,
+  CalendarCheck,
+  ClipboardList,
+  Columns3,
+  FileSliders,
+  FileSpreadsheet,
+  FileText,
   GraduationCap,
   KeyRound,
   Layers,
+  LayoutDashboard,
   RotateCcw,
   Save,
   ScrollText,
   Settings,
   Shield,
+  UserCheck,
+  UserRoundPlus,
   Users,
   Webhook,
   Wrench,
@@ -34,9 +48,23 @@ const PERMISSIONS: { key: PermissionKey; label: string }[] = [
 ];
 
 const FUNCTION_GROUP_METADATA: Record<string, { label: string; icon: LucideIcon }> = {
+  DASHBOARD: { label: "TỔNG QUAN", icon: LayoutDashboard },
   SYSTEM: { label: "HỆ THỐNG", icon: Shield },
   ACCOUNTS: { label: "QUẢN LÝ TÀI KHOẢN", icon: Users },
-  LECTURER: { label: "NGHIỆP VỤ GIẢNG VIÊN", icon: GraduationCap },
+  SEMESTERS: { label: "KỲ THỰC TẬP", icon: Calendar },
+  STUDENTS: { label: "SINH VIÊN", icon: GraduationCap },
+  LECTURER: { label: "GIẢNG VIÊN", icon: UserCheck },
+  COMPANIES: { label: "DOANH NGHIỆP", icon: Building2 },
+  ASSIGNMENTS: { label: "PHÂN CÔNG GVHD", icon: UserRoundPlus },
+  WEEKLY_REPORTS: { label: "BÁO CÁO TUẦN", icon: FileText },
+  ATTENDANCE: { label: "ĐIỂM DANH & NHẬT KÝ", icon: CalendarCheck },
+  EVALUATIONS: { label: "CHẤM ĐIỂM & ĐÁNH GIÁ", icon: Award },
+  SUMMARY: { label: "BẢNG ĐIỂM TỔNG HỢP", icon: ClipboardList },
+  TEMPLATES: { label: "BIỂU MẪU & TÀI LIỆU", icon: FileSpreadsheet },
+  NOTIFICATIONS: { label: "THÔNG BÁO", icon: Bell },
+  DEPARTMENTS: { label: "QUẢN LÝ KHOA", icon: Building },
+  GRID_CONFIG: { label: "CẤU HÌNH BẢNG", icon: Columns3 },
+  FIELD_POLICIES: { label: "CHÍNH SÁCH TRƯỜNG", icon: FileSliders },
   CONFIG: { label: "CẤU HÌNH", icon: Settings },
   AUDIT: { label: "NHẬT KÝ & BÁO CÁO", icon: ScrollText },
   IT_CONFIG: { label: "CẤU HÌNH KỸ THUẬT", icon: Wrench },
@@ -69,17 +97,17 @@ function PermissionSwitch({
       aria-checked={checked}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+      className="inline-flex h-7 w-8 shrink-0 items-center justify-center rounded-[4px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
     >
       <span
         aria-hidden="true"
-        className={`flex h-6 w-10 items-center rounded-full p-1 transition-colors duration-150 ${
+        className={`flex h-4 w-7 items-center rounded-full p-0.5 transition-colors duration-150 ${
           checked ? "bg-[#7bc043]" : "bg-slate-200"
         }`}
       >
         <span
-          className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-150 ${
-            checked ? "translate-x-4" : "translate-x-0"
+          className={`h-3 w-3 rounded-full bg-white shadow-sm transition-transform duration-150 ${
+            checked ? "translate-x-3" : "translate-x-0"
           }`}
         />
       </span>
@@ -224,11 +252,11 @@ export function PermissionMatrixView({
         subtitle="Cấp quyền theo phân hệ, chức năng và thao tác."
       />
 
-      <section className="rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs sm:p-5">
+      <section className="space-y-3 rounded-md border border-slate-200 bg-white p-3">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="grid w-full gap-3 sm:max-w-2xl sm:grid-cols-2">
             <div>
-              <label htmlFor="permission-role" className="mb-1.5 block text-sm font-medium text-slate-700">
+              <label htmlFor="permission-role" className="mb-1 block text-xs font-medium text-slate-700">
                 Nhóm quyền
               </label>
               <select
@@ -236,7 +264,7 @@ export function PermissionMatrixView({
                 value={roleId}
                 onChange={(event) => setRoleId(Number(event.target.value))}
                 disabled={rolesQuery.isLoading || !rolesQuery.data?.length}
-                className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
+                className="h-8 w-full rounded-[4px] border border-slate-200 bg-white px-2.5 text-xs text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
               >
                 {rolesQuery.data?.map((role) => (
                   <option key={role.id} value={role.id}>{role.name}</option>
@@ -244,7 +272,7 @@ export function PermissionMatrixView({
               </select>
             </div>
             <div>
-              <label htmlFor="permission-function-group" className="mb-1.5 block text-sm font-medium text-slate-700">
+              <label htmlFor="permission-function-group" className="mb-1 block text-xs font-medium text-slate-700">
                 Nhóm chức năng
               </label>
               <select
@@ -252,7 +280,7 @@ export function PermissionMatrixView({
                 value={selectedFunctionGroupCode}
                 onChange={(event) => setFunctionGroupCode(event.target.value)}
                 disabled={permissionsQuery.isLoading || !functionGroups.length}
-                className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
+                className="h-8 w-full rounded-[4px] border border-slate-200 bg-white px-2.5 text-xs text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
               >
                 <option value="all">Tất cả nhóm chức năng</option>
                 {functionGroups.map((group) => (
@@ -268,7 +296,7 @@ export function PermissionMatrixView({
               type="button"
               onClick={() => resetMutation.mutate()}
               disabled={!selectedRoleId || isBusy || permissionsQuery.isLoading}
-              className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-8 items-center gap-2 rounded-[4px] border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] disabled:cursor-not-allowed disabled:opacity-50"
             >
               <RotateCcw aria-hidden="true" className="h-4 w-4" />
               Khôi phục mặc định
@@ -277,7 +305,7 @@ export function PermissionMatrixView({
               type="button"
               onClick={() => saveMutation.mutate()}
               disabled={!selectedRoleId || isBusy || permissionsQuery.isLoading || !!error}
-              className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-[#026aa7] px-4 text-xs font-bold text-white transition hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-8 items-center gap-2 rounded-[4px] bg-[#026aa7] px-3.5 text-xs font-semibold text-white transition hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Save aria-hidden="true" className="h-4 w-4" />
               {saveMutation.isPending ? "Đang lưu…" : "Lưu ma trận quyền"}
@@ -286,24 +314,24 @@ export function PermissionMatrixView({
         </div>
 
         {error && (
-          <div role="alert" className="mt-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+          <div role="alert" className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
             {getApiErrorMessage(error)}
           </div>
         )}
         {rolesQuery.isLoading || permissionsQuery.isLoading ? (
-          <p role="status" className="mt-6 text-sm text-slate-600">Đang tải ma trận phân quyền…</p>
+          <p role="status" className="text-sm text-slate-600">Đang tải ma trận phân quyền…</p>
         ) : !rolesQuery.data?.length ? (
-          <p className="mt-6 rounded-lg bg-slate-50 p-4 text-sm text-slate-600">Chưa có vai trò nào được cấu hình.</p>
+          <p className="rounded-md bg-slate-50 p-4 text-sm text-slate-600">Chưa có vai trò nào được cấu hình.</p>
         ) : (
-          <div className="mt-5 overflow-x-auto rounded-xl border border-slate-200">
-            <table className="min-w-[1160px] w-full border-collapse text-sm">
-              <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
+          <div className="overflow-x-auto rounded-md border border-slate-200">
+            <table className="min-w-[1160px] w-full border-separate border-spacing-0 text-sm">
+              <thead className="bg-slate-100/90 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-600">
                 <tr>
-                  <th scope="col" className="sticky left-0 z-10 min-w-56 border-b border-slate-200 bg-slate-50 px-4 py-3">Phân hệ / chức năng</th>
-                  <th scope="col" className="min-w-16 border-b border-slate-200 px-2 py-3 text-center">Sort</th>
-                  <th scope="col" className="min-w-32 border-b border-slate-200 px-2 py-3 text-center">Toàn quyền</th>
+                  <th scope="col" className="sticky left-0 z-20 min-w-56 border-b border-r border-slate-200 bg-white px-4 py-1.5">Phân hệ / chức năng</th>
+                  <th scope="col" className="min-w-16 border-b border-slate-200 px-2 py-1.5 text-center">Sort</th>
+                  <th scope="col" className="min-w-32 border-b border-slate-200 px-2 py-1.5 text-center">Toàn quyền</th>
                   {PERMISSIONS.map(({ key, label }) => (
-                    <th key={key} scope="col" className="min-w-24 border-b border-slate-200 px-3 py-3 text-center">
+                    <th key={key} scope="col" className="min-w-24 border-b border-slate-200 bg-slate-100/90 px-3 py-1.5 text-center text-[11px] font-semibold uppercase tracking-wider text-slate-600">
                       <div className="flex flex-col items-center gap-1">
                         <span>{label}</span>
                         <PermissionSwitch
@@ -327,8 +355,7 @@ export function PermissionMatrixView({
                       <tr className="bg-blue-50/70">
                         <th
                           scope="rowgroup"
-                          colSpan={2}
-                          className="sticky left-0 z-[1] border-y border-blue-100 bg-blue-50/70 px-4 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-slate-700"
+                          className="sticky left-0 z-20 border-y border-r border-slate-200 bg-blue-50/70 px-4 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-slate-700"
                         >
                           <span className="flex items-center gap-2">
                             <GroupIcon aria-hidden="true" className="h-4 w-4 text-[#026aa7]" />
@@ -338,6 +365,7 @@ export function PermissionMatrixView({
                             </span>
                           </span>
                         </th>
+                        <td className="border-y border-blue-100" />
                         <td className="border-y border-blue-100 px-2 py-1 text-center">
                           <div className="flex items-center justify-center gap-1">
                             <PermissionSwitch
@@ -354,14 +382,14 @@ export function PermissionMatrixView({
                         const allGranted = PERMISSIONS.every(({ key }) => row[key]);
                         return (
                           <tr key={row.moduleCode} className="hover:bg-slate-50/80">
-                            <th scope="row" className="sticky left-0 bg-white px-4 py-2.5 text-left font-medium text-slate-900">
+                            <th scope="row" className="sticky left-0 z-20 border-r border-slate-200 bg-white px-4 py-2.5 text-left font-medium text-slate-900">
                               <span className="block pl-5">{row.functionName}</span>
                               <span className="mt-0.5 block pl-5 text-xs font-normal text-slate-500">{row.featureCode}</span>
                             </th>
                             <td className="px-2 py-1 text-center">
                               <span
                                 aria-label={`Thứ tự ${row.sortOrder}`}
-                                className="inline-flex min-w-8 items-center justify-center rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-800"
+                                className="inline-flex min-w-8 items-center justify-center rounded-[3px] border border-amber-200 bg-amber-50 px-2 py-1 font-mono text-[10px] font-bold text-amber-800"
                               >
                                 {row.sortOrder}
                               </span>
@@ -396,7 +424,7 @@ export function PermissionMatrixView({
           </div>
         )}
         {selectedRole && (
-          <p className="mt-3 text-xs text-slate-500">
+          <p className="text-xs text-slate-500">
             Đang chỉnh quyền cho vai trò <span className="font-semibold text-slate-700">{selectedRole.name}</span>.
           </p>
         )}
