@@ -26,14 +26,20 @@ import {
 } from "lucide-react";
 import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
 import { PasswordStrengthMeter } from "../../../components/common/PasswordStrengthMeter";
-import { useSemester } from "../../../contexts/SemesterContext";
+import {
+  ProfileAuditPanel,
+  ProfileCompletionCard,
+  ProfileDetailsCard,
+  ProfileStudioHeader,
+  type ProfileStudioTab,
+} from "../../../components/common/ProfileStudio";
 import { useStudentPortal } from "../../../contexts/StudentPortalContext";
+import { useAuth } from "../../../hooks/useAuth";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { authService } from "../../../services/auth.service";
 import { studentPortalService } from "../../../services/studentPortal.service";
 import type { StudentPortalProfileDto } from "../../../types/api";
 import type { StudentProfile } from "../../../types/common";
-import { StudentSubPageHeader } from "../components/StudentSubPageHeader";
 
 type PersonalInfo = {
   fullName: string;
@@ -95,7 +101,8 @@ export const AccountView = ({
   onLogout?: () => void;
 }) => {
   const { profile, portalData, refresh, isArchiveReadOnly } = useStudentPortal();
-  const { selectedSemester } = useSemester();
+  const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState<ProfileStudioTab>("overview");
 
   const [personalInfo, setPersonalInfo] = useState<PersonalInfo>(() =>
     buildPersonalInfo(profile, portalData),
@@ -226,22 +233,16 @@ export const AccountView = ({
 
   return (
     <div className="mx-auto max-w-[1300px] space-y-4 animate-in fade-in duration-200 font-sans pb-12">
-      {/* ═══════════════════════════════════════════════════════════════════
-          1. TOP CARD BANNER (Chuẩn layout banner xanh #026aa7 + thông tin thực tế)
-         ═══════════════════════════════════════════════════════════════════ */}
+      <ProfileStudioHeader
+        name={personalInfo.fullName}
+        identifier={personalInfo.studentId}
+        role="Sinh viên"
+        department={portalData?.student.department}
+        email={personalInfo.email}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+      />
       <div className="space-y-3">
-        <StudentSubPageHeader
-          icon={User}
-          title="Thông tin tài khoản & hồ sơ"
-          subtitle={
-            isArchiveReadOnly
-              ? "Thông tin hồ sơ được lưu trữ ở chế độ chỉ xem."
-              : "Cập nhật thông tin cá nhân và tùy chọn thực tập."
-          }
-          semesterName={selectedSemester?.name}
-          onRefresh={() => void handleRefresh()}
-          isRefreshing={isRefreshing}
-        />
         {isArchiveReadOnly && (
           <div
             role="status"
@@ -259,6 +260,38 @@ export const AccountView = ({
       {/* ═══════════════════════════════════════════════════════════════════
           2. MAIN CONTENT: 2 CỘT (HỒ SƠ CÁ NHÂN & BẢO MẬT/ĐỔI MẬT KHẨU)
          ═══════════════════════════════════════════════════════════════════ */}
+      {activeTab === "overview" ? (
+      <div
+        id="profile-panel-overview"
+        role="tabpanel"
+        aria-labelledby="profile-tab-overview"
+        className="space-y-5"
+      >
+      <ProfileCompletionCard
+        title="Tiến độ hoàn thiện hồ sơ thực tập"
+        percent={portalData?.progressPercent ?? portalData?.progressBreakdown?.totalPercent}
+        items={[
+          { label: "Đã cập nhật số điện thoại", complete: Boolean(portalData?.student.phone?.trim()) },
+          {
+            label: "Đã có doanh nghiệp tiếp nhận",
+            complete: Boolean(portalData?.internship?.companyId || (profile.company && profile.company !== "—")),
+          },
+          {
+            label: `Đã nộp báo cáo tuần (${portalData?.progressBreakdown?.submittedReportsCount ?? 0}/${portalData?.progressBreakdown?.requiredWeeksCount ?? 0})`,
+            complete: Boolean((portalData?.progressBreakdown?.submittedReportsCount ?? 0) > 0),
+          },
+          {
+            label: "Đã có kết quả đánh giá doanh nghiệp",
+            complete: Boolean((portalData?.progressBreakdown?.evaluationPercent ?? 0) > 0),
+          },
+        ]}
+      />
+      <ProfileDetailsCard
+        email={personalInfo.email}
+        phone={personalInfo.phone}
+        department={portalData?.student.department}
+        userId={user?.id}
+      />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* CỘT TRÁI (2 CỘT): HỒ SƠ CHI TIẾT */}
         <div className="lg:col-span-2 space-y-5">
@@ -815,13 +848,14 @@ export const AccountView = ({
               className="space-y-3.5 text-xs"
             >
               <div>
-                <label className="block font-bold text-slate-700 mb-1">
+                <label htmlFor="profile-current-password" className="block font-bold text-slate-700 mb-1">
                   Mật khẩu hiện tại *
                 </label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                   <input
                     type={showCurrentPassword ? "text" : "password"}
+                    id="profile-current-password"
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
                     autoComplete="current-password"
@@ -844,13 +878,14 @@ export const AccountView = ({
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">
+                <label htmlFor="profile-new-password" className="block font-bold text-slate-700 mb-1">
                   Mật khẩu mới *
                 </label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                   <input
                     type={showNewPassword ? "text" : "password"}
+                    id="profile-new-password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     autoComplete="new-password"
@@ -874,13 +909,14 @@ export const AccountView = ({
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">
+                <label htmlFor="profile-confirm-password" className="block font-bold text-slate-700 mb-1">
                   Xác nhận mật khẩu mới *
                 </label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                   <input
                     type={showConfirmPassword ? "text" : "password"}
+                    id="profile-confirm-password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     autoComplete="new-password"
@@ -959,6 +995,10 @@ export const AccountView = ({
           </div>
         </div>
       </div>
+      </div>
+      ) : (
+        <ProfileAuditPanel tab={activeTab} userId={user?.id} />
+      )}
     </div>
   );
 };

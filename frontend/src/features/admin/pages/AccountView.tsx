@@ -1,6 +1,12 @@
 import { useState, useEffect, FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
+import {
+  ProfileAuditPanel,
+  ProfileCompletionCard,
+  ProfileDetailsCard,
+  ProfileStudioHeader,
+  type ProfileStudioTab,
+} from "../../../components/common/ProfileStudio";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { formatDateTimeVi } from "../../../lib/formatDateTimeVi";
 import { authService } from "../../../services/auth.service";
@@ -26,7 +32,6 @@ import {
   Eye,
   EyeOff,
   Layers,
-  History,
   Users,
   Building,
   GraduationCap,
@@ -78,7 +83,7 @@ export const AccountView = ({
   } = useAdminNavStats(true, selectedSemesterId, selectedDepartmentId);
   const hasLoadedNavStats = !isNavStatsLoading && !isSuperAdmin;
 
-  const [activeTab, setActiveTab] = useState<"profile" | "security" | "preferences" | "activity">("profile");
+  const [activeTab, setActiveTab] = useState<ProfileStudioTab>("overview");
 
   // Profile State
   const [profile, setProfile] = useState<AdminProfileData>(() => {
@@ -132,14 +137,7 @@ export const AccountView = ({
     staleTime: 5 * 60 * 1000,
     queryFn: () => authService.getSessions(),
   });
-  const activityQuery = useQuery({
-    queryKey: queryKeys.auth.activity(accountUserId),
-    enabled: Boolean(user),
-    staleTime: 5 * 60 * 1000,
-    queryFn: () => authService.getActivity(30),
-  });
   const activeSessions = sessionsQuery.data ?? [];
-  const activityLogs = activityQuery.data ?? [];
 
   // Sync with user auth if available
   useEffect(() => {
@@ -281,154 +279,56 @@ export const AccountView = ({
 
   return (
     <div className="mx-auto max-w-[1300px] min-w-0 space-y-4 pb-12 font-sans">
-      <section className="overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-2xs">
-        <div className="flex items-center gap-2 bg-[#026aa7] px-4 py-3 text-white">
-          <User className="h-5 w-5 shrink-0 text-white/90" aria-hidden="true" />
-          <div className="min-w-0">
-            <h1 className="text-base font-bold tracking-wide">
-              {isSuperAdmin
-                ? "Quản lý Tài khoản & Hồ sơ Quản trị hệ thống"
-                : "Quản lý Tài khoản & Hồ sơ Quản trị khoa"}
-            </h1>
-            <p className="mt-0.5 text-xs text-white/80">
-              {isSuperAdmin
-                ? "Quản lý thông tin quản trị hệ thống, cập nhật bảo mật tài khoản và theo dõi lịch sử hoạt động toàn hệ thống."
-                : "Quản lý thông tin quản trị khoa, cập nhật bảo mật tài khoản và theo dõi lịch sử hoạt động của khoa."}
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* 2. ADMIN PROFILE HERO CARD */}
-      <div className="relative overflow-hidden rounded-xl border border-slate-200/90 bg-white p-5 shadow-2xs md:p-6">
-        <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
-          {/* Avatar Container */}
-          <div className="relative group shrink-0">
-            <InitialsAvatar
-              name={profile.fullName || roleDisplayLabel}
-              seed={profile.email || profile.fullName}
-              size={112}
-              className="text-2xl sm:text-3xl ring-4 ring-[#026aa7]"
-            />
-            <button
-              type="button"
-              onClick={() => {
-                setNewAvatarInput(profile.avatarUrl || "");
-                setShowAvatarModal(true);
-              }}
-              className="absolute bottom-0 right-0 p-2 bg-[#026aa7] hover:bg-[#025a8e] text-white rounded-full shadow-xs border-2 border-white transition-colors"
-              title="Đổi ảnh đại diện"
-            >
-              <Camera className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Profile Meta Info */}
-          <div className="space-y-2 text-center md:text-left flex-1 min-w-0">
-            <div className="flex flex-wrap items-center justify-center md:justify-start gap-2.5">
-              <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
-                {profile.fullName}
-              </h1>
-              <span className="px-2.5 py-0.5 bg-[#026aa7]/5 text-[#025a8e] text-xs font-bold rounded-md border border-[#026aa7]/20 font-mono">
-                {profile.adminCode}
-              </span>
-              <span className="flex items-center gap-1 rounded-md border border-[#7bc043]/40 bg-[#7bc043]/10 px-2.5 py-0.5 text-xs font-bold text-slate-800">
-                <ShieldCheck className="h-3.5 w-3.5 text-[#548a28]" aria-hidden="true" />
-                {profile.roleTitle}
-              </span>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-center md:justify-start gap-y-1 gap-x-4 text-xs text-slate-600 font-medium">
-              <span className="flex items-center gap-1 text-slate-800 font-bold">
-                <Building2 className="w-3.5 h-3.5 text-[#026aa7]" />
-                {profile.faculty}
-              </span>
-              <span className="text-slate-300 hidden sm:inline">•</span>
-              <span className="flex items-center gap-1 text-slate-600">
-                <Layers className="w-3.5 h-3.5 text-slate-400" />
-                {profile.department}
-              </span>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 text-xs text-slate-600 pt-1 font-medium">
-              <span className="flex items-center gap-1.5">
-                <Mail className="w-3.5 h-3.5 text-[#026aa7]" />
-                {profile.email}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Phone className="w-3.5 h-3.5 text-[#548a28]" />
-                {profile.phone}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <MapPin className="w-3.5 h-3.5 text-rose-500" />
-                {profile.office}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 3. TABS NAVIGATION */}
-      <div className="flex items-center gap-1 overflow-x-auto rounded-xl border border-slate-200/90 bg-white p-1.5 shadow-2xs no-scrollbar">
-        <button
-          type="button"
-          onClick={() => setActiveTab("profile")}
-          className={`inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-md px-3 py-2.5 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] ${
-            activeTab === "profile"
-              ? "bg-[#026aa7]/5 text-[#026aa7]"
-              : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-          }`}
-        >
-          <User className="w-4 h-4" />
-          <span>Hồ sơ &amp; Thông tin Quản trị</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab("security")}
-          className={`inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-md px-3 py-2.5 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] ${
-            activeTab === "security"
-              ? "bg-[#026aa7]/5 text-[#026aa7]"
-              : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-          }`}
-        >
-          <Lock className="w-4 h-4" />
-          <span>Tài khoản &amp; Đổi Mật khẩu</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab("preferences")}
-          className={`inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-md px-3 py-2.5 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] ${
-            activeTab === "preferences"
-              ? "bg-[#026aa7]/5 text-[#026aa7]"
-              : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-          }`}
-        >
-          <Bell className="w-4 h-4" />
-          <span>Tùy chỉnh &amp; Thông báo</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab("activity")}
-          className={`inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-md px-3 py-2.5 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] ${
-            activeTab === "activity"
-              ? "bg-[#026aa7]/5 text-[#026aa7]"
-              : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-          }`}
-        >
-          <History className="w-4 h-4" />
-          <span>Nhật ký Hoạt động (Audit Logs)</span>
-        </button>
-      </div>
-
-      {/* 4. TAB CONTENTS & SIDEBAR */}
+      <ProfileStudioHeader
+        name={profile.fullName || user?.name || roleDisplayLabel}
+        identifier={profile.adminCode}
+        role={profile.roleTitle || roleDisplayLabel}
+        department={profile.department || profile.faculty}
+        email={profile.email}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        avatarAction={
+          <button
+            type="button"
+            onClick={() => {
+              setNewAvatarInput(profile.avatarUrl || "");
+              setShowAvatarModal(true);
+            }}
+            className="absolute bottom-0 right-0 rounded-full border-2 border-white bg-[#026aa7] p-2 text-white shadow-sm transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            title="Đổi ảnh đại diện"
+            aria-label="Đổi ảnh đại diện"
+          >
+            <Camera className="h-4 w-4" aria-hidden="true" />
+          </button>
+        }
+      />
+      {activeTab === "overview" ? (
+      <div
+        id="profile-panel-overview"
+        role="tabpanel"
+        aria-labelledby="profile-tab-overview"
+        className="space-y-5"
+      >
+      <ProfileCompletionCard
+        title="Mức độ hoàn thiện hồ sơ quản trị"
+        items={[
+          { label: "Đã cập nhật họ tên", complete: Boolean(profile.fullName.trim()) },
+          { label: "Đã có email liên hệ", complete: Boolean(profile.email.trim()) },
+          { label: "Đã có số điện thoại", complete: Boolean(profile.phone.trim()) },
+          { label: "Đã xác định đơn vị quản lý", complete: Boolean(profile.department.trim() || profile.faculty.trim()) },
+        ]}
+      />
+      <ProfileDetailsCard
+        email={profile.email}
+        phone={profile.phone}
+        department={profile.department || profile.faculty}
+        userId={accountUserId}
+      />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
         {/* MAIN COLUMN (8 COLS) */}
         <div className="lg:col-span-8 space-y-6">
           {/* TAB 1: PROFILE TAB */}
-          {activeTab === "profile" && (
+          {activeTab === "overview" && (
             <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 md:p-6 space-y-5">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <div>
@@ -689,7 +589,7 @@ export const AccountView = ({
           )}
 
           {/* TAB 2: SECURITY & PASSWORD TAB */}
-          {activeTab === "security" && (
+          {activeTab === "overview" && (
             <div className="space-y-6">
               {/* Change Password Card */}
               <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 md:p-6 space-y-4">
@@ -880,7 +780,7 @@ export const AccountView = ({
           )}
 
           {/* TAB 3: PREFERENCES TAB */}
-          {activeTab === "preferences" && (
+          {activeTab === "overview" && (
             <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 md:p-6 space-y-5">
               <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
                 <div className="p-2 bg-amber-50 text-amber-600 rounded-md">
@@ -984,64 +884,6 @@ export const AccountView = ({
             </div>
           )}
 
-          {/* TAB 4: ACTIVITY LOGS TAB */}
-          {activeTab === "activity" && (
-            <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 md:p-6 space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 bg-[#026aa7]/5 text-[#026aa7] rounded-md">
-                    <History className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h2 className="text-base font-bold text-slate-900">
-                      Nhật ký Hoạt động Quản trị (Audit Logs)
-                    </h2>
-                    <p className="text-xs text-slate-500 font-medium">
-                      Ghi nhận các thao tác quan trọng được thực hiện bởi tài khoản này trong 30 ngày qua.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-3 text-xs max-h-80 overflow-y-auto pr-1">
-                  {activityLogs.length === 0 ? (
-                    <div className="py-8 text-center border border-dashed border-slate-200 rounded-md text-slate-500">
-                      <History className="w-5 h-5 mx-auto mb-2 text-slate-400" />
-                      <p className="font-semibold">
-                        {activityQuery.error ? "Không thể tải nhật ký hoạt động." : "Chưa có nhật ký hoạt động."}
-                      </p>
-                      <p className="text-[11px] mt-1">
-                        {activityQuery.error
-                          ? getApiErrorMessage(activityQuery.error)
-                          : "Audit log sẽ hiển thị khi backend cung cấp dữ liệu cho tài khoản này."}
-                      </p>
-                    </div>
-                  ) : activityLogs.map((log) => (
-                  <div
-                    key={log.id}
-                    className="p-3.5 bg-slate-50 rounded-md border border-slate-100 flex items-start justify-between gap-3"
-                  >
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="px-2 py-0.5 rounded text-[10px] font-bold border bg-[#026aa7]/5 text-[#026aa7] border-[#026aa7]/14"
-                        >
-                          {log.module}
-                        </span>
-                        <p className="font-bold text-slate-900">{log.action}</p>
-                      </div>
-                      <p className="text-[11px] text-slate-500 font-medium">
-                        Địa chỉ IP: <span className="font-mono">{log.ip || "Không xác định"}</span>
-                      </p>
-                    </div>
-                    <span className="text-[11px] text-slate-400 font-medium shrink-0">
-                      {formatDateTimeVi(log.time)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
 
         {/* SIDEBAR COLUMN (4 COLS) */}
@@ -1143,6 +985,10 @@ export const AccountView = ({
           </div>
         </div>
       </div>
+      </div>
+      ) : (
+        <ProfileAuditPanel tab={activeTab} userId={accountUserId} />
+      )}
 
       {/* AVATAR MODAL */}
       {showAvatarModal && (

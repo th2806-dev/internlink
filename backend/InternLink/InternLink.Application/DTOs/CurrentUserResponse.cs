@@ -12,4 +12,5 @@ public sealed class CurrentUserResponse
     public bool MustChangePassword { get; set; }
     public bool IsArchiveReadOnly { get; set; }
     public Guid? DepartmentId { get; set; }
+    public DateTime CreatedAt { get; set; }
 }
