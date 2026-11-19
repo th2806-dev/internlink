@@ -8,6 +8,7 @@ import { useAdminNavStats } from "../hooks/useAdminNavStats";
 import { useSemester } from "../contexts/SemesterContext";
 import { SuperAdminImpersonationBanner } from "../features/admin/components/SuperAdminImpersonationBanner";
 import { ContextScopeBar } from "../features/admin/components/ContextScopeBar";
+import { AdminMenuRouteGuard } from "../features/admin/components/AdminMenuRouteGuard";
 
 import type { UserRole } from "../types/common";
 
@@ -76,7 +77,7 @@ export default function AdminLayout({
         <ContextScopeBar activeTab={activeTab} />
         <Toast message={message} type={type} onClose={clearToast} />
         <main className="flex-1 p-4 md:p-6 max-w-[1440px] w-full mx-auto">
-          {children}
+          <AdminMenuRouteGuard>{children}</AdminMenuRouteGuard>
         </main>
       </div>
     </div>

@@ -9,8 +9,8 @@ export function useSystemMenu() {
     queryKey: ["system-menu", user?.id],
     queryFn: systemService.getMyMenu,
     enabled: isLoggedIn && Boolean(user?.id),
-    staleTime: 30 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
 }
 

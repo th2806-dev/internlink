@@ -9,7 +9,6 @@ using InternLink.Shared.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Memory;
 
 namespace InternLink.API.Controllers;
 
@@ -18,19 +17,26 @@ namespace InternLink.API.Controllers;
 [Authorize]
 public sealed class SysFunctionsController : ControllerBase
 {
-    private static readonly TimeSpan MenuCacheDuration = TimeSpan.FromMinutes(30);
-    private static int _menuCacheVersion;
+    private static readonly HashSet<string> SuperAdminModules = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "DASHBOARD", "SYSTEM", "ACCOUNTS", "CONFIG", "AUDIT", "IT_CONFIG", "API_WEBHOOK",
+        "DEPARTMENTS", "GRID_CONFIG", "FIELD_POLICIES"
+    };
+
+    private static readonly HashSet<string> DepartmentAdminModules = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "DASHBOARD", "SEMESTERS", "STUDENTS", "LECTURER", "COMPANIES", "ASSIGNMENTS",
+        "WEEKLY_REPORTS", "ATTENDANCE", "EVALUATIONS", "SUMMARY", "TEMPLATES", "NOTIFICATIONS"
+    };
+
     private readonly AppDbContext _context;
-    private readonly IMemoryCache _cache;
     private readonly ISysFunctionService _functionService;
 
     public SysFunctionsController(
         AppDbContext context,
-        IMemoryCache cache,
         ISysFunctionService functionService)
     {
         _context = context;
-        _cache = cache;
         _functionService = functionService;
     }
 
@@ -53,14 +59,7 @@ public sealed class SysFunctionsController : ControllerBase
         var impersonatedRoleCode = User.IsInRole("SuperAdmin")
             ? Request.Headers["X-Impersonate-Role"].FirstOrDefault()
             : null;
-        var menu = await _cache.GetOrCreateAsync(
-            $"system-menu:{Volatile.Read(ref _menuCacheVersion)}:{userId:D}:{impersonatedRoleCode ?? "current"}",
-            async entry =>
-            {
-                entry.AbsoluteExpirationRelativeToNow = MenuCacheDuration;
-                return await BuildMenuAsync(userId, impersonatedRoleCode, cancellationToken);
-            });
-
+        var menu = await BuildMenuAsync(userId, impersonatedRoleCode, cancellationToken);
         return Ok(ApiResponse<IReadOnlyList<SystemMenuItemDto>>.Ok(menu ?? []));
     }
 
@@ -93,7 +92,6 @@ public sealed class SysFunctionsController : ControllerBase
         try
         {
             var function = await _functionService.CreateAsync(request, cancellationToken);
-            InvalidateMenuCache();
             return CreatedAtAction(
                 nameof(GetById),
                 new { id = function.Id },
@@ -115,8 +113,6 @@ public sealed class SysFunctionsController : ControllerBase
         try
         {
             var function = await _functionService.UpdateAsync(id, request, cancellationToken);
-            if (function != null)
-                InvalidateMenuCache();
             return function == null
                 ? NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Không tìm thấy chức năng." }))
                 : Ok(ApiResponse<SysFunctionDto>.Ok(function));
@@ -136,7 +132,6 @@ public sealed class SysFunctionsController : ControllerBase
             var deleted = await _functionService.DeleteAsync(id, cancellationToken);
             if (!deleted)
                 return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Không tìm thấy chức năng." }));
-            InvalidateMenuCache();
             return NoContent();
         }
         catch (InvalidOperationException exception)
@@ -154,7 +149,6 @@ public sealed class SysFunctionsController : ControllerBase
         try
         {
             await _functionService.ReorderAsync(request, cancellationToken);
-            InvalidateMenuCache();
             return NoContent();
         }
         catch (InvalidOperationException exception)
@@ -162,8 +156,6 @@ public sealed class SysFunctionsController : ControllerBase
             return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = exception.Message }));
         }
     }
-
-    private static void InvalidateMenuCache() => Interlocked.Increment(ref _menuCacheVersion);
 
     private async Task<IReadOnlyList<SystemMenuItemDto>> BuildMenuAsync(
         Guid userId,
@@ -176,6 +168,8 @@ public sealed class SysFunctionsController : ControllerBase
                 .Where(role => role.IsActive && !role.IsDeleted && role.Code == impersonatedRoleCode)
                 .Select(role => (long?)role.AutoId)
                 .FirstOrDefaultAsync(cancellationToken);
+        var impersonatingDepartmentAdmin = impersonatedRoleCode?.Equals(
+            "DepartmentAdmin", StringComparison.OrdinalIgnoreCase) == true;
         var grantedIds = impersonatedRoleId.HasValue
             ? await _context.SysRolePermissions
                 .Where(permission => permission.SysRoleId == impersonatedRoleId
@@ -208,10 +202,17 @@ public sealed class SysFunctionsController : ControllerBase
             .ToListAsync(cancellationToken);
         var functions = await _context.SysFunctions
             .AsNoTracking()
-            .Where(function => function.IsActive && !function.IsDeleted && function.IsVisibleInMenu)
+            .Where(function => function.IsActive
+                && !function.IsDeleted
+                && function.IsVisibleInMenu)
             .OrderBy(function => function.SortOrder)
             .ThenBy(function => function.Name)
             .ToListAsync(cancellationToken);
+        if (User.IsInRole("SuperAdmin") && impersonatedRoleId == null)
+            functions = functions.Where(function => SuperAdminModules.Contains(function.ModuleCode)).ToList();
+        else if (User.IsInRole("DepartmentAdmin") || impersonatingDepartmentAdmin)
+            functions = functions.Where(function => DepartmentAdminModules.Contains(function.ModuleCode)).ToList();
+
         var childrenByParent = functions
             .Where(function => function.ParentId.HasValue)
             .GroupBy(function => function.ParentId!.Value)
@@ -220,6 +221,10 @@ public sealed class SysFunctionsController : ControllerBase
 
         SystemMenuItemDto? BuildMenuItem(SysFunction function)
         {
+            if (function.IsAction
+                && !viewableModules.Contains(function.ModuleCode, StringComparer.OrdinalIgnoreCase))
+                return null;
+
             var children = childrenByParent.TryGetValue(function.AutoId, out var childrenForParent)
                 ? childrenForParent
                     .Select(BuildMenuItem)
@@ -242,6 +247,7 @@ public sealed class SysFunctionsController : ControllerBase
                 function.FuncUrl,
                 function.IconName,
                 function.BadgeText,
+                function.ParentId == null ? function.Description : null,
                 children);
         }
 
@@ -261,4 +267,5 @@ public sealed record SystemMenuItemDto(
     string? FuncUrl,
     string? IconName,
     string? BadgeText,
+    string? GroupName,
     IReadOnlyList<SystemMenuItemDto> Children);

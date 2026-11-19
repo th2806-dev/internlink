@@ -16,7 +16,8 @@ public sealed class SysFieldPolicyService : ISysFieldPolicyService
     public async Task<IReadOnlyList<SysFieldPolicyDto>> GetByFormAsync(
         string formCode,
         long? roleId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? tenantId = null)
     {
         ValidateFormCode(formCode);
         var normalizedFormCode = formCode.Trim();
@@ -24,6 +25,7 @@ public sealed class SysFieldPolicyService : ISysFieldPolicyService
             .AsNoTracking()
             .Where(item => !item.IsDeleted
                 && item.FormCode == normalizedFormCode
+                && (item.TenantId == tenantId || tenantId != null && item.TenantId == null)
                 && (item.RoleId == null || item.RoleId == roleId))
             .OrderBy(item => item.SortOrder)
             .ThenBy(item => item.FieldKey)
@@ -31,8 +33,10 @@ public sealed class SysFieldPolicyService : ISysFieldPolicyService
 
         return policies
             .GroupBy(item => item.FieldKey, StringComparer.OrdinalIgnoreCase)
-            .Select(group => group.FirstOrDefault(item => item.RoleId == roleId)
-                ?? group.First(item => item.RoleId == null))
+            .Select(group => group
+                .OrderBy(item => item.TenantId == tenantId ? 0 : 1)
+                .ThenBy(item => item.RoleId == roleId ? 0 : 1)
+                .First())
             .OrderBy(item => item.SortOrder)
             .ThenBy(item => item.FieldKey)
             .Select(Map)
@@ -42,21 +46,23 @@ public sealed class SysFieldPolicyService : ISysFieldPolicyService
     public async Task<IReadOnlyList<SysFieldPolicyDto>> GetByFormForRoleAsync(
         string formCode,
         string roleCode,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? tenantId = null)
     {
         var roleId = await _db.SysRoles.AsNoTracking()
             .Where(role => !role.IsDeleted && role.IsActive && role.Code == roleCode)
             .Select(role => (long?)role.AutoId)
             .FirstOrDefaultAsync(cancellationToken);
 
-        return await GetByFormAsync(formCode, roleId, cancellationToken);
+        return await GetByFormAsync(formCode, roleId, cancellationToken, tenantId);
     }
 
     public async Task<IReadOnlyList<SysFieldPolicyDto>> UpsertAsync(
         string formCode,
         long? roleId,
         UpsertSysFieldPoliciesRequest request,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? tenantId = null)
     {
         ValidateFormCode(formCode);
         if (request.Policies == null || request.Policies.Count > 500)
@@ -78,6 +84,7 @@ public sealed class SysFieldPolicyService : ISysFieldPolicyService
         var existing = await _db.SysFieldPolicies
             .Where(item => !item.IsDeleted
                 && item.FormCode == normalizedFormCode
+                && item.TenantId == tenantId
                 && item.RoleId == roleId
                 && fieldKeys.Contains(item.FieldKey))
             .ToDictionaryAsync(item => item.FieldKey, StringComparer.OrdinalIgnoreCase, cancellationToken);
@@ -92,6 +99,7 @@ public sealed class SysFieldPolicyService : ISysFieldPolicyService
                 {
                     FormCode = normalizedFormCode,
                     FieldKey = fieldKey,
+                    TenantId = tenantId,
                     RoleId = roleId
                 };
                 _db.SysFieldPolicies.Add(entity);
@@ -109,7 +117,7 @@ public sealed class SysFieldPolicyService : ISysFieldPolicyService
         }
 
         await _db.SaveChangesAsync(cancellationToken);
-        return await GetByFormAsync(normalizedFormCode, roleId, cancellationToken);
+        return await GetByFormAsync(normalizedFormCode, roleId, cancellationToken, tenantId);
     }
 
     private static void ValidatePolicy(UpsertSysFieldPolicyItem item)
@@ -151,6 +159,7 @@ public sealed class SysFieldPolicyService : ISysFieldPolicyService
             item.PublicId,
             item.FormCode,
             item.FieldKey,
+            item.TenantId,
             item.RoleId,
             item.IsVisible,
             item.IsRequired,

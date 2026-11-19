@@ -1,19 +1,58 @@
 import {
+  Archive,
+  Bell,
+  Building2,
+  Calendar,
+  CalendarCheck,
+  CircleHelp,
+  ClipboardList,
+  Columns3,
+  DatabaseBackup,
+  FileSliders,
+  FileSpreadsheet,
+  FileText,
+  LayoutDashboard,
+  ScrollText,
+  Settings,
+  Shield,
+  UserRound,
+  UserRoundPlus,
+  Users,
   X,
+  type LucideIcon,
 } from "lucide-react";
-import { FEATURES } from "../../../config/featureFlags";
-import { ADMIN_NAVIGATION_SECTIONS, type AdminNavigationItem } from "../../../config/navigationConfig";
-import { formatCountBadge } from "../../../lib/userDisplay";
 import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
-import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
-import type { AdminNavStats } from "../../../hooks/useAdminNavStats";
 import type { AuthUser } from "../../../contexts/AuthContext";
+import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
+import { useSystemMenu } from "../../../hooks/useSystemMenu";
+import type { AdminNavStats } from "../../../hooks/useAdminNavStats";
+import { formatCountBadge } from "../../../lib/userDisplay";
+import { getSystemMenuItemId, getSystemMenuRoutes } from "../../../lib/systemMenu";
 
-type NavItem = AdminNavigationItem & {
-  badge?: string;
-  badgeAlert?: boolean;
-  badgeText?: string;
+const MENU_ICONS: Record<string, LucideIcon> = {
+  Archive,
+  Bell,
+  Building2,
+  Calendar,
+  CalendarCheck,
+  ClipboardList,
+  Columns3,
+  DatabaseBackup,
+  FileSliders,
+  FileSpreadsheet,
+  FileText,
+  LayoutDashboard,
+  ScrollText,
+  Settings,
+  Shield,
+  UserRound,
+  UserRoundPlus,
+  Users,
 };
+
+function getMenuIcon(iconName: string | null): LucideIcon {
+  return iconName ? MENU_ICONS[iconName] ?? CircleHelp : CircleHelp;
+}
 
 export const Sidebar = ({
   activeTab,
@@ -30,163 +69,138 @@ export const Sidebar = ({
   isOpen?: boolean;
   onClose?: () => void;
 }) => {
-  const { isSuperAdmin, roleDisplayLabel } = useAdminCapabilities();
-  const unassigned = stats?.unassignedCount ?? 0;
-  const campaigns = stats?.notificationCampaignCount ?? 0;
-  const unread = stats?.unreadNotificationCount ?? 0;
-
-  const navSections: { title: string; items: NavItem[] }[] =
-    ADMIN_NAVIGATION_SECTIONS.map((section) => ({
-      ...section,
-      items: section.items.map((item) => ({
-        ...item,
-        ...(item.id === "admin-students" && stats && stats.studentCount > 0
-          ? { badge: formatCountBadge(stats.studentCount) }
-          : {}),
-        ...(item.id === "admin-lecturers" && stats && stats.lecturerCount > 0
-          ? { badge: formatCountBadge(stats.lecturerCount) }
-          : {}),
-        ...(item.id === "admin-assignments" && unassigned > 0
-          ? { badgeText: `${unassigned} chưa PC` }
-          : {}),
-        ...(item.id === "admin-notifications" && unread > 0
-          ? { badge: String(unread), badgeAlert: true }
-          : item.id === "admin-notifications" && campaigns > 0
-          ? { badge: String(campaigns) }
-          : {}),
-      })),
-    }));
-
+  const { roleDisplayLabel } = useAdminCapabilities();
+  const menuQuery = useSystemMenu();
+  const routes = getSystemMenuRoutes(menuQuery.data ?? []);
+  const sections = routes.reduce<{ title: string; items: typeof routes }[]>(
+    (groups, route) => {
+      const section = groups.find((group) => group.title === route.groupName);
+      if (section) section.items.push(route);
+      else groups.push({ title: route.groupName, items: [route] });
+      return groups;
+    },
+    [],
+  );
   const displayName = user?.name || user?.username || roleDisplayLabel;
   const displayRole = roleDisplayLabel;
 
-  const filteredSections = navSections
-    .map((section) => ({
-      ...section,
-      items: section.items.filter((item) => {
-        if (isSuperAdmin) {
-          const superAdminItems = new Set([
-            "admin-dashboard",
-            "admin-departments",
-            "admin-semesters",
-            "admin-users",
-            "admin-settings",
-            "admin-backups",
-            "admin-account",
-          ]);
-          if (!superAdminItems.has(item.id)) return false;
-        }
-        if ((item.id === "admin-departments" || item.id === "admin-settings") && !isSuperAdmin) {
-          return false;
-        }
-        return !item.flag || FEATURES[item.flag];
-      }),
-    }))
-    .filter((section) => section.items.length > 0);
-
-  const visibleSections = isSuperAdmin
-    ? [{ title: "", items: filteredSections.flatMap((section) => section.items) }]
-    : filteredSections;
+  const getBadge = (moduleCode: string, databaseBadge: string | null) => {
+    if (databaseBadge) return { text: databaseBadge, alert: false };
+    if (moduleCode === "STUDENTS" && stats?.studentCount)
+      return { text: formatCountBadge(stats.studentCount), alert: false };
+    if (moduleCode === "LECTURER" && stats?.lecturerCount)
+      return { text: formatCountBadge(stats.lecturerCount), alert: false };
+    if (moduleCode === "ASSIGNMENTS" && stats?.unassignedCount)
+      return { text: `${stats.unassignedCount} chưa PC`, alert: true };
+    if (moduleCode === "NOTIFICATIONS" && stats?.unreadNotificationCount)
+      return { text: String(stats.unreadNotificationCount), alert: true };
+    if (moduleCode === "NOTIFICATIONS" && stats?.notificationCampaignCount)
+      return { text: String(stats.notificationCampaignCount), alert: false };
+    return null;
+  };
 
   return (
     <aside
       id="admin-navigation"
       aria-label="Điều hướng quản trị"
-      className={`w-64 shrink-0 flex flex-col justify-between h-screen sticky top-0 z-40 select-none bg-white border-r border-slate-200/90 admin-sidebar-drawer ${
+      className={`admin-sidebar-drawer sticky top-0 z-40 flex h-screen w-64 shrink-0 select-none flex-col justify-between border-r border-slate-200/90 bg-white ${
         isOpen ? "is-open" : ""
       }`}
     >
       <div>
-        {/* Top Header & Brand */}
-        <div className="p-4 border-b border-slate-200/90 flex items-center justify-between gap-3 bg-gradient-to-b from-blue-50/40 to-white">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-200/90 bg-gradient-to-b from-blue-50/40 to-white p-4">
           <div className="flex items-center gap-3">
-            <div className="p-1.5 bg-[#026aa7]/10 border border-[#026aa7]/20 rounded-lg shrink-0">
+            <div className="shrink-0 rounded-lg border border-[#026aa7]/20 bg-[#026aa7]/10 p-1.5">
               <img
                 src="/logo/logo_internlink-02.png"
-                alt="InternLink Mark Logo"
-                className="w-7 h-7 object-contain"
+                alt="InternLink"
+                className="h-7 w-7 object-contain"
               />
             </div>
             <div>
-              <div className="flex items-center font-bold text-lg tracking-tight leading-none">
+              <div className="flex items-center text-lg font-bold leading-none tracking-tight">
                 <span className="text-slate-900">Intern</span>
                 <span className="text-[#026aa7]">Link</span>
               </div>
-              <p className="text-[10px] font-bold tracking-wider text-[#026aa7] bg-[#026aa7]/10 px-1.5 py-0.5 rounded mt-1 inline-block">
-                {isSuperAdmin ? "QUẢN TRỊ HỆ THỐNG" : "QUẢN TRỊ KHOA"}
+              <p className="mt-1 inline-block rounded bg-[#026aa7]/10 px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-[#026aa7]">
+                {user?.backendRole === "SuperAdmin" ? "QUẢN TRỊ HỆ THỐNG" : "QUẢN TRỊ KHOA"}
               </p>
             </div>
           </div>
-
           <button
             type="button"
-            className="p-1 text-slate-400 hover:text-slate-600 lg:hidden cursor-pointer"
+            className="cursor-pointer p-1 text-slate-400 hover:text-slate-600 lg:hidden"
             onClick={onClose}
             aria-label="Đóng menu điều hướng"
           >
-            <X className="w-4 h-4" />
+            <X className="h-4 w-4" />
           </button>
         </div>
 
-        {/* Navigation Sections */}
         <nav
-          className="p-3 space-y-2.5 overflow-y-auto max-h-[calc(100dvh-155px)] il-scrollbar"
+          className="il-scrollbar max-h-[calc(100dvh-155px)] space-y-2.5 overflow-y-auto p-3"
           aria-label="Điều hướng quản trị"
         >
-          {visibleSections.map((section, idx) => (
-            <div key={idx} className="space-y-0.5">
-              {section.title && (
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-3 pt-2.5 pb-1">
-                  {section.title}
-                </p>
-              )}
-              {section.items.map((item) => {
-                const Icon = item.icon;
-                const normalizedActive = activeTab?.startsWith("admin-")
+          {menuQuery.isPending && (
+            <p role="status" className="px-3 py-4 text-xs text-slate-500">
+              Đang tải phân hệ được cấp quyền...
+            </p>
+          )}
+          {menuQuery.isError && (
+            <p role="alert" className="px-3 py-4 text-xs text-rose-700">
+              Không thể tải menu từ hệ thống phân quyền.
+            </p>
+          )}
+          {!menuQuery.isPending && !menuQuery.isError && sections.length === 0 && (
+            <p className="px-3 py-4 text-xs text-slate-500">
+              Vai trò hiện chưa được cấp quyền xem phân hệ nào.
+            </p>
+          )}
+          {sections.map((section) => (
+            <div key={section.title} className="space-y-0.5">
+              <p className="px-3 pb-1 pt-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                {section.title}
+              </p>
+              {section.items.map(({ item }) => {
+                const id = getSystemMenuItemId(item);
+                const normalizedActive = activeTab.startsWith("admin-")
                   ? activeTab
                   : `admin-${activeTab}`;
-                const isActive = normalizedActive === item.id;
+                const isActive = normalizedActive === id;
+                const Icon = getMenuIcon(item.iconName);
+                const badge = getBadge(item.moduleCode, item.badgeText);
                 return (
                   <button
-                    key={item.id}
+                    key={item.code}
                     type="button"
-                    onClick={() => onNavigate(item.id)}
-                    className={`flex w-full items-center justify-between gap-2.5 px-3 py-2 rounded-lg text-xs transition-colors select-none text-left ${
+                    onClick={() => onNavigate(id)}
+                    className={`flex w-full items-center justify-between gap-2.5 rounded-lg px-3 py-2 text-left text-xs transition-colors ${
                       isActive
-                        ? "bg-[#026aa7] text-white shadow-2xs font-semibold"
-                        : "text-slate-600 hover:bg-slate-100/80 hover:text-slate-900 font-medium"
-                    } ${
-                      isSuperAdmin && item.id === "admin-settings"
-                        ? "border-t border-slate-200 mt-2 pt-2.5"
-                        : ""
+                        ? "bg-[#026aa7] font-semibold text-white shadow-2xs"
+                        : "font-medium text-slate-600 hover:bg-slate-100/80 hover:text-slate-900"
                     }`}
                     aria-current={isActive ? "page" : undefined}
                   >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <Icon className={`w-4 h-4 shrink-0 ${isActive ? "text-white" : "text-slate-500"}`} />
-                      <span className="truncate whitespace-nowrap">
-                        {item.label}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 shrink-0 ml-1">
-                      {item.badgeText && (
-                        <span className="text-[9px] bg-rose-500 text-white font-bold px-1.5 py-0.5 rounded-md whitespace-nowrap shrink-0">
-                          {item.badgeText}
-                        </span>
-                      )}
-                      {item.badge && !item.badgeText && (
-                        <span
-                          className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold shrink-0 ${
-                            isActive
+                    <span className="flex min-w-0 items-center gap-2.5">
+                      <Icon
+                        aria-hidden="true"
+                        className={`h-4 w-4 shrink-0 ${isActive ? "text-white" : "text-slate-500"}`}
+                      />
+                      <span className="truncate">{item.name}</span>
+                    </span>
+                    {badge && (
+                      <span
+                        className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-bold ${
+                          badge.alert
+                            ? "bg-rose-500 text-white"
+                            : isActive
                               ? "bg-white/20 text-white"
-                              : "bg-blue-50 text-[#026aa7] border border-blue-200/80"
-                          }`}
-                        >
-                          {item.badge}
-                        </span>
-                      )}
-                    </div>
+                              : "border border-blue-200/80 bg-blue-50 text-[#026aa7]"
+                        }`}
+                      >
+                        {badge.text}
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -195,26 +209,22 @@ export const Sidebar = ({
         </nav>
       </div>
 
-      {/* Footer User Profile Card */}
-      <div className="p-3 border-t border-slate-200/90 bg-slate-50/70">
+      <div className="border-t border-slate-200/90 bg-slate-50/70 p-3">
         <button
           type="button"
           onClick={() => onNavigate("admin-account")}
-          className="flex w-full items-center gap-2.5 p-2 rounded-xl bg-white border border-slate-200/80 shadow-2xs hover:bg-slate-50 hover:border-slate-300 transition-colors cursor-pointer text-left"
+          className="flex w-full cursor-pointer items-center gap-2.5 rounded-xl border border-slate-200/80 bg-white p-2 text-left shadow-2xs transition-colors hover:border-slate-300 hover:bg-slate-50"
           aria-label={`Mở tài khoản ${displayName}`}
         >
-          <div className="relative shrink-0">
-            <InitialsAvatar
-              name={displayName}
-              seed={user?.id || user?.email || displayName}
-              size={34}
-            />
-          </div>
-
-          <div className="overflow-hidden min-w-0 flex-1">
-            <p className="text-xs font-bold text-slate-900 truncate">{displayName}</p>
-            <p className="text-[10.5px] text-slate-500 font-medium truncate">{displayRole}</p>
-          </div>
+          <InitialsAvatar
+            name={displayName}
+            seed={user?.id || user?.email || displayName}
+            size={34}
+          />
+          <span className="min-w-0 flex-1 overflow-hidden">
+            <span className="block truncate text-xs font-bold text-slate-900">{displayName}</span>
+            <span className="block truncate text-[10.5px] font-medium text-slate-500">{displayRole}</span>
+          </span>
         </button>
       </div>
     </aside>

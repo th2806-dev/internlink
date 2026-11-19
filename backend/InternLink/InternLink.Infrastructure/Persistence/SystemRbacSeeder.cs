@@ -18,18 +18,19 @@ public static class SystemRbacSeeder
         string? FuncUrl = null,
         string? IconName = null,
         string? BadgeText = null,
-        bool IsMenuEntry = false);
+        bool IsMenuEntry = false,
+        string? Description = null);
 
     private static readonly FunctionDefinition[] Functions =
     new FunctionDefinition[]
     {
-        new("LECTURER", "Giảng viên", "LECTURER", 0, false),
+        new("LECTURER", "Giảng viên", "LECTURER", 0, false, Description: "GIAI ĐOẠN 1 · CHUẨN BỊ KỲ"),
         new(SystemPermissionCodes.LecturerExport, "Xuất báo cáo", "LECTURER", 1, true, "LECTURER"),
-        new("SYSTEM", "Hệ thống", "SYSTEM", 1, false),
+        new("SYSTEM", "Hệ thống", "SYSTEM", 1, false, Description: "QUẢN TRỊ NỀN TẢNG"),
         new(SystemPermissionCodes.SystemView, "Xem", "SYSTEM", 1, true, "SYSTEM"),
         new(SystemPermissionCodes.SystemManage, "Quản lý", "SYSTEM", 2, true, "SYSTEM"),
 
-        new("ACCOUNTS", "Tài khoản", "ACCOUNTS", 2, false),
+        new("ACCOUNTS", "Tài khoản", "ACCOUNTS", 2, false, Description: "QUẢN TRỊ NỀN TẢNG"),
         new(SystemPermissionCodes.AccountsView, "Xem", "ACCOUNTS", 1, true, "ACCOUNTS"),
         new(SystemPermissionCodes.AccountsCreate, "Tạo", "ACCOUNTS", 2, true, "ACCOUNTS"),
         new(SystemPermissionCodes.AccountsUpdate, "Cập nhật", "ACCOUNTS", 3, true, "ACCOUNTS"),
@@ -37,26 +38,40 @@ public static class SystemRbacSeeder
         new(SystemPermissionCodes.AccountsResetPassword, "Cấp lại mật khẩu", "ACCOUNTS", 5, true, "ACCOUNTS"),
         new(SystemPermissionCodes.AccountsAssignRole, "Gán vai trò", "ACCOUNTS", 6, true, "ACCOUNTS"),
 
-        new("CONFIG", "Cấu hình", "CONFIG", 3, false),
+        new("CONFIG", "Cấu hình", "CONFIG", 3, false, Description: "QUẢN TRỊ NỀN TẢNG"),
         new(SystemPermissionCodes.ConfigurationView, "Xem", "CONFIG", 1, true, "CONFIG"),
         new(SystemPermissionCodes.ConfigurationUpdate, "Cập nhật", "CONFIG", 2, true, "CONFIG"),
 
-        new("AUDIT", "Nhật ký", "AUDIT", 4, false),
+        new("AUDIT", "Nhật ký", "AUDIT", 4, false, Description: "QUẢN TRỊ NỀN TẢNG"),
         new(SystemPermissionCodes.AuditView, "Xem", "AUDIT", 1, true, "AUDIT"),
         new(SystemPermissionCodes.AuditExport, "Xuất", "AUDIT", 2, true, "AUDIT"),
 
-        new("IT_CONFIG", "Cấu hình IT", "IT_CONFIG", 5, false),
+        new("IT_CONFIG", "Cấu hình IT", "IT_CONFIG", 5, false, Description: "QUẢN TRỊ NỀN TẢNG"),
         new(SystemPermissionCodes.ItConfigurationView, "Xem", "IT_CONFIG", 1, true, "IT_CONFIG"),
         new(SystemPermissionCodes.ItConfigurationUpdate, "Cập nhật", "IT_CONFIG", 2, true, "IT_CONFIG"),
         new(SystemPermissionCodes.ItConfigurationTestConnection, "Kiểm tra kết nối", "IT_CONFIG", 3, true, "IT_CONFIG"),
 
-        new("API_WEBHOOK", "API / Webhook", "API_WEBHOOK", 6, false),
+        new("API_WEBHOOK", "API / Webhook", "API_WEBHOOK", 6, false, Description: "QUẢN TRỊ NỀN TẢNG"),
         new(SystemPermissionCodes.ApiWebhookView, "Xem", "API_WEBHOOK", 1, true, "API_WEBHOOK"),
         new(SystemPermissionCodes.ApiWebhookCreate, "Tạo", "API_WEBHOOK", 2, true, "API_WEBHOOK"),
         new(SystemPermissionCodes.ApiWebhookUpdate, "Cập nhật", "API_WEBHOOK", 3, true, "API_WEBHOOK"),
         new(SystemPermissionCodes.ApiWebhookDelete, "Xóa", "API_WEBHOOK", 4, true, "API_WEBHOOK"),
         new(SystemPermissionCodes.ApiWebhookTest, "Kiểm tra", "API_WEBHOOK", 5, true, "API_WEBHOOK"),
         new(SystemPermissionCodes.ApiWebhookRotateSecret, "Đổi khóa bí mật", "API_WEBHOOK", 6, true, "API_WEBHOOK"),
+        new("DASHBOARD", "Tổng quan", "DASHBOARD", 0, false, FuncUrl: "/admin/dashboard", IconName: "LayoutDashboard", Description: "TỔNG QUAN"),
+        new("SEMESTERS", "Kỳ thực tập", "SEMESTERS", 10, false, Description: "GIAI ĐOẠN 1 · CHUẨN BỊ KỲ"),
+        new("STUDENTS", "Sinh viên", "STUDENTS", 11, false, Description: "GIAI ĐOẠN 1 · CHUẨN BỊ KỲ"),
+        new("COMPANIES", "Doanh nghiệp", "COMPANIES", 12, false, Description: "GIAI ĐOẠN 1 · CHUẨN BỊ KỲ"),
+        new("ASSIGNMENTS", "Phân công", "ASSIGNMENTS", 13, false, Description: "GIAI ĐOẠN 1 · CHUẨN BỊ KỲ"),
+        new("WEEKLY_REPORTS", "Báo cáo tuần", "WEEKLY_REPORTS", 20, false, Description: "GIAI ĐOẠN 2 · THEO DÕI VẬN HÀNH"),
+        new("ATTENDANCE", "Điểm danh", "ATTENDANCE", 21, false, Description: "GIAI ĐOẠN 2 · THEO DÕI VẬN HÀNH"),
+        new("EVALUATIONS", "Chấm điểm", "EVALUATIONS", 30, false, Description: "GIAI ĐOẠN 3 · TỔNG KẾT KỲ"),
+        new("SUMMARY", "Bảng điểm tổng hợp", "SUMMARY", 31, false, Description: "GIAI ĐOẠN 3 · TỔNG KẾT KỲ"),
+        new("TEMPLATES", "Biểu mẫu", "TEMPLATES", 14, false, Description: "GIAI ĐOẠN 1 · CHUẨN BỊ KỲ"),
+        new("DEPARTMENTS", "Khoa", "DEPARTMENTS", 7, false, Description: "QUẢN TRỊ NỀN TẢNG"),
+        new("GRID_CONFIG", "Cấu hình bảng", "GRID_CONFIG", 8, false, Description: "QUẢN TRỊ NỀN TẢNG"),
+        new("FIELD_POLICIES", "Chính sách trường", "FIELD_POLICIES", 9, false, Description: "QUẢN TRỊ NỀN TẢNG"),
+        new("NOTIFICATIONS", "Thông báo", "NOTIFICATIONS", 22, false, Description: "GIAI ĐOẠN 2 · THEO DÕI VẬN HÀNH"),
     }.Concat(BuildMatrixActionFunctions())
         .Concat(BuildMenuFunctions())
         .DistinctBy(function => function.Code, StringComparer.OrdinalIgnoreCase)
@@ -66,13 +81,25 @@ public static class SystemRbacSeeder
     {
         yield return new("SYSTEM.FUNCTIONS", "Chức năng", "SYSTEM", 10, false, "SYSTEM", "/admin/functions", "Settings", IsMenuEntry: true);
         yield return new("SYSTEM.PERMISSIONS", "Phân quyền chức năng", "SYSTEM", 11, false, "SYSTEM", "/admin/system/permissions", "Shield", IsMenuEntry: true);
+        yield return new("SYSTEM.BACKUPS", "Sao lưu & Khôi phục", "SYSTEM", 12, false, "SYSTEM", "/admin/backups", "DatabaseBackup", IsMenuEntry: true);
         yield return new("ACCOUNTS.USERS", "Thành viên", "ACCOUNTS", 10, false, "ACCOUNTS", "/admin/users", "Users", IsMenuEntry: true);
-        yield return new("CONFIG.GRID", "Cấu hình bảng", "CONFIG", 10, false, "CONFIG", "/admin/config/grid", "Columns3", IsMenuEntry: true);
-        yield return new("CONFIG.FIELD_POLICIES", "Chính sách trường dữ liệu", "CONFIG", 11, false, "CONFIG", "/admin/config/field-policies", "FileSliders", IsMenuEntry: true);
+        yield return new("CONFIG.GRID", "Cấu hình bảng", "GRID_CONFIG", 10, false, "GRID_CONFIG", "/admin/config/grid", "Columns3", IsMenuEntry: true);
+        yield return new("CONFIG.FIELD_POLICIES", "Chính sách trường dữ liệu", "FIELD_POLICIES", 10, false, "FIELD_POLICIES", "/admin/config/field-policies", "FileSliders", IsMenuEntry: true);
         yield return new("CONFIG.GRADING_RULES", "Quy chế điểm & deadline", "CONFIG", 12, false, "CONFIG", "/admin/config/grading-rules", "ClipboardList", IsMenuEntry: true);
         yield return new("AUDIT.LOGS", "Nhật ký kiểm toán", "AUDIT", 10, false, "AUDIT", "/admin/logs/audit", "ScrollText", IsMenuEntry: true);
         yield return new(SystemPermissionCodes.ExcelImport, "Nhập sinh viên từ Excel", "IT_CONFIG", 10, false, "IT_CONFIG", "/admin/config/import-excel", "FileSpreadsheet", IsMenuEntry: true);
         yield return new("API_WEBHOOK.SETTINGS", "Cấu hình kết nối", "API_WEBHOOK", 10, false, "API_WEBHOOK", "/admin/settings", "Settings", IsMenuEntry: true);
+        yield return new("DEPARTMENTS.LIST", "Quản lý Khoa", "DEPARTMENTS", 10, false, "DEPARTMENTS", "/admin/departments", "Building2", IsMenuEntry: true);
+        yield return new("SEMESTERS.LIST", "Kỳ thực tập", "SEMESTERS", 10, false, "SEMESTERS", "/admin/semesters", "Calendar", IsMenuEntry: true);
+        yield return new("STUDENTS.LIST", "Sinh viên", "STUDENTS", 10, false, "STUDENTS", "/admin/students", "Users", IsMenuEntry: true);
+        yield return new("LECTURER.LIST", "Giảng viên", "LECTURER", 10, false, "LECTURER", "/admin/lecturers", "UserRound", IsMenuEntry: true);
+        yield return new("COMPANIES.LIST", "Doanh nghiệp", "COMPANIES", 10, false, "COMPANIES", "/admin/companies", "Building2", IsMenuEntry: true);
+        yield return new("ASSIGNMENTS.LIST", "Phân công GVHD", "ASSIGNMENTS", 10, false, "ASSIGNMENTS", "/admin/assignments", "UserRoundPlus", IsMenuEntry: true);
+        yield return new("WEEKLY_REPORTS.ARCHIVE", "Báo cáo tuần", "WEEKLY_REPORTS", 10, false, "WEEKLY_REPORTS", "/admin/report-archive", "FileText", IsMenuEntry: true);
+        yield return new("ATTENDANCE.LOG", "Điểm danh & Nhật ký", "ATTENDANCE", 10, false, "ATTENDANCE", "/admin/attendance", "CalendarCheck", IsMenuEntry: true);
+        yield return new("NOTIFICATIONS.LIST", "Thông báo", "NOTIFICATIONS", 10, false, "NOTIFICATIONS", "/admin/notifications", "Bell", IsMenuEntry: true);
+        yield return new("TEMPLATES.LIST", "Biểu mẫu & Tài liệu", "TEMPLATES", 10, false, "TEMPLATES", "/admin/templates", "FileText", IsMenuEntry: true);
+        yield return new("SUMMARY.REPORT", "Bảng điểm tổng hợp & Hồ sơ kỳ", "SUMMARY", 10, false, "SUMMARY", "/admin/summary", "ClipboardList", IsMenuEntry: true);
     }
 
     private static IEnumerable<FunctionDefinition> BuildMatrixActionFunctions()
@@ -85,7 +112,21 @@ public static class SystemRbacSeeder
             ("CONFIG", "Cấu hình"),
             ("AUDIT", "Nhật ký"),
             ("IT_CONFIG", "Cấu hình IT"),
-            ("API_WEBHOOK", "API / Webhook")
+            ("API_WEBHOOK", "API / Webhook"),
+            ("SEMESTERS", "Kỳ thực tập"),
+            ("STUDENTS", "Sinh viên"),
+            ("COMPANIES", "Doanh nghiệp"),
+            ("ASSIGNMENTS", "Phân công"),
+            ("WEEKLY_REPORTS", "Báo cáo tuần"),
+            ("ATTENDANCE", "Điểm danh"),
+            ("EVALUATIONS", "Chấm điểm"),
+            ("SUMMARY", "Báo cáo tổng kết"),
+            ("TEMPLATES", "Biểu mẫu"),
+            ("DEPARTMENTS", "Khoa"),
+            ("GRID_CONFIG", "Cấu hình bảng"),
+            ("FIELD_POLICIES", "Chính sách trường"),
+            ("DASHBOARD", "Tổng quan"),
+            ("NOTIFICATIONS", "Thông báo")
         };
         var actions = new[]
         {
@@ -250,6 +291,12 @@ public static class SystemRbacSeeder
             {
                 if (definition.IsMenuEntry)
                 {
+                    existingFunction.ModuleCode = definition.ModuleCode;
+                    existingFunction.ParentId = functionsByCode[definition.ParentCode!].AutoId;
+                    existingFunction.SortOrder = definition.SortOrder;
+                    existingFunction.IsAction = false;
+                    existingFunction.IsActive = true;
+                    existingFunction.IsDeleted = false;
                     existingFunction.FuncUrl ??= definition.FuncUrl;
                     if ((existingFunction.IconName is null or "Folder") && definition.IconName != null)
                         existingFunction.IconName = definition.IconName;
@@ -263,6 +310,10 @@ public static class SystemRbacSeeder
                     existingFunction.IsAction = definition.IsAction;
                     existingFunction.IsActive = true;
                     existingFunction.IsDeleted = false;
+                    existingFunction.Description ??= definition.Description;
+                    existingFunction.FuncUrl ??= definition.FuncUrl;
+                    if ((existingFunction.IconName is null or "Folder") && definition.IconName != null)
+                        existingFunction.IconName = definition.IconName;
                 }
                 continue;
             }
@@ -291,6 +342,12 @@ public static class SystemRbacSeeder
             {
                 if (definition.IsMenuEntry)
                 {
+                    existingFunction.ModuleCode = definition.ModuleCode;
+                    existingFunction.ParentId = functionsByCode[definition.ParentCode!].AutoId;
+                    existingFunction.SortOrder = definition.SortOrder;
+                    existingFunction.IsAction = false;
+                    existingFunction.IsActive = true;
+                    existingFunction.IsDeleted = false;
                     existingFunction.FuncUrl ??= definition.FuncUrl;
                     if ((existingFunction.IconName is null or "Folder") && definition.IconName != null)
                         existingFunction.IconName = definition.IconName;
@@ -305,6 +362,10 @@ public static class SystemRbacSeeder
                     existingFunction.IsAction = definition.IsAction;
                     existingFunction.IsActive = true;
                     existingFunction.IsDeleted = false;
+                    existingFunction.Description ??= definition.Description;
+                    existingFunction.FuncUrl ??= definition.FuncUrl;
+                    if ((existingFunction.IconName is null or "Folder") && definition.IconName != null)
+                        existingFunction.IconName = definition.IconName;
                 }
                 continue;
             }
@@ -340,13 +401,23 @@ public static class SystemRbacSeeder
         var functions = await context.SysFunctions
             .Where(function => function.IsActive)
             .ToListAsync(cancellationToken);
+        var operationalModules = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "DASHBOARD", "SEMESTERS", "STUDENTS", "LECTURER", "COMPANIES", "ASSIGNMENTS",
+            "WEEKLY_REPORTS", "ATTENDANCE", "EVALUATIONS", "SUMMARY", "TEMPLATES", "NOTIFICATIONS"
+        };
+        var platformModules = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "SYSTEM", "ACCOUNTS", "CONFIG", "AUDIT", "IT_CONFIG", "API_WEBHOOK",
+            "DEPARTMENTS", "GRID_CONFIG", "FIELD_POLICIES"
+        };
         var permissionsByRoleAndFunction = await context.SysRolePermissions
             .IgnoreQueryFilters()
             .ToDictionaryAsync(
                 permission => (permission.SysRoleId, permission.SysFunctionId),
                 cancellationToken);
 
-        void EnsurePermission(SysRole role, SysFunction function)
+        void EnsurePermission(SysRole role, SysFunction function, bool isGranted = true)
         {
             var key = (role.AutoId, function.AutoId);
             if (!permissionsByRoleAndFunction.TryGetValue(key, out var permission))
@@ -355,7 +426,7 @@ public static class SystemRbacSeeder
                 {
                     SysRoleId = role.AutoId,
                     SysFunctionId = function.AutoId,
-                    IsGranted = true
+                    IsGranted = isGranted
                 };
                 context.SysRolePermissions.Add(permission);
                 permissionsByRoleAndFunction.Add(key, permission);
@@ -363,7 +434,7 @@ public static class SystemRbacSeeder
             else if (permission.IsDeleted)
             {
                 permission.IsDeleted = false;
-                permission.IsGranted = true;
+                permission.IsGranted = isGranted;
             }
         }
 
@@ -373,15 +444,8 @@ public static class SystemRbacSeeder
             {
                 nameof(Role.SuperAdmin) => functions,
                 nameof(Role.DepartmentAdmin) => functions.Where(function =>
-                    function.Code == "ACCOUNTS" ||
-                    function.Code is SystemPermissionCodes.AccountsView
-                        or SystemPermissionCodes.AccountsCreate
-                        or SystemPermissionCodes.AccountsUpdate
-                        or SystemPermissionCodes.AccountsDelete
-                        or SystemPermissionCodes.AccountsResetPassword
-                        or SystemPermissionCodes.ConfigurationView
-                        or SystemPermissionCodes.ConfigurationUpdate
-                        or SystemPermissionCodes.ExcelImport),
+                    operationalModules.Contains(function.ModuleCode)
+                    && (function.IsAction || function.Code == "DASHBOARD")),
                 _ => []
             };
 
@@ -396,23 +460,26 @@ public static class SystemRbacSeeder
         if (superAdmin != null)
         {
             foreach (var function in functions)
+            {
                 EnsurePermission(superAdmin, function);
+                permissionsByRoleAndFunction[(superAdmin.AutoId, function.AutoId)].IsGranted = true;
+            }
         }
 
         var departmentAdmin = roles.FirstOrDefault(role =>
             role.Code.Equals(nameof(Role.DepartmentAdmin), StringComparison.OrdinalIgnoreCase));
         if (departmentAdmin != null)
         {
-            var configurableFunctions = functions.Where(function =>
-                function.Code is SystemPermissionCodes.ConfigurationView
-                    or SystemPermissionCodes.ConfigurationUpdate);
-            foreach (var function in configurableFunctions)
+            foreach (var function in functions.Where(function =>
+                         operationalModules.Contains(function.ModuleCode) && function.IsAction))
                 EnsurePermission(departmentAdmin, function);
 
-            var excelImportFunction = functions.FirstOrDefault(function =>
-                function.Code == SystemPermissionCodes.ExcelImport);
-            if (excelImportFunction != null)
-                EnsurePermission(departmentAdmin, excelImportFunction);
+            foreach (var function in functions.Where(function => platformModules.Contains(function.ModuleCode)))
+            {
+                EnsurePermission(departmentAdmin, function, isGranted: false);
+                var permission = permissionsByRoleAndFunction[(departmentAdmin.AutoId, function.AutoId)];
+                permission.IsGranted = false;
+            }
         }
 
         var exportPermission = functions.FirstOrDefault(function =>
@@ -543,6 +610,72 @@ public static class SystemRbacSeeder
                     FrozenSide = frozenSide,
                     RoleId = roleId,
                     SortOrder = Array.IndexOf(defaults, (fieldCode, headerTitle, width, frozen, frozenSide))
+                });
+            }
+        }
+
+        var adminGrids = new Dictionary<string, (string FieldCode, string HeaderTitle, int Width, bool Frozen, string FrozenSide)[]>
+        {
+            ["STUDENTS"] =
+            [
+                ("select", "Chọn", 42, true, "left"),
+                ("fullName", "Họ & tên", 210, true, "left"),
+                ("studentCode", "MSSV & Lớp", 150, false, "left"),
+                ("assignedLecturer", "GVHD", 170, false, "left"),
+                ("companyName", "Doanh nghiệp", 190, false, "left"),
+                ("accountStatus", "Trạng thái tài khoản", 150, false, "left"),
+                ("actions", "Thao tác", 160, true, "right")
+            ],
+            ["LECTURERS"] =
+            [
+                ("select", "Chọn", 42, true, "left"),
+                ("fullName", "Giảng viên", 210, true, "left"),
+                ("staffCode", "MSGV", 120, false, "left"),
+                ("department", "Khoa / Bộ môn", 170, false, "left"),
+                ("contact", "Liên hệ", 220, false, "left"),
+                ("assignedCount", "SV phân công", 120, false, "left"),
+                ("accountStatus", "Trạng thái tài khoản", 150, false, "left"),
+                ("actions", "Thao tác", 160, true, "right")
+            ],
+            ["COMPANIES"] =
+            [
+                ("name", "Doanh nghiệp", 240, true, "left"),
+                ("industry", "Lĩnh vực", 180, false, "left"),
+                ("contact", "Liên hệ", 220, false, "left"),
+                ("openPositions", "Vị trí tuyển dụng", 150, false, "left"),
+                ("capacity", "SV / Sức chứa", 130, false, "left"),
+                ("status", "Trạng thái", 150, false, "left"),
+                ("actions", "Thao tác", 180, true, "right")
+            ]
+        };
+        foreach (var (featureCode, columns) in adminGrids)
+        {
+            var existing = await context.SysGridConfigs
+                .IgnoreQueryFilters()
+                .Where(config => config.FeatureCode == featureCode
+                    && config.RoleId == null
+                    && config.TenantId == null)
+                .ToListAsync(cancellationToken);
+            var existingByField = existing.ToDictionary(config => config.FieldCode, StringComparer.OrdinalIgnoreCase);
+            for (var index = 0; index < columns.Length; index++)
+            {
+                var (fieldCode, headerTitle, width, frozen, frozenSide) = columns[index];
+                if (existingByField.TryGetValue(fieldCode, out var config))
+                {
+                    config.IsDeleted = false;
+                    continue;
+                }
+
+                context.SysGridConfigs.Add(new SysGridConfig
+                {
+                    FeatureCode = featureCode,
+                    FieldCode = fieldCode,
+                    HeaderTitle = headerTitle,
+                    ColumnWidth = width,
+                    IsVisible = true,
+                    IsFrozen = frozen,
+                    FrozenSide = frozenSide,
+                    SortOrder = index
                 });
             }
         }

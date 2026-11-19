@@ -11,6 +11,10 @@ interface DynamicDataGridProps<T extends object> {
   emptyMessage?: string;
   configOverride?: SysGridConfig[];
   renderCell?: (row: T, fieldCode: string) => ReactNode;
+  renderHeader?: (fieldCode: string) => ReactNode;
+  hideFieldCodes?: string[];
+  isLoading?: boolean;
+  onRowClick?: (row: T) => void;
 }
 
 const SAFE_HEX_COLOR = /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
@@ -27,6 +31,10 @@ export function DynamicDataGrid<T extends object>({
   emptyMessage = "Không có dữ liệu.",
   configOverride,
   renderCell,
+  renderHeader,
+  hideFieldCodes = [],
+  isLoading = false,
+  onRowClick,
 }: DynamicDataGridProps<T>) {
   const configQuery = useGridConfig(
     featureCode,
@@ -42,8 +50,14 @@ export function DynamicDataGrid<T extends object>({
     return <p role="alert" className="p-4 text-sm text-rose-700">Không thể tải cấu hình bảng.</p>;
   }
 
+  if (isLoading) {
+    return <p role="status" className="p-4 text-sm text-slate-500">{loadingMessage}</p>;
+  }
+
+  const hiddenFields = new Set(hideFieldCodes);
   const columns = (configOverride ?? configQuery.data ?? [])
     .filter((column) => column.isVisible)
+    .filter((column) => !hiddenFields.has(column.fieldCode))
     .sort((left, right) => left.sortOrder - right.sortOrder);
   const leftFrozenOffsets = new Map<string, number>();
   const rightFrozenOffsets = new Map<string, number>();
@@ -89,7 +103,7 @@ export function DynamicDataGrid<T extends object>({
                   color: safeColor(column.headerTextColor),
                 }}
               >
-                {column.headerTitle}
+                {renderHeader?.(column.fieldCode) ?? column.headerTitle}
               </th>
             ))}
           </tr>
@@ -102,7 +116,11 @@ export function DynamicDataGrid<T extends object>({
               </td>
             </tr>
           ) : rows.map((row, rowIndex) => (
-            <tr key={getRowKey?.(row, rowIndex) ?? rowIndex} className="odd:bg-white even:bg-slate-50/60">
+            <tr
+              key={getRowKey?.(row, rowIndex) ?? rowIndex}
+              onClick={onRowClick ? () => onRowClick(row) : undefined}
+              className={`odd:bg-white even:bg-slate-50/60 ${onRowClick ? "cursor-pointer hover:bg-slate-100" : ""}`}
+            >
               {columns.map((column) => (
                 <td
                   key={column.fieldCode}

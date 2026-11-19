@@ -39,6 +39,7 @@ import { adminUsersService } from "../../../services/adminUsers.service";
 import { useSemester, toApiSemesterId, toApiDepartmentId } from "../../../contexts/SemesterContext";
 import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
 import type { ToastType } from "../../../contexts/ToastContext";
+import { DynamicDataGrid } from "../components/DynamicDataGrid";
 export const LecturersView = ({
   onShowToast,
   onNavigateTab: _onNavigateTab,
@@ -428,276 +429,60 @@ export const LecturersView = ({
           </div>
         </div>
 
-        {/* Data Table */}
-        <div className="overflow-x-auto border border-slate-200/80 rounded-xl">
-          <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
-                {canMutateOps && (
-                  <th className="py-2.5 px-3 text-center w-10">
-                    <input
-                      type="checkbox"
-                      checked={isAllPageSelected}
-                      onChange={handleToggleSelectAllPage}
-                      className="rounded text-[#026aa7] cursor-pointer"
-                    />
-                  </th>
-                )}
-                <th className="py-2.5 px-3">Giảng viên</th>
-                <th className="py-2.5 px-3">MSGV</th>
-                <th className="py-2.5 px-3">Khoa / Bộ môn</th>
-                <th className="py-2.5 px-3">Liên hệ</th>
-                <th className="py-2.5 px-3 text-center">SV phân công</th>
-                <th className="py-2.5 px-3 text-center">Trạng thái TK</th>
-                <th className="py-2.5 px-3 text-center">Thao tác</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {isError && paginatedLecturers.length === 0 ? (
-                <tr>
-                  <td colSpan={canMutateOps ? 8 : 7} className="p-6">
-                    <div role="alert" className="mx-auto flex max-w-xl flex-col items-center gap-3 text-center">
-                      <AlertCircle className="h-8 w-8 text-rose-600" aria-hidden="true" />
-                      <p className="text-sm font-semibold text-rose-700">
-                        Không thể tải danh sách giảng viên
-                      </p>
-                      <p className="text-xs text-slate-600">{getApiErrorMessage(error)}</p>
-                      <button
-                        type="button"
-                        onClick={() => void refetch()}
-                        className="min-h-9 rounded-md bg-[#026aa7] px-3 text-xs font-bold text-white transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/30"
-                      >
-                        Thử tải lại
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ) : isLoadingApi ? (
-                Array.from({ length: 6 }).map((_, index) => (
-                  <tr key={index} className="animate-pulse">
-                    {canMutateOps && (
-                      <td className="px-3 py-3 text-center">
-                        <SkeletonBox className="mx-auto h-4 w-4" />
-                      </td>
-                    )}
-                    <td className="px-3 py-3">
-                      <div className="flex items-center gap-2.5">
-                        <SkeletonBox className="h-8 w-8 shrink-0 rounded-full" />
-                        <div className="space-y-1">
-                          <SkeletonBox className="h-3.5 w-28" />
-                          <SkeletonBox className="h-2.5 w-20" />
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-3 py-3"><SkeletonBox className="h-3.5 w-16" /></td>
-                    <td className="px-3 py-3"><SkeletonBox className="h-3.5 w-24" /></td>
-                    <td className="px-3 py-3"><SkeletonBox className="h-3.5 w-28" /></td>
-                    <td className="px-3 py-3 text-center"><SkeletonBox className="mx-auto h-3.5 w-8" /></td>
-                    <td className="px-3 py-3 text-center"><SkeletonBox className="mx-auto h-5 w-20 rounded-full" /></td>
-                    <td className="px-3 py-3 text-center"><SkeletonBox className="mx-auto h-6 w-24 rounded-md" /></td>
-                  </tr>
-                ))
-              ) : paginatedLecturers.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={canMutateOps ? 8 : 7}
-                    className="p-4"
-                  >
-                    <EmptyState
-                      icon={UserSearch}
-                      title={
-                        hasActiveFilters
-                          ? "Không tìm thấy giảng viên phù hợp"
-                          : "Chưa có giảng viên để hiển thị"
-                      }
-                      description={
-                        hasActiveFilters
-                          ? "Thử thay đổi từ khóa hoặc bộ lọc để tìm giảng viên."
-                          : "API không trả về giảng viên nào cho kỳ và đơn vị đang chọn."
-                      }
-                      action={
-                        hasActiveFilters
-                          ? {
-                              label: "Xóa bộ lọc tìm kiếm",
-                              onClick: () => {
-                                setSearchInput("");
-                                clearFilters();
-                              },
-                            }
-                          : canMutateOps
-                            ? {
-                                label: "Thêm giảng viên",
-                                onClick: () => setIsCreateModalOpen(true),
-                              }
-                            : undefined
-                      }
-                    />
-                  </td>
-                </tr>
-              ) : (
-                paginatedLecturers.map((lec) => {
-                  const isSelected = selectedIds.includes(lec.id);
-                  return (
-                    <tr
-                      key={lec.id}
-                      className={`hover:bg-slate-50/80 transition-colors ${isSelected ? "bg-[#026aa7]/5" : ""}`}
-                    >
-                      {canMutateOps && (
-                        <td className="py-3 px-3 text-center">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => handleToggleSelect(lec.id)}
-                            className="rounded text-[#026aa7] cursor-pointer"
-                          />
-                        </td>
-                      )}
-
-                      {/* Name & Academic Degree */}
-                      <td className="py-3 px-3">
-                        <div className="flex items-center gap-2.5">
-                          <InitialsAvatar
-                            name={lec.fullName}
-                            seed={lec.employeeId || lec.email || lec.fullName}
-                            size={32}
-                          />
-                          <div>
-                            <p className="font-bold text-slate-900">
-                              {lec.fullName}
-                            </p>
-                            <p className="text-[10px] text-slate-400 font-medium">
-                              {lec.academicDegree}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Employee ID */}
-                      <td className="py-3 px-3 font-mono font-bold text-slate-800">
-                        {lec.employeeId}
-                      </td>
-
-                      {/* Department */}
-                      <td className="py-3 px-3">
-                        <span className="font-bold text-slate-800 block">
-                          {lec.department}
-                        </span>
-                        <span className="text-[10px] text-slate-400 font-medium">
-                          {lec.faculty}
-                        </span>
-                      </td>
-
-                      {/* Contact */}
-                      <td className="py-3 px-3">
-                        <p className="font-bold text-[#026aa7]">{lec.email}</p>
-                        <p className="text-[10px] text-slate-400 font-mono">
-                          {lec.phone}
-                        </p>
-                      </td>
-
-                      {/* Assignment count */}
-                      <td className="py-3 px-3 text-center">
-                        <span className="font-bold text-slate-800 tabular-nums">
-                          {lec.currentCount}
-                        </span>
-                      </td>
-
-                      {/* Account Status Badge */}
-                      <td className="py-3 px-3 text-center">
-                        {lec.accountStatus === "active" && (
-                          <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold rounded-md inline-flex items-center gap-1">
-                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />{" "}
-                            Đã cấp
-                          </span>
-                        )}
-                        {lec.accountStatus === "pending" && (
-                          <span className="px-2.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-bold rounded-md inline-flex items-center gap-1">
-                            <KeyRound className="w-3 h-3 text-amber-600" /> Chưa
-                            cấp
-                          </span>
-                        )}
-                        {lec.accountStatus === "locked" && (
-                          <span className="px-2.5 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-bold rounded-md inline-flex items-center gap-1">
-                            <Lock className="w-3 h-3 text-rose-600" /> Đã khóa
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Action Buttons */}
-                      <td className="py-3 px-3 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
-                          {canMutateOps && lec.accountStatus === "pending" && (
-                            <button
-                              onClick={() => handleQuickGrantSingle(lec)}
-                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] rounded-lg shadow-2xs transition-colors flex items-center gap-1 cursor-pointer"
-                              title="Cấp tài khoản ngay"
-                            >
-                              <KeyRound className="w-3 h-3" />
-                              <span>Cấp TK ngay</span>
-                            </button>
-                          )}
-
-                          <button
-                            onClick={() => setSelectedLecturer(lec)}
-                            className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-[#026aa7] rounded-lg transition-colors cursor-pointer"
-                            title="Xem chi tiết"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-
-                          {canMutateOps && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => setEditingLecturer(lec)}
-                                className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-amber-600 rounded-lg transition-colors cursor-pointer"
-                                title="Sửa"
-                              >
-                                <Pencil className="w-4 h-4" />
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => setDeleteTarget(lec)}
-                                className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
-                                title="Xóa"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-
-                              <button
-                                onClick={() => handleResetPassword(lec)}
-                                className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-amber-600 rounded-lg transition-colors cursor-pointer"
-                                title="Đặt lại mật khẩu"
-                              >
-                                <RotateCcw className="w-4 h-4" />
-                              </button>
-
-                              <button
-                                onClick={() => handleToggleLockAccount(lec.id)}
-                                className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
-                                title={
-                                  lec.accountStatus === "locked"
-                                    ? "M\u1EDF kh\xF3a t\xE0i kho\u1EA3n"
-                                    : "Kh\xF3a t\xE0i kho\u1EA3n"
-                                }
-                              >
-                                {lec.accountStatus === "locked" ? (
-                                  <Unlock className="w-4 h-4 text-emerald-600" />
-                                ) : (
-                                  <Lock className="w-4 h-4 text-rose-600" />
-                                )}
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+        {/* Configurable data table */}
+        <div className="overflow-x-auto rounded-xl border border-slate-200/80">
+          {isError ? (
+            <div role="alert" className="mx-auto flex max-w-xl flex-col items-center gap-3 p-6 text-center">
+              <AlertCircle className="h-8 w-8 text-rose-600" aria-hidden="true" />
+              <p className="text-sm font-semibold text-rose-700">Không thể tải danh sách giảng viên</p>
+              <p className="text-xs text-slate-600">{getApiErrorMessage(error)}</p>
+              <button type="button" onClick={() => void refetch()} className="min-h-9 rounded-md bg-[#026aa7] px-3 text-xs font-bold text-white hover:bg-[#025a8e]">Thử tải lại</button>
+            </div>
+          ) : (
+            <DynamicDataGrid
+              featureCode="LECTURERS"
+              rows={paginatedLecturers}
+              getRowKey={(lecturer) => lecturer.id}
+              isLoading={isLoadingApi && paginatedLecturers.length === 0}
+              loadingMessage="Đang tải danh sách giảng viên..."
+              emptyMessage={hasActiveFilters ? "Không tìm thấy giảng viên phù hợp." : "Chưa có giảng viên trong phạm vi đang chọn."}
+              hideFieldCodes={canMutateOps ? [] : ["select"]}
+              renderHeader={(fieldCode) => fieldCode === "select" && canMutateOps ? (
+                <input type="checkbox" aria-label="Chọn tất cả giảng viên trong trang" checked={isAllPageSelected} onChange={handleToggleSelectAllPage} className="rounded text-[#026aa7]" />
+              ) : undefined}
+              renderCell={(lecturer, fieldCode) => {
+                switch (fieldCode) {
+                  case "select":
+                    return canMutateOps ? <input type="checkbox" aria-label={`Chọn ${lecturer.fullName}`} checked={selectedIds.includes(lecturer.id)} onChange={() => handleToggleSelect(lecturer.id)} className="rounded text-[#026aa7]" /> : null;
+                  case "fullName":
+                    return <div className="flex items-center gap-2.5"><InitialsAvatar name={lecturer.fullName} seed={lecturer.employeeId || lecturer.email} size={32} /><div><p className="font-bold text-slate-900">{lecturer.fullName}</p><p className="text-[10px] text-slate-400">{lecturer.academicDegree}</p></div></div>;
+                  case "staffCode":
+                    return <span className="font-mono font-bold text-slate-800">{lecturer.employeeId}</span>;
+                  case "department":
+                    return <div><p className="font-bold text-slate-800">{lecturer.department}</p><p className="text-[10px] text-slate-400">{lecturer.faculty}</p></div>;
+                  case "contact":
+                    return <div><p className="font-bold text-[#026aa7]">{lecturer.email}</p><p className="font-mono text-[10px] text-slate-400">{lecturer.phone}</p></div>;
+                  case "assignedCount":
+                    return <span className="font-bold tabular-nums text-slate-800">{lecturer.currentCount ?? 0}</span>;
+                  case "accountStatus":
+                    return <span className={lecturer.accountStatus === "active" ? "rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700" : lecturer.accountStatus === "pending" ? "rounded-md border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[10px] font-bold text-amber-700" : "rounded-md border border-rose-200 bg-rose-50 px-2.5 py-0.5 text-[10px] font-bold text-rose-700"}>{lecturer.accountStatus === "active" ? "Đã cấp" : lecturer.accountStatus === "pending" ? "Chưa cấp" : "Đã khóa"}</span>;
+                  case "actions":
+                    return <div className="flex items-center justify-center gap-1.5">
+                      {canMutateOps && lecturer.accountStatus === "pending" && <button type="button" onClick={() => handleQuickGrantSingle(lecturer)} className="rounded-md bg-emerald-600 px-2 py-1 text-[10px] font-bold text-white hover:bg-emerald-700" title="Cấp tài khoản ngay">Cấp TK</button>}
+                      <button type="button" onClick={() => setSelectedLecturer(lecturer)} className="rounded-lg p-1.5 text-slate-600 hover:bg-slate-100 hover:text-[#026aa7]" title="Xem chi tiết" aria-label={`Xem ${lecturer.fullName}`}><Eye className="h-4 w-4" /></button>
+                      {canMutateOps && <>
+                        <button type="button" onClick={() => setEditingLecturer(lecturer)} className="rounded-lg p-1.5 text-slate-600 hover:bg-slate-100 hover:text-amber-600" title="Sửa" aria-label={`Sửa ${lecturer.fullName}`}><Pencil className="h-4 w-4" /></button>
+                        <button type="button" onClick={() => setDeleteTarget(lecturer)} className="rounded-lg p-1.5 text-slate-600 hover:bg-rose-50 hover:text-rose-600" title="Xóa" aria-label={`Xóa ${lecturer.fullName}`}><Trash2 className="h-4 w-4" /></button>
+                        <button type="button" onClick={() => handleResetPassword(lecturer)} className="rounded-lg p-1.5 text-slate-600 hover:bg-slate-100 hover:text-amber-600" title="Đặt lại mật khẩu" aria-label={`Đặt lại mật khẩu ${lecturer.fullName}`}><RotateCcw className="h-4 w-4" /></button>
+                        <button type="button" onClick={() => handleToggleLockAccount(lecturer.id)} className="rounded-lg p-1.5 text-slate-600 hover:bg-slate-100" title={lecturer.accountStatus === "locked" ? "Mở khóa tài khoản" : "Khóa tài khoản"} aria-label={lecturer.accountStatus === "locked" ? `Mở khóa ${lecturer.fullName}` : `Khóa ${lecturer.fullName}`}>{lecturer.accountStatus === "locked" ? <Unlock className="h-4 w-4 text-emerald-600" /> : <Lock className="h-4 w-4 text-rose-600" />}</button>
+                      </>}
+                    </div>;
+                  default:
+                    return undefined;
+                }
+              }}
+            />
+          )}
         </div>
 
         {/* Table Pagination */}

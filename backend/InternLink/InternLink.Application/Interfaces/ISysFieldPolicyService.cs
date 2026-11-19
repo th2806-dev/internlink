@@ -7,15 +7,18 @@ public interface ISysFieldPolicyService
     Task<IReadOnlyList<SysFieldPolicyDto>> GetByFormAsync(
         string formCode,
         long? roleId,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        string? tenantId = null);
     Task<IReadOnlyList<SysFieldPolicyDto>> GetByFormForRoleAsync(
         string formCode,
         string roleCode,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        string? tenantId = null);
 
     Task<IReadOnlyList<SysFieldPolicyDto>> UpsertAsync(
         string formCode,
         long? roleId,
         UpsertSysFieldPoliciesRequest request,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        string? tenantId = null);
 }

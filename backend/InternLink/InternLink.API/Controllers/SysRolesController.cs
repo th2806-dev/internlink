@@ -15,6 +15,12 @@ namespace InternLink.API.Controllers;
 [RequirePermission(SystemPermissionCodes.SystemManage)]
 public sealed class SysRolesController : ControllerBase
 {
+    private static readonly HashSet<string> DepartmentAdminModules = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "DASHBOARD", "SEMESTERS", "STUDENTS", "LECTURER", "COMPANIES", "ASSIGNMENTS",
+        "WEEKLY_REPORTS", "ATTENDANCE", "EVALUATIONS", "SUMMARY", "TEMPLATES", "NOTIFICATIONS"
+    };
+
     private static readonly (string Suffix, string Name)[] Actions =
     [
         ("VIEW", "Xem"),
@@ -145,9 +151,13 @@ public sealed class SysRolesController : ControllerBase
                 if (!byCode.TryGetValue($"{moduleCode}.{Actions[index].Suffix}", out var function))
                     continue;
 
+                var isGranted = role.Code.Equals("DepartmentAdmin", StringComparison.OrdinalIgnoreCase)
+                    && !DepartmentAdminModules.Contains(moduleCode)
+                    ? false
+                    : values[index];
                 if (permissions.TryGetValue(function.AutoId, out var permission))
                 {
-                    permission.IsGranted = values[index];
+                    permission.IsGranted = isGranted;
                 }
                 else
                 {
@@ -155,7 +165,7 @@ public sealed class SysRolesController : ControllerBase
                     {
                         SysRoleId = roleId,
                         SysFunctionId = function.AutoId,
-                        IsGranted = values[index]
+                        IsGranted = isGranted
                     };
                     _context.SysRolePermissions.Add(permission);
                     permissions.Add(function.AutoId, permission);
@@ -181,18 +191,11 @@ public sealed class SysRolesController : ControllerBase
         var permissions = await _context.SysRolePermissions
             .Where(permission => permission.SysRoleId == roleId)
             .ToDictionaryAsync(permission => permission.SysFunctionId, cancellationToken);
-        var departmentAdminCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "ACCOUNTS.VIEW", "ACCOUNTS.CREATE", "ACCOUNTS.UPDATE", "ACCOUNTS.DELETE",
-            SystemPermissionCodes.AccountsResetPassword,
-            SystemPermissionCodes.ConfigurationView, SystemPermissionCodes.ConfigurationUpdate
-        };
-
         foreach (var function in functions)
         {
             var granted = role.Code.Equals("SuperAdmin", StringComparison.OrdinalIgnoreCase)
                 || role.Code.Equals("DepartmentAdmin", StringComparison.OrdinalIgnoreCase)
-                    && departmentAdminCodes.Contains(function.Code);
+                    && DepartmentAdminModules.Contains(function.ModuleCode);
             if (permissions.TryGetValue(function.AutoId, out var permission))
                 permission.IsGranted = granted;
             else

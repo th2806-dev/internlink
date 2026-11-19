@@ -49,6 +49,7 @@ import { submissionApiService } from "../../../services/submissionApi.service";
 import { StudentReportsTab } from "../../lecturer/components/StudentReportsTab";
 import type { SubmissionDto, WeeklyReportDto } from "../../../types/api";
 import type { ToastType } from "../../../contexts/ToastContext";
+import { DynamicDataGrid } from "../components/DynamicDataGrid";
 export const StudentsView = ({
   onShowToast,
   onNavigateTab,
@@ -610,265 +611,57 @@ export const StudentsView = ({
           </div>
         </div>
 
-        {/* Data Table */}
-        <div className="overflow-x-auto border border-slate-200/80 rounded-xl">
-          <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
-                {canMutateOps && (
-                  <th className="py-2.5 px-3 text-center w-10">
-                    <input
-                      type="checkbox"
-                      checked={isAllPageSelected}
-                      onChange={handleToggleSelectAllPage}
-                      className="rounded text-[#026aa7] cursor-pointer"
-                    />
-                  </th>
-                )}
-                <th className="py-2.5 px-3 text-center w-10">STT</th>
-                <th className="py-2.5 px-3">Họ & tên</th>
-                <th className="py-2.5 px-3">MSSV & Lớp</th>
-                <th className="py-2.5 px-3">GVHD</th>
-                <th className="py-2.5 px-3">Doanh nghiệp</th>
-                <th className="py-2.5 px-3 text-center">Trạng thái TK</th>
-                <th className="py-2.5 px-3 text-center">Thao tác</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {isError ? (
-                <tr>
-                  <td colSpan={canMutateOps ? 8 : 7} className="p-6">
-                    <div role="alert" className="mx-auto flex max-w-xl flex-col items-center gap-3 text-center">
-                      <p className="text-sm font-semibold text-rose-700">
-                        Không thể tải danh sách sinh viên
-                      </p>
-                      <p className="text-xs text-slate-600">{getApiErrorMessage(error)}</p>
-                      <button
-                        type="button"
-                        onClick={() => void refetch()}
-                        className="min-h-9 rounded-md bg-[#026aa7] px-3 text-xs font-bold text-white transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/30"
-                      >
-                        Thử tải lại
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ) : isLoadingApi ? (
-                Array.from({ length: 6 }).map((_, idx) => (
-                  <tr key={idx} className="animate-pulse">
-                    {canMutateOps && (
-                      <td className="py-3 px-3 text-center"><SkeletonBox className="h-4 w-4 mx-auto" /></td>
-                    )}
-                    <td className="py-3 px-3 text-center"><SkeletonBox className="h-3.5 w-6 mx-auto" /></td>
-                    <td className="py-3 px-3">
-                      <div className="flex items-center gap-2.5">
-                        <SkeletonBox className="w-8 h-8 rounded-full shrink-0" />
-                        <div className="space-y-1">
-                          <SkeletonBox className="h-3.5 w-28" />
-                          <SkeletonBox className="h-2.5 w-20" />
-                        </div>
-                      </div>
-                    </td>
-                    <td className="py-3 px-3"><SkeletonBox className="h-3.5 w-20" /></td>
-                    <td className="py-3 px-3"><SkeletonBox className="h-3.5 w-24" /></td>
-                    <td className="py-3 px-3"><SkeletonBox className="h-3.5 w-24" /></td>
-                    <td className="py-3 px-3 text-center"><SkeletonBox className="h-5 w-20 rounded-full mx-auto" /></td>
-                    <td className="py-3 px-3 text-center"><SkeletonBox className="h-6 w-24 rounded-md mx-auto" /></td>
-                  </tr>
-                ))
-              ) : paginatedStudents.length === 0 ? (
-                <tr>
-                  <td colSpan={canMutateOps ? 8 : 7} className="p-4">
-                    <EmptyState
-                      title={
-                        !hasActiveFilters
-                          ? "Chưa có sinh viên để hiển thị"
-                          : "Không tìm thấy sinh viên phù hợp"
-                      }
-                      description={
-                        !hasActiveFilters
-                          ? "API không trả về sinh viên nào cho kỳ và đơn vị đang chọn."
-                          : "Thử thay đổi từ khóa hoặc bộ lọc để tìm sinh viên."
-                      }
-                      action={
-                        hasActiveFilters
-                          ? {
-                              label: "Xóa bộ lọc tìm kiếm",
-                              onClick: () => {
-                                setSearchInput("");
-                                clearFilters();
-                                setStatusFilter("all");
-                                setLecturerFilter("all");
-                              },
-                            }
-                          : undefined
-                      }
-                    />
-                  </td>
-                </tr>
-              ) : (
-                paginatedStudents.map((st, idx) => {
-                  const isSelected = selectedIds.includes(st.id);
-                  return (
-                    <tr
-                      key={st.id}
-                      className={`hover:bg-slate-50/80 transition-colors ${isSelected ? "bg-[#026aa7]/5" : ""}`}
-                    >
-                      {canMutateOps && (
-                        <td className="py-3 px-3 text-center">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => handleToggleSelect(st.id)}
-                            className="rounded text-[#026aa7] cursor-pointer"
-                          />
-                        </td>
-                      )}
-
-                      {/* STT */}
-                      <td className="py-3 px-3 text-center text-slate-400 font-mono font-bold">
-                        {(currentPage - 1) * pageSize + idx + 1}
-                      </td>
-
-                      {/* Họ & tên */}
-                      <td className="py-3 px-3">
-                        <div className="flex items-center gap-2.5">
-                          <InitialsAvatar name={st.fullName} seed={st.mssv} size={32} />
-                          <div className="min-w-0">
-                            <p
-                              className="font-bold text-slate-900 truncate leading-tight"
-                              title={st.fullName}
-                            >
-                              {st.fullName}
-                            </p>
-                            <p className="text-[10px] text-slate-400 font-medium truncate leading-tight">
-                              {st.email}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* MSSV & Lớp */}
-                      <td className="py-3 px-3">
-                        <p className="font-mono font-bold text-slate-800">
-                          {st.mssv}
-                        </p>
-                        <p className="text-[10px] text-[#026aa7] font-bold">
-                          {st.classCode}
-                        </p>
-                      </td>
-
-                      {/* GVHD */}
-                      <td className="py-3 px-3">
-                        <p className="font-bold text-slate-800">
-                          {st.assignedLecturer}
-                        </p>
-                      </td>
-
-                      {/* Doanh nghiệp */}
-                      <td className="py-3 px-3">
-                        <div className="flex items-center gap-1.5 font-bold text-slate-800">
-                          <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                          <span>{st.companyName}</span>
-                        </div>
-                      </td>
-
-                      {/* Account Status Badge */}
-                      <td className="py-3 px-3 text-center">
-                        {st.accountStatus === "active" && (
-                          <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold rounded-md inline-flex items-center gap-1">
-                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />{" "}
-                            Đã cấp
-                          </span>
-                        )}
-                        {st.accountStatus === "pending" && (
-                          <span className="px-2.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-bold rounded-md inline-flex items-center gap-1">
-                            <KeyRound className="w-3 h-3 text-amber-600" /> Chưa
-                            cấp
-                          </span>
-                        )}
-                        {st.accountStatus === "locked" && (
-                          <span className="px-2.5 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-bold rounded-md inline-flex items-center gap-1">
-                            <Lock className="w-3 h-3 text-rose-600" /> Đã khóa
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Action Buttons */}
-                      <td className="py-3 px-3 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
-                          {canMutateOps && st.accountStatus === "pending" && (
-                            <button
-                              onClick={() => handleQuickGrantSingle(st)}
-                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] rounded-lg shadow-2xs transition-colors flex items-center gap-1 cursor-pointer"
-                              title="Cấp tài khoản ngay"
-                            >
-                              <KeyRound className="w-3 h-3" />
-                              <span>Cấp TK ngay</span>
-                            </button>
-                          )}
-
-                          <button
-                            onClick={() => setSelectedStudent(st as AdminStudentRow)}
-                            className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-[#026aa7] rounded-lg transition-colors cursor-pointer"
-                            title="Xem chi tiết"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-
-                          {canMutateOps && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => setEditingStudent(st as AdminStudentRow)}
-                                className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-amber-600 rounded-lg transition-colors cursor-pointer"
-                                title="Sửa"
-                              >
-                                <Pencil className="w-4 h-4" />
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => setDeleteTarget(st as AdminStudentRow)}
-                                className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
-                                title="Xóa"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-
-                              <button
-                                onClick={() => handleResetPassword(st)}
-                                className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-amber-600 rounded-lg transition-colors cursor-pointer"
-                                title="Đặt lại mật khẩu"
-                              >
-                                <RotateCcw className="w-4 h-4" />
-                              </button>
-
-                              <button
-                                onClick={() => handleToggleLockAccount(st.id)}
-                                className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
-                                title={
-                                  st.accountStatus === "locked"
-                                    ? "M\u1EDF kh\xF3a t\xE0i kho\u1EA3n"
-                                    : "Kh\xF3a t\xE0i kho\u1EA3n"
-                                }
-                              >
-                                {st.accountStatus === "locked" ? (
-                                  <Unlock className="w-4 h-4 text-emerald-600" />
-                                ) : (
-                                  <Lock className="w-4 h-4 text-rose-600" />
-                                )}
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+        {/* Configurable data table */}
+        <div className="overflow-x-auto rounded-xl border border-slate-200/80">
+          {isError ? (
+            <div role="alert" className="flex flex-col items-center gap-3 p-6 text-center">
+              <p className="text-sm font-semibold text-rose-700">Không thể tải danh sách sinh viên</p>
+              <p className="text-xs text-slate-600">{getApiErrorMessage(error)}</p>
+              <button type="button" onClick={() => void refetch()} className="min-h-9 rounded-md bg-[#026aa7] px-3 text-xs font-bold text-white hover:bg-[#025a8e]">Thử tải lại</button>
+            </div>
+          ) : (
+            <DynamicDataGrid
+              featureCode="STUDENTS"
+              rows={paginatedStudents}
+              getRowKey={(student) => student.id}
+              isLoading={isLoadingApi && paginatedStudents.length === 0}
+              loadingMessage="Đang tải danh sách sinh viên..."
+              emptyMessage={hasActiveFilters ? "Không tìm thấy sinh viên phù hợp." : "Chưa có sinh viên trong phạm vi đang chọn."}
+              hideFieldCodes={canMutateOps ? [] : ["select"]}
+              renderHeader={(fieldCode) => fieldCode === "select" && canMutateOps ? (
+                <input type="checkbox" aria-label="Chọn tất cả sinh viên trong trang" checked={isAllPageSelected} onChange={handleToggleSelectAllPage} className="rounded text-[#026aa7]" />
+              ) : undefined}
+              renderCell={(student, fieldCode) => {
+                switch (fieldCode) {
+                  case "select":
+                    return canMutateOps ? <input type="checkbox" aria-label={`Chọn ${student.fullName}`} checked={selectedIds.includes(student.id)} onChange={() => handleToggleSelect(student.id)} className="rounded text-[#026aa7]" /> : null;
+                  case "fullName":
+                    return <div className="flex items-center gap-2.5"><InitialsAvatar name={student.fullName} seed={student.mssv} size={32} /><div className="min-w-0"><p className="truncate font-bold text-slate-900">{student.fullName}</p><p className="truncate text-[10px] text-slate-400">{student.email}</p></div></div>;
+                  case "studentCode":
+                    return <div><p className="font-mono font-bold text-slate-800">{student.mssv}</p><p className="text-[10px] font-bold text-[#026aa7]">{student.classCode}</p></div>;
+                  case "assignedLecturer":
+                    return <span className="font-semibold text-slate-800">{student.assignedLecturer}</span>;
+                  case "companyName":
+                    return <span className="font-semibold text-slate-800">{student.companyName}</span>;
+                  case "accountStatus":
+                    return <span className={student.accountStatus === "active" ? "rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700" : student.accountStatus === "pending" ? "rounded-md border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[10px] font-bold text-amber-700" : "rounded-md border border-rose-200 bg-rose-50 px-2.5 py-0.5 text-[10px] font-bold text-rose-700"}>{student.accountStatus === "active" ? "Đã cấp" : student.accountStatus === "pending" ? "Chưa cấp" : "Đã khóa"}</span>;
+                  case "actions":
+                    return <div className="flex items-center justify-center gap-1.5">
+                      {canMutateOps && student.accountStatus === "pending" && <button type="button" onClick={() => handleQuickGrantSingle(student)} className="rounded-md bg-emerald-600 px-2 py-1 text-[10px] font-bold text-white hover:bg-emerald-700" title="Cấp tài khoản ngay">Cấp TK</button>}
+                      <button type="button" onClick={() => setSelectedStudent(student)} className="rounded-lg p-1.5 text-slate-600 hover:bg-slate-100 hover:text-[#026aa7]" title="Xem chi tiết" aria-label={`Xem ${student.fullName}`}><Eye className="h-4 w-4" /></button>
+                      {canMutateOps && <>
+                        <button type="button" onClick={() => setEditingStudent(student)} className="rounded-lg p-1.5 text-slate-600 hover:bg-slate-100 hover:text-amber-600" title="Sửa" aria-label={`Sửa ${student.fullName}`}><Pencil className="h-4 w-4" /></button>
+                        <button type="button" onClick={() => setDeleteTarget(student)} className="rounded-lg p-1.5 text-slate-600 hover:bg-rose-50 hover:text-rose-600" title="Xóa" aria-label={`Xóa ${student.fullName}`}><Trash2 className="h-4 w-4" /></button>
+                        <button type="button" onClick={() => handleResetPassword(student)} className="rounded-lg p-1.5 text-slate-600 hover:bg-slate-100 hover:text-amber-600" title="Đặt lại mật khẩu" aria-label={`Đặt lại mật khẩu ${student.fullName}`}><RotateCcw className="h-4 w-4" /></button>
+                        <button type="button" onClick={() => handleToggleLockAccount(student.id)} className="rounded-lg p-1.5 text-slate-600 hover:bg-slate-100" title={student.accountStatus === "locked" ? "Mở khóa tài khoản" : "Khóa tài khoản"} aria-label={student.accountStatus === "locked" ? `Mở khóa ${student.fullName}` : `Khóa ${student.fullName}`}>{student.accountStatus === "locked" ? <Unlock className="h-4 w-4 text-emerald-600" /> : <Lock className="h-4 w-4 text-rose-600" />}</button>
+                      </>}
+                    </div>;
+                  default:
+                    return undefined;
+                }
+              }}
+            />
+          )}
         </div>
 
         {/* Table Pagination */}

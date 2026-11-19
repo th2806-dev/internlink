@@ -4,6 +4,7 @@ public sealed record SysFieldPolicyDto(
     Guid Id,
     string FormCode,
     string FieldKey,
+    string? TenantId,
     long? RoleId,
     bool IsVisible,
     bool IsRequired,

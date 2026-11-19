@@ -222,10 +222,7 @@ public class SystemConfigurationControllerTests
             .Select(permission => permission.Function.Parent!.Code)
             .ToListAsync()).Should().Contain("ACCOUNTS");
 
-        var controller = new SysFunctionsController(
-            context,
-            new MemoryCache(new MemoryCacheOptions()),
-            new SysFunctionService(context));
+        var controller = new SysFunctionsController(context, new SysFunctionService(context));
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext

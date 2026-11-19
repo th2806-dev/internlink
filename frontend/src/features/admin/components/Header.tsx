@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ChevronDown, Eye, Menu, Settings, User } from "lucide-react";
+import { ChevronDown, Eye, Menu, User } from "lucide-react";
 import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
 import { NotificationDropdown } from "../../../components/common/NotificationDropdown";
 import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
+import { useSystemMenu } from "../../../hooks/useSystemMenu";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { useImpersonation } from "../../../contexts/ImpersonationContext";
 import { systemAdminService } from "../../../services/systemAdmin.service";
-import { getAdminPageTitle } from "../../../config/navigationConfig";
+import { findSystemMenuRoute } from "../../../lib/systemMenu";
 import type { AuthUser } from "../../../contexts/AuthContext";
 
 export const Header = ({
@@ -30,6 +31,7 @@ export const Header = ({
   const { isSuperAdmin, roleDisplayLabel } = useAdminCapabilities();
   const { impersonation, startImpersonation } = useImpersonation();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const menuQuery = useSystemMenu();
   const impersonationTargetsQuery = useQuery({
     queryKey: ["system-admin", "impersonation-targets"],
     queryFn: systemAdminService.getImpersonationTargets,
@@ -48,6 +50,12 @@ export const Header = ({
 
   const displayName = user?.name || user?.username || roleDisplayLabel;
   const displayEmail = user?.email ?? user?.username ?? "—";
+  const activePath = activeTab.startsWith("admin-")
+    ? `/admin/${activeTab.slice("admin-".length)}`
+    : `/admin/${activeTab || "dashboard"}`;
+  const activeRoute = findSystemMenuRoute(menuQuery.data ?? [], activePath);
+  const pageTitle = activeRoute?.item.name
+    ?? (activePath === "/admin/account" ? "Hồ sơ tài khoản" : "Phân hệ quản trị");
 
   return (
     <header className="sticky top-0 z-30 flex h-12 w-full shrink-0 items-center justify-between gap-3 border-b border-slate-200/90 bg-white px-3.5 sm:px-5 lg:px-6">
@@ -70,9 +78,17 @@ export const Header = ({
           >
             Cổng Quản trị
           </button>
+          {activeRoute?.groupName && (
+            <>
+              <span aria-hidden="true" className="hidden text-slate-300 sm:inline">›</span>
+              <span className="hidden truncate text-slate-500 md:inline">
+                {activeRoute.groupName}
+              </span>
+            </>
+          )}
           <span aria-hidden="true" className="hidden text-slate-300 sm:inline">›</span>
           <span className="truncate font-semibold text-slate-900">
-            {getAdminPageTitle(activeTab)}
+            {pageTitle}
           </span>
         </nav>
       </div>
@@ -130,18 +146,6 @@ export const Header = ({
 
                 {isSuperAdmin && (
                   <>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowProfileMenu(false);
-                        onNavigate("admin-settings");
-                      }}
-                      className="flex min-h-10 w-full items-center justify-between rounded-lg px-2.5 text-left font-medium text-slate-700 transition-colors hover:bg-[#026aa7]/5 hover:text-[#026aa7]"
-                    >
-                      <span>Cài đặt hệ thống</span>
-                      <Settings aria-hidden="true" className="h-3.5 w-3.5 text-slate-400" />
-                    </button>
-
                     <div className="mt-1 border-t border-slate-100 pt-2">
                       <p className="px-2.5 pb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">
                         <Eye aria-hidden="true" className="mr-1 inline h-3.5 w-3.5" />

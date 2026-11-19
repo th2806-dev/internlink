@@ -32,6 +32,7 @@ import { EmptyState } from "../../../components/common/EmptyState";
 import { TableSkeleton } from "../../../components/common/SkeletonLoader";
 import { RequestErrorState } from "../../../components/common/RequestErrorState";
 import { useAdminCompaniesQuery } from "../../../hooks/useAdminCompaniesQuery";
+import { DynamicDataGrid } from "../components/DynamicDataGrid";
 
 const emptyForm = {
   companyCode: "",
@@ -396,146 +397,42 @@ export const CompaniesView = ({
               isFetching ? "opacity-60" : ""
             }`}
           >
-            <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 font-bold">
-                <th className="py-2.5 pr-3">Doanh nghiệp</th>
-                <th className="py-2.5 pr-3">Lĩnh vực</th>
-                <th className="py-2.5 pr-3">Liên hệ</th>
-                <th className="py-2.5 pr-3">Vị trí tuyển dụng</th>
-                <th className="py-2.5 pr-3">SV / Sức chứa</th>
-                <th className="py-2.5 pr-3">Trạng thái</th>
-                <th className="py-2.5 text-right">Thao tác</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {paginatedCompanies.map((c) => (
-                <tr
-                  key={c.id}
-                  className="cursor-pointer transition-colors hover:bg-slate-50/80"
-                  onClick={() => navigate(`/admin/companies/${c.id}`)}
-                >
-                  <td className="py-3 pr-3">
-                    <div className="flex items-center gap-3">
-                      <CompanyAvatar name={c.name} size={40} />
-                      <div>
-                        <div className="font-bold text-slate-900">{c.name}</div>
-                        <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                          {c.shortCode}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="py-3 pr-3 text-slate-600 max-w-[180px]">
-                    {c.field}
-                  </td>
-                  <td className="py-3 pr-3 text-slate-600">
-                    <div>{c.contactPerson}</div>
-                    <div className="text-[10px] text-slate-400">{c.contactEmail}</div>
-                  </td>
-                  <td className="py-3 pr-3">
-                    <span
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium ${
-                        (c.openPositionCount ?? 0) > 0
-                          ? "bg-[#026aa7]/5 text-[#025a8e] border border-[#026aa7]/20"
-                          : "bg-slate-50 text-slate-500 border border-slate-200"
-                      }`}
-                    >
-                      <Briefcase className="w-3 h-3" />
-                      {c.openPositionCount ?? 0} vị trí
-                    </span>
-                  </td>
-                  <td className="py-3 pr-3 font-semibold text-slate-800">
-                    {c.studentCount} / {c.capacity}
-                  </td>
-                  <td className="py-3 pr-3">
-                    <span
-                      className={`inline-flex px-2 py-0.5 rounded-md border text-[10px] font-bold ${
-                        c.status === "Ngưng liên kết"
-                          ? "bg-slate-100 text-slate-500 border-slate-200"
-                          : "bg-emerald-50 text-emerald-700 border-emerald-200/80"
-                      }`}
-                    >
-                      {c.status}
-                    </span>
-                    {c.status === "Ngưng liên kết" && (
-                      <span className="block text-[10px] text-slate-400 mt-0.5">
-                        Ẩn khỏi phân bổ mới · SV đang TT vẫn hiển thị
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-3 text-right">
-                    <div className="inline-flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/admin/companies/${c.id}`);
-                        }}
-                        className="p-1.5 rounded-md text-slate-500 hover:bg-[#026aa7]/5 hover:text-[#025a8e] cursor-pointer"
-                        title="Xem chi tiết"
-                        aria-label={`Xem chi tiết ${c.name}`}
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                      </button>
-                      {canMutateOps && canLink && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setLinkTarget(c);
-                          }}
-                          disabled={isLinking}
-                          className={`px-2 py-1 rounded-md text-[10px] font-bold border cursor-pointer disabled:opacity-50 transition-colors ${
-                            c.status === "Ngưng liên kết"
-                              ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
-                              : "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
-                          }`}
-                          title={
-                            c.status === "Ngưng liên kết"
-                              ? "Liên kết lại với học kỳ này"
-                              : "Ngưng liên kết với học kỳ này"
-                          }
-                        >
-                          {c.status === "Ngưng liên kết"
-                            ? "Liên kết lại"
-                            : "Ngưng liên kết"}
-                        </button>
-                      )}
-                      {canMutateOps && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openEdit(c);
-                            }}
-                            className="p-1.5 rounded-md text-slate-500 hover:bg-[#026aa7]/5 hover:text-[#025a8e] cursor-pointer"
-                            title="Sửa"
-                            aria-label={`Sửa ${c.name}`}
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setDeleteTarget(c);
-                            }}
-                            className="p-1.5 rounded-md text-slate-500 hover:bg-rose-50 hover:text-rose-700 cursor-pointer"
-                            title="Xóa khỏi hệ thống"
-                            aria-label={`Xóa ${c.name}`}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+            <DynamicDataGrid
+              featureCode="COMPANIES"
+              rows={paginatedCompanies}
+              getRowKey={(company) => company.id}
+              isLoading={isLoadingApi && paginatedCompanies.length === 0}
+              loadingMessage={"Đang tải danh sách doanh nghiệp..."}
+              emptyMessage={hasActiveFilters ? "Không tìm thấy doanh nghiệp phù hợp." : "Chưa có doanh nghiệp trong phạm vi đang chọn."}
+              onRowClick={(company) => navigate("/admin/companies/" + company.id)}
+              renderCell={(company, fieldCode) => {
+                switch (fieldCode) {
+                  case "name":
+                    return <div className="flex items-center gap-3"><CompanyAvatar name={company.name} size={40} /><div><p className="font-bold text-slate-900">{company.name}</p><p className="mt-0.5 font-mono text-[10px] text-slate-400">{company.shortCode}</p></div></div>;
+                  case "industry":
+                    return <span className="text-slate-600">{company.field}</span>;
+                  case "contact":
+                    return <div className="text-slate-600"><p>{company.contactPerson}</p><p className="text-[10px] text-slate-400">{company.contactEmail}</p></div>;
+                  case "openPositions":
+                    return <span className={company.openPositionCount ? "inline-flex rounded-md border border-[#026aa7]/20 bg-[#026aa7]/5 px-2 py-0.5 text-[11px] font-medium text-[#025a8e]" : "inline-flex rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-500"}>{company.openPositionCount ?? 0}{" vị trí"}</span>;
+                  case "capacity":
+                    return <span className="font-semibold text-slate-800">{company.studentCount} / {company.capacity}</span>;
+                  case "status":
+                    return <span className={company.status === "Ngưng liên kết" ? "inline-flex rounded-md border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500" : "inline-flex rounded-md border border-emerald-200/80 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700"}>{company.status}</span>;
+                  case "actions":
+                    return <div className="inline-flex items-center gap-1">
+                      <button type="button" onClick={(event) => { event.stopPropagation(); navigate("/admin/companies/" + company.id); }} className="rounded-md p-1.5 text-slate-500 hover:bg-[#026aa7]/5 hover:text-[#025a8e]" title={"Xem chi tiết"} aria-label={"Xem chi tiết " + company.name}><Eye className="h-3.5 w-3.5" /></button>
+                      {canMutateOps && canLink && <button type="button" onClick={(event) => { event.stopPropagation(); setLinkTarget(company); }} disabled={isLinking} className="rounded-md border px-2 py-1 text-[10px] font-bold disabled:opacity-50" title={company.status === "Ngưng liên kết" ? "Liên kết lại với học kỳ này" : "Ngưng liên kết với học kỳ này"}>{company.status === "Ngưng liên kết" ? "Liên kết lại" : "Ngưng liên kết"}</button>}
+                      {canMutateOps && <>
+                        <button type="button" onClick={(event) => { event.stopPropagation(); openEdit(company); }} className="rounded-md p-1.5 text-slate-500 hover:bg-[#026aa7]/5 hover:text-[#025a8e]" title="Sửa" aria-label={"Sửa " + company.name}><Pencil className="h-3.5 w-3.5" /></button>
+                        <button type="button" onClick={(event) => { event.stopPropagation(); setDeleteTarget(company); }} className="rounded-md p-1.5 text-slate-500 hover:bg-rose-50 hover:text-rose-700" title={"Xóa khỏi hệ thống"} aria-label={"Xóa " + company.name}><Trash2 className="h-3.5 w-3.5" /></button>
+                      </>}
+                    </div>;
+                  default:
+                    return undefined;
+                }
+              }}
+            />
         </div>
         )}
 

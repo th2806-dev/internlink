@@ -71,6 +71,46 @@ public sealed class SysFieldPolicyServiceTests
     }
 
     [Fact]
+    public async Task GetByFormAsync_PrefersTenantPolicyAndFallsBackToGeneralBaseline()
+    {
+        await using var db = CreateContext();
+        db.SysFieldPolicies.AddRange(
+            new SysFieldPolicy
+            {
+                FormCode = "FORM_STUDENT_PROFILE",
+                FieldKey = "Email",
+                TenantId = null,
+                CustomLabel = "Email"
+            },
+            new SysFieldPolicy
+            {
+                FormCode = "FORM_STUDENT_PROFILE",
+                FieldKey = "Email",
+                TenantId = "faculty-a",
+                CustomLabel = "Email trường A"
+            },
+            new SysFieldPolicy
+            {
+                FormCode = "FORM_STUDENT_PROFILE",
+                FieldKey = "Phone",
+                TenantId = "faculty-b",
+                CustomLabel = "Riêng khoa B"
+            });
+        await db.SaveChangesAsync();
+
+        var service = new SysFieldPolicyService(db);
+        var facultyA = await service.GetByFormAsync(
+            "FORM_STUDENT_PROFILE", null, CancellationToken.None, "faculty-a");
+        var facultyC = await service.GetByFormAsync(
+            "FORM_STUDENT_PROFILE", null, CancellationToken.None, "faculty-c");
+
+        facultyA.Should().ContainSingle()
+            .Which.CustomLabel.Should().Be("Email trường A");
+        facultyC.Should().ContainSingle()
+            .Which.CustomLabel.Should().Be("Email");
+    }
+
+    [Fact]
     public async Task UpsertAsync_RejectsInvalidRegularExpression()
     {
         await using var db = CreateContext();

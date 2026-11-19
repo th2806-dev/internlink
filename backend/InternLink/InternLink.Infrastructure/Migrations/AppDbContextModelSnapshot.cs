@@ -4508,6 +4508,10 @@ namespace InternLink.Infrastructure.Migrations
                     b.Property<int>("SortOrder")
                         .HasColumnType("int");
 
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
@@ -4530,7 +4534,7 @@ namespace InternLink.Infrastructure.Migrations
 
                     b.HasIndex("RoleId");
 
-                    b.HasIndex("FormCode", "FieldKey", "RoleId")
+                    b.HasIndex("FormCode", "FieldKey", "RoleId", "TenantId")
                         .IsUnique()
                         .HasFilter("[IsDeleted] = 0");
 

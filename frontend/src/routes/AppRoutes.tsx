@@ -97,7 +97,7 @@ export function AppRoutes() {
     location.pathname.startsWith("/lecturer/")
       ? location.pathname.split("/")[2] || "dashboard"
       : location.pathname.startsWith("/admin/")
-      ? location.pathname.split("/")[2] || "dashboard"
+      ? location.pathname.slice("/admin/".length) || "dashboard"
       : location.pathname.startsWith("/student/")
       ? location.pathname.split("/")[2] || "dashboard"
       : location.pathname.split("/").pop() || "dashboard";
@@ -242,16 +242,12 @@ export function AppRoutes() {
                 <Route
                   path="semesters"
                   element={
-                    FEATURES.adminSemesters ? (
-                      <AdminSemestersView
-                        onShowToast={showToast}
-                        onNavigateTab={(t) =>
-                          navigate(`/admin/${t.replace("admin-", "")}`)
-                        }
-                      />
-                    ) : (
-                      <Navigate to="/admin/dashboard" replace />
-                    )
+                    <AdminSemestersView
+                      onShowToast={showToast}
+                      onNavigateTab={(t) =>
+                        navigate(`/admin/${t.replace("admin-", "")}`)
+                      }
+                    />
                   }
                 />
                 <Route

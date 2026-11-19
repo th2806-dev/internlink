@@ -21,6 +21,9 @@ const FEATURE_OPTIONS = [
   { code: "STUDENTS_LIST", label: "Bảng Danh sách Sinh viên" },
   { code: "LECTURERS_LIST", label: "Bảng Danh sách Giảng viên" },
   { code: "COMPANIES_LIST", label: "Bảng Danh sách Doanh nghiệp" },
+  { code: "STUDENTS", label: "Sinh viên" },
+  { code: "LECTURERS", label: "Giảng viên" },
+  { code: "COMPANIES", label: "Doanh nghiệp" },
 ] as const;
 
 type FeatureCode = (typeof FEATURE_OPTIONS)[number]["code"];
@@ -58,6 +61,34 @@ const DEFAULT_COLUMNS: Record<FeatureCode, SysGridConfig[]> = {
     { fieldCode: "address", headerTitle: "Địa chỉ", columnWidth: 240, isVisible: true, isFrozen: false, frozenSide: "left", sortOrder: 3, cellFormatType: "text" },
     { fieldCode: "contactEmail", headerTitle: "Email liên hệ", columnWidth: 220, isVisible: true, isFrozen: false, frozenSide: "left", sortOrder: 4, cellFormatType: "text" },
     { fieldCode: "status", headerTitle: "Trạng thái", columnWidth: 130, isVisible: true, isFrozen: false, frozenSide: "left", sortOrder: 5, cellFormatType: "text" },
+  ],
+  STUDENTS: [
+    { fieldCode: "select", headerTitle: "Chọn", columnWidth: 42, isVisible: true, isFrozen: true, frozenSide: "left", sortOrder: 0, cellFormatType: "text" },
+    { fieldCode: "fullName", headerTitle: "Họ & tên", columnWidth: 210, isVisible: true, isFrozen: true, frozenSide: "left", sortOrder: 1, cellFormatType: "text" },
+    { fieldCode: "studentCode", headerTitle: "MSSV & Lớp", columnWidth: 150, isVisible: true, isFrozen: false, frozenSide: "left", sortOrder: 2, cellFormatType: "text" },
+    { fieldCode: "assignedLecturer", headerTitle: "GVHD", columnWidth: 170, isVisible: true, isFrozen: false, frozenSide: "left", sortOrder: 3, cellFormatType: "text" },
+    { fieldCode: "companyName", headerTitle: "Doanh nghiệp", columnWidth: 190, isVisible: true, isFrozen: false, frozenSide: "left", sortOrder: 4, cellFormatType: "text" },
+    { fieldCode: "accountStatus", headerTitle: "Trạng thái tài khoản", columnWidth: 150, isVisible: true, isFrozen: false, frozenSide: "left", sortOrder: 5, cellFormatType: "text" },
+    { fieldCode: "actions", headerTitle: "Thao tác", columnWidth: 160, isVisible: true, isFrozen: true, frozenSide: "right", sortOrder: 6, cellFormatType: "text" },
+  ],
+  LECTURERS: [
+    { fieldCode: "select", headerTitle: "Chọn", columnWidth: 42, isVisible: true, isFrozen: true, frozenSide: "left", sortOrder: 0, cellFormatType: "text" },
+    { fieldCode: "fullName", headerTitle: "Giảng viên", columnWidth: 210, isVisible: true, isFrozen: true, frozenSide: "left", sortOrder: 1, cellFormatType: "text" },
+    { fieldCode: "staffCode", headerTitle: "MSGV", columnWidth: 120, isVisible: true, isFrozen: false, frozenSide: "left", sortOrder: 2, cellFormatType: "text" },
+    { fieldCode: "department", headerTitle: "Khoa / Bộ môn", columnWidth: 170, isVisible: true, isFrozen: false, frozenSide: "left", sortOrder: 3, cellFormatType: "text" },
+    { fieldCode: "contact", headerTitle: "Liên hệ", columnWidth: 220, isVisible: true, isFrozen: false, frozenSide: "left", sortOrder: 4, cellFormatType: "text" },
+    { fieldCode: "assignedCount", headerTitle: "SV phân công", columnWidth: 120, isVisible: true, isFrozen: false, frozenSide: "left", sortOrder: 5, cellFormatType: "number" },
+    { fieldCode: "accountStatus", headerTitle: "Trạng thái tài khoản", columnWidth: 150, isVisible: true, isFrozen: false, frozenSide: "left", sortOrder: 6, cellFormatType: "text" },
+    { fieldCode: "actions", headerTitle: "Thao tác", columnWidth: 160, isVisible: true, isFrozen: true, frozenSide: "right", sortOrder: 7, cellFormatType: "text" },
+  ],
+  COMPANIES: [
+    { fieldCode: "name", headerTitle: "Doanh nghiệp", columnWidth: 240, isVisible: true, isFrozen: true, frozenSide: "left", sortOrder: 0, cellFormatType: "text" },
+    { fieldCode: "industry", headerTitle: "Lĩnh vực", columnWidth: 180, isVisible: true, isFrozen: false, frozenSide: "left", sortOrder: 1, cellFormatType: "text" },
+    { fieldCode: "contact", headerTitle: "Liên hệ", columnWidth: 220, isVisible: true, isFrozen: false, frozenSide: "left", sortOrder: 2, cellFormatType: "text" },
+    { fieldCode: "openPositions", headerTitle: "Vị trí tuyển dụng", columnWidth: 150, isVisible: true, isFrozen: false, frozenSide: "left", sortOrder: 3, cellFormatType: "number" },
+    { fieldCode: "capacity", headerTitle: "SV / Sức chứa", columnWidth: 130, isVisible: true, isFrozen: false, frozenSide: "left", sortOrder: 4, cellFormatType: "text" },
+    { fieldCode: "status", headerTitle: "Trạng thái", columnWidth: 150, isVisible: true, isFrozen: false, frozenSide: "left", sortOrder: 5, cellFormatType: "text" },
+    { fieldCode: "actions", headerTitle: "Thao tác", columnWidth: 180, isVisible: true, isFrozen: true, frozenSide: "right", sortOrder: 6, cellFormatType: "text" },
   ],
 };
 

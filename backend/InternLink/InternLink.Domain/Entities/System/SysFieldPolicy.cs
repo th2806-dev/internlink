@@ -6,6 +6,7 @@ public class SysFieldPolicy : BaseEntity
 {
     public string FormCode { get; set; } = string.Empty;
     public string FieldKey { get; set; } = string.Empty;
+    public string? TenantId { get; set; }
     public long? RoleId { get; set; }
     public SysRole? Role { get; set; }
     public bool IsVisible { get; set; } = true;

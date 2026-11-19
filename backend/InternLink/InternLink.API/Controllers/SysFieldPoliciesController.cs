@@ -33,8 +33,9 @@ public sealed class SysFieldPoliciesController : ControllerBase
                     formCode,
                     User.FindFirst(ClaimTypes.Role)?.Value
                         ?? throw new InvalidOperationException("Không xác định được vai trò tài khoản."),
-                    cancellationToken)
-                : await _service.GetByFormAsync(formCode, roleId, cancellationToken);
+                    cancellationToken,
+                    GetTenantId())
+                : await _service.GetByFormAsync(formCode, roleId, cancellationToken, GetTenantId());
             return Ok(ApiResponse<IReadOnlyList<SysFieldPolicyDto>>.Ok(policies));
         }
         catch (InvalidOperationException exception)
@@ -54,12 +55,21 @@ public sealed class SysFieldPoliciesController : ControllerBase
     {
         try
         {
-            var policies = await _service.UpsertAsync(formCode, roleId, request, cancellationToken);
+            var policies = await _service.UpsertAsync(formCode, roleId, request, cancellationToken, GetTenantId());
             return Ok(ApiResponse<IReadOnlyList<SysFieldPolicyDto>>.Ok(policies));
         }
         catch (InvalidOperationException exception)
         {
             return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = exception.Message }));
         }
+    }
+
+    private string? GetTenantId()
+    {
+        var tenantId = User.FindFirst("tenantId")?.Value
+            ?? User.FindFirst("TenantId")?.Value
+            ?? User.FindFirst("departmentId")?.Value
+            ?? User.FindFirst("department_id")?.Value;
+        return string.IsNullOrWhiteSpace(tenantId) ? null : tenantId.Trim();
     }
 }

@@ -907,12 +907,13 @@ public class AppDbContext : DbContext
             b.HasKey(x => x.AutoId);
             b.Property(x => x.FormCode).IsRequired().HasMaxLength(100);
             b.Property(x => x.FieldKey).IsRequired().HasMaxLength(100);
+            b.Property(x => x.TenantId).HasMaxLength(100);
             b.Property(x => x.CustomLabel).HasMaxLength(200);
             b.Property(x => x.DefaultValue).HasMaxLength(1000);
             b.Property(x => x.ValidationRegex).HasMaxLength(500);
             b.Property(x => x.ErrorMessage).HasMaxLength(500);
             b.HasIndex(x => x.PublicId).IsUnique();
-            b.HasIndex(x => new { x.FormCode, x.FieldKey, x.RoleId })
+            b.HasIndex(x => new { x.FormCode, x.FieldKey, x.RoleId, x.TenantId })
                 .IsUnique()
                 .HasFilter("[IsDeleted] = 0");
             b.HasOne(x => x.Role)

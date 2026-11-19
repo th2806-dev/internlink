@@ -6,6 +6,7 @@ export interface SystemMenuItem {
   funcUrl: string | null;
   iconName: string | null;
   badgeText: string | null;
+  groupName?: string | null;
   children: SystemMenuItem[];
 }
 
