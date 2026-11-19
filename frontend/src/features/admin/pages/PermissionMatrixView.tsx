@@ -111,9 +111,7 @@ export function PermissionMatrixView({
       <PageHeader
         icon={KeyRound}
         title="Ma trận phân quyền"
-        subtitle="Cấp quyền theo phân hệ và thao tác cho từng vai trò. F1005: cấp toàn quyền theo chức năng hoặc áp dụng quyền theo cột."
-        badge="PERMISSION STUDIO"
-        badgeColor="border-blue-200 bg-blue-50 text-[#026aa7]"
+        subtitle="Cấp quyền theo phân hệ, chức năng và thao tác."
       />
 
       <section className="rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs sm:p-5">

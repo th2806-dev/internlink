@@ -140,7 +140,7 @@ export const TemplatesView: React.FC<{
       case "XLSX":
         return "bg-emerald-600 text-white";
       case "ZIP":
-        return "bg-purple-600 text-white";
+        return "bg-[#026aa7] text-white";
       default:
         return "bg-slate-700 text-white";
     }

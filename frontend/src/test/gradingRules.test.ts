@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   getFinalReportWeek,
+  getClassificationTone,
   GR_INELIGIBLE_LABEL,
   classifyScore,
   computeGrade,
@@ -280,6 +281,12 @@ describe("computeGrade", () => {
     expect(classifyScore(6.4)).toBe("Trung bình");
     expect(classifyScore(5)).toBe("Trung bình");
     expect(classifyScore(4.9)).toBe("Không đạt");
+  });
+
+  it("uses the success palette for the excellent classification badge", () => {
+    expect(getClassificationTone("Xuất sắc")).toBe(
+      "text-emerald-700 bg-emerald-50 border-emerald-200",
+    );
   });
 
   it("shows 40% of process score while eligible but oral exam is pending", () => {

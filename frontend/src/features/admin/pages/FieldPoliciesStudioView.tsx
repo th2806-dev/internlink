@@ -100,9 +100,7 @@ export function FieldPoliciesStudioView({
       <PageHeader
         icon={FileSliders}
         title="Chính sách trường dữ liệu"
-        subtitle="Điều chỉnh hiển thị, bắt buộc, chỉ đọc và quy tắc kiểm tra theo biểu mẫu, vai trò."
-        badge="FIELD POLICY STUDIO"
-        badgeColor="border-[#026aa7]/20 bg-[#026aa7]/5 text-[#026aa7]"
+        subtitle="Quản lý quy tắc hiển thị và kiểm tra theo biểu mẫu, vai trò."
       >
         <button
           type="button"

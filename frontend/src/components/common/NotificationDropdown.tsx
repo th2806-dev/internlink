@@ -390,7 +390,7 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
       case "announcement":
         return <Send className="w-4 h-4 text-[#026aa7]" />;
       case "system":
-        return <ShieldAlert className="w-4 h-4 text-purple-600" />;
+        return <ShieldAlert className="w-4 h-4 text-[#026aa7]" />;
       default:
         return <Info className="w-4 h-4 text-blue-600" />;
     }

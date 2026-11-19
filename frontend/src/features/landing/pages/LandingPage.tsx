@@ -28,13 +28,13 @@ export function LandingPage() {
   const [activeTab, setActiveTab] = useState<"school" | "enterprise" | "student">("school");
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100 font-sans antialiased selection:bg-blue-600 selection:text-white">
+    <div className="min-h-screen bg-slate-900 text-slate-100 font-sans antialiased selection:bg-[#026aa7] selection:text-white">
       {/* 1. TOP STICKY HEADER */}
       <header className="sticky top-0 z-50 backdrop-blur-md bg-slate-900/85 border-b border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-18 flex items-center justify-between">
           {/* Logo & School Badge */}
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#026aa7] to-[#025a8e] flex items-center justify-center shadow-lg shadow-blue-500/20">
               <GraduationCap className="w-6 h-6 text-white" />
             </div>
             <div>
@@ -42,7 +42,7 @@ export function LandingPage() {
                 <span className="text-xl font-black tracking-tight text-white">
                   Intern<span className="text-blue-500">Link</span>
                 </span>
-                <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full bg-[#026aa7]/10 text-[#7bc043] border border-[#026aa7]/20">
                   v2.0 Production
                 </span>
               </div>
@@ -73,7 +73,7 @@ export function LandingPage() {
             {isLoggedIn ? (
               <button
                 onClick={() => navigate(`/${role}/dashboard`)}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm transition-all shadow-lg shadow-blue-600/30 hover:scale-[1.02]"
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#026aa7] hover:bg-[#025a8e] text-white font-semibold text-sm transition-all shadow-lg shadow-[#026aa7]/30 hover:scale-[1.02]"
               >
                 <span>Vào Dashboard ({user?.name || "Tài khoản"})</span>
                 <ArrowRight className="w-4 h-4" />
@@ -81,7 +81,7 @@ export function LandingPage() {
             ) : (
               <button
                 onClick={() => navigate("/login")}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold text-sm transition-all shadow-lg shadow-blue-600/30 hover:shadow-blue-600/50 hover:scale-[1.02]"
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#026aa7] hover:bg-[#025a8e] text-white font-semibold text-sm transition-all shadow-lg shadow-blue-600/30 hover:shadow-blue-600/50 hover:scale-[1.02]"
               >
                 <span>Đăng nhập Cổng Thực tập</span>
                 <ArrowRight className="w-4 h-4" />
@@ -94,8 +94,8 @@ export function LandingPage() {
       {/* 2. HERO SECTION */}
       <section className="relative pt-16 pb-20 lg:pt-24 lg:pb-28 overflow-hidden">
         {/* Subtle Ambient Background */}
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[700px] h-[400px] bg-blue-600/15 rounded-full blur-[140px] pointer-events-none" />
-        <div className="absolute top-1/3 right-10 w-[400px] h-[300px] bg-indigo-600/10 rounded-full blur-[120px] pointer-events-none" />
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[700px] h-[400px] bg-[#026aa7]/15 rounded-full blur-[140px] pointer-events-none" />
+        <div className="absolute top-1/3 right-10 w-[400px] h-[300px] bg-[#026aa7]/10 rounded-full blur-[120px] pointer-events-none" />
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="text-center max-w-3xl mx-auto">
@@ -108,7 +108,7 @@ export function LandingPage() {
             {/* Main Headline */}
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-white leading-[1.15]">
               Nền tảng số hóa quản trị <br />
-              <span className="bg-gradient-to-r from-blue-400 via-indigo-300 to-teal-300 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-[#7bc043] via-[#026aa7] to-[#025a8e] bg-clip-text text-transparent">
                 Thực tập Doanh nghiệp
               </span>
             </h1>
@@ -122,7 +122,7 @@ export function LandingPage() {
             <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
               <button
                 onClick={() => navigate("/login")}
-                className="w-full sm:w-auto flex items-center justify-center gap-2.5 px-7 py-3.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-base transition-all shadow-xl shadow-blue-600/30 hover:scale-[1.02]"
+                className="w-full sm:w-auto flex items-center justify-center gap-2.5 px-7 py-3.5 rounded-xl bg-[#026aa7] hover:bg-[#025a8e] text-white font-bold text-base transition-all shadow-xl shadow-[#026aa7]/30 hover:scale-[1.02]"
               >
                 <span>Truy cập Cổng Quản trị</span>
                 <ChevronRight className="w-5 h-5" />
@@ -166,7 +166,7 @@ export function LandingPage() {
                   </div>
                   <div className="mt-2 text-xs text-slate-400 flex justify-between">
                     <span>Giai đoạn: Hoàn tất</span>
-                    <span className="text-blue-400 font-bold">100%</span>
+                    <span className="text-[#7bc043] font-bold">100%</span>
                   </div>
                 </div>
 
@@ -185,9 +185,9 @@ export function LandingPage() {
                   <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
                     Doanh nghiệp tiếp nhận
                   </div>
-                  <div className="mt-2 text-2xl font-black text-indigo-400">18 Đối tác</div>
+                  <div className="mt-2 text-2xl font-black text-[#7bc043]">18 Đối tác</div>
                   <div className="mt-1 text-xs text-slate-400">Lĩnh vực: Software, Logistics, IT Services</div>
-                  <div className="mt-2 text-xs text-indigo-400/80 flex items-center gap-1">
+                  <div className="mt-2 text-xs text-[#7bc043] flex items-center gap-1">
                     <Building2 className="w-3.5 h-3.5" /> Đánh giá trực tuyến 100%
                   </div>
                 </div>
@@ -208,11 +208,11 @@ export function LandingPage() {
               </div>
             </div>
             <div>
-              <div className="text-3xl sm:text-4xl font-black text-blue-400">100%</div>
+              <div className="text-3xl sm:text-4xl font-black text-[#7bc043]">100%</div>
               <div className="mt-1 text-xs sm:text-sm text-slate-400 font-medium">Không giấy tờ (Paperless)</div>
             </div>
             <div>
-              <div className="text-3xl sm:text-4xl font-black text-indigo-400">7 Tuần</div>
+              <div className="text-3xl sm:text-4xl font-black text-[#7bc043]">7 Tuần</div>
               <div className="mt-1 text-xs sm:text-sm text-slate-400 font-medium">
                 Giám sát báo cáo & minh chứng
               </div>
@@ -228,7 +228,7 @@ export function LandingPage() {
       {/* 4. THE TRIPARTITE ECOSYSTEM (3-SIDED VALUE) */}
       <section id="ecosystem" className="py-20 lg:py-28 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center max-w-3xl mx-auto mb-14">
-          <h2 className="text-xs uppercase font-bold tracking-widest text-blue-400 mb-2">
+          <h2 className="text-xs uppercase font-bold tracking-widest text-[#7bc043] mb-2">
             Hệ sinh thái liên kết
           </h2>
           <p className="text-3xl sm:text-4xl font-black text-white tracking-tight">
@@ -244,7 +244,7 @@ export function LandingPage() {
               onClick={() => setActiveTab("school")}
               className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold transition-all ${
                 activeTab === "school"
-                  ? "bg-blue-600 text-white shadow-md shadow-blue-600/30"
+                  ? "bg-[#026aa7] text-white shadow-md shadow-[#026aa7]/30"
                   : "text-slate-400 hover:text-slate-200"
               }`}
             >
@@ -255,7 +255,7 @@ export function LandingPage() {
               onClick={() => setActiveTab("enterprise")}
               className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold transition-all ${
                 activeTab === "enterprise"
-                  ? "bg-blue-600 text-white shadow-md shadow-blue-600/30"
+                  ? "bg-[#026aa7] text-white shadow-md shadow-[#026aa7]/30"
                   : "text-slate-400 hover:text-slate-200"
               }`}
             >
@@ -266,7 +266,7 @@ export function LandingPage() {
               onClick={() => setActiveTab("student")}
               className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold transition-all ${
                 activeTab === "student"
-                  ? "bg-blue-600 text-white shadow-md shadow-blue-600/30"
+                  ? "bg-[#026aa7] text-white shadow-md shadow-[#026aa7]/30"
                   : "text-slate-400 hover:text-slate-200"
               }`}
             >
@@ -290,7 +290,7 @@ export function LandingPage() {
                 </p>
               </div>
               <div className="p-6 rounded-2xl bg-slate-800/40 border border-slate-700/60 hover:border-blue-500/50 transition-all">
-                <div className="w-12 h-12 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center mb-4">
+                <div className="w-12 h-12 rounded-xl bg-[#026aa7]/10 text-[#026aa7] flex items-center justify-center mb-4">
                   <CalendarCheck className="w-6 h-6" />
                 </div>
                 <h3 className="text-lg font-bold text-white">Ghi đè Deadline linh hoạt</h3>
@@ -322,7 +322,7 @@ export function LandingPage() {
                 </p>
               </div>
               <div className="p-6 rounded-2xl bg-slate-800/40 border border-slate-700/60 hover:border-blue-500/50 transition-all">
-                <div className="w-12 h-12 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center mb-4">
+                <div className="w-12 h-12 rounded-xl bg-[#026aa7]/10 text-[#026aa7] flex items-center justify-center mb-4">
                   <ShieldCheck className="w-6 h-6" />
                 </div>
                 <h3 className="text-lg font-bold text-white">Chấm điểm 1-Click trực tuyến</h3>
@@ -354,7 +354,7 @@ export function LandingPage() {
                 </p>
               </div>
               <div className="p-6 rounded-2xl bg-slate-800/40 border border-slate-700/60 hover:border-blue-500/50 transition-all">
-                <div className="w-12 h-12 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center mb-4">
+                <div className="w-12 h-12 rounded-xl bg-[#026aa7]/10 text-[#026aa7] flex items-center justify-center mb-4">
                   <BarChart3 className="w-6 h-6" />
                 </div>
                 <h3 className="text-lg font-bold text-white">Minh bạch điểm số quá trình</h3>
@@ -401,7 +401,7 @@ export function LandingPage() {
             </div>
 
             <div className="p-6 rounded-xl bg-slate-900 border border-slate-800">
-              <Layers className="w-8 h-8 text-indigo-400 mb-3" />
+              <Layers className="w-8 h-8 text-[#026aa7] mb-3" />
               <h4 className="text-base font-bold text-white">React 19 & TypeScript</h4>
               <p className="mt-2 text-xs text-slate-400 leading-relaxed">
                 Quản lý server-state bằng <strong>TanStack Query</strong> với tính năng cache thông minh, giao diện phản hồi tức thì và không bị giật lag.
@@ -428,7 +428,7 @@ export function LandingPage() {
       </section>
 
       {/* 6. FINAL CALL TO ACTION */}
-      <section className="py-20 relative overflow-hidden bg-gradient-to-b from-slate-950 to-blue-950/40 border-t border-slate-800">
+      <section className="py-20 relative overflow-hidden bg-gradient-to-b from-slate-950 to-[#025a8e]/20 border-t border-slate-800">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight">
             Sẵn sàng chuyển đổi số kỳ thực tập cùng InternLink?
@@ -439,7 +439,7 @@ export function LandingPage() {
           <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
             <button
               onClick={() => navigate("/login")}
-              className="px-8 py-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-base transition-all shadow-xl shadow-blue-600/30 hover:scale-[1.02]"
+              className="px-8 py-4 rounded-xl bg-[#026aa7] hover:bg-[#025a8e] text-white font-bold text-base transition-all shadow-xl shadow-[#026aa7]/30 hover:scale-[1.02]"
             >
               Đăng nhập Cổng Thực tập ngay
             </button>
@@ -457,7 +457,7 @@ export function LandingPage() {
       <footer id="about" className="py-12 bg-slate-950 border-t border-slate-900 text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-black text-sm">
+            <div className="w-8 h-8 rounded-lg bg-[#026aa7] flex items-center justify-center text-white font-black text-sm">
               IL
             </div>
             <div>

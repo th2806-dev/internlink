@@ -167,9 +167,7 @@ export function GridConfigStudioView({
       <PageHeader
         icon={Columns3}
         title="Cấu hình bảng"
-        subtitle="Tùy chỉnh tiêu đề, khả năng hiển thị, màu sắc và độ rộng cột cho từng màn hình."
-        badge="GRID STUDIO"
-        badgeColor="border-[#026aa7]/20 bg-[#026aa7]/5 text-[#026aa7]"
+        subtitle="Tùy chỉnh cột và cách hiển thị dữ liệu trên từng màn hình."
       >
         <button
           type="button"

@@ -989,7 +989,7 @@ export const AccountView = ({
             <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 md:p-6 space-y-4">
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                 <div className="flex items-center gap-2.5">
-                  <div className="p-2 bg-purple-50 text-purple-600 rounded-md">
+                  <div className="p-2 bg-[#026aa7]/5 text-[#026aa7] rounded-md">
                     <History className="w-5 h-5" />
                   </div>
                   <div>
@@ -1064,12 +1064,12 @@ export const AccountView = ({
                 </span>
               </div>
 
-              <div className="p-3 bg-purple-50/60 rounded-md border border-purple-100 flex items-center justify-between">
+              <div className="p-3 bg-[#026aa7]/5 rounded-md border border-[#026aa7]/20 flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  <Users className="w-4 h-4 text-purple-600" />
+                  <Users className="w-4 h-4 text-[#026aa7]" />
                   <span className="font-medium text-slate-700">Giảng viên hướng dẫn</span>
                 </div>
-                <span className="font-bold text-purple-900">
+                <span className="font-bold text-[#026aa7]">
                   {hasLoadedNavStats ? `${navStats.lecturerCount} Giảng viên` : "—"}
                 </span>
               </div>

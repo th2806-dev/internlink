@@ -94,8 +94,6 @@ export function AuditLogsView() {
         icon={ClipboardList}
         title="Nhật ký hoạt động"
         subtitle="Tra cứu thay đổi dữ liệu và đối soát giá trị trước / sau thao tác."
-        badge="AUDIT TRAIL"
-        badgeColor="border-blue-200 bg-blue-50 text-[#026aa7]"
       />
 
       <section className="space-y-4 rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs sm:p-5">
