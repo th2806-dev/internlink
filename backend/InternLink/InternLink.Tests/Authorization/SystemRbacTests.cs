@@ -1,13 +1,16 @@
 using System.Security.Claims;
 using FluentAssertions;
 using InternLink.API.Authorization;
+using InternLink.API.Controllers;
 using InternLink.Domain.Entities;
+using InternLink.Domain.Entities.Rbac;
 using InternLink.Domain.Enums;
 using InternLink.Infrastructure.Persistence;
 using InternLink.Shared.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Infrastructure;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -33,7 +36,14 @@ public class SystemRbacTests
         await SystemRbacSeeder.SeedAsync(context);
 
         (await context.SysFunctions.CountAsync(function => function.ParentId == null)).Should().Be(7);
-        (await context.SysFunctions.CountAsync(function => function.IsAction)).Should().Be(55);
+        (await context.SysFunctions.CountAsync(function => function.IsAction)).Should().Be(62);
+        (await context.SysFunctions
+            .Where(function => function.ModuleCode == "LECTURER" && function.IsAction)
+            .Select(function => function.Code)
+            .ToArrayAsync())
+            .Should().BeEquivalentTo(
+                "LECTURER.VIEW", "LECTURER.CREATE", "LECTURER.UPDATE", "LECTURER.DELETE",
+                "LECTURER.EXPORT", "LECTURER.IMPORT", "LECTURER.PRINT", "LECTURER.APPROVE");
         (await context.SysRoles.CountAsync()).Should().Be(4);
         (await context.SysUsers.CountAsync()).Should().Be(1);
         (await context.SysUserRoles.CountAsync()).Should().Be(1);
@@ -135,6 +145,46 @@ public class SystemRbacTests
                 .SequenceEqual([nameof(InternLink.Domain.Entities.Rbac.SysUser.UserName)]));
         userNameIndex.IsUnique.Should().BeTrue();
         userNameIndex.GetFilter().Should().Be("[IsDeleted] = 0");
+    }
+
+    [Fact]
+    public async Task SavePermissions_SkipsMatrixActionsThatAreNotDefinedForModule()
+    {
+        await using var context = CreateContext();
+        var role = new SysRole { Code = "TEST", Name = "Test" };
+        var root = new SysFunction
+        {
+            Code = "LECTURER",
+            Name = "Giảng viên",
+            ModuleCode = "LECTURER",
+            IsAction = false
+        };
+        context.SysRoles.Add(role);
+        context.SysFunctions.Add(root);
+        await context.SaveChangesAsync();
+
+        var export = new SysFunction
+        {
+            Code = "LECTURER.EXPORT",
+            Name = "Xuất báo cáo",
+            ModuleCode = "LECTURER",
+            ParentId = root.AutoId,
+            IsAction = true
+        };
+        context.SysFunctions.Add(export);
+        await context.SaveChangesAsync();
+
+        var matrix = new[]
+        {
+            new SaveSysRolePermissionMatrixRowDto("LECTURER", true, false, false, false, true, false, false, false)
+        };
+        var result = await new SysRolesController(context)
+            .SavePermissions(role.AutoId, matrix, CancellationToken.None);
+
+        result.Should().BeOfType<OkObjectResult>();
+        var permission = await context.SysRolePermissions.SingleAsync();
+        permission.SysFunctionId.Should().Be(export.AutoId);
+        permission.IsGranted.Should().BeTrue();
     }
 
     [Fact]

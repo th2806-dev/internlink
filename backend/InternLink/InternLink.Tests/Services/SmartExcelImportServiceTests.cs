@@ -244,6 +244,65 @@ public class SmartExcelImportServiceTests
         (await db.SysUserRoles.CountAsync()).Should().Be(1);
     }
 
+    [Fact]
+    public async Task ExecuteImportAsync_ImportsLecturerAcademicTitle()
+    {
+        await using var db = CreateDb();
+        db.SysRoles.Add(new SysRole { Code = nameof(Role.Lecturer), Name = "Giảng viên", IsActive = true });
+        await db.SaveChangesAsync();
+        var (service, request) = await StageTargetAsync(
+            db,
+            "Lecturers",
+            [
+                ("StaffCode", "Mã giảng viên", true),
+                ("FullName", "Họ tên", true),
+                ("AcademicTitle", "Học hàm / học vị", false)
+            ],
+            "GV001",
+            "Nguyễn An",
+            "PGS.TS.");
+
+        var validation = await service.ValidateImportAsync(
+            request, "admin", null, null, CancellationToken.None);
+        validation.ErrorRecordsCount.Should().Be(0);
+
+        var result = await service.ExecuteImportAsync(
+            new ExecuteExcelImportRequest(request.FileId, request.MappingConfig, true),
+            "admin", null, null, "admin", CancellationToken.None);
+
+        result.SuccessCount.Should().Be(1);
+        (await db.Lecturers.SingleAsync()).AcademicTitle.Should().Be("PGS.TS.");
+    }
+
+    [Fact]
+    public async Task ExecuteImportAsync_UpsertsCompanyByTaxCode()
+    {
+        await using var db = CreateDb();
+        db.Companies.Add(new Company { CompanyName = "Tên cũ", TaxCode = "0123456789" });
+        await db.SaveChangesAsync();
+        var (service, request) = await StageTargetAsync(
+            db,
+            "Companies",
+            [
+                ("CompanyName", "Tên doanh nghiệp", true),
+                ("TaxCode", "Mã số thuế", false)
+            ],
+            "Công ty mới",
+            "0123456789");
+
+        var validation = await service.ValidateImportAsync(
+            request, "admin", null, null, CancellationToken.None);
+        validation.WarningRecordsCount.Should().Be(1);
+        validation.ErrorRecordsCount.Should().Be(0);
+
+        var result = await service.ExecuteImportAsync(
+            new ExecuteExcelImportRequest(request.FileId, request.MappingConfig, true),
+            "admin", null, null, "admin", CancellationToken.None);
+
+        result.UpdatedCount.Should().Be(1);
+        (await db.Companies.SingleAsync()).CompanyName.Should().Be("Công ty mới");
+    }
+
     [C24AthFixtureFact]
     public async Task ExecuteImportAsync_ValidatesAndImportsTheC24AthStudentWorkbook()
     {
@@ -300,6 +359,39 @@ public class SmartExcelImportServiceTests
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
         return new AppDbContext(options);
+    }
+
+    private static async Task<(SmartExcelImportService Service, ExcelImportRequest Request)> StageTargetAsync(
+        AppDbContext db,
+        string targetEntity,
+        IReadOnlyList<(string FieldCode, string Header, bool Required)> fields,
+        params string[] values)
+    {
+        using var workbook = new XLWorkbook();
+        var sheet = workbook.AddWorksheet(targetEntity);
+        for (var index = 0; index < fields.Count; index++)
+        {
+            sheet.Cell(1, index + 1).Value = fields[index].Header;
+            sheet.Cell(2, index + 1).Value = values[index];
+        }
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        stream.Position = 0;
+        var service = new SmartExcelImportService(
+            db,
+            new PasswordHasher<User>(),
+            new ExcelImportFileStore(Path.Combine(Path.GetTempPath(), "InternLinkTests", Guid.NewGuid().ToString("N"))));
+        var staged = await service.StageAndAnalyzeExcelAsync(
+            stream, $"{targetEntity}.xlsx", targetEntity, "admin", null, null, CancellationToken.None);
+        var mappings = fields.Select((field, index) => new ExcelColumnMappingDto(
+            field.FieldCode, field.Header, index, field.Required, null, "TRIM")).ToArray();
+        return (
+            service,
+            new ExcelImportRequest(
+                staged.FileId,
+                new ExcelImportMappingConfig(
+                    targetEntity, 2, null, null, targetEntity, mappings)));
     }
 
     private static async Task<(SmartExcelImportService Service, ExcelImportRequest Request)> StageStudentsAsync(

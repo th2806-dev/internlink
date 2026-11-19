@@ -81,6 +81,7 @@ public static class SystemRbacSeeder
         {
             ("SYSTEM", "Hệ thống"),
             ("ACCOUNTS", "Tài khoản"),
+            ("LECTURER", "Giảng viên"),
             ("CONFIG", "Cấu hình"),
             ("AUDIT", "Nhật ký"),
             ("IT_CONFIG", "Cấu hình IT"),

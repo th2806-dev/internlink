@@ -19,8 +19,8 @@ public sealed partial class SmartExcelImportService
         new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
             ["Students"] = ["StudentCode", "FullName", "Email", "PhoneNumber", "Phone", "ClassName", "Class", "MajorName", "Major", "DepartmentId", "DepartmentCode", "DepartmentName", "ClassId"],
-            ["Lecturers"] = ["StaffCode", "FullName", "Email", "PhoneNumber", "Phone", "DepartmentId", "DepartmentCode", "DepartmentName", "Username"],
-            ["Companies"] = ["CompanyCode", "CompanyName", "Address", "Website", "Industry", "ContactPerson", "ContactEmail", "ContactPhone", "Capacity", "DepartmentId", "DepartmentCode", "DepartmentName"],
+            ["Lecturers"] = ["StaffCode", "FullName", "AcademicTitle", "Email", "PhoneNumber", "Phone", "DepartmentId", "DepartmentCode", "DepartmentName", "Username"],
+            ["Companies"] = ["CompanyCode", "TaxCode", "CompanyName", "Address", "Website", "Industry", "ContactPerson", "ContactEmail", "ContactPhone", "Capacity", "DepartmentId", "DepartmentCode", "DepartmentName"],
             ["InternshipAssignments"] = ["StudentId", "StudentCode", "CompanyId", "CompanyCode", "LecturerId", "StaffCode", "SemesterId", "Position", "SupervisorName", "SupervisorPhone", "SupervisorEmail", "SupervisorDepartment", "StartDate", "EndDate"],
             ["Internships"] = ["StudentId", "StudentCode", "CompanyId", "CompanyCode", "LecturerId", "StaffCode", "SemesterId", "Position", "SupervisorName", "SupervisorPhone", "SupervisorEmail", "SupervisorDepartment", "StartDate", "EndDate"]
         };
@@ -323,9 +323,20 @@ public sealed partial class SmartExcelImportService
             else if (config.TargetEntity.Equals("Companies", StringComparison.OrdinalIgnoreCase))
             {
                 var code = Value("CompanyCode");
-                if (!string.IsNullOrWhiteSpace(code)
-                    && companies.Any(item => string.Equals(item.CompanyCode, code, StringComparison.OrdinalIgnoreCase)))
+                var taxCode = Value("TaxCode");
+                var existingByCode = companies.FirstOrDefault(item =>
+                    !string.IsNullOrWhiteSpace(code)
+                    && string.Equals(item.CompanyCode, code, StringComparison.OrdinalIgnoreCase));
+                var existingByTaxCode = companies.FirstOrDefault(item =>
+                    !string.IsNullOrWhiteSpace(taxCode)
+                    && string.Equals(item.TaxCode, taxCode, StringComparison.OrdinalIgnoreCase));
+                if (existingByCode != null && existingByTaxCode != null
+                    && existingByCode.PublicId != existingByTaxCode.PublicId)
+                    AddError("TaxCode", "Mã doanh nghiệp và mã số thuế đang thuộc hai hồ sơ khác nhau.", taxCode!);
+                else if (existingByCode != null)
                     AddWarning("CompanyCode", "Mã doanh nghiệp đã tồn tại; hồ sơ sẽ được cập nhật.", code);
+                else if (existingByTaxCode != null)
+                    AddWarning("TaxCode", "Mã số thuế đã tồn tại; hồ sơ sẽ được cập nhật.", taxCode);
             }
             else if (config.TargetEntity.Equals("InternshipAssignments", StringComparison.OrdinalIgnoreCase)
                 || config.TargetEntity.Equals("Internships", StringComparison.OrdinalIgnoreCase))
@@ -459,6 +470,9 @@ public sealed partial class SmartExcelImportService
                 updated++;
 
             lecturer.FullName = GetMappedValue(row.Values, config.Mappings, "FullName").Trim();
+            if (config.Mappings.Any(mapping =>
+                    string.Equals(mapping.SystemFieldCode, "AcademicTitle", StringComparison.OrdinalIgnoreCase)))
+                lecturer.AcademicTitle = NullIfWhiteSpace(GetMappedValue(row.Values, config.Mappings, "AcademicTitle"));
             lecturer.Email = NullIfWhiteSpace(GetMappedValue(row.Values, config.Mappings, "Email"));
             lecturer.Phone = NullIfWhiteSpace(GetValue(row.Values, config.Mappings, "PhoneNumber", "Phone"));
             var department = await ResolveDepartmentAsync(row.Values, config, cancellationToken);
@@ -486,8 +500,12 @@ public sealed partial class SmartExcelImportService
         foreach (var row in rows)
         {
             var code = NullIfWhiteSpace(GetMappedValue(row.Values, config.Mappings, "CompanyCode"));
-            var company = code == null ? null : companies.FirstOrDefault(item =>
+            var taxCode = NullIfWhiteSpace(GetMappedValue(row.Values, config.Mappings, "TaxCode"));
+            var companyByCode = code == null ? null : companies.FirstOrDefault(item =>
                 string.Equals(item.CompanyCode, code, StringComparison.OrdinalIgnoreCase));
+            var companyByTaxCode = taxCode == null ? null : companies.FirstOrDefault(item =>
+                string.Equals(item.TaxCode, taxCode, StringComparison.OrdinalIgnoreCase));
+            var company = companyByCode ?? companyByTaxCode;
             if (company == null)
             {
                 company = new Company { CompanyCode = code, CreatedBy = userName, CreatedByFunction = "SYSTEM.EXCEL.IMPORT" };
@@ -498,6 +516,9 @@ public sealed partial class SmartExcelImportService
             else
                 updated++;
 
+            if (config.Mappings.Any(mapping =>
+                    string.Equals(mapping.SystemFieldCode, "TaxCode", StringComparison.OrdinalIgnoreCase)))
+                company.TaxCode = taxCode;
             company.CompanyName = GetMappedValue(row.Values, config.Mappings, "CompanyName").Trim();
             company.Address = NullIfWhiteSpace(GetMappedValue(row.Values, config.Mappings, "Address"));
             company.Website = NullIfWhiteSpace(GetMappedValue(row.Values, config.Mappings, "Website"));
@@ -942,11 +963,11 @@ public sealed partial class SmartExcelImportService
             },
             "lecturers" => new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
             {
-                ["StaffCode"] = 50, ["FullName"] = 200, ["Email"] = 200, ["PhoneNumber"] = 50, ["Phone"] = 50
+                ["StaffCode"] = 50, ["FullName"] = 200, ["AcademicTitle"] = 150, ["Email"] = 200, ["PhoneNumber"] = 50, ["Phone"] = 50
             },
             "companies" => new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
             {
-                ["CompanyCode"] = 50, ["CompanyName"] = 250, ["Address"] = 500, ["Website"] = 250, ["Industry"] = 150, ["ContactPerson"] = 200, ["ContactEmail"] = 200, ["ContactPhone"] = 50
+                ["CompanyCode"] = 50, ["TaxCode"] = 50, ["CompanyName"] = 250, ["Address"] = 500, ["Website"] = 250, ["Industry"] = 150, ["ContactPerson"] = 200, ["ContactEmail"] = 200, ["ContactPhone"] = 50
             },
             _ => new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
             {

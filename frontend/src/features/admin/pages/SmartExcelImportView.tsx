@@ -76,7 +76,8 @@ type ImportCommitResult = {
   errorReportUrl: string | null;
   accountProvisioningWarnings?: string[];
 };
-type FieldCode = "StudentCode" | "FullName" | "Email" | "PhoneNumber" | "ClassName" | "MajorName";
+type TargetEntity = "Students" | "Lecturers" | "Companies";
+type FieldCode = string;
 type MappingState = Record<FieldCode, string>;
 type ImportField = {
   code: FieldCode;
@@ -89,36 +90,40 @@ const PREVIEW_ENDPOINT = "/api/v1/system/excel/preview";
 const PRESETS_ENDPOINT = "/api/v1/system/excel/mappings";
 const VALIDATE_ENDPOINT = "/api/v1/system/excel/validate";
 const EXECUTE_ENDPOINT = "/api/v1/system/excel/execute-import";
-const EMPTY_MAPPING: MappingState = {
-  StudentCode: "",
-  FullName: "",
-  Email: "",
-  PhoneNumber: "",
-  ClassName: "",
-  MajorName: "",
+const EMPTY_MAPPING: MappingState = {};
+const FIELDS_BY_ENTITY: Record<TargetEntity, ImportField[]> = {
+  Students: [
+    { code: "StudentCode", label: "Mã số sinh viên", required: true, aliases: ["mssv", "ma sv", "ma sinh vien", "ma so sinh vien", "student code", "student id"] },
+    { code: "FullName", label: "Họ và tên", required: true, aliases: ["ho va ten", "ho ten", "ten sinh vien", "ten sv", "full name", "fullname"] },
+    { code: "Email", label: "Email", required: false, aliases: ["email", "e mail", "thu dien tu"] },
+    { code: "PhoneNumber", label: "Điện thoại", required: false, aliases: ["dien thoai", "so dien thoai", "sdt", "mobile", "phone", "phone number"] },
+    { code: "ClassName", label: "Lớp", required: false, aliases: ["lop", "lop sinh hoat", "class", "class name"] },
+    { code: "MajorName", label: "Ngành", required: false, aliases: ["nganh", "chuyen nganh", "major", "major name"] },
+  ],
+  Lecturers: [
+    { code: "StaffCode", label: "Mã giảng viên", required: true, aliases: ["ma giang vien", "ma gv", "magv", "staff code", "employee id"] },
+    { code: "FullName", label: "Họ và tên", required: true, aliases: ["ho va ten", "ho ten", "ten giang vien", "ten gv", "full name", "fullname"] },
+    { code: "Email", label: "Email", required: false, aliases: ["email", "e mail", "thu dien tu"] },
+    { code: "PhoneNumber", label: "Điện thoại", required: false, aliases: ["dien thoai", "so dien thoai", "sdt", "mobile", "phone", "phone number"] },
+    { code: "AcademicTitle", label: "Học hàm / học vị", required: false, aliases: ["hoc ham", "hoc vi", "chuc danh", "academic title", "title"] },
+    { code: "DepartmentName", label: "Khoa / đơn vị", required: false, aliases: ["khoa", "don vi", "department", "department name"] },
+  ],
+  Companies: [
+    { code: "CompanyName", label: "Tên doanh nghiệp", required: true, aliases: ["ten doanh nghiep", "ten cong ty", "company name"] },
+    { code: "CompanyCode", label: "Mã doanh nghiệp", required: false, aliases: ["ma doanh nghiep", "ma cong ty", "company code"] },
+    { code: "TaxCode", label: "Mã số thuế", required: false, aliases: ["ma so thue", "mst", "tax code", "tax id"] },
+    { code: "Address", label: "Địa chỉ", required: false, aliases: ["dia chi", "address"] },
+    { code: "ContactPerson", label: "Người liên hệ", required: false, aliases: ["nguoi lien he", "contact person", "contact name"] },
+    { code: "ContactEmail", label: "Email liên hệ", required: false, aliases: ["email lien he", "contact email"] },
+    { code: "ContactPhone", label: "Điện thoại liên hệ", required: false, aliases: ["dien thoai lien he", "so dien thoai lien he", "contact phone"] },
+    { code: "Industry", label: "Lĩnh vực", required: false, aliases: ["linh vuc", "nganh", "nganh nghe", "industry"] },
+    { code: "Website", label: "Website", required: false, aliases: ["website", "web site", "trang web"] },
+  ],
 };
-const FIELDS: ImportField[] = [
-  {
-    code: "StudentCode",
-    label: "Mã số sinh viên",
-    required: true,
-    aliases: ["mssv", "ma sv", "ma sinh vien", "ma so sinh vien", "student code", "student id"],
-  },
-  {
-    code: "FullName",
-    label: "Họ và tên",
-    required: true,
-    aliases: ["ho va ten", "ho ten", "ten sinh vien", "ten sv", "full name", "fullname"],
-  },
-  { code: "Email", label: "Email", required: false, aliases: ["email", "e mail", "thu dien tu"] },
-  {
-    code: "PhoneNumber",
-    label: "Điện thoại",
-    required: false,
-    aliases: ["dien thoai", "so dien thoai", "sdt", "mobile", "phone", "phone number"],
-  },
-  { code: "ClassName", label: "Lớp", required: false, aliases: ["lop", "lop sinh hoat", "class", "class name"] },
-  { code: "MajorName", label: "Ngành", required: false, aliases: ["nganh", "chuyen nganh", "major", "major name"] },
+const TARGET_ENTITY_OPTIONS: { value: TargetEntity; label: string }[] = [
+  { value: "Students", label: "Sinh viên" },
+  { value: "Lecturers", label: "Giảng viên" },
+  { value: "Companies", label: "Doanh nghiệp" },
 ];
 const STEPS = [
   { number: 1, title: "Tải tệp & chọn sheet" },
@@ -144,6 +149,10 @@ function normalizeHeader(value: string) {
     .trim();
 }
 
+function emptyMapping(fields: ImportField[]): MappingState {
+  return Object.fromEntries(fields.map((field) => [field.code, ""]));
+}
+
 function editDistance(left: string, right: string) {
   const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
   for (let leftIndex = 1; leftIndex <= left.length; leftIndex++) {
@@ -162,8 +171,8 @@ function editDistance(left: string, right: string) {
   return previous[right.length];
 }
 
-function suggestMappings(headers: ImportHeader[]): MappingState {
-  const candidates = FIELDS.flatMap((field) =>
+function suggestMappings(headers: ImportHeader[], fields: ImportField[]): MappingState {
+  const candidates = fields.flatMap((field) =>
     headers.flatMap((header) => {
       const normalized = normalizeHeader(header.title);
       const score = field.aliases.reduce((best, alias) => {
@@ -178,7 +187,7 @@ function suggestMappings(headers: ImportHeader[]): MappingState {
       return score > 0 ? [{ field: field.code, column: header.column, score }] : [];
     }),
   ).sort((left, right) => right.score - left.score);
-  const result = { ...EMPTY_MAPPING };
+  const result = emptyMapping(fields);
   const usedColumns = new Set<string>();
 
   for (const candidate of candidates) {
@@ -219,6 +228,7 @@ export default function SmartExcelImportView() {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [selectedSheet, setSelectedSheet] = useState("");
+  const [targetEntity, setTargetEntity] = useState<TargetEntity>("Students");
   const [mapping, setMapping] = useState<MappingState>(EMPTY_MAPPING);
   const [presets, setPresets] = useState<MappingPreset[]>([]);
   const [selectedPresetId, setSelectedPresetId] = useState("");
@@ -231,13 +241,17 @@ export default function SmartExcelImportView() {
   const [commitResult, setCommitResult] = useState<ImportCommitResult | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
-  const mappingIsValid = Boolean(mapping.StudentCode && mapping.FullName);
+  const fields = FIELDS_BY_ENTITY[targetEntity];
+  const mappingIsValid = fields.filter((field) => field.required).every((field) => Boolean(mapping[field.code]));
   const presetCode = toMappingCode(presetName);
   const mappedColumns = useMemo(
     () => new Map(Object.entries(mapping).filter(([, column]) => column)),
     [mapping],
   );
-  const mappedFields = FIELDS.filter((field) => mapping[field.code]);
+  const mappedFields = fields.filter((field) => mapping[field.code]);
+  const matchingPresets = presets.filter(
+    (preset) => preset.targetEntity.toLowerCase() === targetEntity.toLowerCase(),
+  );
 
   const loadPresets = useCallback(async () => {
     setBusy("presets");
@@ -286,11 +300,11 @@ export default function SmartExcelImportView() {
         if (currentRequestId !== requestId.current) return;
         setPreview(firstSheetPreview);
         setSelectedSheet(firstSheetPreview.selectedSheetName ?? firstSheet);
-        setMapping(suggestMappings(firstSheetPreview.headers));
+        setMapping(suggestMappings(firstSheetPreview.headers, FIELDS_BY_ENTITY[targetEntity]));
       } else {
         setPreview(result);
         setSelectedSheet(result.selectedSheetName ?? sheetName ?? firstSheet);
-        setMapping(suggestMappings(result.headers));
+        setMapping(suggestMappings(result.headers, FIELDS_BY_ENTITY[targetEntity]));
       }
       setSelectedPresetId("");
       setValidation(null);
@@ -309,7 +323,7 @@ export default function SmartExcelImportView() {
     } finally {
       if (currentRequestId === requestId.current) setBusy(null);
     }
-  }, [departmentId]);
+  }, [departmentId, targetEntity]);
 
   const loadFile = (selectedFile?: File) => {
     if (!selectedFile) return;
@@ -347,9 +361,12 @@ export default function SmartExcelImportView() {
     const preset = presets.find((item) => item.id === presetId);
     if (!preset || !preview) return;
 
-    const nextMapping = { ...EMPTY_MAPPING };
+    if (preset.targetEntity.toLowerCase() !== targetEntity.toLowerCase()) return;
+
+    const nextMapping = emptyMapping(FIELDS_BY_ENTITY[targetEntity]);
     for (const item of preset.mappings) {
-      const field = FIELDS.find((candidate) => candidate.code.toLowerCase() === item.systemFieldCode.toLowerCase());
+      const field = FIELDS_BY_ENTITY[targetEntity].find((candidate) =>
+        candidate.code.toLowerCase() === item.systemFieldCode.toLowerCase());
       const column = columnIndexToLetter(item.excelColumnIndex);
       if (field && preview.headers.some((header) => header.column === column)) nextMapping[field.code] = column;
     }
@@ -360,7 +377,7 @@ export default function SmartExcelImportView() {
     setMapping((current) => {
       const next = { ...current, [fieldCode]: column };
       if (column) {
-        for (const field of FIELDS) {
+        for (const field of FIELDS_BY_ENTITY[targetEntity]) {
           if (field.code !== fieldCode && next[field.code] === column) next[field.code] = "";
         }
       }
@@ -371,14 +388,27 @@ export default function SmartExcelImportView() {
     setCommitResult(null);
   };
 
+  const changeTargetEntity = (nextEntity: TargetEntity) => {
+    if (nextEntity === targetEntity) return;
+    setTargetEntity(nextEntity);
+    setMapping(preview
+      ? suggestMappings(preview.headers, FIELDS_BY_ENTITY[nextEntity])
+      : emptyMapping(FIELDS_BY_ENTITY[nextEntity]));
+    setSelectedPresetId("");
+    setValidation(null);
+    setCommitResult(null);
+    setShowSavePreset(false);
+    setError(null);
+  };
+
   const savePreset = async () => {
-    if (!preview || !presetName.trim() || !presetCode) return;
+    if (!preview || !mappingIsValid || !presetName.trim() || !presetCode) return;
     setBusy("save");
     setError(null);
     const body = {
       mappingCode: presetCode,
       mappingName: presetName.trim(),
-      targetEntity: "Students",
+      targetEntity,
       startRowIndex: (preview.headerRowIndex ?? 0) + 2,
       departmentId: departmentId ?? null,
       mappings: mappedFields.map((field) => {
@@ -409,7 +439,7 @@ export default function SmartExcelImportView() {
   };
 
   const buildMappingConfig = () => ({
-    targetEntity: "Students",
+    targetEntity,
     startRowIndex: (preview?.headerRowIndex ?? 0) + 2,
     departmentId: departmentId ?? null,
     tenantId: null,
@@ -612,22 +642,43 @@ export default function SmartExcelImportView() {
 
       {step === 2 && preview && (
         <section className="space-y-5 rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs sm:p-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_220px_260px] lg:items-end">
             <div>
               <h2 className="text-lg font-bold text-slate-900">Ghép cột Excel với trường hệ thống</h2>
               <p className="mt-1 text-sm text-slate-600">Gợi ý tự động dựa trên tên cột; bạn có thể thay đổi bất kỳ ánh xạ nào.</p>
             </div>
-            <label className="block text-sm font-semibold text-slate-800 sm:min-w-64">
+            <label className="block text-sm font-semibold text-slate-800">
+              Loại dữ liệu cần nạp
+              <select
+                aria-label="Loại dữ liệu cần nạp"
+                value={targetEntity}
+                onChange={(event) => {
+                  const option = TARGET_ENTITY_OPTIONS.find((item) => item.value === event.target.value);
+                  if (option) changeTargetEntity(option.value);
+                }}
+                disabled={busy !== null}
+                className="mt-2 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 font-normal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
+              >
+                {TARGET_ENTITY_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-sm font-semibold text-slate-800">
               Cấu hình mẫu đã lưu
               <select
                 aria-label="Chọn cấu hình mẫu"
                 value={selectedPresetId}
                 onChange={(event) => loadPreset(event.target.value)}
-                disabled={busy === "presets" || presets.length === 0}
+                disabled={busy === "presets" || matchingPresets.length === 0}
                 className="mt-2 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 font-normal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
               >
-                <option value="">{busy === "presets" ? "Đang tải cấu hình..." : "Chọn cấu hình mẫu"}</option>
-                {presets.map((preset) => (
+                <option value="">
+                  {busy === "presets"
+                    ? "Đang tải cấu hình..."
+                    : matchingPresets.length === 0 ? "Chưa có cấu hình cho loại dữ liệu này" : "Chọn cấu hình mẫu"}
+                </option>
+                {matchingPresets.map((preset) => (
                   <option key={preset.id} value={preset.id}>{preset.mappingName}</option>
                 ))}
               </select>
@@ -635,7 +686,7 @@ export default function SmartExcelImportView() {
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {FIELDS.map((field) => {
+            {fields.map((field) => {
               const selectedColumn = mapping[field.code];
               const alreadyUsedColumns = new Set(
                 Object.entries(mapping)

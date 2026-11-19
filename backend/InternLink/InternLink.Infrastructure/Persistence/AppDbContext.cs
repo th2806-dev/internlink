@@ -129,6 +129,7 @@ public class AppDbContext : DbContext
             b.Property(x => x.Id).HasColumnName("LecturerId");
             b.Property(x => x.StaffCode).IsRequired().HasMaxLength(50);
             b.Property(x => x.FullName).IsRequired().HasMaxLength(200);
+            b.Property(x => x.AcademicTitle).HasMaxLength(150);
             b.Property(x => x.Email).HasMaxLength(200);
             b.Property(x => x.Phone).HasMaxLength(50);
             b.Property(x => x.Department).HasMaxLength(150);
@@ -147,6 +148,7 @@ public class AppDbContext : DbContext
             b.Property(x => x.Id).HasColumnName("CompanyId");
             b.Property(x => x.CompanyName).IsRequired().HasMaxLength(250);
             b.Property(x => x.CompanyCode).HasMaxLength(50);
+            b.Property(x => x.TaxCode).HasMaxLength(50);
             b.Property(x => x.Address).HasMaxLength(500);
             b.Property(x => x.Website).HasMaxLength(250);
             b.Property(x => x.Industry).HasMaxLength(150);

@@ -6,6 +6,7 @@ public class Company : BaseEntity, IDepartmentScoped
 {
     /// <summary>External company code from the official "DANH SÁCH DOANH NGHIỆP LIÊN KẾT" list (like MSSV/MaGV).</summary>
     public string? CompanyCode { get; set; }
+    public string? TaxCode { get; set; }
     public string CompanyName { get; set; } = null!;
     public string? Address { get; set; }
     public string? Website { get; set; }

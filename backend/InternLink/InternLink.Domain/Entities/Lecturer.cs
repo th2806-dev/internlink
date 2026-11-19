@@ -9,6 +9,7 @@ public class Lecturer : BaseEntity, IDepartmentScoped
 
     public string StaffCode { get; set; } = null!;
     public string FullName { get; set; } = null!;
+    public string? AcademicTitle { get; set; }
     public string? Email { get; set; }
     public string? Phone { get; set; }
     public string? Department { get; set; }

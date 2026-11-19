@@ -143,7 +143,7 @@ public sealed class SysRolesController : ControllerBase
             for (var index = 0; index < Actions.Length; index++)
             {
                 if (!byCode.TryGetValue($"{moduleCode}.{Actions[index].Suffix}", out var function))
-                    return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = $"Thiếu quyền {Actions[index].Name} của phân hệ {moduleCode}." }));
+                    continue;
 
                 if (permissions.TryGetValue(function.AutoId, out var permission))
                 {

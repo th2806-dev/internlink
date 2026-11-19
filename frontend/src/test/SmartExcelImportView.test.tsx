@@ -32,6 +32,39 @@ const preview = {
   headerRowIndex: 2,
 };
 
+const lecturerPreview = {
+  ...preview,
+  headers: [
+    { column: "A", title: "Mã GV" },
+    { column: "B", title: "Họ và tên" },
+    { column: "C", title: "Email" },
+    { column: "D", title: "Điện thoại" },
+    { column: "E", title: "Học vị" },
+    { column: "F", title: "Khoa" },
+  ],
+  sampleRows: [["GV001", "Nguyễn An", "an@example.edu.vn", "0900000000", "Thạc sĩ", "CNTT"]],
+  sheetNames: ["Danh sách giảng viên"],
+  selectedSheetName: "Danh sách giảng viên",
+};
+
+const companyPreview = {
+  ...preview,
+  headers: [
+    { column: "A", title: "Mã doanh nghiệp" },
+    { column: "B", title: "Tên doanh nghiệp" },
+    { column: "C", title: "MST" },
+    { column: "D", title: "Địa chỉ" },
+    { column: "E", title: "Người liên hệ" },
+    { column: "F", title: "Email liên hệ" },
+    { column: "G", title: "Điện thoại liên hệ" },
+    { column: "H", title: "Ngành nghề" },
+    { column: "I", title: "Website" },
+  ],
+  sampleRows: [["CTY001", "Công ty An", "0123456789", "Quận 1", "Nguyễn An", "an@example.com", "0900000000", "Công nghệ", "https://example.com"]],
+  sheetNames: ["Danh sách doanh nghiệp"],
+  selectedSheetName: "Danh sách doanh nghiệp",
+};
+
 const preset = {
   id: "preset-1",
   mappingCode: "C24ATH_STUDENTS",
@@ -157,6 +190,91 @@ describe("SmartExcelImportView", () => {
     expect(apiRequestRaw).toHaveBeenNthCalledWith(4, "/api/v1/system/excel/execute-import", expect.objectContaining({
       method: "POST",
       body: expect.objectContaining({ fileId: "file-1", confirmImport: true }),
+    }));
+  });
+
+  it("maps lecturer-specific columns and sends Lecturers to validation", async () => {
+    vi.mocked(apiRequestRaw)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(lecturerPreview)
+      .mockResolvedValueOnce(validImport);
+    render(<SmartExcelImportView />);
+    await uploadFile(createFile("lecturers.xlsx"));
+    await goToMappingStep();
+    const entitySelector = screen.getByRole("combobox", { name: "Loại dữ liệu cần nạp" });
+    await waitFor(() => expect(entitySelector).toBeEnabled());
+    fireEvent.change(entitySelector, {
+      target: { value: "Lecturers" },
+    });
+
+    expect(screen.getByRole("combobox", { name: "Ghép cột Mã giảng viên" })).toHaveValue("A");
+    expect(screen.getByRole("combobox", { name: "Ghép cột Họ và tên" })).toHaveValue("B");
+    expect(screen.getByRole("combobox", { name: "Ghép cột Học hàm / học vị" })).toHaveValue("E");
+    expect(screen.getByRole("combobox", { name: "Ghép cột Khoa / đơn vị" })).toHaveValue("F");
+    fireEvent.click(screen.getByRole("button", { name: "Kiểm tra dữ liệu" }));
+
+    expect(await screen.findByRole("region", { name: "Kết quả kiểm tra dữ liệu" })).toBeInTheDocument();
+    expect(apiRequestRaw).toHaveBeenNthCalledWith(3, "/api/v1/system/excel/validate", expect.objectContaining({
+      body: expect.objectContaining({
+        mappingConfig: expect.objectContaining({
+          targetEntity: "Lecturers",
+          mappings: expect.arrayContaining([
+            expect.objectContaining({ systemFieldCode: "StaffCode", excelColumnIndex: 0 }),
+            expect.objectContaining({ systemFieldCode: "AcademicTitle", excelColumnIndex: 4 }),
+            expect.objectContaining({ systemFieldCode: "DepartmentName", excelColumnIndex: 5 }),
+          ]),
+        }),
+      }),
+    }));
+  });
+
+  it("maps company fields and preserves Companies through validation and commit", async () => {
+    vi.mocked(apiRequestRaw)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(companyPreview)
+      .mockResolvedValueOnce(validImport)
+      .mockResolvedValueOnce({
+        totalProcessed: 1,
+        successCount: 1,
+        updatedCount: 0,
+        errorCount: 0,
+        errorReportId: null,
+        errorReportUrl: null,
+      });
+    render(<SmartExcelImportView />);
+    await uploadFile(createFile("companies.xlsx"));
+    await goToMappingStep();
+    const entitySelector = screen.getByRole("combobox", { name: "Loại dữ liệu cần nạp" });
+    await waitFor(() => expect(entitySelector).toBeEnabled());
+    fireEvent.change(entitySelector, {
+      target: { value: "Companies" },
+    });
+
+    expect(screen.getByRole("combobox", { name: "Ghép cột Tên doanh nghiệp" })).toHaveValue("B");
+    expect(screen.getByRole("combobox", { name: "Ghép cột Mã doanh nghiệp" })).toHaveValue("A");
+    expect(screen.getByRole("combobox", { name: "Ghép cột Mã số thuế" })).toHaveValue("C");
+    expect(screen.getByRole("combobox", { name: "Ghép cột Điện thoại liên hệ" })).toHaveValue("G");
+    fireEvent.click(screen.getByRole("button", { name: "Kiểm tra dữ liệu" }));
+
+    expect(await screen.findByRole("region", { name: "Kết quả kiểm tra dữ liệu" })).toBeInTheDocument();
+    expect(apiRequestRaw).toHaveBeenNthCalledWith(3, "/api/v1/system/excel/validate", expect.objectContaining({
+      body: expect.objectContaining({
+        mappingConfig: expect.objectContaining({
+          targetEntity: "Companies",
+          mappings: expect.arrayContaining([
+            expect.objectContaining({ systemFieldCode: "CompanyName", excelColumnIndex: 1 }),
+            expect.objectContaining({ systemFieldCode: "TaxCode", excelColumnIndex: 2 }),
+          ]),
+        }),
+      }),
+    }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Xác nhận nạp vào hệ thống" }));
+    await screen.findByText("Nạp dữ liệu thành công.");
+    expect(apiRequestRaw).toHaveBeenNthCalledWith(4, "/api/v1/system/excel/execute-import", expect.objectContaining({
+      body: expect.objectContaining({
+        mappingConfig: expect.objectContaining({ targetEntity: "Companies" }),
+      }),
     }));
   });
 

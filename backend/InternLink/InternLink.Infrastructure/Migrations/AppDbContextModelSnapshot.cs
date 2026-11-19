@@ -459,6 +459,10 @@ namespace InternLink.Infrastructure.Migrations
                         .HasColumnType("uniqueidentifier")
                         .HasColumnName("Public_ID");
 
+                    b.Property<string>("TaxCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
@@ -1539,6 +1543,10 @@ namespace InternLink.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier")
                         .HasColumnName("LecturerId");
+
+                    b.Property<string>("AcademicTitle")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
 
                     b.Property<long>("AutoId")
                         .ValueGeneratedOnAdd()
