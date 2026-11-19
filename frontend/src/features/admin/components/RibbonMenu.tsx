@@ -106,7 +106,7 @@ export function RibbonMenu({
               key={item.code}
               type="button"
               onClick={() => navigateTo(item)}
-              className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded px-2.5 text-xs font-semibold transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+              className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[4px] px-2.5 text-xs font-semibold transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
             >
               <Icon aria-hidden="true" className="h-3.5 w-3.5" />
               {item.name}
@@ -140,7 +140,7 @@ export function RibbonMenu({
                       setOpenGroup(section.title);
                     }
                   }}
-                  className={`inline-flex h-8 max-w-full items-center gap-1.5 rounded px-2.5 text-xs font-semibold transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${
+                  className={`inline-flex h-8 max-w-full items-center gap-1.5 rounded-[4px] px-2.5 text-xs font-semibold transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${
                     isOpen ? "bg-[#025a8e]" : ""
                   }`}
                 >
@@ -158,7 +158,7 @@ export function RibbonMenu({
                     role="menu"
                     aria-label={section.title}
                     onKeyDown={handleMenuKeyDown}
-                    className="absolute left-0 top-full z-[60] mt-1 min-w-64 max-w-[min(24rem,calc(100vw-1rem))] overflow-hidden rounded-lg border border-slate-200 bg-white p-1.5 text-slate-800 shadow-xl"
+                    className="absolute left-0 top-full z-[60] mt-1 min-w-64 max-w-[min(24rem,calc(100vw-1rem))] overflow-hidden rounded-md border border-slate-200 bg-white p-1.5 text-slate-800 shadow-xl"
                   >
                     {section.routes.map(({ item }, index) => {
                       const Icon = getMenuIcon(item.iconName);
@@ -171,7 +171,7 @@ export function RibbonMenu({
                           type="button"
                           role="menuitem"
                           onClick={() => navigateTo(item)}
-                          className="flex min-h-9 w-full items-center gap-2 rounded-md px-2.5 text-left text-xs font-medium text-slate-700 transition-colors hover:bg-sky-50 hover:text-[#025a8e] focus-visible:bg-sky-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
+                          className="flex min-h-9 w-full items-center gap-2 rounded-[4px] px-2.5 text-left text-xs font-medium text-slate-700 transition-colors hover:bg-sky-50 hover:text-[#025a8e] focus-visible:bg-sky-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
                         >
                           <Icon aria-hidden="true" className="h-4 w-4 shrink-0 text-[#026aa7]" />
                           <span className="min-w-0 flex-1 truncate">{item.name}</span>

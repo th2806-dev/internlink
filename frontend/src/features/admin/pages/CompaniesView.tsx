@@ -19,7 +19,6 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { ConfirmDialog } from "../../../components/common/ConfirmDialog";
-import { Panel } from "../../../components/common/Panel";
 import { CompanyAvatar } from "../../../components/common/CompanyAvatar";
 import type { Enterprise } from "../../../types/enterprise";
 import { getApiErrorMessage } from "../../../lib/apiClient";
@@ -212,13 +211,13 @@ export const CompaniesView = ({
   const hasActiveFilters = Boolean(search.trim()) || statusFilter !== "all";
 
   return (
-    <div className="w-full space-y-4 pb-12">
+    <div className="w-full space-y-1.5 pb-12">
       <CompactActionBar
         icon={Building2}
         title="Doanh nghiệp"
         total={isLoadingApi
           ? "Đang tải danh sách…"
-          : `Tổng cộng: ${filtered.length.toLocaleString("vi-VN")} doanh nghiệp`}
+          : `(${filtered.length.toLocaleString("vi-VN")} DN)`}
         subtitle={isFetching && !isLoadingApi
           ? "Đang cập nhật…"
           : canLink
@@ -281,7 +280,7 @@ export const CompaniesView = ({
         ]}
       />
 
-      <Panel className="space-y-4 rounded-xl border border-slate-200/90 shadow-2xs">
+      <div className="space-y-1.5">
         {isError && paginatedCompanies.length > 0 && (
           <div
             role="alert"
@@ -434,7 +433,7 @@ export const CompaniesView = ({
             </button>
           </div>
         </div>
-      </Panel>
+      </div>
 
       {isFormOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 flex items-center justify-center p-4">

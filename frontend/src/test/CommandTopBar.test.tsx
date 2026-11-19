@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   selectSemester: vi.fn(),
   selectDepartment: vi.fn(),
   startImpersonation: vi.fn(),
+  menu: [] as unknown[],
 }));
 
 vi.mock("@tanstack/react-query", () => ({
@@ -39,7 +40,7 @@ vi.mock("../hooks/useAdminCapabilities", () => ({
 }));
 
 vi.mock("../hooks/useSystemMenu", () => ({
-  useSystemMenu: () => ({ data: [], isPending: false, isError: false }),
+  useSystemMenu: () => ({ data: mocks.menu, isPending: false, isError: false }),
 }));
 
 vi.mock("../services/systemAdmin.service", () => ({
@@ -52,6 +53,7 @@ vi.mock("../components/common/NotificationDropdown", () => ({
 
 afterEach(() => {
   vi.clearAllMocks();
+  mocks.menu = [];
 });
 
 describe("CommandTopBar", () => {
@@ -91,5 +93,31 @@ describe("CommandTopBar", () => {
 
     expect(onMenuOpen).toHaveBeenCalledOnce();
     expect(screen.getByText("Mô phỏng góc nhìn")).toBeInTheDocument();
+  });
+
+  it("shows the screen function code in parentheses instead of the module code", () => {
+    mocks.menu = [
+      {
+        code: "GRID_CONFIG",
+        name: "Cấu hình bảng",
+        moduleCode: "GRID_CONFIG",
+        sortOrder: 1,
+        funcUrl: "/admin/config/grid",
+        iconName: "Columns3",
+        badgeText: null,
+        groupName: "Cấu hình",
+        children: [],
+      },
+    ];
+
+    render(
+      <CommandTopBar
+        activeTab="admin-config/grid"
+        onNavigate={vi.fn()}
+        onShowToast={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("(GRID_CONFIG)")).toBeInTheDocument();
   });
 });

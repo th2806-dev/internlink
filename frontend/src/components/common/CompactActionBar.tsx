@@ -66,7 +66,7 @@ export function CompactActionBar({
         )}
         {badge && badge.trim().toLocaleLowerCase() !== title.trim().toLocaleLowerCase() && (
           <span
-            className={`shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-semibold ${badgeColor}`}
+            className={`shrink-0 rounded-[4px] border px-1.5 py-0.5 text-[10px] font-semibold ${badgeColor}`}
           >
             {badge}
           </span>
@@ -85,7 +85,7 @@ export function CompactActionBar({
               onChange={(event) => search.onChange(event.target.value)}
               placeholder={search.placeholder}
               aria-label={search.ariaLabel}
-              className="h-8 w-full rounded-md border border-slate-200 bg-slate-50 pl-8 pr-2 text-xs text-slate-800 outline-none transition-colors placeholder:text-slate-400 focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+              className="h-8 w-full rounded-[4px] border border-slate-200 bg-slate-50 pl-8 pr-2 text-xs text-slate-800 outline-none transition-colors placeholder:text-slate-400 focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
             />
           </label>
         )}
@@ -100,7 +100,7 @@ export function CompactActionBar({
               onClick={action.onClick}
               disabled={action.disabled}
               aria-label={action.ariaLabel ?? action.label}
-              className={`inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/30 disabled:cursor-not-allowed disabled:opacity-50 ${
+              className={`inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-[4px] border px-2.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/30 disabled:cursor-not-allowed disabled:opacity-50 ${
                 variant === "primary"
                   ? "border-[#026aa7] bg-[#026aa7] text-white hover:bg-[#025a8e]"
                   : variant === "ghost"

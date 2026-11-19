@@ -44,14 +44,14 @@ export function DynamicDataGrid<T extends object>({
   );
 
   if (configOverride === undefined && configQuery.isPending) {
-    return <p role="status" className="p-4 text-sm text-slate-500">{loadingMessage}</p>;
+    return <p role="status" className="p-4 text-xs text-slate-500">{loadingMessage}</p>;
   }
   if (configOverride === undefined && configQuery.isError) {
-    return <p role="alert" className="p-4 text-sm text-rose-700">Không thể tải cấu hình bảng.</p>;
+    return <p role="alert" className="p-4 text-xs text-rose-700">Không thể tải cấu hình bảng.</p>;
   }
 
   if (isLoading) {
-    return <p role="status" className="p-4 text-sm text-slate-500">{loadingMessage}</p>;
+    return <p role="status" className="p-4 text-xs text-slate-500">{loadingMessage}</p>;
   }
 
   const hiddenFields = new Set(hideFieldCodes);
@@ -75,19 +75,19 @@ export function DynamicDataGrid<T extends object>({
   }
 
   if (columns.length === 0) {
-    return <p className="p-4 text-sm text-slate-500">Chưa có cấu hình cột cho màn hình này.</p>;
+    return <p className="p-4 text-xs text-slate-500">Chưa có cấu hình cột cho màn hình này.</p>;
   }
 
   return (
-    <div className="max-w-full overflow-auto rounded-lg border border-slate-200">
-      <table className="w-full border-separate border-spacing-0 text-left text-sm">
+    <div className="max-w-full overflow-auto rounded-md border border-slate-200">
+      <table className="w-full border-separate border-spacing-0 text-left text-xs">
         <thead>
           <tr>
             {columns.map((column) => (
               <th
                 key={column.fieldCode}
                 scope="col"
-                className={`sticky top-0 z-20 border-b border-r border-slate-200 px-3 py-2 font-semibold text-slate-800 ${
+                className={`sticky top-0 z-20 border-b border-r border-slate-200 bg-slate-100/90 px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-600 ${
                   column.isFrozen ? "z-30" : ""
                 }`}
                 style={{
@@ -99,7 +99,7 @@ export function DynamicDataGrid<T extends object>({
                   right: column.isFrozen && column.frozenSide === "right"
                     ? rightFrozenOffsets.get(column.fieldCode)
                     : undefined,
-                  backgroundColor: safeColor(column.headerBgColor) ?? "#f8fafc",
+                  backgroundColor: safeColor(column.headerBgColor),
                   color: safeColor(column.headerTextColor),
                 }}
               >
@@ -111,7 +111,7 @@ export function DynamicDataGrid<T extends object>({
         <tbody>
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={columns.length} className="px-3 py-8 text-center text-slate-500">
+              <td colSpan={columns.length} className="border-b border-r border-slate-100 px-2.5 py-1.5 text-center text-xs text-slate-500">
                 {emptyMessage}
               </td>
             </tr>
@@ -124,7 +124,7 @@ export function DynamicDataGrid<T extends object>({
               {columns.map((column) => (
                 <td
                   key={column.fieldCode}
-                  className={`border-b border-r border-slate-100 px-3 py-2 ${
+                  className={`border-b border-r border-slate-100 px-2.5 py-1.5 text-xs text-slate-700 ${
                     column.isFrozen ? "sticky z-10 bg-inherit" : ""
                   }`}
                   style={{

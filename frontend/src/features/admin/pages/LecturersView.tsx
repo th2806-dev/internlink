@@ -28,7 +28,6 @@ import type {
 } from "../components/modals/EditLecturerModal";
 import { ImportLecturersModal } from "../components/modals/ImportLecturersModal";
 import { ConfirmDialog } from "../../../components/common/ConfirmDialog";
-import { Panel } from "../../../components/common/Panel";
 import { EmptyState } from "../../../components/common/EmptyState";
 import { SkeletonBox } from "../../../components/common/SkeletonLoader";
 import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
@@ -277,13 +276,13 @@ export const LecturersView = ({
   };
 
   return (
-    <div className="w-full space-y-4 pb-12">
+    <div className="w-full space-y-1.5 pb-12">
       <CompactActionBar
         icon={GraduationCap}
         title="Giảng viên"
         total={isLoadingApi
           ? "Đang tải số liệu…"
-          : `Tổng cộng: ${pagination.total.toLocaleString("vi-VN")} giảng viên`}
+          : `(${pagination.total.toLocaleString("vi-VN")} GV)`}
         search={{
           value: searchInput,
           onChange: (value) => {
@@ -363,7 +362,7 @@ export const LecturersView = ({
       </CompactActionBar>
 
       {/* LECTURERS MAIN TABLE */}
-      <Panel className="space-y-4 rounded-xl border border-slate-200/90 shadow-2xs">
+      <div className="space-y-1.5">
         {isError && paginatedLecturers.length > 0 && (
           <div
             role="alert"
@@ -380,7 +379,7 @@ export const LecturersView = ({
           </div>
         )}
         {/* Configurable data table */}
-        <div className="overflow-x-auto rounded-xl border border-slate-200/80">
+        <div className="overflow-x-auto rounded-md border border-slate-200/80">
           {isError ? (
             <div role="alert" className="mx-auto flex max-w-xl flex-col items-center gap-3 p-6 text-center">
               <AlertCircle className="h-8 w-8 text-rose-600" aria-hidden="true" />
@@ -405,7 +404,7 @@ export const LecturersView = ({
                   case "select":
                     return canMutateOps ? <input type="checkbox" aria-label={`Chọn ${lecturer.fullName}`} checked={selectedIds.includes(lecturer.id)} onChange={() => handleToggleSelect(lecturer.id)} className="rounded text-[#026aa7]" /> : null;
                   case "fullName":
-                    return <div className="flex items-center gap-2.5"><InitialsAvatar name={lecturer.fullName} seed={lecturer.employeeId || lecturer.email} size={32} /><div><p className="font-bold text-slate-900">{lecturer.fullName}</p><p className="text-[10px] text-slate-400">{lecturer.academicDegree}</p></div></div>;
+                    return <div className="flex items-center gap-2.5"><InitialsAvatar name={lecturer.fullName} seed={lecturer.employeeId || lecturer.email} size={24} fontSize={10} className="text-[10px]" /><div><p className="font-bold text-slate-900">{lecturer.fullName}</p><p className="text-[10px] text-slate-400">{lecturer.academicDegree}</p></div></div>;
                   case "staffCode":
                     return <span className="font-mono font-bold text-slate-800">{lecturer.employeeId}</span>;
                   case "department":
@@ -479,7 +478,7 @@ export const LecturersView = ({
             </button>
           </div>
         </div>
-      </Panel>
+      </div>
 
       {/* GENERATE ACCOUNTS MODAL */}
       {isGenerateAccountsModalOpen && (

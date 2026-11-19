@@ -11,7 +11,7 @@ describe("CompactActionBar", () => {
       <CompactActionBar
         icon={Home}
         title="Sinh viên"
-        total="Tổng cộng: 425 sinh viên"
+        total="(425 SV)"
         search={{
           value: "",
           onChange: onSearch,
@@ -28,7 +28,9 @@ describe("CompactActionBar", () => {
     fireEvent.click(screen.getByRole("button", { name: "Thêm mới" }));
 
     expect(screen.getByRole("heading", { name: "Sinh viên" })).toBeInTheDocument();
-    expect(screen.getByText("Tổng cộng: 425 sinh viên")).toBeInTheDocument();
+    expect(screen.getByText("(425 SV)")).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Tìm sinh viên" })).toHaveClass("rounded-[4px]");
+    expect(screen.getByRole("button", { name: "Thêm mới" })).toHaveClass("rounded-[4px]");
     expect(onSearch).toHaveBeenCalledWith("Nguyen");
     expect(onCreate).toHaveBeenCalledOnce();
   });

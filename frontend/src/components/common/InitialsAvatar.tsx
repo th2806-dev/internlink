@@ -23,6 +23,7 @@ interface InitialsAvatarProps {
   name: string;
   seed?: string;
   size?: number | "sm";
+  fontSize?: number;
   className?: string;
 }
 
@@ -30,6 +31,7 @@ export function InitialsAvatar({
   name,
   seed,
   size = 32,
+  fontSize,
   className = "",
 }: InitialsAvatarProps) {
   const initials = getInitials(name);
@@ -43,7 +45,7 @@ export function InitialsAvatar({
         width: normalizedSize,
         height: normalizedSize,
         background: gradient,
-        fontSize: normalizedSize * 0.38,
+        fontSize: fontSize ?? normalizedSize * 0.38,
         lineHeight: 1,
       }}
       title={name}

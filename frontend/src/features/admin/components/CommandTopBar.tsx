@@ -143,15 +143,15 @@ export function CommandTopBar({
         <div className="flex min-w-0 items-center gap-1.5">
           <span className="truncate text-xs font-semibold text-white">{pageTitle}</span>
           {activeRoute && (
-            <span className="hidden shrink-0 rounded bg-white/10 px-1.5 py-0.5 font-mono text-[9px] text-slate-300 sm:inline">
-              {activeRoute.item.code}
+            <span className="hidden shrink-0 rounded-[4px] bg-white/10 px-1.5 py-0.5 font-mono text-[9px] text-slate-300 sm:inline">
+              ({activeRoute.item.code})
             </span>
           )}
         </div>
       </div>
 
       <div className="hidden shrink-0 items-center gap-1.5 sm:flex">
-        <label className="flex h-7 max-w-48 items-center gap-1.5 rounded-md border border-white/10 bg-white/10 px-2 text-[10px] text-slate-200">
+        <label className="flex h-7 max-w-48 items-center gap-1.5 rounded-[4px] border border-white/10 bg-white/10 px-2 text-[10px] text-slate-200">
           <span className="sr-only">Kỳ thực tập</span>
           <select
             aria-label="Chọn kỳ thực tập"
@@ -168,7 +168,7 @@ export function CommandTopBar({
           </select>
         </label>
         {isSuperAdmin && departments.length > 0 && (
-          <label className="flex h-7 max-w-40 items-center gap-1 rounded-md border border-white/10 bg-white/10 px-2 text-[10px] text-slate-200">
+          <label className="flex h-7 max-w-40 items-center gap-1 rounded-[4px] border border-white/10 bg-white/10 px-2 text-[10px] text-slate-200">
             <Building2 aria-hidden="true" className="h-3 w-3 shrink-0 text-[#7bc043]" />
             <span className="sr-only">Khoa</span>
             <select
@@ -220,7 +220,7 @@ export function CommandTopBar({
           <button
             type="button"
             onClick={() => setShowProfileMenu((open) => !open)}
-            className="inline-flex h-8 max-w-44 items-center gap-1.5 rounded-full px-1 transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7bc043]"
+            className="inline-flex h-8 max-w-44 items-center gap-1.5 rounded-[4px] px-1 transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7bc043]"
             title="Tài khoản"
             aria-label="Mở menu tài khoản"
             aria-expanded={showProfileMenu}
@@ -245,7 +245,7 @@ export function CommandTopBar({
           {showProfileMenu && (
             <div
               id="admin-profile-menu"
-              className="absolute right-0 mt-1.5 w-72 rounded-lg border border-slate-200 bg-white p-2.5 text-slate-800 shadow-xl"
+              className="absolute right-0 mt-1.5 w-72 rounded-md border border-slate-200 bg-white p-2.5 text-slate-800 shadow-xl"
             >
               <div className="border-b border-slate-100 px-2 pb-2">
                 <p className="truncate text-xs font-bold">{displayName}</p>
@@ -260,7 +260,7 @@ export function CommandTopBar({
                   setShowProfileMenu(false);
                   onNavigate("admin-account");
                 }}
-                className="mt-1 flex min-h-9 w-full items-center justify-between rounded px-2 text-left text-xs font-medium text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
+                className="mt-1 flex min-h-9 w-full items-center justify-between rounded-[4px] px-2 text-left text-xs font-medium text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
               >
                 Hồ sơ tài khoản
                 <User aria-hidden="true" className="h-3.5 w-3.5 text-slate-400" />
@@ -294,7 +294,7 @@ export function CommandTopBar({
                           type="button"
                           disabled={impersonationMutation.isPending}
                           onClick={() => impersonationMutation.mutate(target.roleCode)}
-                          className="flex min-h-9 w-full items-center rounded px-2 text-left text-xs font-medium text-slate-700 transition-colors hover:bg-[#026aa7]/5 hover:text-[#026aa7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] disabled:cursor-not-allowed disabled:opacity-50"
+                          className="flex min-h-9 w-full items-center rounded-[4px] px-2 text-left text-xs font-medium text-slate-700 transition-colors hover:bg-[#026aa7]/5 hover:text-[#026aa7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {target.roleName}
                         </button>
@@ -311,7 +311,7 @@ export function CommandTopBar({
                     setShowProfileMenu(false);
                     onLogout();
                   }}
-                  className="mt-1 min-h-9 w-full border-t border-slate-100 px-2 pt-1.5 text-left text-xs font-bold text-rose-600 hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+                  className="mt-1 min-h-9 w-full rounded-[4px] border-t border-slate-100 px-2 pt-1.5 text-left text-xs font-bold text-rose-600 hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
                 >
                   Đăng xuất
                 </button>

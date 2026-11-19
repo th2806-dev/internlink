@@ -31,7 +31,6 @@ import type { EditStudentFormPayload } from "../components/modals/EditStudentMod
 import { ImportStudentsModal } from "../components/modals/ImportStudentsModal";
 import type { AdminStudentRow } from "../../../hooks/useAdminStudentsQuery";
 import { ConfirmDialog } from "../../../components/common/ConfirmDialog";
-import { Panel } from "../../../components/common/Panel";
 import { EmptyState } from "../../../components/common/EmptyState";
 import { SkeletonBox } from "../../../components/common/SkeletonLoader";
 import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
@@ -422,13 +421,13 @@ export const StudentsView = ({
   };
 
   return (
-    <div className="w-full space-y-4 pb-12">
+    <div className="w-full space-y-1.5 pb-12">
       <CompactActionBar
         icon={GraduationCap}
         title="Sinh viên"
         total={isCountsPending
           ? "Đang tải số liệu…"
-          : `Tổng cộng: ${totalStudents.toLocaleString("vi-VN")} sinh viên`}
+          : `(${totalStudents.toLocaleString("vi-VN")} SV)`}
         search={{
           value: searchInput,
           onChange: (value) => {
@@ -501,7 +500,7 @@ export const StudentsView = ({
         }
         actions={[
           {
-            label: "Xuất DS",
+            label: "Xuất Excel",
             icon: Download,
             onClick: () => void handleExportInternshipList(),
           },
@@ -549,9 +548,9 @@ export const StudentsView = ({
       )}
 
       {/* STUDENTS MAIN TABLE */}
-      <Panel className="space-y-4 rounded-xl border border-slate-200/90 shadow-2xs">
+      <div className="space-y-1.5">
         {/* Configurable data table */}
-        <div className="overflow-x-auto rounded-xl border border-slate-200/80">
+        <div className="overflow-x-auto rounded-md border border-slate-200/80">
           {isError ? (
             <div role="alert" className="flex flex-col items-center gap-3 p-6 text-center">
               <p className="text-sm font-semibold text-rose-700">Không thể tải danh sách sinh viên</p>
@@ -575,7 +574,7 @@ export const StudentsView = ({
                   case "select":
                     return canMutateOps ? <input type="checkbox" aria-label={`Chọn ${student.fullName}`} checked={selectedIds.includes(student.id)} onChange={() => handleToggleSelect(student.id)} className="rounded text-[#026aa7]" /> : null;
                   case "fullName":
-                    return <div className="flex items-center gap-2.5"><InitialsAvatar name={student.fullName} seed={student.mssv} size={32} /><div className="min-w-0"><p className="truncate font-bold text-slate-900">{student.fullName}</p><p className="truncate text-[10px] text-slate-400">{student.email}</p></div></div>;
+                    return <div className="flex items-center gap-2.5"><InitialsAvatar name={student.fullName} seed={student.mssv} size={24} fontSize={10} className="text-[10px]" /><div className="min-w-0"><p className="truncate font-bold text-slate-900">{student.fullName}</p><p className="truncate text-[10px] text-slate-400">{student.email}</p></div></div>;
                   case "studentCode":
                     return <div><p className="font-mono font-bold text-slate-800">{student.mssv}</p><p className="text-[10px] font-bold text-[#026aa7]">{student.classCode}</p></div>;
                   case "assignedLecturer":
@@ -647,7 +646,7 @@ export const StudentsView = ({
             </button>
           </div>
         </div>
-      </Panel>
+      </div>
 
       {/* GENERATE ACCOUNTS MODAL */}
       {isGenerateAccountsModalOpen && (
