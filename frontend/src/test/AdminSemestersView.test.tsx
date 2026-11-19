@@ -43,7 +43,7 @@ vi.mock("../components/modals/ImportLecturersModal", () => ({
 }));
 
 describe("Admin semesters page", () => {
-  it("uses the branded subpage header and honest empty states when there is no semester data", () => {
+  it("renders the semester controls and honest empty states at full width", () => {
     const { container } = render(
       <SemestersView onShowToast={vi.fn()} onNavigateTab={vi.fn()} />,
     );
@@ -59,7 +59,7 @@ describe("Admin semesters page", () => {
     expect(
       screen.getByRole("group", { name: "Lọc kỳ theo trạng thái" }),
     ).toBeInTheDocument();
-    expect(container.querySelector(".max-w-\\[1300px\\]")).not.toBeNull();
+    expect(container.querySelector(".max-w-\\[1300px\\]")).toBeNull();
     expect(screen.queryByText(/0 SV/)).not.toBeInTheDocument();
   });
 });

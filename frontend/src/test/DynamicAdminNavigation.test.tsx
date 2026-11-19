@@ -62,6 +62,20 @@ describe("database-driven admin navigation", () => {
     expect(getSystemMenuRoutes(menu)).toHaveLength(1);
   });
 
+  it("lets a menu route override its inherited group using API metadata", () => {
+    const groupedMenu: SystemMenuItem[] = [
+      {
+        ...menu[0],
+        children: [{
+          ...menu[0].children[0],
+          groupName: "PHÂN QUYỀN F1005",
+        }],
+      },
+    ];
+
+    expect(getSystemMenuRoutes(groupedMenu)[0].groupName).toBe("PHÂN QUYỀN F1005");
+  });
+
   it("renders only the routes present in the role's returned menu", () => {
     setMenuData(menu);
     const onNavigate = vi.fn();
@@ -70,6 +84,7 @@ describe("database-driven admin navigation", () => {
         activeTab="admin-dashboard"
         onNavigate={onNavigate}
         user={{ id: "admin", username: "admin", name: "Admin", backendRole: "DepartmentAdmin" } as never}
+        isOpen
       />,
     );
 

@@ -11,9 +11,10 @@ export function getSystemMenuRoutes(menu: SystemMenuItem[]): SystemMenuRoute[] {
 
   const visit = (
     item: SystemMenuItem,
-    groupName: string,
+    inheritedGroupName: string,
     parentName: string | null,
   ) => {
+    const groupName = item.groupName || inheritedGroupName;
     if (item.funcUrl) routes.push({ item, groupName, parentName });
     for (const child of item.children) {
       visit(child, groupName, item.name);

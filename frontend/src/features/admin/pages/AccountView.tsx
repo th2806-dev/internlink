@@ -278,7 +278,7 @@ export const AccountView = ({
   const passStrength = getPasswordStrength(newPassword);
 
   return (
-    <div className="mx-auto max-w-[1300px] min-w-0 space-y-4 pb-12 font-sans">
+    <div className="w-full min-w-0 space-y-4 pb-12 font-sans">
       <ProfileStudioHeader
         name={profile.fullName || user?.name || roleDisplayLabel}
         identifier={profile.adminCode}

@@ -247,7 +247,7 @@ public sealed class SysFunctionsController : ControllerBase
                 function.FuncUrl,
                 function.IconName,
                 function.BadgeText,
-                function.ParentId == null ? function.Description : null,
+                function.Description,
                 children);
         }
 

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BadgeCheck, Save } from "lucide-react";
-import { PageHeader } from "../../../components/common/PageHeader";
+import { CompactActionBar } from "../../../components/common/CompactActionBar";
 import { useSemester } from "../../../contexts/SemesterContext";
 import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
 import { getApiErrorMessage } from "../../../lib/apiClient";
@@ -181,8 +181,8 @@ export function GradingRulesConfigView({
     && employerRubric.ratingLevels.every((level) => level.label.trim() && level.description.trim());
 
   return (
-    <div className="mx-auto max-w-[1300px] space-y-4 animate-in fade-in duration-200 font-sans pb-12">
-      <PageHeader
+    <div className="w-full space-y-4 animate-in fade-in duration-200 font-sans pb-12">
+      <CompactActionBar
         icon={BadgeCheck}
         title="Quy chế điểm & deadline"
         subtitle="Thiết lập trọng số, lịch báo cáo và ngưỡng đạt theo kỳ, khoa."

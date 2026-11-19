@@ -286,7 +286,7 @@ export const DashboardView = ({
   } as const;
 
   return (
-    <div className="mx-auto max-w-[1300px] space-y-4 pb-12 font-sans">
+    <div className="w-full space-y-4 pb-12 font-sans">
       <section className="overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-2xs">
         <div className="flex flex-wrap items-center justify-between gap-2 bg-[#026aa7] px-4 py-2.5 text-white">
           <div className="flex items-center gap-2">

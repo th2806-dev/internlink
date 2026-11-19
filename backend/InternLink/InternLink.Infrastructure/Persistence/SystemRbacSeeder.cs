@@ -79,17 +79,17 @@ public static class SystemRbacSeeder
 
     private static IEnumerable<FunctionDefinition> BuildMenuFunctions()
     {
-        yield return new("SYSTEM.FUNCTIONS", "Chức năng", "SYSTEM", 10, false, "SYSTEM", "/admin/functions", "Settings", IsMenuEntry: true);
-        yield return new("SYSTEM.PERMISSIONS", "Phân quyền chức năng", "SYSTEM", 11, false, "SYSTEM", "/admin/system/permissions", "Shield", IsMenuEntry: true);
-        yield return new("SYSTEM.BACKUPS", "Sao lưu & Khôi phục", "SYSTEM", 12, false, "SYSTEM", "/admin/backups", "DatabaseBackup", IsMenuEntry: true);
-        yield return new("ACCOUNTS.USERS", "Thành viên", "ACCOUNTS", 10, false, "ACCOUNTS", "/admin/users", "Users", IsMenuEntry: true);
-        yield return new("CONFIG.GRID", "Cấu hình bảng", "GRID_CONFIG", 10, false, "GRID_CONFIG", "/admin/config/grid", "Columns3", IsMenuEntry: true);
-        yield return new("CONFIG.FIELD_POLICIES", "Chính sách trường dữ liệu", "FIELD_POLICIES", 10, false, "FIELD_POLICIES", "/admin/config/field-policies", "FileSliders", IsMenuEntry: true);
-        yield return new("CONFIG.GRADING_RULES", "Quy chế điểm & deadline", "CONFIG", 12, false, "CONFIG", "/admin/config/grading-rules", "ClipboardList", IsMenuEntry: true);
-        yield return new("AUDIT.LOGS", "Nhật ký kiểm toán", "AUDIT", 10, false, "AUDIT", "/admin/logs/audit", "ScrollText", IsMenuEntry: true);
-        yield return new(SystemPermissionCodes.ExcelImport, "Nhập sinh viên từ Excel", "IT_CONFIG", 10, false, "IT_CONFIG", "/admin/config/import-excel", "FileSpreadsheet", IsMenuEntry: true);
-        yield return new("API_WEBHOOK.SETTINGS", "Cấu hình kết nối", "API_WEBHOOK", 10, false, "API_WEBHOOK", "/admin/settings", "Settings", IsMenuEntry: true);
-        yield return new("DEPARTMENTS.LIST", "Quản lý Khoa", "DEPARTMENTS", 10, false, "DEPARTMENTS", "/admin/departments", "Building2", IsMenuEntry: true);
+        yield return new("SYSTEM.FUNCTIONS", "Chức năng", "SYSTEM", 10, false, "SYSTEM", "/admin/functions", "Settings", IsMenuEntry: true, Description: "QUẢN TRỊ HỆ THỐNG");
+        yield return new("SYSTEM.PERMISSIONS", "Phân quyền chức năng", "SYSTEM", 11, false, "SYSTEM", "/admin/system/permissions", "Shield", IsMenuEntry: true, Description: "PHÂN QUYỀN F1005");
+        yield return new("SYSTEM.BACKUPS", "Sao lưu & Khôi phục", "SYSTEM", 12, false, "SYSTEM", "/admin/backups", "DatabaseBackup", IsMenuEntry: true, Description: "QUẢN TRỊ HỆ THỐNG");
+        yield return new("ACCOUNTS.USERS", "Thành viên", "ACCOUNTS", 10, false, "ACCOUNTS", "/admin/users", "Users", IsMenuEntry: true, Description: "QUẢN TRỊ HỆ THỐNG");
+        yield return new("CONFIG.GRID", "Cấu hình bảng", "GRID_CONFIG", 10, false, "GRID_CONFIG", "/admin/config/grid", "Columns3", IsMenuEntry: true, Description: "CẤU HÌNH MASTER F1002");
+        yield return new("CONFIG.FIELD_POLICIES", "Chính sách trường dữ liệu", "FIELD_POLICIES", 10, false, "FIELD_POLICIES", "/admin/config/field-policies", "FileSliders", IsMenuEntry: true, Description: "CẤU HÌNH MASTER F1002");
+        yield return new("CONFIG.GRADING_RULES", "Quy chế điểm & deadline", "CONFIG", 12, false, "CONFIG", "/admin/config/grading-rules", "ClipboardList", IsMenuEntry: true, Description: "CẤU HÌNH MASTER F1002");
+        yield return new("AUDIT.LOGS", "Nhật ký kiểm toán", "AUDIT", 10, false, "AUDIT", "/admin/logs/audit", "ScrollText", IsMenuEntry: true, Description: "NHẬT KÝ F1006");
+        yield return new(SystemPermissionCodes.ExcelImport, "Nhập sinh viên từ Excel", "IT_CONFIG", 10, false, "IT_CONFIG", "/admin/config/import-excel", "FileSpreadsheet", IsMenuEntry: true, Description: "CẤU HÌNH MASTER F1002");
+        yield return new("API_WEBHOOK.SETTINGS", "Cấu hình kết nối", "API_WEBHOOK", 10, false, "API_WEBHOOK", "/admin/settings", "Settings", IsMenuEntry: true, Description: "CẤU HÌNH MASTER F1002");
+        yield return new("DEPARTMENTS.LIST", "Quản lý Khoa", "DEPARTMENTS", 10, false, "DEPARTMENTS", "/admin/departments", "Building2", IsMenuEntry: true, Description: "QUẢN LÝ TRƯỜNG/KHOA");
         yield return new("SEMESTERS.LIST", "Kỳ thực tập", "SEMESTERS", 10, false, "SEMESTERS", "/admin/semesters", "Calendar", IsMenuEntry: true);
         yield return new("STUDENTS.LIST", "Sinh viên", "STUDENTS", 10, false, "STUDENTS", "/admin/students", "Users", IsMenuEntry: true);
         yield return new("LECTURER.LIST", "Giảng viên", "LECTURER", 10, false, "LECTURER", "/admin/lecturers", "UserRound", IsMenuEntry: true);
@@ -297,6 +297,7 @@ public static class SystemRbacSeeder
                     existingFunction.IsAction = false;
                     existingFunction.IsActive = true;
                     existingFunction.IsDeleted = false;
+                    existingFunction.Description ??= definition.Description;
                     existingFunction.FuncUrl ??= definition.FuncUrl;
                     if ((existingFunction.IconName is null or "Folder") && definition.IconName != null)
                         existingFunction.IconName = definition.IconName;
@@ -323,6 +324,7 @@ public static class SystemRbacSeeder
                 Code = definition.Code,
                 Name = definition.Name,
                 ModuleCode = definition.ModuleCode,
+                Description = definition.Description,
                 SortOrder = definition.SortOrder,
                 IsAction = definition.IsAction,
                 FuncUrl = definition.FuncUrl,
@@ -348,6 +350,7 @@ public static class SystemRbacSeeder
                     existingFunction.IsAction = false;
                     existingFunction.IsActive = true;
                     existingFunction.IsDeleted = false;
+                    existingFunction.Description ??= definition.Description;
                     existingFunction.FuncUrl ??= definition.FuncUrl;
                     if ((existingFunction.IconName is null or "Folder") && definition.IconName != null)
                         existingFunction.IconName = definition.IconName;
@@ -378,6 +381,7 @@ public static class SystemRbacSeeder
                 Code = definition.Code,
                 Name = definition.Name,
                 ModuleCode = definition.ModuleCode,
+                Description = definition.Description,
                 Parent = parent,
                 SortOrder = definition.SortOrder,
                 IsAction = definition.IsAction,

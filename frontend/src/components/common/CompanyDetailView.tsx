@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useParams, useNavigate } from "react-router-dom";
-import { PageHeader } from "../common/PageHeader";
+import { CompactActionBar } from "../common/CompactActionBar";
 import { Panel } from "../common/Panel";
 import { adminCompaniesService } from "../../services/adminCompanies.service";
 import type { CompanyPositionDto } from "../../types/api";
@@ -62,7 +62,7 @@ interface CompanyDetailViewProps {
   semesterId?: string;
   /** Optional: override the page title subtitle. */
   subtitle?: string;
-  /** Optional: additional actions for PageHeader. */
+  /** Optional: additional actions for CompactActionBar. */
   actions?: Array<{
     label: string;
     icon: LucideIcon;
@@ -340,8 +340,8 @@ export const CompanyDetailView = ({
 
   if (error || !detail) {
     return (
-      <div className="mx-auto max-w-[1300px] animate-in fade-in duration-200 space-y-4 pb-10">
-        <PageHeader
+      <div className="w-full animate-in fade-in duration-200 space-y-4 pb-10">
+        <CompactActionBar
           icon={Building2}
           title="Doanh nghiệp"
           subtitle={
@@ -384,8 +384,8 @@ export const CompanyDetailView = ({
   ).length;
 
   return (
-    <div className="mx-auto max-w-[1300px] animate-in fade-in duration-200 space-y-4 pb-10">
-      <PageHeader
+    <div className="w-full animate-in fade-in duration-200 space-y-4 pb-10">
+      <CompactActionBar
         icon={Building2}
         title={detail.name}
         subtitle={

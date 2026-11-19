@@ -18,7 +18,7 @@ import {
   Users,
   XCircle,
 } from "lucide-react";
-import { PageHeader } from "../../../components/common/PageHeader";
+import { CompactActionBar } from "../../../components/common/CompactActionBar";
 import { Panel } from "../../../components/common/Panel";
 import { PermissionGuard } from "../../../components/common/PermissionGuard";
 import { getApiErrorMessage } from "../../../lib/apiClient";
@@ -560,7 +560,7 @@ export const SummaryView = ({ onShowToast, scope = "lecturer" }: { onShowToast?:
           </div>
         </section>
       ) : (
-        <PageHeader icon={ClipboardList} title="Tổng kết" subtitle="Rà soát, bổ sung nội dung và chuẩn bị hồ sơ cuối kỳ của nhóm sinh viên đang hướng dẫn." badge={selectedSemester?.name || "Chưa chọn học kỳ"} badgeColor="bg-[#026aa7]/5 text-[#026aa7] border-[#026aa7]/20" />
+        <CompactActionBar icon={ClipboardList} title="Tổng kết" subtitle="Rà soát, bổ sung nội dung và chuẩn bị hồ sơ cuối kỳ của nhóm sinh viên đang hướng dẫn." badge={selectedSemester?.name || "Chưa chọn học kỳ"} badgeColor="bg-[#026aa7]/5 text-[#026aa7] border-[#026aa7]/20" />
       )}
 
       {/* Chưa có học kỳ cụ thể (selector đang ở "Tất cả các kỳ") → trang không có dữ liệu để hiển thị */}

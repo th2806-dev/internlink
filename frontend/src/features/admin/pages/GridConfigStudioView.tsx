@@ -7,7 +7,7 @@ import {
   RotateCcw,
   Save,
 } from "lucide-react";
-import { PageHeader } from "../../../components/common/PageHeader";
+import { CompactActionBar } from "../../../components/common/CompactActionBar";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { useGridConfig } from "../../../hooks/useSystemMenu";
 import { systemService } from "../../../services/system.service";
@@ -194,8 +194,8 @@ export function GridConfigStudioView({
   };
 
   return (
-    <div className="mx-auto max-w-[1300px] space-y-4 animate-in fade-in duration-200 font-sans pb-12">
-      <PageHeader
+    <div className="w-full space-y-4 animate-in fade-in duration-200 font-sans pb-12">
+      <CompactActionBar
         icon={Columns3}
         title="Cấu hình bảng"
         subtitle="Tùy chỉnh cột và cách hiển thị dữ liệu trên từng màn hình."
@@ -217,7 +217,7 @@ export function GridConfigStudioView({
           <Save aria-hidden="true" className={`h-4 w-4 ${saveMutation.isPending ? "animate-pulse" : ""}`} />
           {saveMutation.isPending ? "Đang lưu..." : "Lưu cấu hình"}
         </button>
-      </PageHeader>
+      </CompactActionBar>
 
       <section className="rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs sm:p-5">
         <div className="grid gap-4 sm:grid-cols-3 sm:items-end">

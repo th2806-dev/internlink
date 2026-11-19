@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Eye, EyeOff, FileSliders, Save, ShieldCheck } from "lucide-react";
-import { PageHeader } from "../../../components/common/PageHeader";
+import { CompactActionBar } from "../../../components/common/CompactActionBar";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { systemService } from "../../../services/system.service";
 import { systemAdminService } from "../../../services/systemAdmin.service";
@@ -96,8 +96,8 @@ export function FieldPoliciesStudioView({
   };
 
   return (
-    <div className="mx-auto max-w-[1300px] space-y-4 animate-in fade-in duration-200 font-sans pb-12">
-      <PageHeader
+    <div className="w-full space-y-4 animate-in fade-in duration-200 font-sans pb-12">
+      <CompactActionBar
         icon={FileSliders}
         title="Chính sách trường dữ liệu"
         subtitle="Quản lý quy tắc hiển thị và kiểm tra theo biểu mẫu, vai trò."
@@ -111,7 +111,7 @@ export function FieldPoliciesStudioView({
           <Save aria-hidden="true" className={`h-4 w-4 ${saveMutation.isPending ? "animate-pulse" : ""}`} />
           {saveMutation.isPending ? "Đang lưu..." : "Lưu chính sách"}
         </button>
-      </PageHeader>
+      </CompactActionBar>
 
       <section className="grid gap-3 rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs sm:grid-cols-2 sm:p-5">
         <div className="space-y-1.5">

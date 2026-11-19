@@ -1,7 +1,6 @@
 import { useState } from "react";
 import {
   UserPlus,
-  Search,
   CheckCircle2,
   KeyRound,
   Lock,
@@ -40,6 +39,7 @@ import { useSemester, toApiSemesterId, toApiDepartmentId } from "../../../contex
 import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
 import type { ToastType } from "../../../contexts/ToastContext";
 import { DynamicDataGrid } from "../components/DynamicDataGrid";
+import { CompactActionBar } from "../../../components/common/CompactActionBar";
 export const LecturersView = ({
   onShowToast,
   onNavigateTab: _onNavigateTab,
@@ -74,7 +74,6 @@ export const LecturersView = ({
     pagination,
     filter,
     setSearch,
-    applySearch,
     setAccountStatusFilter,
     setHasGuidanceFilter,
     clearFilters,
@@ -278,48 +277,90 @@ export const LecturersView = ({
   };
 
   return (
-    <div className="mx-auto max-w-[1300px] space-y-4 pb-12">
-      <section className="overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-2xs">
-        <div className="flex flex-wrap items-center justify-between gap-3 bg-[#026aa7] px-4 py-3 text-white">
-          <div className="flex min-w-0 items-center gap-2">
-            <GraduationCap className="h-5 w-5 shrink-0 text-white/90" aria-hidden="true" />
-            <div className="min-w-0">
-              <h1 className="text-base font-bold tracking-wide">Quản lý giảng viên</h1>
-              <p className="mt-0.5 text-xs text-white/80">
-                Danh sách giảng viên, thông tin liên hệ, phân công và tài khoản
-              </p>
-            </div>
-          </div>
-          {canMutateOps && (
-            <div className="flex flex-wrap items-center gap-2">
+    <div className="w-full space-y-4 pb-12">
+      <CompactActionBar
+        icon={GraduationCap}
+        title="Giảng viên"
+        total={isLoadingApi
+          ? "Đang tải số liệu…"
+          : `Tổng cộng: ${pagination.total.toLocaleString("vi-VN")} giảng viên`}
+        search={{
+          value: searchInput,
+          onChange: (value) => {
+            setSearchInput(value);
+            setSearch(value);
+          },
+          placeholder: "Tìm tên, MSGV, email...",
+          ariaLabel: "Tìm giảng viên",
+        }}
+        filters={
+          <>
+            <select
+              value={filter.accountStatus}
+              onChange={(event) => setAccountStatusFilter(event.target.value)}
+              aria-label="Lọc theo trạng thái tài khoản"
+              className="h-8 max-w-36 rounded-md border border-slate-200 bg-slate-50 px-2 text-[11px] font-semibold text-slate-700"
+            >
+              <option value="all">Mọi trạng thái TK</option>
+              <option value="active">Đã cấp</option>
+              <option value="pending">Chưa cấp</option>
+            </select>
+            <select
+              value={filter.hasGuidance}
+              onChange={(event) => setHasGuidanceFilter(event.target.value as typeof filter.hasGuidance)}
+              aria-label="Lọc theo trạng thái hướng dẫn"
+              className="h-8 max-w-36 rounded-md border border-slate-200 bg-slate-50 px-2 text-[11px] font-semibold text-slate-700"
+            >
+              <option value="all">Mọi trạng thái HD</option>
+              <option value="yes">Đang hướng dẫn</option>
+              <option value="no">Chưa có SV</option>
+            </select>
+            {hasActiveFilters && (
               <button
                 type="button"
-                onClick={() => setIsImportModalOpen(true)}
-                className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-white/30 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                onClick={() => {
+                  setSearchInput("");
+                  clearFilters();
+                }}
+                className="h-8 rounded-md border border-slate-200 bg-white px-2 text-[11px] font-semibold text-slate-600 hover:bg-slate-50"
               >
-                <FileUp className="h-4 w-4" aria-hidden="true" />
-                Import Excel
+                Xóa lọc
               </button>
-              <button
-                type="button"
-                onClick={() => setIsGenerateAccountsModalOpen(true)}
-                className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-white/30 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-              >
-                <KeyRound className="h-4 w-4" aria-hidden="true" />
-                Cấp tài khoản nhanh
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsCreateModalOpen(true)}
-                className="inline-flex min-h-9 items-center gap-1.5 rounded-md bg-white px-3 text-xs font-bold text-[#026aa7] transition-colors hover:bg-sky-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-              >
-                <UserPlus className="h-4 w-4" aria-hidden="true" />
-                Thêm giảng viên
-              </button>
-            </div>
-          )}
-        </div>
-      </section>
+            )}
+          </>
+        }
+        actions={canMutateOps
+          ? [
+              {
+                label: "Nhập Excel",
+                icon: FileUp,
+                onClick: () => setIsImportModalOpen(true),
+              },
+              {
+                label: `Cấp TK${pendingAccounts > 0 ? ` (${pendingAccounts})` : ""}`,
+                icon: KeyRound,
+                onClick: () => setIsGenerateAccountsModalOpen(true),
+              },
+              {
+                label: "Thêm",
+                icon: UserPlus,
+                onClick: () => setIsCreateModalOpen(true),
+                variant: "primary",
+              },
+            ]
+          : []}
+      >
+        {canMutateOps && selectedIds.length > 0 && (
+          <button
+            type="button"
+            onClick={handleBatchGenerateAccounts}
+            className="inline-flex h-8 items-center gap-1 rounded-md bg-[#7bc043] px-2.5 text-[11px] font-bold text-slate-900 hover:bg-[#6eae36] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/30"
+          >
+            <KeyRound aria-hidden="true" className="h-3.5 w-3.5" />
+            Cấp {selectedIds.length}
+          </button>
+        )}
+      </CompactActionBar>
 
       {/* LECTURERS MAIN TABLE */}
       <Panel className="space-y-4 rounded-xl border border-slate-200/90 shadow-2xs">
@@ -338,97 +379,6 @@ export const LecturersView = ({
             </button>
           </div>
         )}
-        {/* Table Header & Search Filters */}
-        <div className="flex flex-col gap-3 border-b border-slate-100 pb-3.5">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 className="text-base font-bold tracking-tight text-slate-900">
-                Danh sách giảng viên
-              </h2>
-              <p className="mt-0.5 text-xs font-medium text-slate-500">
-                Bảng thông tin chi tiết và quản lý quyền truy cập
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="inline-flex items-center rounded-md bg-slate-100 px-2.5 py-1 font-semibold text-slate-700">
-                {selectedSemester.name}
-              </span>
-              <span className="inline-flex items-center rounded-md border border-sky-100 bg-sky-50 px-2.5 py-1 font-semibold text-[#025a8e]">
-                {isLoadingApi
-                  ? "Đang tải số liệu…"
-                  : `${pagination.total.toLocaleString("vi-VN")} giảng viên trong kỳ`}
-              </span>
-            </div>
-          </div>
-
-          {/* Search & Filter Inputs */}
-          <div className="flex flex-wrap items-center gap-2.5 pt-1 text-xs">
-            <div className="relative min-w-[220px] flex-1 sm:max-w-xs">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" aria-hidden="true" />
-              <input
-                type="text"
-                value={searchInput}
-                onChange={(e) => {
-                  setSearchInput(e.target.value);
-                  setSearch(e.target.value);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") applySearch();
-                }}
-                placeholder="Tìm tên, MSGV, Email..."
-                aria-label="Tìm giảng viên"
-                className="h-9 w-full rounded-md border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-3 font-medium outline-none transition-colors focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
-              />
-            </div>
-
-            {/* Bộ lọc bộ môn giờ do Header department filter đảm nhiệm (server-side departmentId). */}
-            <select
-              value={filter.accountStatus}
-              onChange={(e) => setAccountStatusFilter(e.target.value)}
-              aria-label="Lọc theo trạng thái tài khoản"
-              className="h-9 cursor-pointer rounded-md border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700 outline-none transition-colors focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
-            >
-              <option value="all">Tất cả trạng thái TK</option>
-              <option value="active">Đã cấp tài khoản</option>
-              <option value="pending">Chưa cấp tài khoản</option>
-            </select>
-
-            <select
-              value={filter.hasGuidance}
-              onChange={(e) => setHasGuidanceFilter(e.target.value as typeof filter.hasGuidance)}
-              aria-label="Lọc theo trạng thái hướng dẫn"
-              className="h-9 cursor-pointer rounded-md border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700 outline-none transition-colors focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
-            >
-              <option value="all">Mọi trạng thái hướng dẫn</option>
-              <option value="yes">Đang hướng dẫn</option>
-              <option value="no">Chưa có SV</option>
-            </select>
-
-            {canMutateOps && selectedIds.length > 0 && (
-              <button
-                onClick={handleBatchGenerateAccounts}
-                className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-md transition-colors flex items-center gap-1.5 cursor-pointer animate-in fade-in"
-              >
-                <KeyRound className="w-3.5 h-3.5" />
-                <span>Cấp TK đã chọn ({selectedIds.length})</span>
-              </button>
-            )}
-            {hasActiveFilters && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchInput("");
-                  clearFilters();
-                }}
-                className="inline-flex h-9 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 font-semibold text-slate-600 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
-              >
-                <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
-                Xóa bộ lọc
-              </button>
-            )}
-          </div>
-        </div>
-
         {/* Configurable data table */}
         <div className="overflow-x-auto rounded-xl border border-slate-200/80">
           {isError ? (

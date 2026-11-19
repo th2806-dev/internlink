@@ -18,7 +18,7 @@ import {
   Trash2,
   Users,
 } from "lucide-react";
-import { PageHeader } from "../../../components/common/PageHeader";
+import { CompactActionBar } from "../../../components/common/CompactActionBar";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { systemService } from "../../../services/system.service";
 import type { SaveSysFunction, SysFunction } from "../../../types/system";
@@ -289,8 +289,8 @@ export function SysFunctionsManagerView({
   const selectedIcon = ICONS[draft.iconName as keyof typeof ICONS] ?? Folder;
 
   return (
-    <div className="mx-auto max-w-[1300px] space-y-4 animate-in fade-in duration-200 font-sans pb-12">
-      <PageHeader
+    <div className="w-full space-y-4 animate-in fade-in duration-200 font-sans pb-12">
+      <CompactActionBar
         icon={Settings}
         title="Quản lý Danh mục Chức năng & Cấu trúc Mega-Menu"
         subtitle="Tổ chức cây chức năng, liên kết màn hình và điều chỉnh quyền khả dụng."
@@ -310,7 +310,7 @@ export function SysFunctionsManagerView({
           <RefreshCw aria-hidden="true" className={`h-4 w-4 ${treeQuery.isFetching ? "animate-spin" : ""}`} />
           Tải lại cây
         </button>
-      </PageHeader>
+      </CompactActionBar>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(360px,2fr)]">
         <section className="rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs sm:p-5" aria-label="Cây chức năng">

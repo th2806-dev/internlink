@@ -47,6 +47,8 @@ public class SystemRbacTests
 
         (await context.SysFunctions.CountAsync(function => function.ParentId == null)).Should().Be(21);
         (await context.SysFunctions.CountAsync(function => function.IsAction)).Should().Be(174);
+        (await context.SysFunctions.SingleAsync(function => function.Code == "SYSTEM.PERMISSIONS"))
+            .Description.Should().Be("PHÂN QUYỀN F1005");
         (await context.SysFunctions
             .Where(function => function.ModuleCode == "LECTURER" && function.IsAction)
             .Select(function => function.Code)
@@ -155,6 +157,8 @@ public class SystemRbacTests
         await context.SaveChangesAsync();
         await SystemRbacSeeder.SeedAsync(context);
 
+        (await context.SysFunctions.SingleAsync(function => function.Code == "STUDENTS"))
+            .Description.Should().Be("GIAI ĐOẠN 1 · CHUẨN BỊ KỲ");
         var departmentRole = await context.SysRoles.SingleAsync(role => role.Code == nameof(Role.DepartmentAdmin));
         var companyView = await context.SysFunctions.SingleAsync(function => function.Code == "COMPANIES.VIEW");
         var permission = await context.SysRolePermissions.SingleAsync(item =>
@@ -173,6 +177,8 @@ public class SystemRbacTests
         await context.SaveChangesAsync();
         var visibleMenu = GetMenu(await controller.GetMyMenu(CancellationToken.None));
         visibleMenu.Should().Contain(item => item.FuncUrl == "/admin/companies");
+        visibleMenu.Single(item => item.Code == "STUDENTS").GroupName
+            .Should().Be("GIAI ĐOẠN 1 · CHUẨN BỊ KỲ");
     }
 
     [Fact]

@@ -17,7 +17,7 @@ import {
 import { useNavigate, useParams } from "react-router-dom";
 import { useSemester } from "../../../contexts/SemesterContext";
 import { useStudentWorkspace } from "../../../hooks/useStudentWorkspace";
-import { PageHeader } from "../../../components/common/PageHeader";
+import { CompactActionBar } from "../../../components/common/CompactActionBar";
 import { Panel } from "../../../components/common/Panel";
 import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
 import { mapInternshipStatusToUi } from "../../../lib/portalMappers";
@@ -122,7 +122,7 @@ export function StudentWorkspace({
   if (error || !detail || !student) {
     return (
       <div className="space-y-5 max-w-[1500px] mx-auto">
-        <PageHeader
+        <CompactActionBar
           icon={GraduationCap}
           title="Hồ sơ sinh viên"
           subtitle="Không tìm thấy dữ liệu phân công"

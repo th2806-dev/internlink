@@ -36,7 +36,7 @@ import {
   FileCheck2,
   Bell,
 } from "lucide-react";
-import { PageHeader } from "../../../components/common/PageHeader";
+import { CompactActionBar } from "../../../components/common/CompactActionBar";
 import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
 import { CompanyAvatar } from "../../../components/common/CompanyAvatar";
 import { KpiCard, KpiGrid } from "../../../components/common/KpiCard";
@@ -442,8 +442,8 @@ export const AccountRequestsView = ({
     void queryClient.invalidateQueries({ queryKey: queryKeys.admin.accountRequests.all });
   };
   return (
-    <div className="space-y-4 max-w-[1500px] mx-auto min-w-0 max-w-full overflow-hidden">
-      <PageHeader
+    <div className="space-y-4 w-full min-w-0 overflow-hidden">
+      <CompactActionBar
         icon={KeyRound}
         title="Quản lý Yêu cầu & Cấp phát Tài khoản"
         actions={[
@@ -482,7 +482,7 @@ export const AccountRequestsView = ({
             className={`w-4 h-4 ${isLoading ? "animate-spin text-blue-600" : ""}`}
           />
         </button>
-      </PageHeader>
+      </CompactActionBar>
 
       {requestsQuery.isError && (
         <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
@@ -499,7 +499,7 @@ export const AccountRequestsView = ({
       )}
 
       {/* MAIN VIEW MODE NAV TABS */}
-      <div className="flex items-center gap-1.5 p-1.5 bg-slate-100/90 rounded-lg border border-slate-200 text-xs font-bold max-w-full overflow-x-auto shrink-0">
+      <div className="flex items-center gap-1.5 p-1.5 bg-slate-100/90 rounded-lg border border-slate-200 text-xs font-bold overflow-x-auto shrink-0">
         <button
           onClick={() => setActiveMainTab("requests")}
           className={`px-4 py-2.5 rounded-md transition-all flex items-center gap-2 whitespace-nowrap shrink-0 ${activeMainTab === "requests" ? "bg-white text-blue-700 shadow-2xs font-bold" : "text-slate-600 hover:text-slate-900"}`}
@@ -572,7 +572,7 @@ export const AccountRequestsView = ({
       {activeMainTab === "requests" && (
         <div className="space-y-6">
           {/* REQUEST CATEGORIES GRID */}
-          <Panel className="space-y-3 max-w-full overflow-hidden">
+          <Panel className="space-y-3 overflow-hidden">
             <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
               <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
                 <SlidersHorizontal className="w-4 h-4 text-blue-600" />
@@ -621,10 +621,10 @@ export const AccountRequestsView = ({
           </Panel>
 
           {/* MAIN CONTENT AREA & RIGHT SIDEBAR GRID */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start min-w-0 max-w-full">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start min-w-0">
             {/* LEFT COLUMN: REQUEST QUEUE TABLE */}
-            <div className="lg:col-span-8 space-y-6 min-w-0 max-w-full">
-              <Panel className="space-y-4 max-w-full overflow-hidden">
+            <div className="lg:col-span-8 space-y-6 min-w-0">
+              <Panel className="space-y-4 overflow-hidden">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
                   <div>
                     <h2 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
@@ -1034,7 +1034,7 @@ export const AccountRequestsView = ({
 
       {/* TAB 2: USER ACCOUNT DIRECTORY & PROVISIONING */}
       {activeMainTab === "directory" && (
-        <div className="bg-white p-5 rounded-lg border border-slate-200/80 shadow-xs space-y-4 max-w-full overflow-hidden">
+        <div className="bg-white p-5 rounded-lg border border-slate-200/80 shadow-xs space-y-4 overflow-hidden">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
             <div>
               <h2 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
@@ -1241,7 +1241,7 @@ export const AccountRequestsView = ({
 
       {/* TAB 3: SYSTEM AUDIT & ACTIVITY LOGS */}
       {activeMainTab === "logs" && (
-        <Panel className="space-y-4 max-w-full overflow-hidden">
+        <Panel className="space-y-4 overflow-hidden">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
             <div>
               <h3 className="text-sm font-bold text-slate-900 tracking-tight flex items-center gap-2">

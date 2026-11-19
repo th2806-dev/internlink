@@ -4,7 +4,6 @@ import { useNavigate } from "react-router-dom";
 import {
   Building2,
   Plus,
-  Search,
   FileUp,
   Pencil,
   Trash2,
@@ -33,6 +32,7 @@ import { TableSkeleton } from "../../../components/common/SkeletonLoader";
 import { RequestErrorState } from "../../../components/common/RequestErrorState";
 import { useAdminCompaniesQuery } from "../../../hooks/useAdminCompaniesQuery";
 import { DynamicDataGrid } from "../components/DynamicDataGrid";
+import { CompactActionBar } from "../../../components/common/CompactActionBar";
 
 const emptyForm = {
   companyCode: "",
@@ -212,50 +212,74 @@ export const CompaniesView = ({
   const hasActiveFilters = Boolean(search.trim()) || statusFilter !== "all";
 
   return (
-    <div className="mx-auto max-w-[1300px] space-y-4 pb-12">
-      <section className="overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-2xs">
-        <div className="flex flex-wrap items-center justify-between gap-3 bg-[#026aa7] px-4 py-3 text-white">
-          <div className="flex min-w-0 items-center gap-2">
-            <Building2 className="h-5 w-5 shrink-0 text-white/90" aria-hidden="true" />
-            <div className="min-w-0">
-              <h1 className="text-base font-bold tracking-wide">Quản lý doanh nghiệp</h1>
-              <p className="mt-0.5 text-xs text-white/80">
-                Danh mục đối tác thực tập và thông tin liên kết theo học kỳ
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => void handleExport()}
-              className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-white/30 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+    <div className="w-full space-y-4 pb-12">
+      <CompactActionBar
+        icon={Building2}
+        title="Doanh nghiệp"
+        total={isLoadingApi
+          ? "Đang tải danh sách…"
+          : `Tổng cộng: ${filtered.length.toLocaleString("vi-VN")} doanh nghiệp`}
+        subtitle={isFetching && !isLoadingApi
+          ? "Đang cập nhật…"
+          : canLink
+            ? "Liên kết doanh nghiệp theo học kỳ đang chọn"
+            : "Chọn một học kỳ để quản lý liên kết"}
+        search={{
+          value: search,
+          onChange: updateSearch,
+          placeholder: "Tìm tên, mã, lĩnh vực...",
+          ariaLabel: "Tìm doanh nghiệp theo tên, mã hoặc lĩnh vực",
+        }}
+        filters={
+          <>
+            <select
+              value={statusFilter}
+              onChange={(event) => updateStatusFilter(event.target.value)}
+              aria-label="Lọc doanh nghiệp theo trạng thái"
+              className="h-8 max-w-40 rounded-md border border-slate-200 bg-slate-50 px-2 text-[11px] font-semibold text-slate-700"
             >
-              <Download className="h-4 w-4" aria-hidden="true" />
-              Xuất Excel
-            </button>
-            {canMutateOps && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setIsImportModalOpen(true)}
-                  className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-white/30 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-                >
-                  <FileUp className="h-4 w-4" aria-hidden="true" />
-                  Import Excel
-                </button>
-                <button
-                  type="button"
-                  onClick={openCreate}
-                  className="inline-flex min-h-9 items-center gap-1.5 rounded-md bg-white px-3 text-xs font-bold text-[#026aa7] transition-colors hover:bg-sky-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-                >
-                  <Plus className="h-4 w-4" aria-hidden="true" />
-                  Thêm doanh nghiệp
-                </button>
-              </>
+              <option value="all">Tất cả trạng thái</option>
+              {statuses.map((status) => (
+                <option key={status} value={status}>{status}</option>
+              ))}
+            </select>
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={() => {
+                  updateSearch("");
+                  updateStatusFilter("all");
+                }}
+                className="h-8 rounded-md border border-slate-200 bg-white px-2 text-[11px] font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                Xóa lọc
+              </button>
             )}
-          </div>
-        </div>
-      </section>
+          </>
+        }
+        actions={[
+          {
+            label: "Xuất Excel",
+            icon: Download,
+            onClick: () => void handleExport(),
+          },
+          ...(canMutateOps
+            ? [
+                {
+                  label: "Nhập Excel",
+                  icon: FileUp,
+                  onClick: () => setIsImportModalOpen(true),
+                },
+                {
+                  label: "Thêm",
+                  icon: Plus,
+                  onClick: openCreate,
+                  variant: "primary" as const,
+                },
+              ]
+            : []),
+        ]}
+      />
 
       <Panel className="space-y-4 rounded-xl border border-slate-200/90 shadow-2xs">
         {isError && paginatedCompanies.length > 0 && (
@@ -277,76 +301,6 @@ export const CompaniesView = ({
             </button>
           </div>
         )}
-        <div className="flex flex-col gap-3 border-b border-slate-100 pb-3.5">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 className="text-base font-bold tracking-tight text-slate-900">
-                Danh sách doanh nghiệp
-              </h2>
-              <p className="mt-0.5 text-xs font-medium text-slate-500">
-                {canLink
-                  ? "Doanh nghiệp liên kết mặc định với mọi học kỳ — dùng 'Ngưng liên kết' để ẩn khỏi phân bổ mới của kỳ này."
-                  : "Chọn một học kỳ cụ thể để quản lý liên kết doanh nghiệp của kỳ đó."}
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              {selectedSemester?.name && selectedSemester.id !== "all" && (
-                <span className="inline-flex items-center rounded-md bg-slate-100 px-2.5 py-1 font-semibold text-slate-700">
-                  {selectedSemester.name}
-                </span>
-              )}
-              <span className="inline-flex items-center rounded-md border border-sky-100 bg-sky-50 px-2.5 py-1 font-semibold text-[#025a8e]">
-                {isLoadingApi
-                  ? "Đang tải danh sách…"
-                  : `${filtered.length.toLocaleString("vi-VN")} doanh nghiệp đang hiển thị`}
-              </span>
-              {isFetching && !isLoadingApi && (
-                <span className="font-semibold text-[#026aa7]" role="status">
-                  Đang cập nhật…
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2.5 pt-1">
-            <div className="relative min-w-[220px] flex-1 sm:max-w-xs">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" aria-hidden="true" />
-              <input
-                value={search}
-                onChange={(e) => updateSearch(e.target.value)}
-                placeholder="Tìm tên, mã, lĩnh vực…"
-                aria-label="Tìm doanh nghiệp theo tên, mã hoặc lĩnh vực"
-                className="h-9 w-full rounded-md border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-3 text-xs outline-none transition-colors focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
-              />
-            </div>
-            <select
-              value={statusFilter}
-              onChange={(e) => updateStatusFilter(e.target.value)}
-              aria-label="Lọc doanh nghiệp theo trạng thái"
-              className="h-9 cursor-pointer rounded-md border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700 outline-none transition-colors focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
-            >
-              <option value="all">Tất cả trạng thái</option>
-              {statuses.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-            {hasActiveFilters && (
-              <button
-                type="button"
-                onClick={() => {
-                  updateSearch("");
-                  updateStatusFilter("all");
-                }}
-                className="inline-flex h-9 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
-              >
-                <X className="h-3.5 w-3.5" aria-hidden="true" />
-                Xóa bộ lọc
-              </button>
-            )}
-          </div>
-        </div>
-
         {isLoadingApi && paginatedCompanies.length === 0 ? (
           <div className="p-4" data-testid="companies-loading">
             <TableSkeleton rows={5} columns={7} />

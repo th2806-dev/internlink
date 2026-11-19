@@ -369,7 +369,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
   }, [templates, searchTerm, selectedSemester, selectedDept, selectedCategory, selectedStatus]);
 
   return (
-    <div className="mx-auto max-w-[1300px] space-y-4 pb-12">
+    <div className="w-full space-y-4 pb-12">
       <section className="overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-2xs">
         <div className="flex flex-wrap items-center justify-between gap-3 bg-[#026aa7] px-4 py-3 text-white">
           <div className="flex min-w-0 items-center gap-2">
@@ -464,7 +464,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
               value={selectedDept}
               onChange={(e) => setSelectedDept(e.target.value)}
               aria-label="Lọc theo khoa"
-              className="h-9 min-w-44 max-w-full rounded-md border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700 outline-none transition-colors focus-visible:border-[#026aa7] focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+              className="h-9 min-w-44 rounded-md border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700 outline-none transition-colors focus-visible:border-[#026aa7] focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
             >
               {departmentOptions.map((department) => (
                 <option key={department.value} value={department.value}>{department.label}</option>
@@ -474,7 +474,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
               value={selectedSemester}
               onChange={(e) => setSelectedSemester(e.target.value)}
               aria-label="Lọc theo học kỳ"
-              className="h-9 min-w-44 max-w-full rounded-md border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700 outline-none transition-colors focus-visible:border-[#026aa7] focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+              className="h-9 min-w-44 rounded-md border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700 outline-none transition-colors focus-visible:border-[#026aa7] focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
             >
               <option value="">Tất cả học kỳ</option>
               {semesters.map((semester) => (
@@ -485,7 +485,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
               aria-label="Lọc theo danh mục"
-              className="h-9 min-w-44 max-w-full rounded-md border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700 outline-none transition-colors focus-visible:border-[#026aa7] focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+              className="h-9 min-w-44 rounded-md border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700 outline-none transition-colors focus-visible:border-[#026aa7] focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
             >
               {CATEGORIES.map((category) => (
                 <option key={category.value} value={category.value}>{category.label}</option>
@@ -495,7 +495,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({ onShowToast }) => 
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value as typeof selectedStatus)}
               aria-label="Lọc theo trạng thái ban hành"
-              className="h-9 min-w-36 max-w-full rounded-md border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700 outline-none transition-colors focus-visible:border-[#026aa7] focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+              className="h-9 min-w-36 rounded-md border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700 outline-none transition-colors focus-visible:border-[#026aa7] focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
             >
               <option value="all">Mọi trạng thái</option>
               <option value="published">Đang lưu hành</option>

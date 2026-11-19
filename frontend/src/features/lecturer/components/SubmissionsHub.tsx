@@ -20,7 +20,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-import { PageHeader } from "../../../components/common/PageHeader";
+import { CompactActionBar } from "../../../components/common/CompactActionBar";
 import { Toolbar } from "../../../components/common/Toolbar";
 import { Panel } from "../../../components/common/Panel";
 import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
@@ -505,7 +505,7 @@ export const SubmissionsHub = ({
 
   return (
     <div className="space-y-5 max-w-[1500px] mx-auto animate-in fade-in duration-200">
-      {!compact && <PageHeader
+      {!compact && <CompactActionBar
         icon={FileCheck}
         title="Kho Báo Cáo & Bài Nộp Sinh Viên"
         subtitle={`Tổng hợp báo cáo tuần, giữa kỳ & cuối kỳ do sinh viên tải lên · ${selectedSemester?.name || "Kỳ thực tập đang chọn"}`}

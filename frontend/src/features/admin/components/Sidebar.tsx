@@ -50,7 +50,7 @@ const MENU_ICONS: Record<string, LucideIcon> = {
   Users,
 };
 
-function getMenuIcon(iconName: string | null): LucideIcon {
+export function getMenuIcon(iconName: string | null): LucideIcon {
   return iconName ? MENU_ICONS[iconName] ?? CircleHelp : CircleHelp;
 }
 
@@ -103,7 +103,9 @@ export const Sidebar = ({
     <aside
       id="admin-navigation"
       aria-label="Điều hướng quản trị"
-      className={`admin-sidebar-drawer sticky top-0 z-40 flex h-screen w-64 shrink-0 select-none flex-col justify-between border-r border-slate-200/90 bg-white ${
+      aria-hidden={!isOpen}
+      inert={!isOpen}
+      className={`admin-sidebar-drawer fixed inset-y-0 left-0 z-50 flex h-dvh w-64 shrink-0 select-none flex-col justify-between border-r border-slate-200/90 bg-white transition-transform duration-200 lg:hidden ${
         isOpen ? "is-open" : ""
       }`}
     >

@@ -14,7 +14,7 @@ import {
   Wrench,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { PageHeader } from "../../../components/common/PageHeader";
+import { CompactActionBar } from "../../../components/common/CompactActionBar";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { systemAdminService } from "../../../services/systemAdmin.service";
 import type { RolePermissionRow } from "../../../types/systemAdmin";
@@ -217,8 +217,8 @@ export function PermissionMatrixView({
   const error = rolesQuery.error ?? permissionsQuery.error;
 
   return (
-    <div className="mx-auto max-w-[1300px] space-y-4 animate-in fade-in duration-200 font-sans pb-12">
-      <PageHeader
+    <div className="w-full space-y-4 animate-in fade-in duration-200 font-sans pb-12">
+      <CompactActionBar
         icon={KeyRound}
         title="Ma trận phân quyền"
         subtitle="Cấp quyền theo phân hệ, chức năng và thao tác."

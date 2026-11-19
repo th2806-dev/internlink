@@ -1,13 +1,13 @@
 import { ReactNode, useEffect, useState } from "react";
 import { Sidebar as AdminSidebar } from "../features/admin/components/Sidebar";
-import { Header as AdminHeader } from "../features/admin/components/Header";
+import { CommandTopBar } from "../features/admin/components/CommandTopBar";
+import { RibbonMenu } from "../features/admin/components/RibbonMenu";
 import { Toast } from "../components/common/Toast";
 import { useToast } from "../hooks/useToast";
 import { useAuth } from "../hooks/useAuth";
 import { useAdminNavStats } from "../hooks/useAdminNavStats";
 import { useSemester } from "../contexts/SemesterContext";
 import { SuperAdminImpersonationBanner } from "../features/admin/components/SuperAdminImpersonationBanner";
-import { ContextScopeBar } from "../features/admin/components/ContextScopeBar";
 import { AdminMenuRouteGuard } from "../features/admin/components/AdminMenuRouteGuard";
 
 import type { UserRole } from "../types/common";
@@ -43,7 +43,7 @@ export default function AdminLayout({
   }, [isSidebarOpen]);
 
   return (
-    <div className="h-dvh overflow-hidden bg-[var(--il-surface-bg)] text-slate-800 font-sans flex antialiased">
+    <div className="flex h-dvh w-full overflow-hidden bg-[var(--il-surface-bg)] font-sans text-slate-800 antialiased">
       {isSidebarOpen && (
         <button
           type="button"
@@ -63,9 +63,9 @@ export default function AdminLayout({
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
       />
-      <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-y-auto">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
         <SuperAdminImpersonationBanner />
-        <AdminHeader
+        <CommandTopBar
           activeTab={activeTab}
           onNavigate={onNavigate}
           onLogout={onLogout}
@@ -74,9 +74,9 @@ export default function AdminLayout({
           onMenuOpen={() => setIsSidebarOpen((open) => !open)}
           isMenuOpen={isSidebarOpen}
         />
-        <ContextScopeBar activeTab={activeTab} />
+        <RibbonMenu onNavigate={onNavigate} />
         <Toast message={message} type={type} onClose={clearToast} />
-        <main className="flex-1 p-4 md:p-6 max-w-[1440px] w-full mx-auto">
+        <main className="w-full flex-1 px-3 py-3 sm:px-5">
           <AdminMenuRouteGuard>{children}</AdminMenuRouteGuard>
         </main>
       </div>

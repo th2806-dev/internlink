@@ -2,7 +2,6 @@ import { useState, useMemo, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   UserPlus,
-  Search,
   Upload,
   Download,
   FileSpreadsheet,
@@ -50,6 +49,7 @@ import { StudentReportsTab } from "../../lecturer/components/StudentReportsTab";
 import type { SubmissionDto, WeeklyReportDto } from "../../../types/api";
 import type { ToastType } from "../../../contexts/ToastContext";
 import { DynamicDataGrid } from "../components/DynamicDataGrid";
+import { CompactActionBar } from "../../../components/common/CompactActionBar";
 export const StudentsView = ({
   onShowToast,
   onNavigateTab,
@@ -79,7 +79,6 @@ export const StudentsView = ({
     pagination,
     filter,
     setSearch,
-    applySearch,
     setClassFilter,
     setSortBy,
     clearFilters,
@@ -423,58 +422,122 @@ export const StudentsView = ({
   };
 
   return (
-    <div className="mx-auto max-w-[1300px] space-y-4 pb-12">
-      <section className="overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-2xs">
-        <div className="flex flex-wrap items-center justify-between gap-3 bg-[#026aa7] px-4 py-3 text-white">
-          <div className="flex min-w-0 items-center gap-2">
-            <GraduationCap className="h-5 w-5 shrink-0 text-white/90" aria-hidden="true" />
-            <div className="min-w-0">
-              <h1 className="text-base font-bold tracking-wide">Quản lý sinh viên</h1>
-              <p className="mt-0.5 text-xs text-white/80">
-                Danh sách sinh viên, giảng viên hướng dẫn, doanh nghiệp và tài khoản
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => void handleExportInternshipList()}
-              className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-white/30 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+    <div className="w-full space-y-4 pb-12">
+      <CompactActionBar
+        icon={GraduationCap}
+        title="Sinh viên"
+        total={isCountsPending
+          ? "Đang tải số liệu…"
+          : `Tổng cộng: ${totalStudents.toLocaleString("vi-VN")} sinh viên`}
+        search={{
+          value: searchInput,
+          onChange: (value) => {
+            setSearchInput(value);
+            setSearch(value);
+          },
+          placeholder: "Tìm tên, MSSV, email...",
+          ariaLabel: "Tìm sinh viên",
+        }}
+        filters={
+          <>
+            <select
+              value={filter.class}
+              onChange={(event) => setClassFilter(event.target.value)}
+              aria-label="Lọc theo lớp"
+              className="h-8 max-w-28 rounded-md border border-slate-200 bg-slate-50 px-2 text-[11px] font-semibold text-slate-700"
             >
-              <Download className="h-4 w-4" aria-hidden="true" />
-              Xuất danh sách thực tập
-            </button>
-            {canMutateOps && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setIsImportModalOpen(true)}
-                  className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-white/30 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-                >
-                  <FileUp className="h-4 w-4" aria-hidden="true" />
-                  Import Excel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsGenerateAccountsModalOpen(true)}
-                  className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-white/30 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-                >
-                  <KeyRound className="h-4 w-4" aria-hidden="true" />
-                  Cấp tài khoản nhanh{!isCountsPending && ` (${pendingAccounts})`}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsCreateModalOpen(true)}
-                  className="inline-flex min-h-9 items-center gap-1.5 rounded-md bg-white px-3 text-xs font-bold text-[#026aa7] transition-colors hover:bg-sky-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-                >
-                  <UserPlus className="h-4 w-4" aria-hidden="true" />
-                  Thêm sinh viên
-                </button>
-              </>
+              <option value="all">Tất cả lớp</option>
+              {classOptions.map((classCode) => (
+                <option key={classCode} value={classCode}>{classCode}</option>
+              ))}
+            </select>
+            <select
+              value={lecturerFilter}
+              onChange={(event) => setLecturerFilter(event.target.value)}
+              aria-label="Lọc theo giảng viên hướng dẫn"
+              className="h-8 max-w-36 rounded-md border border-slate-200 bg-slate-50 px-2 text-[11px] font-semibold text-slate-700"
+            >
+              <option value="all">Tất cả giảng viên</option>
+              {lecturerOptions.map((lecturer) => (
+                <option key={lecturer} value={lecturer}>{lecturer}</option>
+              ))}
+            </select>
+            <select
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value)}
+              aria-label="Lọc theo trạng thái tài khoản"
+              className="h-8 max-w-32 rounded-md border border-slate-200 bg-slate-50 px-2 text-[11px] font-semibold text-slate-700"
+            >
+              <option value="all">Mọi trạng thái</option>
+              <option value="active">Đã cấp</option>
+              <option value="pending">Chưa cấp</option>
+              <option value="locked">Đã khóa</option>
+            </select>
+            <select
+              value={filter.sortBy}
+              onChange={(event) => setSortBy(event.target.value)}
+              aria-label="Sắp xếp"
+              className="h-8 max-w-28 rounded-md border border-slate-200 bg-slate-50 px-2 text-[11px] font-semibold text-slate-700"
+            >
+              <option value="ten">Tên A-Z</option>
+              <option value="mssv">MSSV</option>
+              <option value="class">Lớp</option>
+            </select>
+            {(hasActiveFilters || filter.sortBy !== "ten") && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchInput("");
+                  clearFilters();
+                  setStatusFilter("all");
+                  setLecturerFilter("all");
+                }}
+                className="h-8 rounded-md border border-slate-200 bg-white px-2 text-[11px] font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                Xóa lọc
+              </button>
             )}
-          </div>
-        </div>
-      </section>
+          </>
+        }
+        actions={[
+          {
+            label: "Xuất DS",
+            icon: Download,
+            onClick: () => void handleExportInternshipList(),
+          },
+          ...(canMutateOps
+            ? [
+                {
+                  label: "Nhập Excel",
+                  icon: FileUp,
+                  onClick: () => setIsImportModalOpen(true),
+                },
+                {
+                  label: `Cấp TK${!isCountsPending ? ` (${pendingAccounts})` : ""}`,
+                  icon: KeyRound,
+                  onClick: () => setIsGenerateAccountsModalOpen(true),
+                },
+                {
+                  label: "Thêm",
+                  icon: UserPlus,
+                  onClick: () => setIsCreateModalOpen(true),
+                  variant: "primary" as const,
+                },
+              ]
+            : []),
+        ]}
+      >
+        {canMutateOps && selectedIds.length > 0 && (
+          <button
+            type="button"
+            onClick={handleBatchGenerateAccounts}
+            className="inline-flex h-8 items-center gap-1 rounded-md bg-[#7bc043] px-2.5 text-[11px] font-bold text-slate-900 hover:bg-[#6eae36] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/30"
+          >
+            <KeyRound aria-hidden="true" className="h-3.5 w-3.5" />
+            Cấp {selectedIds.length}
+          </button>
+        )}
+      </CompactActionBar>
 
       {selectedSemester.status === "completed" && (
         <div className="px-4 py-3 bg-slate-100 border border-slate-300 rounded-lg text-xs text-slate-800 flex items-center gap-2.5">
@@ -487,130 +550,6 @@ export const StudentsView = ({
 
       {/* STUDENTS MAIN TABLE */}
       <Panel className="space-y-4 rounded-xl border border-slate-200/90 shadow-2xs">
-        {/* Table Header & Search Filters */}
-        <div className="flex flex-col gap-3 border-b border-slate-100 pb-3.5">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 className="text-base font-bold tracking-tight text-slate-900">
-                Danh sách sinh viên
-              </h2>
-              <p className="mt-0.5 text-xs font-medium text-slate-500">
-                Bảng thông tin chi tiết và quản lý tài khoản sinh viên
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="inline-flex items-center rounded-md bg-slate-100 px-2.5 py-1 font-semibold text-slate-700">
-                {selectedSemester.name}
-              </span>
-              <span className="inline-flex items-center rounded-md border border-sky-100 bg-sky-50 px-2.5 py-1 font-semibold text-[#025a8e]">
-                {isCountsPending
-                  ? "Đang tải số liệu…"
-                  : `${totalStudents.toLocaleString("vi-VN")} sinh viên trong kỳ`}
-              </span>
-              {isLoadingApi && (
-                <span className="font-semibold text-[#026aa7]">Đang tải danh sách…</span>
-              )}
-            </div>
-          </div>
-
-          {/* Search & Filter Inputs */}
-          <div className="flex flex-wrap items-center gap-2.5 pt-1 text-xs">
-            <div className="relative min-w-[220px] flex-1 sm:max-w-xs">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" aria-hidden="true" />
-              <input
-                type="text"
-                value={searchInput}
-                onChange={(e) => {
-                  setSearchInput(e.target.value);
-                  setSearch(e.target.value);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") applySearch();
-                }}
-                placeholder="Tìm tên, MSSV, Email, Doanh nghiệp..."
-                aria-label="Tìm sinh viên"
-                className="h-9 w-full rounded-md border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-3 font-medium outline-none transition-colors focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
-              />
-            </div>
-
-            <select
-              value={filter.class}
-              onChange={(e) => setClassFilter(e.target.value)}
-              aria-label="Lọc theo lớp"
-              className="h-9 cursor-pointer rounded-md border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700 outline-none transition-colors focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
-            >
-              <option value="all">Tất cả Lớp</option>
-              {classOptions.map((cls) => (
-                <option key={cls} value={cls}>
-                  Lớp {cls}
-                </option>
-              ))}
-            </select>
-
-            <select
-              value={lecturerFilter}
-              onChange={(e) => setLecturerFilter(e.target.value)}
-              aria-label="Lọc theo giảng viên hướng dẫn"
-              className="h-9 max-w-full cursor-pointer rounded-md border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700 outline-none transition-colors focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
-            >
-              <option value="all">Tất cả giảng viên</option>
-              {lecturerOptions.map((lecturer) => (
-                <option key={lecturer} value={lecturer}>
-                  {lecturer}
-                </option>
-              ))}
-            </select>
-
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              aria-label="Lọc theo trạng thái tài khoản"
-              className="h-9 cursor-pointer rounded-md border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700 outline-none transition-colors focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
-            >
-              <option value="all">Tất cả trạng thái</option>
-              <option value="active">Đã cấp tài khoản</option>
-              <option value="pending">Chưa cấp tài khoản</option>
-              <option value="locked">Tài khoản bị khóa</option>
-            </select>
-
-            <select
-              value={filter.sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              aria-label="Sắp xếp"
-              className="h-9 cursor-pointer rounded-md border border-[#026aa7]/20 bg-[#026aa7]/5 px-3 text-xs font-semibold text-[#025a8e] outline-none transition-colors focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
-            >
-              <option value="ten">Sắp xếp: Tên A-Z</option>
-              <option value="mssv">Sắp xếp: MSSV</option>
-              <option value="class">Sắp xếp: Lớp</option>
-            </select>
-
-            {canMutateOps && selectedIds.length > 0 && (
-              <button
-                onClick={handleBatchGenerateAccounts}
-                className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-md transition-colors flex items-center gap-1.5 cursor-pointer animate-in fade-in"
-              >
-                <KeyRound className="w-3.5 h-3.5" />
-                <span>Cấp TK đã chọn ({selectedIds.length})</span>
-              </button>
-            )}
-            {(hasActiveFilters || filter.sortBy !== "ten") && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSearchInput("");
-                    clearFilters();
-                    setStatusFilter("all");
-                    setLecturerFilter("all");
-                  }}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 font-semibold text-slate-600 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
-                >
-                  <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
-                  Xóa bộ lọc
-                </button>
-            )}
-          </div>
-        </div>
-
         {/* Configurable data table */}
         <div className="overflow-x-auto rounded-xl border border-slate-200/80">
           {isError ? (

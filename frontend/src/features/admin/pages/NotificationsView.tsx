@@ -228,7 +228,7 @@ export const NotificationsView = ({
   };
 
   return (
-    <div className="mx-auto min-w-0 max-w-[1300px] space-y-4 pb-12 font-sans">
+    <div className="mx-auto min-w-0 w-full space-y-4 pb-12 font-sans">
       <section className="overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-2xs">
         <div className="flex flex-wrap items-center justify-between gap-3 bg-[#026aa7] px-4 py-3 text-white">
           <div className="flex min-w-0 items-center gap-2">

@@ -10,7 +10,7 @@ import {
   Save,
   UploadCloud,
 } from "lucide-react";
-import { PageHeader } from "../../../components/common/PageHeader";
+import { CompactActionBar } from "../../../components/common/CompactActionBar";
 import { useSemester, toApiDepartmentId } from "../../../contexts/SemesterContext";
 import { apiRequestRaw, downloadAuthenticatedFile, getApiErrorMessage } from "../../../lib/apiClient";
 
@@ -513,8 +513,8 @@ export default function SmartExcelImportView() {
   };
 
   return (
-    <main className="mx-auto max-w-[1300px] space-y-4 animate-in fade-in duration-200 font-sans pb-12">
-      <PageHeader
+    <main className="w-full space-y-4 animate-in fade-in duration-200 font-sans pb-12">
+      <CompactActionBar
         icon={FileSpreadsheet}
         title="Smart Excel Import Studio"
         subtitle="Tải dữ liệu, ghép cột theo biểu mẫu của khoa và kiểm tra trước khi nhập."

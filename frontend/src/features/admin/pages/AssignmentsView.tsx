@@ -394,7 +394,7 @@ export const AssignmentsView = ({
   };
 
   return (
-    <div className="mx-auto max-w-[1300px] space-y-4 pb-12">
+    <div className="w-full space-y-4 pb-12">
       <section className="overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-2xs">
         <div className="flex flex-wrap items-center justify-between gap-3 bg-[#026aa7] px-4 py-3 text-white">
           <div className="flex min-w-0 items-center gap-2">
@@ -495,13 +495,13 @@ export const AssignmentsView = ({
           )}
 
           {/* SEMESTER SELECTOR & MAIN TAB SWITCHER BAR */}
-          <Panel className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 max-w-full rounded-xl border border-slate-200/90 shadow-2xs" padding="sm">
+          <Panel className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 rounded-xl border border-slate-200/90 shadow-2xs" padding="sm">
             {/* Semester Selector */}
-            <div className="flex items-center gap-3 min-w-0 max-w-full">
+            <div className="flex items-center gap-3 min-w-0">
               <div className="p-2.5 bg-[#026aa7]/5 text-[#026aa7] rounded-md border border-[#026aa7]/14 shrink-0">
                 <CalendarDays className="w-5 h-5" />
               </div>
-              <div className="min-w-0 max-w-full">
+              <div className="min-w-0">
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
                   Kỳ thực tập đang chọn
                 </label>
@@ -516,7 +516,7 @@ export const AssignmentsView = ({
                       if (sem) onShowToast(`Đã chọn đợt: "${sem.name}"`);
                     }
                   }}
-                  className="mt-0.5 max-w-full cursor-pointer truncate rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-900 outline-none transition-colors focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+                  className="mt-0.5 cursor-pointer truncate rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-900 outline-none transition-colors focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
                 >
                   <option value="all">Tất cả học kỳ</option>
                   {semesters.map((sem) => (
