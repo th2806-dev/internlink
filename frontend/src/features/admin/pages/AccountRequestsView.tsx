@@ -442,7 +442,7 @@ export const AccountRequestsView = ({
     void queryClient.invalidateQueries({ queryKey: queryKeys.admin.accountRequests.all });
   };
   return (
-    <div className="space-y-5 max-w-[1500px] mx-auto min-w-0 max-w-full overflow-hidden">
+    <div className="space-y-4 max-w-[1500px] mx-auto min-w-0 max-w-full overflow-hidden">
       <PageHeader
         icon={KeyRound}
         title="Quản lý Yêu cầu & Cấp phát Tài khoản"

@@ -43,16 +43,16 @@ export function PageHeader({
   };
 
   return (
-    <div className="il-toolbar il-animate-in !mb-4 !px-0">
+    <div className="il-toolbar il-animate-in !mb-2 !px-0 !pb-2">
       <div className="min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="flex h-9 w-9 items-center justify-center rounded-full border border-[#026aa7]/20 bg-[#026aa7]/5 shrink-0">
             <Icon className="w-4 h-4 text-[#026aa7]" />
           </span>
-            <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">
+          <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">
             {title}
           </h1>
-          {badge && (
+          {badge && badge.trim().toLocaleLowerCase() !== title.trim().toLocaleLowerCase() && (
             <span
               className={`px-2 py-0.5 font-semibold text-[10px] rounded-md border ${badgeColor}`}
             >
@@ -61,7 +61,7 @@ export function PageHeader({
           )}
         </div>
         {subtitle && (
-          <p className="text-xs text-slate-500 font-medium mt-1 pl-7 line-clamp-2">
+            <p className="text-[11px] text-slate-500 font-medium mt-0.5 pl-7 line-clamp-1">
             {subtitle}
           </p>
         )}

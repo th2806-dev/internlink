@@ -513,13 +513,11 @@ export default function SmartExcelImportView() {
   };
 
   return (
-    <main className="mx-auto max-w-[1300px] space-y-5 animate-in fade-in duration-200 font-sans pb-12">
+    <main className="mx-auto max-w-[1300px] space-y-4 animate-in fade-in duration-200 font-sans pb-12">
       <PageHeader
         icon={FileSpreadsheet}
         title="Smart Excel Import Studio"
         subtitle="Tải dữ liệu, ghép cột theo biểu mẫu của khoa và kiểm tra trước khi nhập."
-        badge="IMPORT STUDIO"
-        badgeColor="border-blue-200 bg-blue-50 text-[#026aa7]"
       />
 
       <nav aria-label="Các bước nhập dữ liệu" className="grid gap-3 sm:grid-cols-3">

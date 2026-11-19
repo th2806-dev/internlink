@@ -20,9 +20,16 @@ import {
 import { Panel } from "../../../components/common/Panel";
 import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
 import { PasswordStrengthMeter } from "../../../components/common/PasswordStrengthMeter";
-import { LecturerSubPageHeader } from "../components/LecturerSubPageHeader";
+import {
+  ProfileAuditPanel,
+  ProfileCompletionCard,
+  ProfileDetailsCard,
+  ProfileStudioHeader,
+  type ProfileStudioTab,
+} from "../../../components/common/ProfileStudio";
 import { apiRequest, getApiErrorMessage } from "../../../lib/apiClient";
 import { authService } from "../../../services/auth.service";
+import { lecturerAnalyticsService } from "../../../services/lecturerAnalytics.service";
 import { queryKeys } from "../../../lib/queryKeys";
 import { useAuth } from "../../../hooks/useAuth";
 import { useSemester } from "../../../contexts/SemesterContext";
@@ -72,6 +79,7 @@ export const AccountView = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPasswords, setShowPasswords] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
+  const [activeTab, setActiveTab] = useState<ProfileStudioTab>("overview");
 
   const profileQueryKey = queryKeys.auth.lecturerProfile(user?.id ?? user?.username);
   const profileQuery = useQuery({
@@ -79,6 +87,12 @@ export const AccountView = () => {
     enabled: Boolean(user),
     staleTime: 5 * 60 * 1000,
     queryFn: () => apiRequest<LecturerOverview>("/api/Lecturer/me"),
+  });
+  const activityStatsQuery = useQuery({
+    queryKey: ["lecturer", "account-activity-stats", selectedSemester?.id, user?.id],
+    enabled: Boolean(user),
+    staleTime: 5 *  60 * 1000,
+    queryFn: () => lecturerAnalyticsService.getActivityStats(selectedSemester?.id),
   });
   const overview = {
     totalInternships: profileQuery.data?.totalInternships ?? 0,
@@ -165,32 +179,34 @@ export const AccountView = () => {
 
   return (
     <div className="mx-auto max-w-[1300px] space-y-4 animate-in fade-in duration-200 pb-12 font-sans">
-      <LecturerSubPageHeader
-        icon={User}
-        title="Thông tin Tài khoản"
-        subtitle="Quản lý hồ sơ cá nhân, thông tin giảng viên và bảo mật mật khẩu tài khoản."
-      >
-        <span className="rounded-md border border-white/20 bg-white/15 px-3 py-1 text-xs font-semibold text-white">
-          Mã GV: {profile.lecturerCode || "—"}
-        </span>
-        <button
-          type="button"
-          onClick={() => { setEditing(true); setDraft({ ...profile }); }}
-          disabled={editing}
-          className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-white/30 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <Edit3 className="h-3.5 w-3.5" aria-hidden="true" />
-          {editing ? "Đang chỉnh sửa" : "Chỉnh sửa hồ sơ"}
-        </button>
-        <button
-          type="button"
-          onClick={() => void logout()}
-          className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-white/30 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-rose-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-        >
-          <LogOut className="h-3.5 w-3.5" /> Đăng xuất
-        </button>
-      </LecturerSubPageHeader>
+      <ProfileStudioHeader
+        name={profile.fullName || user?.name || "Giảng viên"}
+        identifier={profile.lecturerCode}
+        role="Giảng viên hướng dẫn"
+        department={profile.department}
+        email={profile.email}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        avatarAction={
+          <button
+            type="button"
+            onClick={() => { setEditing(true); setDraft({ ...profile }); }}
+            disabled={editing}
+            className="mt-2 inline-flex min-h-10 items-center gap-1.5 rounded-md bg-white/15 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Edit3 className="h-3.5 w-3.5" aria-hidden="true" />
+            {editing ? "Đang chỉnh sửa" : "Chỉnh sửa hồ sơ"}
+          </button>
+        }
+      />
 
+      {activeTab === "overview" ? (
+      <div
+        id="profile-panel-overview"
+        role="tabpanel"
+        aria-labelledby="profile-tab-overview"
+        className="space-y-5"
+      >
       {message && <p role="status" className="rounded-lg border border-[#7bc043]/30 bg-[#7bc043]/10 p-3 text-xs font-semibold text-[#446d20]">{message}</p>}
       {visibleError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-700">{visibleError}</p>}
 
@@ -198,6 +214,51 @@ export const AccountView = () => {
         <Panel role="status" className="rounded-lg border border-slate-200/90 py-12 text-center text-xs text-slate-500 shadow-2xs">Đang tải thông tin tài khoản...</Panel>
       ) : (
         <>
+        {activityStatsQuery.isPending && (
+          <p role="status" className="text-sm text-slate-600">Đang tải thống kê hướng dẫn và chấm điểm...</p>
+        )}
+        {activityStatsQuery.error && (
+          <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+            Không thể tải thống kê hướng dẫn và chấm điểm.
+          </p>
+        )}
+        {!activityStatsQuery.isPending && !activityStatsQuery.error && (
+        <ProfileCompletionCard
+          title="Tiến độ hướng dẫn và chấm điểm"
+          percent={
+            activityStatsQuery.data &&
+            activityStatsQuery.data.reviewedReportsCount + activityStatsQuery.data.pendingReportsCount > 0
+              ? (activityStatsQuery.data.reviewedReportsCount /
+                  (activityStatsQuery.data.reviewedReportsCount + activityStatsQuery.data.pendingReportsCount)) *
+                100
+              : 0
+          }
+          items={[
+            {
+              label: `Sinh viên đang hướng dẫn: ${activityStatsQuery.data?.totalStudentsCount ?? overview.totalInternships}`,
+              complete: (activityStatsQuery.data?.totalStudentsCount ?? overview.totalInternships) > 0,
+            },
+            {
+              label: `Sinh viên hoàn tất: ${activityStatsQuery.data?.completedStudentsCount ?? 0}`,
+              complete: (activityStatsQuery.data?.completedStudentsCount ?? 0) > 0,
+            },
+            {
+              label: `Báo cáo đã chấm: ${activityStatsQuery.data?.reviewedReportsCount ?? 0}`,
+              complete: (activityStatsQuery.data?.reviewedReportsCount ?? 0) > 0,
+            },
+            {
+              label: `Báo cáo chờ chấm: ${activityStatsQuery.data?.pendingReportsCount ?? 0}`,
+              complete: (activityStatsQuery.data?.pendingReportsCount ?? 0) === 0,
+            },
+          ]}
+        />
+        )}
+        <ProfileDetailsCard
+          email={profile.email}
+          phone={profile.phone}
+          department={profile.department}
+          userId={user?.id}
+        />
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         <div className="space-y-5 lg:col-span-2">
         <Panel className="space-y-4 rounded-lg border border-slate-200/90 shadow-2xs">
@@ -297,6 +358,10 @@ export const AccountView = () => {
           </div>
         </div>
         </>
+      )}
+      </div>
+      ) : (
+        <ProfileAuditPanel tab={activeTab} userId={user?.id} />
       )}
     </div>
   );

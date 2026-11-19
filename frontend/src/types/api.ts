@@ -45,6 +45,7 @@ export interface CurrentUserDto {
   mustChangePassword: boolean;
   isArchiveReadOnly?: boolean;
   departmentId?: string | null;
+  createdAt?: string | null;
 }
 
 export interface AuthSessionDto {

@@ -397,7 +397,7 @@ export function toEligibilityCell(isEligible: boolean): string {
 /** Nhãn màu cho badge xếp loại trên UI */
 export function getClassificationTone(classification: string): string {
   switch (classification) {
-    case "Xuất sắc": return "text-violet-700 bg-violet-50 border-violet-200";
+    case "Xuất sắc": return "text-emerald-700 bg-emerald-50 border-emerald-200";
     case "Giỏi": return "text-emerald-700 bg-emerald-50 border-emerald-200";
     case "Khá": return "text-blue-700 bg-blue-50 border-blue-200";
     case "Trung bình": return "text-amber-700 bg-amber-50 border-amber-200";

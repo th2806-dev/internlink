@@ -1,36 +1,18 @@
 import {
   X,
-  LayoutDashboard,
-  UserCheck,
-  Users,
-  UserPlus,
-  Building2,
-  KeyRound,
-  Bell,
-  Settings,
-  User,
-  Calendar,
-  FileText,
-  ClipboardList,
-  CalendarCheck,
-  Archive,
-  DatabaseBackup,
 } from "lucide-react";
 import { FEATURES } from "../../../config/featureFlags";
+import { ADMIN_NAVIGATION_SECTIONS, type AdminNavigationItem } from "../../../config/navigationConfig";
 import { formatCountBadge } from "../../../lib/userDisplay";
 import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
 import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
 import type { AdminNavStats } from "../../../hooks/useAdminNavStats";
 import type { AuthUser } from "../../../contexts/AuthContext";
 
-type NavItem = {
-  id: string;
-  label: string;
-  icon: typeof LayoutDashboard;
+type NavItem = AdminNavigationItem & {
   badge?: string;
   badgeAlert?: boolean;
   badgeText?: string;
-  flag?: keyof typeof FEATURES;
 };
 
 export const Sidebar = ({
@@ -53,117 +35,27 @@ export const Sidebar = ({
   const campaigns = stats?.notificationCampaignCount ?? 0;
   const unread = stats?.unreadNotificationCount ?? 0;
 
-  // Trình tự theo WORKFLOW đợt thực tập:
-  // Chuẩn bị (kỳ, SV, GV, DN, phân công, biểu mẫu) → Vận hành (điểm danh, thông báo)
-  // → Tổng kết (báo cáo khoa) → Hệ thống & cá nhân.
-  const navSections: { title: string; items: NavItem[] }[] = [
-    {
-      title: "TỔNG QUAN",
-      items: [
-        { id: "admin-dashboard", label: "Tổng quan", icon: LayoutDashboard },
-      ],
-    },
-    {
-      title: "CHUẨN BỊ KỲ THỰC TẬP",
-      items: [
-        {
-          id: "admin-semesters",
-          label: "Kỳ thực tập",
-          icon: Calendar,
-          flag: "adminSemesters",
-        },
-        {
-          id: "admin-students",
-          label: "Sinh viên",
-          icon: Users,
-          badge:
-            stats && stats.studentCount > 0
-              ? formatCountBadge(stats.studentCount)
-              : undefined,
-        },
-        {
-          id: "admin-lecturers",
-          label: "Giảng viên",
-          icon: UserCheck,
-          badge:
-            stats && stats.lecturerCount > 0
-              ? formatCountBadge(stats.lecturerCount)
-              : undefined,
-        },
-        {
-          id: "admin-companies",
-          label: "Doanh nghiệp",
-          icon: Building2,
-        },
-        {
-          id: "admin-assignments",
-          label: "Phân công hướng dẫn",
-          icon: UserPlus,
-          ...(unassigned > 0
-            ? { badgeText: `${unassigned} chưa PC` }
-            : {}),
-        },
-        {
-          id: "admin-templates",
-          label: "Biểu mẫu & Tài liệu",
-          icon: FileText,
-        },
-      ],
-    },
-    {
-      title: "VẬN HÀNH KỲ THỰC TẬP",
-      items: [
-        {
-          id: "admin-attendance",
-          label: "Điểm danh & Buổi gặp",
-          icon: CalendarCheck,
-        },
-        {
-          id: "admin-report-archive",
-          label: "Kho hồ sơ lưu trữ",
-          icon: Archive,
-        },
-        {
-          id: "admin-notifications",
-          label: "Thông báo",
-          icon: Bell,
-          ...(unread > 0
-            ? { badge: String(unread), badgeAlert: true }
-            : campaigns > 0
-            ? { badge: String(campaigns) }
-            : {}),
-        },
-      ],
-    },
-    {
-      title: "TỔNG KẾT KỲ THỰC TẬP",
-      items: [
-        {
-          id: "admin-summary",
-          label: "Báo cáo tổng kết",
-          icon: ClipboardList,
-        },
-      ],
-    },
-    {
-      title: "HỆ THỐNG & CÁ NHÂN",
-      items: [
-        {
-          id: "admin-departments",
-          label: "Khoa",
-          icon: Building2,
-        },
-        {
-          id: "admin-users",
-          label: "Người dùng",
-          icon: KeyRound,
-        },
-        { id: "admin-settings", label: "Cài đặt", icon: Settings },
-        { id: "admin-backups", label: "Sao lưu & Khôi phục", icon: DatabaseBackup },
-        { id: "admin-account", label: "Tài khoản", icon: User },
-      ],
-    },
-  ];
+  const navSections: { title: string; items: NavItem[] }[] =
+    ADMIN_NAVIGATION_SECTIONS.map((section) => ({
+      ...section,
+      items: section.items.map((item) => ({
+        ...item,
+        ...(item.id === "admin-students" && stats && stats.studentCount > 0
+          ? { badge: formatCountBadge(stats.studentCount) }
+          : {}),
+        ...(item.id === "admin-lecturers" && stats && stats.lecturerCount > 0
+          ? { badge: formatCountBadge(stats.lecturerCount) }
+          : {}),
+        ...(item.id === "admin-assignments" && unassigned > 0
+          ? { badgeText: `${unassigned} chưa PC` }
+          : {}),
+        ...(item.id === "admin-notifications" && unread > 0
+          ? { badge: String(unread), badgeAlert: true }
+          : item.id === "admin-notifications" && campaigns > 0
+          ? { badge: String(campaigns) }
+          : {}),
+      })),
+    }));
 
   const displayName = user?.name || user?.username || roleDisplayLabel;
   const displayRole = roleDisplayLabel;

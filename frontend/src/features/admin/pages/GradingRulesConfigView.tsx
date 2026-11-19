@@ -185,9 +185,7 @@ export function GradingRulesConfigView({
       <PageHeader
         icon={BadgeCheck}
         title="Quy chế điểm & deadline"
-        subtitle="Thiết lập trọng số, lịch báo cáo và ngưỡng đạt cho từng học kỳ và khoa."
-        badge="GRADING RULES"
-        badgeColor="border-blue-200 bg-blue-50 text-[#026aa7]"
+        subtitle="Thiết lập trọng số, lịch báo cáo và ngưỡng đạt theo kỳ, khoa."
       />
 
       <section className="space-y-6 rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs sm:p-5">
