@@ -16,6 +16,7 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import { ConfirmDialog } from "../../../components/common/ConfirmDialog";
+import { CompactActionBar } from "../../../components/common/CompactActionBar";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { adminEmailService } from "../../../services/adminEmail.service";
 import {
@@ -153,23 +154,30 @@ export const SettingsView = ({
   };
 
   return (
-    <div className="w-full min-w-0 space-y-4 pb-12 font-sans">
-      <section className="overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-2xs">
-        <div className="flex flex-wrap items-center justify-between gap-3 bg-[#026aa7] px-4 py-3 text-white">
-          <div className="flex min-w-0 items-center gap-2">
-            <Sliders className="h-5 w-5 shrink-0 text-white/90" aria-hidden="true" />
-            <div className="min-w-0">
-              <h1 className="text-base font-bold tracking-wide">Cài đặt hệ thống</h1>
-              <p className="mt-0.5 text-xs text-white/80">
-                Quản lý thông tin liên hệ và các tham số dùng chung cho nghiệp vụ thực tập
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
+    <div className="w-full min-w-0 space-y-1.5 pb-12 font-sans">
+      <CompactActionBar
+        icon={Sliders}
+        title="Cài đặt hệ thống"
+        actions={[
+          {
+            label: "Đặt lại mặc định",
+            icon: RotateCcw,
+            onClick: () => setShowResetConfirm(true),
+            disabled: isSaving || isLoadingSettings || settingsLoadError,
+          },
+          {
+            label: isSaving ? "Đang lưu…" : "Lưu cài đặt",
+            icon: Save,
+            variant: "primary",
+            onClick: () => void handleSave(),
+            disabled: isSaving || isLoadingSettings || settingsLoadError || !hasUnsavedChanges,
+            loading: isSaving,
+          },
+        ]}
+      />
 
       {settingsLoadError && (
-        <div role="alert" className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-900">
+        <div role="alert" className="flex flex-wrap items-start justify-between gap-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-900">
           <div className="flex items-start gap-2.5">
             <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-rose-700" />
             <div>
@@ -183,7 +191,7 @@ export const SettingsView = ({
             type="button"
             onClick={() => void settingsQuery.refetch()}
             disabled={settingsQuery.isFetching}
-            className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-rose-300 bg-white px-3 font-semibold text-rose-800 transition-colors hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-8 items-center gap-1.5 rounded-[4px] border border-rose-300 bg-white px-3 text-xs font-semibold text-rose-800 transition-colors hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <RotateCcw className={`h-3.5 w-3.5 ${settingsQuery.isFetching ? "animate-spin" : ""}`} aria-hidden="true" />
             Thử tải lại
@@ -192,21 +200,21 @@ export const SettingsView = ({
       )}
 
       {isLoadingSettings && (
-        <div className="rounded-xl border border-slate-200/90 bg-white px-4 py-3 text-xs text-slate-500 shadow-2xs">
+        <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500">
           Đang tải cài đặt hiện tại…
         </div>
       )}
 
-      {!isLoadingSettings && !settingsLoadError && <form onSubmit={handleSave} className="space-y-4">
-        <fieldset disabled={isLoadingSettings || isSaving} className="space-y-4 disabled:opacity-70">
+      {!isLoadingSettings && !settingsLoadError && <form onSubmit={handleSave} className="space-y-1.5">
+        <fieldset disabled={isLoadingSettings || isSaving} className="space-y-1.5 disabled:opacity-70">
         {/* SECTION 1: FACULTY CONTACT INFORMATION */}
-        <div className="space-y-4 rounded-xl border border-slate-200/90 bg-white p-5 shadow-2xs md:p-6">
+        <div className="space-y-2 rounded-md border border-slate-200 bg-white p-3">
           <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
             <div className="rounded-md bg-[#026aa7]/5 p-2 text-[#026aa7]">
               <Building2 className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900">
+              <h2 className="text-sm font-bold text-slate-900">
                 1. Thông tin Liên hệ Khoa &amp; Ban Giám hiệu
               </h2>
               <p className="text-xs text-slate-500 font-medium">
@@ -215,7 +223,7 @@ export const SettingsView = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+          <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">
             <div>
               <label className="block font-bold text-slate-700 mb-1">
                 Tên Khoa / Đơn vị chủ quản <span className="text-rose-500">*</span>
@@ -230,7 +238,7 @@ export const SettingsView = ({
                     setSettings({ ...settings, departmentName: e.target.value })
                   }
                   placeholder="Ví dụ: Khoa Công nghệ Thông tin"
-                  className="w-full rounded-md border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 font-medium text-slate-900 outline-none focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+                  className="h-8 w-full rounded-[4px] border border-slate-200 bg-slate-50 pl-9 pr-2.5 text-xs font-medium text-slate-900 outline-none focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
                 />
               </div>
             </div>
@@ -248,7 +256,7 @@ export const SettingsView = ({
                     setSettings({ ...settings, phone: e.target.value })
                   }
                   placeholder="Ví dụ: 0906891704"
-                  className="w-full rounded-md border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 font-medium text-slate-900 outline-none focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+                  className="h-8 w-full rounded-[4px] border border-slate-200 bg-slate-50 pl-9 pr-2.5 text-xs font-medium text-slate-900 outline-none focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
                 />
               </div>
             </div>
@@ -268,14 +276,14 @@ export const SettingsView = ({
                       setSettings({ ...settings, supportEmail: e.target.value })
                     }
                     placeholder="internlink.cntt@gmail.com"
-                    className="w-full rounded-md border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 font-medium text-slate-900 outline-none focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+                    className="h-8 w-full rounded-[4px] border border-slate-200 bg-slate-50 pl-9 pr-2.5 text-xs font-medium text-slate-900 outline-none focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
                   />
                 </div>
                 <button
                   type="button"
                   onClick={handleTestEmail}
                   disabled={isTestingEmail}
-                  className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-md border border-slate-200 flex items-center gap-1.5 transition-colors disabled:opacity-50 shrink-0"
+                  className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[4px] border border-slate-200 bg-slate-100 px-2.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-200 disabled:opacity-50"
                   title="Gửi email kiểm tra"
                 >
                   <Send className="w-3.5 h-3.5" />
@@ -297,7 +305,7 @@ export const SettingsView = ({
                     setSettings({ ...settings, address: e.target.value })
                   }
                   placeholder="Ví dụ: Tòa nhà A, 227 Nguyễn Văn Cừ, Q.5, TP.HCM"
-                  className="w-full rounded-md border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 font-medium text-slate-900 outline-none focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+                  className="h-8 w-full rounded-[4px] border border-slate-200 bg-slate-50 pl-9 pr-2.5 text-xs font-medium text-slate-900 outline-none focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
                 />
               </div>
             </div>
@@ -305,13 +313,13 @@ export const SettingsView = ({
         </div>
 
         {/* SECTION 2: INTERNSHIP RULES & PARAMETERS */}
-        <div className="space-y-4 rounded-xl border border-slate-200/90 bg-white p-5 shadow-2xs md:p-6">
+        <div className="space-y-2 rounded-md border border-slate-200 bg-white p-3">
           <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
             <div className="rounded-md bg-[#026aa7]/5 p-2 text-[#026aa7]">
               <Calendar className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900">
+              <h2 className="text-sm font-bold text-slate-900">
                 2. Quy tắc Thực tập &amp; Hạn nộp Báo cáo
               </h2>
               <p className="text-xs text-slate-500 font-medium">
@@ -320,7 +328,7 @@ export const SettingsView = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+          <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-3">
             <div>
               <label className="block font-bold text-slate-700 mb-1">
                 Số sinh viên tối đa / 1 Giảng viên
@@ -338,7 +346,7 @@ export const SettingsView = ({
                       maxStudentsPerLecturer: Number(e.target.value),
                     })
                   }
-                  className="w-full rounded-md border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 font-bold text-slate-900 outline-none focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+                  className="h-8 w-full rounded-[4px] border border-slate-200 bg-slate-50 pl-9 pr-2.5 text-xs font-semibold text-slate-900 outline-none focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
                 />
               </div>
               <span className="text-[11px] text-slate-400 mt-1 block">
@@ -358,7 +366,7 @@ export const SettingsView = ({
                     defaultReportDeadlineDay: e.target.value,
                   })
                 }
-                className="w-full rounded-md border border-slate-200 bg-slate-50 p-2 font-medium text-slate-900 outline-none focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+                className="h-8 w-full rounded-[4px] border border-slate-200 bg-slate-50 px-2.5 text-xs font-medium text-slate-900 outline-none focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
               >
                 <option value="Chủ Nhật (23:59)">Chủ Nhật (23:59 hàng tuần)</option>
                 <option value="Thứ Bảy (23:59)">Thứ Bảy (23:59 hàng tuần)</option>
@@ -386,7 +394,7 @@ export const SettingsView = ({
                       maxFileSizeMb: Number(e.target.value),
                     })
                   }
-                  className="w-full rounded-md border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 font-bold text-slate-900 outline-none focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+                  className="h-8 w-full rounded-[4px] border border-slate-200 bg-slate-50 pl-9 pr-2.5 text-xs font-semibold text-slate-900 outline-none focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
                 />
               </div>
               <span className="text-[11px] text-slate-400 mt-1 block">
@@ -395,8 +403,8 @@ export const SettingsView = ({
             </div>
           </div>
 
-          <div className="space-y-3 pt-2">
-            <label className="flex items-center justify-between p-3.5 bg-slate-50 rounded-md border border-slate-200/60 cursor-pointer hover:bg-slate-100/60 transition-colors">
+          <div className="space-y-2 pt-1">
+            <label className="flex items-center justify-between gap-3 rounded-md border border-slate-200/60 bg-slate-50 p-3 transition-colors hover:bg-slate-100/60">
               <div>
                 <p className="text-xs font-bold text-slate-900">
                   Cho phép sinh viên nộp trễ báo cáo tuần
@@ -418,7 +426,7 @@ export const SettingsView = ({
               />
             </label>
 
-            <label className="flex items-center justify-between p-3.5 bg-slate-50 rounded-md border border-slate-200/60 cursor-pointer hover:bg-slate-100/60 transition-colors">
+            <label className="flex items-center justify-between gap-3 rounded-md border border-slate-200/60 bg-slate-50 p-3 transition-colors hover:bg-slate-100/60">
               <div>
                 <p className="text-xs font-bold text-slate-900">
                   Tự động khóa chỉnh sửa điểm khi học kỳ kết thúc
@@ -442,8 +450,7 @@ export const SettingsView = ({
           </div>
         </div>
 
-        {/* BOTTOM SAVE BAR */}
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-200 bg-white p-3">
           <div className="flex items-center gap-2 text-xs text-slate-600 font-medium">
             {hasUnsavedChanges ? (
               <ShieldAlert className="w-4 h-4 text-amber-600" />
@@ -457,23 +464,6 @@ export const SettingsView = ({
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setShowResetConfirm(true)}
-              className="inline-flex min-h-10 items-center rounded-md border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
-            >
-              Đặt lại mặc định
-            </button>
-            <button
-              type="submit"
-              disabled={isSaving}
-              className="inline-flex min-h-10 items-center gap-1.5 rounded-md bg-[#026aa7] px-5 py-2 text-xs font-bold text-white shadow-2xs transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Save className="w-3.5 h-3.5" />
-              <span>{isSaving ? "Đang lưu..." : "Lưu cài đặt"}</span>
-            </button>
-          </div>
         </div>
         </fieldset>
       </form>}

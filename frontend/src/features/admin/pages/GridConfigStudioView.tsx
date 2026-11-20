@@ -8,6 +8,7 @@ import {
   Save,
 } from "lucide-react";
 import { CompactActionBar } from "../../../components/common/CompactActionBar";
+import { CompactToggleSwitch } from "../../../components/common/CompactToggleSwitch";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { useGridConfig } from "../../../hooks/useSystemMenu";
 import { systemService } from "../../../services/system.service";
@@ -197,13 +198,45 @@ export function GridConfigStudioView({
     <div className="w-full space-y-4 animate-in fade-in duration-200 font-sans pb-12">
       <CompactActionBar
         icon={Columns3}
-        title="Cấu hình bảng"
+        title="Cấu hình Bảng Dữ liệu (F1002)"
         subtitle="Tùy chỉnh cột và cách hiển thị dữ liệu trên từng màn hình."
+        filters={
+          <div className="flex flex-wrap items-center gap-1.5">
+            <label className="sr-only" htmlFor="grid-feature-select">Phân hệ</label>
+            <select
+              id="grid-feature-select"
+              value={featureCode}
+              onChange={(event) => changeFeature(event.target.value)}
+              aria-label="Màn hình cần cấu hình"
+              className="h-8 min-w-48 rounded-[4px] border border-slate-200 bg-white px-2.5 text-xs text-slate-800 outline-none transition focus:border-[#026aa7] focus:ring-2 focus:ring-[#026aa7]/10"
+            >
+              {FEATURE_OPTIONS.map((feature) => (
+                <option key={feature.code} value={feature.code}>
+                  {feature.label} · {feature.code}
+                </option>
+              ))}
+            </select>
+            <label className="sr-only" htmlFor="grid-role-select">Vai trò áp dụng</label>
+            <select
+              id="grid-role-select"
+              value={roleId ?? ""}
+              onChange={(event) => changeRole(event.target.value)}
+              disabled={rolesQuery.isLoading}
+              aria-label="Vai trò áp dụng"
+              className="h-8 min-w-40 rounded-[4px] border border-slate-200 bg-white px-2.5 text-xs text-slate-800 outline-none transition focus:border-[#026aa7] focus:ring-2 focus:ring-[#026aa7]/10"
+            >
+              <option value="">Mặc định toàn hệ thống</option>
+              {rolesQuery.data?.map((role: SysRole) => (
+                <option key={role.id} value={role.id}>{role.name}</option>
+              ))}
+            </select>
+          </div>
+        }
       >
         <button
           type="button"
           onClick={restoreDefaults}
-          className="il-btn il-btn-secondary inline-flex items-center gap-2"
+          className="inline-flex h-8 items-center gap-2 rounded-[4px] border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
         >
           <RotateCcw aria-hidden="true" className="h-4 w-4" />
           Khôi phục mặc định
@@ -212,63 +245,24 @@ export function GridConfigStudioView({
           type="button"
           onClick={save}
           disabled={saveMutation.isPending || configQuery.isPending || (roleId !== null && rolesQuery.isLoading)}
-          className="il-btn il-btn-primary inline-flex items-center gap-2 disabled:pointer-events-none disabled:opacity-50"
+          className="inline-flex h-8 items-center gap-2 rounded-[4px] bg-[#026aa7] px-3 text-xs font-semibold text-white hover:bg-[#025a8e] disabled:pointer-events-none disabled:opacity-50"
         >
           <Save aria-hidden="true" className={`h-4 w-4 ${saveMutation.isPending ? "animate-pulse" : ""}`} />
           {saveMutation.isPending ? "Đang lưu..." : "Lưu cấu hình"}
         </button>
       </CompactActionBar>
 
-      <section className="rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs sm:p-5">
-        <div className="grid gap-4 sm:grid-cols-3 sm:items-end">
-          <div className="space-y-1.5">
-            <label htmlFor="grid-feature-select" className="text-sm font-semibold text-slate-800">
-              Màn hình cần cấu hình
-            </label>
-            <select
-              id="grid-feature-select"
-              value={featureCode}
-              onChange={(event) => changeFeature(event.target.value)}
-              className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-800 outline-none transition focus:border-[#026aa7] focus:ring-2 focus:ring-[#026aa7]/10"
-            >
-              {FEATURE_OPTIONS.map((feature) => (
-                <option key={feature.code} value={feature.code}>
-                  {feature.label} · {feature.code}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-1.5">
-            <label htmlFor="grid-role-select" className="text-sm font-semibold text-slate-800">
-              Vai trò áp dụng
-            </label>
-            <select
-              id="grid-role-select"
-              value={roleId ?? ""}
-              onChange={(event) => changeRole(event.target.value)}
-              disabled={rolesQuery.isLoading}
-              className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-800 outline-none transition focus:border-[#026aa7] focus:ring-2 focus:ring-[#026aa7]/10"
-            >
-              <option value="">Mặc định toàn hệ thống</option>
-              {rolesQuery.data?.map((role: SysRole) => (
-                <option key={role.id} value={role.id}>{role.name}</option>
-              ))}
-            </select>
-          </div>
-          <p className="text-xs leading-5 text-slate-500">
-            Kéo không bắt buộc: dùng các nút mũi tên để đổi thứ tự, đặt độ rộng từ 60 đến 400 px.
-            Thay đổi chỉ được áp dụng sau khi lưu.
-          </p>
-        </div>
-        {rolesQuery.isError && (
-          <p role="alert" className="mt-3 text-sm text-rose-700">
-            Không thể tải danh sách vai trò. Cấu hình mặc định vẫn có thể chỉnh sửa.
-          </p>
-        )}
-      </section>
+      <p className="text-xs text-slate-500">
+        Dùng các nút mũi tên để đổi thứ tự, đặt độ rộng từ 60 đến 400 px. Thay đổi chỉ được áp dụng sau khi lưu.
+      </p>
+      {rolesQuery.isError && (
+        <p role="alert" className="text-xs text-rose-700">
+          Không thể tải danh sách vai trò. Cấu hình mặc định vẫn có thể chỉnh sửa.
+        </p>
+      )}
 
       {configQuery.isError ? (
-        <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+        <div role="alert" className="rounded-md border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
           Không thể tải cấu hình cột. Vui lòng tải lại trang hoặc thử lại sau.
           <button
             type="button"
@@ -279,38 +273,38 @@ export function GridConfigStudioView({
           </button>
         </div>
       ) : (
-        <section aria-labelledby="grid-columns-heading" className="overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-2xs">
-          <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-5">
+        <section aria-labelledby="grid-columns-heading" className="overflow-hidden rounded-md border border-slate-200 bg-white">
+          <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-3 py-2">
             <div>
-              <h2 id="grid-columns-heading" className="font-semibold text-slate-900">
+              <h2 id="grid-columns-heading" className="text-xs font-semibold text-slate-900">
                 Danh sách cột
               </h2>
-              <p className="mt-0.5 text-xs text-slate-500">{columns.length} trường cấu hình</p>
+              <p className="mt-0.5 text-[11px] text-slate-500">{columns.length} trường cấu hình</p>
             </div>
-            <span className="rounded-full bg-slate-100 px-2.5 py-1 font-mono text-[11px] font-semibold text-slate-600">
+            <span className="rounded-[3px] border border-slate-200 bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-600">
               {featureCode}
             </span>
           </div>
 
           {configQuery.isPending ? (
-            <p role="status" className="p-6 text-sm text-slate-500">Đang tải cấu hình cột...</p>
+            <p role="status" className="p-3 text-xs text-slate-500">Đang tải cấu hình cột...</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1080px] text-left text-sm">
-                <thead className="bg-slate-50 text-xs font-semibold text-slate-600">
+              <table className="w-full min-w-[1080px] text-left text-xs">
+                <thead className="bg-slate-100/90 text-[11px] font-semibold uppercase tracking-wider text-slate-600">
                   <tr>
-                    <th scope="col" className="px-3 py-3">Trường / Tiêu đề</th>
-                    <th scope="col" className="px-3 py-3 text-center">Hiển thị</th>
-                    <th scope="col" className="px-3 py-3 text-center">Ghim cố định</th>
-                    <th scope="col" className="w-56 px-3 py-3">Độ rộng</th>
-                    <th scope="col" className="px-3 py-3">Màu header / chữ</th>
-                    <th scope="col" className="px-3 py-3 text-center">Thứ tự</th>
+                    <th scope="col" className="px-2.5 py-1.5">Trường / Tiêu đề</th>
+                    <th scope="col" className="px-2.5 py-1.5 text-center">Hiển thị</th>
+                    <th scope="col" className="px-2.5 py-1.5 text-center">Ghim cố định</th>
+                    <th scope="col" className="w-56 px-2.5 py-1.5">Độ rộng</th>
+                    <th scope="col" className="px-2.5 py-1.5">Màu header / chữ</th>
+                    <th scope="col" className="px-2.5 py-1.5 text-center">Thứ tự</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {columns.map((column, index) => (
                     <tr key={column.fieldCode} className="align-middle">
-                      <td className="min-w-64 px-3 py-3">
+                      <td className="min-w-64 px-2.5 py-1.5 text-xs text-slate-700">
                         <code className="mb-1 block text-[11px] font-semibold text-[#026aa7]">
                           {column.fieldCode}
                         </code>
@@ -322,38 +316,41 @@ export function GridConfigStudioView({
                           type="text"
                           value={column.headerTitle}
                           onChange={(event) => updateColumn(index, { headerTitle: event.target.value })}
-                          className="min-h-10 w-full rounded-md border border-slate-300 px-2.5 text-sm outline-none focus:border-[#026aa7] focus:ring-2 focus:ring-[#026aa7]/10"
+                          className="h-8 w-full rounded-[4px] border border-slate-200 px-2.5 text-xs outline-none focus:border-[#026aa7] focus:ring-2 focus:ring-[#026aa7]/10"
                         />
                       </td>
-                      <td className="px-3 py-3 text-center">
-                        <input
-                          type="checkbox"
+                      <td className="px-2.5 py-1.5 text-center">
+                        <CompactToggleSwitch
                           checked={column.isVisible}
-                          onChange={(event) => updateColumn(index, { isVisible: event.target.checked })}
-                          aria-label={`${column.isVisible ? "Ẩn" : "Hiện"} cột ${column.headerTitle}`}
-                          className="h-5 w-5 rounded border-slate-300 accent-[#026aa7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2"
+                          onChange={(checked) => updateColumn(index, { isVisible: checked })}
+                          label={`${column.isVisible ? "Ẩn" : "Hiện"} cột ${column.headerTitle}`}
                         />
                       </td>
-                      <td className="px-3 py-3 text-center">
-                        <label className="sr-only" htmlFor={`grid-frozen-${column.fieldCode}`}>
-                          Vị trí ghim {column.headerTitle}
-                        </label>
-                        <select
-                          id={`grid-frozen-${column.fieldCode}`}
-                          value={column.isFrozen ? column.frozenSide ?? "left" : ""}
-                          onChange={(event) => updateColumn(index, {
-                            isFrozen: Boolean(event.target.value),
-                            frozenSide: event.target.value === "right" ? "right" : "left",
-                          })}
-                          aria-label={`Vị trí ghim ${column.headerTitle}`}
-                          className="min-h-10 rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-700 outline-none focus:border-[#026aa7] focus:ring-2 focus:ring-[#026aa7]/10"
-                        >
-                          <option value="">Không ghim</option>
-                          <option value="left">Bên trái</option>
-                          <option value="right">Bên phải</option>
-                        </select>
+                      <td className="px-2.5 py-1.5 text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <CompactToggleSwitch
+                            checked={column.isFrozen}
+                            onChange={(checked) => updateColumn(index, { isFrozen: checked })}
+                            label={`Ghim cột ${column.headerTitle}`}
+                          />
+                          <select
+                            id={`grid-frozen-${column.fieldCode}`}
+                            value={column.isFrozen ? column.frozenSide ?? "left" : ""}
+                            onChange={(event) => updateColumn(index, {
+                              isFrozen: Boolean(event.target.value),
+                              frozenSide: event.target.value === "right" ? "right" : "left",
+                            })}
+                            disabled={!column.isFrozen}
+                            aria-label={`Vị trí ghim ${column.headerTitle}`}
+                            className="h-8 rounded-[4px] border border-slate-200 bg-white px-2 text-xs text-slate-700 outline-none focus:border-[#026aa7] focus:ring-2 focus:ring-[#026aa7]/10 disabled:opacity-50"
+                          >
+                            <option value="">Không ghim</option>
+                            <option value="left">Bên trái</option>
+                            <option value="right">Bên phải</option>
+                          </select>
+                        </div>
                       </td>
-                      <td className="px-3 py-3">
+                      <td className="px-2.5 py-1.5 text-xs text-slate-700">
                         <div className="flex items-center gap-3">
                           <input
                             type="range"
@@ -382,12 +379,12 @@ export function GridConfigStudioView({
                                   columnWidth: Math.min(400, Math.max(60, Math.round(value))),
                                 });
                             }}
-                            className="min-h-10 w-20 rounded-md border border-slate-300 px-2 text-right tabular-nums outline-none focus:border-[#026aa7] focus:ring-2 focus:ring-[#026aa7]/10"
+                            className="h-8 w-20 rounded-[4px] border border-slate-200 px-2 text-right text-xs tabular-nums outline-none focus:border-[#026aa7] focus:ring-2 focus:ring-[#026aa7]/10"
                           />
                           <span className="text-xs text-slate-500">px</span>
                         </div>
                       </td>
-                      <td className="px-3 py-3">
+                      <td className="px-2.5 py-1.5 text-xs text-slate-700">
                         <div className="flex items-center gap-3">
                           <label className="flex items-center gap-1.5 text-xs text-slate-600">
                             <input
@@ -395,7 +392,7 @@ export function GridConfigStudioView({
                               value={column.headerBgColor ?? "#f1f5f9"}
                               onChange={(event) => updateColumn(index, { headerBgColor: event.target.value })}
                               aria-label={`Màu nền header ${column.headerTitle}`}
-                              className="h-9 w-10 cursor-pointer rounded border border-slate-300 bg-white p-1"
+                              className="h-8 w-10 cursor-pointer rounded-[4px] border border-slate-200 bg-white p-1"
                             />
                             Nền
                           </label>
@@ -405,20 +402,20 @@ export function GridConfigStudioView({
                               value={column.headerTextColor ?? "#1e293b"}
                               onChange={(event) => updateColumn(index, { headerTextColor: event.target.value })}
                               aria-label={`Màu chữ header ${column.headerTitle}`}
-                              className="h-9 w-10 cursor-pointer rounded border border-slate-300 bg-white p-1"
+                              className="h-8 w-10 cursor-pointer rounded-[4px] border border-slate-200 bg-white p-1"
                             />
                             Chữ
                           </label>
                         </div>
                       </td>
-                      <td className="px-3 py-3">
+                      <td className="px-2.5 py-1.5 text-xs text-slate-700">
                         <div className="flex justify-center gap-1">
                           <button
                             type="button"
                             onClick={() => setColumns((current) => reorderColumns(current, index, -1))}
                             disabled={index === 0}
                             aria-label={`Chuyển ${column.headerTitle} lên`}
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 text-slate-600 transition hover:bg-[#026aa7]/5 hover:text-[#026aa7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] disabled:cursor-not-allowed disabled:opacity-40"
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-[4px] border border-slate-200 text-slate-600 transition hover:bg-[#026aa7]/5 hover:text-[#026aa7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] disabled:cursor-not-allowed disabled:opacity-40"
                           >
                             <ArrowUp aria-hidden="true" className="h-4 w-4" />
                           </button>
@@ -427,7 +424,7 @@ export function GridConfigStudioView({
                             onClick={() => setColumns((current) => reorderColumns(current, index, 1))}
                             disabled={index === columns.length - 1}
                             aria-label={`Chuyển ${column.headerTitle} xuống`}
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 text-slate-600 transition hover:bg-[#026aa7]/5 hover:text-[#026aa7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] disabled:cursor-not-allowed disabled:opacity-40"
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-[4px] border border-slate-200 text-slate-600 transition hover:bg-[#026aa7]/5 hover:text-[#026aa7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] disabled:cursor-not-allowed disabled:opacity-40"
                           >
                             <ArrowDown aria-hidden="true" className="h-4 w-4" />
                           </button>

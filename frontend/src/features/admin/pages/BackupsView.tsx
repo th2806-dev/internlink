@@ -11,7 +11,7 @@ import {
   ShieldCheck,
   Trash2,
 } from "lucide-react";
-import { Panel } from "../../../components/common/Panel";
+import { CompactActionBar } from "../../../components/common/CompactActionBar";
 import { ConfirmDialog } from "../../../components/common/ConfirmDialog";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { adminBackupsService, type BackupFile } from "../../../services/adminBackups.service";
@@ -134,7 +134,7 @@ export function BackupsView({
           disabled={isBusy || isCreating}
           aria-label={`Tải xuống ${backup.fileName}`}
           title="Tải xuống"
-          className="inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-600 transition-colors hover:bg-[#026aa7]/5 hover:text-[#026aa7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] disabled:opacity-50"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-[4px] text-slate-600 transition-colors hover:bg-[#026aa7]/5 hover:text-[#026aa7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] disabled:opacity-50"
         >
           {isBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
         </button>
@@ -147,7 +147,7 @@ export function BackupsView({
           disabled={isBusy || isCreating}
           aria-label={`Khôi phục từ ${backup.fileName}`}
           title="Khôi phục database"
-          className="inline-flex h-9 w-9 items-center justify-center rounded-md text-amber-700 transition-colors hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] disabled:opacity-50"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-[4px] text-amber-700 transition-colors hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] disabled:opacity-50"
         >
           <ArchiveRestore className="h-4 w-4" />
         </button>
@@ -157,7 +157,7 @@ export function BackupsView({
           disabled={isBusy || isCreating}
           aria-label={`Xóa ${backup.fileName}`}
           title="Xóa bản sao lưu"
-          className="inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-600 transition-colors hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 disabled:opacity-50"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-[4px] text-slate-600 transition-colors hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 disabled:opacity-50"
         >
           <Trash2 className="h-4 w-4" />
         </button>
@@ -166,69 +166,40 @@ export function BackupsView({
   };
 
   return (
-    <div className="w-full space-y-4 pb-12">
-      <section className="overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-2xs">
-        <div className="flex flex-wrap items-center justify-between gap-3 bg-[#026aa7] px-4 py-3 text-white">
-          <div className="flex min-w-0 items-center gap-2">
-            <DatabaseBackup className="h-5 w-5 shrink-0 text-white/90" aria-hidden="true" />
-            <div className="min-w-0">
-              <h1 className="text-base font-bold tracking-wide">Sao lưu &amp; Khôi phục</h1>
-              <p className="mt-0.5 text-xs text-white/80">
-                Quản lý các tệp sao lưu database toàn hệ thống
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => void refresh()}
-              disabled={isLoading}
-              className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-white/30 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} aria-hidden="true" />
-              Làm mới
-            </button>
-            <button
-              type="button"
-              onClick={() => void createBackup()}
-              disabled={isCreating || isLoading}
-              className="inline-flex min-h-9 items-center gap-1.5 rounded-md bg-white px-3 text-xs font-bold text-[#026aa7] transition-colors hover:bg-sky-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isCreating ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" /> : <DatabaseBackup className="h-4 w-4" aria-hidden="true" />}
-              {isCreating ? "Đang sao lưu…" : "Tạo bản sao lưu"}
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <Panel padding="none" className="overflow-hidden rounded-xl border-slate-200/90 shadow-2xs">
-        <div className="flex flex-col gap-2 border-b border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2">
-            <h2 className="font-semibold text-slate-900">Danh sách bản sao lưu</h2>
-            <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
-              {isLoading ? "…" : backups.length}
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={() => void refresh()}
-            disabled={isLoading}
-            className="inline-flex min-h-9 items-center gap-1.5 self-start rounded-md border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] disabled:cursor-not-allowed disabled:opacity-50 sm:self-auto"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
-            Tải lại
-          </button>
-        </div>
+    <div className="w-full space-y-1.5 pb-12">
+      <CompactActionBar
+        icon={DatabaseBackup}
+        title="Sao lưu & Khôi phục DB"
+        total={`(${backups.length} tệp)`}
+        actions={[
+          {
+            label: "Làm mới",
+            icon: RefreshCw,
+            onClick: () => void refresh(),
+            disabled: isLoading,
+            loading: isLoading,
+          },
+          {
+            label: isCreating ? "Đang sao lưu…" : "Tạo bản sao lưu",
+            icon: isCreating ? LoaderCircle : DatabaseBackup,
+            variant: "primary",
+            onClick: () => void createBackup(),
+            disabled: isCreating || isLoading,
+            loading: isCreating,
+          },
+        ]}
+      />
 
         {loadError && (
-          <div role="alert" className="flex flex-col gap-2 border-b border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 sm:flex-row sm:items-center sm:justify-between">
+          <div role="alert" className="flex flex-col gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800 sm:flex-row sm:items-center sm:justify-between">
             <span>{loadError}</span>
-            <button type="button" onClick={() => void refresh()} disabled={isLoading} className="inline-flex min-h-9 items-center justify-center rounded-md border border-rose-300 bg-white px-3 font-semibold transition-colors hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 disabled:cursor-not-allowed disabled:opacity-50 sm:self-auto">
+            <button type="button" onClick={() => void refresh()} disabled={isLoading} className="inline-flex h-8 items-center justify-center rounded-[4px] border border-rose-300 bg-white px-3 text-xs font-semibold transition-colors hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 disabled:cursor-not-allowed disabled:opacity-50 sm:self-auto">
               Thử lại
             </button>
           </div>
         )}
 
+        <div className="overflow-hidden rounded-md border border-slate-200">
         <div className="divide-y divide-slate-100 md:hidden">
           {isLoading ? (
             <p className="px-4 py-8 text-center text-sm text-slate-500">Đang tải danh sách…</p>
@@ -239,10 +210,10 @@ export function BackupsView({
               <p className="mt-1 text-xs text-slate-500">Tạo bản sao lưu đầu tiên để có thể khôi phục dữ liệu khi cần.</p>
             </div>
           ) : backups.map((backup) => (
-            <article key={backup.fileName} className="space-y-2 px-4 py-3">
+            <article key={backup.fileName} className="space-y-2 border-b border-slate-100 px-3 py-2 last:border-0">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <h3 className="break-all text-sm font-semibold text-slate-900">{backup.fileName}</h3>
+                  <h3 className="break-all font-mono text-xs font-semibold text-slate-900">{backup.fileName}</h3>
                   <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
                     <Clock3 className="h-3.5 w-3.5 shrink-0" /> {formatTimestamp(backup.createdAt)}
                   </p>
@@ -255,23 +226,23 @@ export function BackupsView({
         </div>
 
         <div className="hidden overflow-x-auto md:block">
-          <table className="w-full min-w-[680px] text-left text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600">
+          <table className="w-full min-w-[680px] text-left text-xs">
+            <thead className="border-b border-slate-200 bg-slate-100/90 text-[11px] font-semibold uppercase tracking-wider text-slate-600">
               <tr>
-                <th className="px-4 py-3">Tên tệp</th>
-                <th className="px-4 py-3">Thời gian tạo</th>
-                <th className="px-4 py-3 text-right">Dung lượng</th>
-                <th className="px-4 py-3 text-right">Thao tác</th>
+                <th className="px-2.5 py-1.5">Tên tệp</th>
+                <th className="px-2.5 py-1.5">Thời gian tạo</th>
+                <th className="px-2.5 py-1.5 text-right">Dung lượng</th>
+                <th className="px-2.5 py-1.5 text-right">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {isLoading ? (
                 <tr><td colSpan={4} className="px-4 py-8 text-center text-slate-500">Đang tải danh sách…</td></tr>
               ) : loadError ? (
-                <tr><td colSpan={4} className="px-4 py-8 text-center text-slate-500">Không thể hiển thị dữ liệu khi tải thất bại.</td></tr>
+                <tr><td colSpan={4} className="px-2.5 py-6 text-center text-slate-500">Không thể hiển thị dữ liệu khi tải thất bại.</td></tr>
               ) : backups.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-4 py-12 text-center">
+                  <td colSpan={4} className="px-2.5 py-8 text-center">
                     <DatabaseBackup className="mx-auto h-8 w-8 text-slate-300" />
                     <p className="mt-2 text-sm font-semibold text-slate-700">Chưa có bản sao lưu</p>
                     <p className="mt-1 text-xs text-slate-500">Tạo bản sao lưu đầu tiên để có thể khôi phục dữ liệu khi cần.</p>
@@ -279,18 +250,18 @@ export function BackupsView({
                 </tr>
               ) : backups.map((backup) => (
                 <tr key={backup.fileName}>
-                  <td className="max-w-[360px] break-all px-4 py-3 font-medium text-slate-800">{backup.fileName}</td>
-                  <td className="whitespace-nowrap px-4 py-3 text-slate-600">{formatTimestamp(backup.createdAt)}</td>
-                  <td className="whitespace-nowrap px-4 py-3 text-right text-slate-600">{formatBytes(backup.sizeBytes)}</td>
-                  <td className="px-4 py-2">{renderBackupActions(backup)}</td>
+                  <td className="max-w-[360px] break-all px-2.5 py-1.5 font-mono text-xs text-slate-800">{backup.fileName}</td>
+                  <td className="whitespace-nowrap px-2.5 py-1.5 text-xs text-slate-600">{formatTimestamp(backup.createdAt)}</td>
+                  <td className="whitespace-nowrap px-2.5 py-1.5 text-right text-xs text-slate-600">{formatBytes(backup.sizeBytes)}</td>
+                  <td className="px-2.5 py-1">{renderBackupActions(backup)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-      </Panel>
+        </div>
 
-      <Panel padding="sm" className="flex items-start gap-3 rounded-xl border-slate-200/90 shadow-2xs">
+      <div className="flex items-start gap-3 rounded-md border border-slate-200 bg-white p-3">
         <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
         <div className="text-xs leading-relaxed text-amber-900">
           <p className="font-semibold">Lưu ý khi khôi phục</p>
@@ -298,7 +269,7 @@ export function BackupsView({
             Khôi phục sẽ thay thế dữ liệu hiện tại. Hệ thống tự tạo một bản sao lưu dự phòng ngay trước thao tác; hãy tải bản sao lưu xuống và lưu ở nơi an toàn.
           </p>
         </div>
-      </Panel>
+      </div>
 
       <ConfirmDialog
         open={deleteTarget !== null}
@@ -321,7 +292,7 @@ export function BackupsView({
             role="alertdialog"
             aria-modal="true"
             aria-labelledby="restore-backup-title"
-            className="w-full max-w-lg overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl"
+            className="w-full max-w-lg overflow-hidden rounded-md border border-slate-200 bg-white shadow-xl"
           >
             <div className="flex items-start gap-3 border-b border-rose-100 bg-rose-50 px-5 py-4">
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-rose-700" />
@@ -330,7 +301,7 @@ export function BackupsView({
                 <p className="mt-1 break-all text-xs text-rose-800">{restoreTarget.fileName}</p>
               </div>
             </div>
-            <div className="space-y-3 px-5 py-4 text-sm text-slate-700">
+            <div className="space-y-2 px-4 py-3 text-xs text-slate-700">
               <p className="font-semibold text-rose-800">
                 Dữ liệu hiện tại sẽ bị thay thế. Những thay đổi phát sinh sau thời điểm sao lưu sẽ mất.
               </p>
@@ -345,7 +316,7 @@ export function BackupsView({
                 autoComplete="off"
                 value={restoreConfirmation}
                 onChange={(event) => setRestoreConfirmation(event.target.value)}
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+                className="h-8 w-full rounded-[4px] border border-slate-300 px-2.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
                 placeholder="RESTORE"
               />
             </div>
@@ -357,7 +328,7 @@ export function BackupsView({
                   setRestoreConfirmation("");
                 }}
                 disabled={busyFile === restoreTarget.fileName}
-                className="il-btn il-btn-secondary justify-center"
+                className="inline-flex h-8 items-center justify-center rounded-[4px] border border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
               >
                 Hủy
               </button>
@@ -365,7 +336,7 @@ export function BackupsView({
                 type="button"
                 onClick={() => void restoreBackup()}
                 disabled={restoreConfirmation !== "RESTORE" || busyFile === restoreTarget.fileName}
-                className="il-btn inline-flex items-center justify-center gap-2 bg-rose-700 text-white hover:bg-rose-800 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex h-8 items-center justify-center gap-2 rounded-[4px] bg-rose-700 px-3 text-xs font-semibold text-white hover:bg-rose-800 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {busyFile === restoreTarget.fileName
                   ? <LoaderCircle className="h-4 w-4 animate-spin" />

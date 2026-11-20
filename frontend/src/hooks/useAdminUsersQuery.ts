@@ -40,7 +40,13 @@ export interface AdminUsersCounts {
 /** Gộp filter + trang trong MỘT state → mọi thay đổi đổi key nguyên tử. */
 export interface AdminUsersFilterState {
   search: string;
-  role: "all" | "admin" | "lecturer" | "student";
+  role:
+    | "all"
+    | "admin"
+    | "superAdmin"
+    | "departmentAdmin"
+    | "lecturer"
+    | "student";
   status: "all" | "active" | "locked";
   page: number;
 }

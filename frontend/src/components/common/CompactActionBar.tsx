@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { Search } from "lucide-react";
 
@@ -22,6 +22,7 @@ export interface CompactActionBarProps {
   search?: {
     value: string;
     onChange: (value: string) => void;
+    onKeyDown?: (event: KeyboardEvent<HTMLInputElement>) => void;
     placeholder: string;
     ariaLabel: string;
   };
@@ -66,7 +67,7 @@ export function CompactActionBar({
         )}
         {badge && badge.trim().toLocaleLowerCase() !== title.trim().toLocaleLowerCase() && (
           <span
-            className={`shrink-0 rounded-[4px] border px-1.5 py-0.5 text-[10px] font-semibold ${badgeColor}`}
+            className={`shrink-0 rounded-[3px] border px-1.5 py-0.5 font-mono text-[10px] font-semibold ${badgeColor}`}
           >
             {badge}
           </span>
@@ -83,6 +84,7 @@ export function CompactActionBar({
             <input
               value={search.value}
               onChange={(event) => search.onChange(event.target.value)}
+              onKeyDown={search.onKeyDown}
               placeholder={search.placeholder}
               aria-label={search.ariaLabel}
               className="h-8 w-full rounded-[4px] border border-slate-200 bg-slate-50 pl-8 pr-2 text-xs text-slate-800 outline-none transition-colors placeholder:text-slate-400 focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"

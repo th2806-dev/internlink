@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Edit2, Trash2, Building2, AlertTriangle, RefreshCw } from 'lucide-react';
 import { adminDepartmentsService, type DepartmentDto, type CreateDepartmentRequest, type UpdateDepartmentRequest } from '../../../services/adminDepartments.service';
-import { Panel } from "../../../components/common/Panel";
+import { CompactActionBar } from "../../../components/common/CompactActionBar";
 import type { ToastType } from '../../../contexts/ToastContext';
 import { queryKeys } from '../../../lib/queryKeys';
 import { getApiErrorMessage } from '../../../lib/apiClient';
@@ -18,38 +18,38 @@ function formatDate(iso: string) {
 function DepartmentRow({ department, onEdit, onDelete }: { department: DepartmentDto; onEdit: (d: DepartmentDto) => void; onDelete: (d: DepartmentDto) => void }) {
   return (
     <tr className="border-b border-slate-200 last:border-0">
-      <td className="px-4 py-3 text-sm align-middle whitespace-nowrap">
+      <td className="px-2.5 py-1.5 align-middle text-xs whitespace-nowrap">
         <div className="flex items-center gap-2">
           <Building2 className="w-4 h-4 text-slate-500" />
           <span className="font-mono text-xs font-semibold bg-slate-100 px-2 py-0.5 rounded">{department.code}</span>
         </div>
       </td>
-      <td className="px-4 py-3 text-sm align-middle font-medium text-slate-800">{department.name}</td>
-      <td className="px-4 py-3 text-sm align-middle text-slate-600 max-w-[220px] truncate">{department.description ?? '-'}</td>
-      <td className="px-4 py-3 text-sm align-middle">
-        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${department.isActive ? 'border border-[#7bc043]/40 bg-[#7bc043]/10 text-slate-800' : 'bg-slate-100 text-slate-600'}`}>
+      <td className="px-2.5 py-1.5 align-middle text-xs font-medium text-slate-800">{department.name}</td>
+      <td className="max-w-[220px] truncate px-2.5 py-1.5 align-middle text-xs text-slate-600">{department.description ?? '-'}</td>
+      <td className="px-2.5 py-1.5 align-middle text-xs">
+        <span className={`inline-flex items-center rounded-[3px] border px-1.5 py-0.5 font-mono text-[9.5px] font-medium ${department.isActive ? 'border-[#7bc043]/40 bg-[#7bc043]/10 text-slate-800' : 'border-slate-200 bg-slate-100 text-slate-600'}`}>
           {department.isActive ? 'Hoạt động' : 'Tạm ngưng'}
         </span>
       </td>
-      <td className="px-4 py-3 text-sm align-middle text-slate-600 whitespace-nowrap">
+      <td className="px-2.5 py-1.5 align-middle text-xs text-slate-600 whitespace-nowrap">
         <div className="flex items-center gap-2 text-xs text-slate-500">
           <span>{formatDate(department.createdAt)}</span>
         </div>
       </td>
-      <td className="px-4 py-3 text-sm align-middle text-slate-600 whitespace-nowrap">
-        <div className="flex items-center gap-3 text-xs">
+      <td className="px-2.5 py-1.5 align-middle text-xs text-slate-600 whitespace-nowrap">
+        <div className="flex items-center gap-2 text-xs">
           <span className="text-slate-500">SV: {department.studentCount}</span>
           <span className="text-slate-500">GV: {department.lecturerCount}</span>
           <span className="text-slate-500">User: {department.userCount}</span>
           <span className="text-slate-500">Kỳ: {department.semesterCount}</span>
         </div>
       </td>
-      <td className="px-4 py-3 text-sm align-middle whitespace-nowrap">
+      <td className="px-2.5 py-1.5 align-middle whitespace-nowrap">
         <div className="flex items-center gap-1">
-          <button type="button" onClick={() => onEdit(department)} className="inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-600 transition-colors hover:bg-[#026aa7]/5 hover:text-[#026aa7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]" title="Sửa khoa" aria-label={`Sửa khoa ${department.name}`}>
+          <button type="button" onClick={() => onEdit(department)} className="inline-flex h-8 w-8 items-center justify-center rounded-[4px] text-slate-600 transition-colors hover:bg-[#026aa7]/5 hover:text-[#026aa7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]" title="Sửa khoa" aria-label={`Sửa khoa ${department.name}`}>
             <Edit2 className="w-4 h-4" />
           </button>
-          <button type="button" onClick={() => onDelete(department)} className="inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-600 transition-colors hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600" title="Xóa khoa" aria-label={`Xóa khoa ${department.name}`}>
+          <button type="button" onClick={() => onDelete(department)} className="inline-flex h-8 w-8 items-center justify-center rounded-[4px] text-slate-600 transition-colors hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600" title="Xóa khoa" aria-label={`Xóa khoa ${department.name}`}>
             <Trash2 className="w-4 h-4" />
           </button>
         </div>
@@ -108,45 +108,45 @@ function DepartmentModal({ department, onClose, onSave }: { department?: Departm
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div role="dialog" aria-modal="true" aria-labelledby="department-modal-title" className="relative max-h-[calc(100dvh-2rem)] overflow-y-auto bg-white rounded-lg shadow-xl w-full max-w-md p-5">
+      <div role="dialog" aria-modal="true" aria-labelledby="department-modal-title" className="relative max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-md bg-white p-5 shadow-xl">
         <h3 id="department-modal-title" className="text-lg font-semibold text-slate-800 mb-4">
           {isEdit ? 'Sửa thông tin khoa' : 'Thêm khoa mới'}
         </h3>
         {error && (
-          <div className="mb-4 flex items-start gap-2 text-sm bg-rose-50 text-rose-700 border border-rose-200 rounded-lg p-3">
+          <div className="mb-3 flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
             <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
             <span>{error}</span>
           </div>
         )}
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-2">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Mã khoa <span className="text-rose-600">*</span></label>
+            <label className="mb-1 block text-xs font-medium text-slate-700">Mã khoa <span className="text-rose-600">*</span></label>
             <input
               type="text"
               value={code}
               onChange={(e) => setCode(e.target.value.toUpperCase())}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-1"
+              className="h-8 w-full rounded-[4px] border border-slate-300 px-2.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-1"
               placeholder="CNTT"
               disabled={isEdit}
             />
             <p className="text-xs text-slate-500 mt-1">Mã viết hoa, ví dụ: CNTT, QTKD. Khóa khi sửa.</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Tên khoa <span className="text-rose-600">*</span></label>
+            <label className="mb-1 block text-xs font-medium text-slate-700">Tên khoa <span className="text-rose-600">*</span></label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-1"
+              className="h-8 w-full rounded-[4px] border border-slate-300 px-2.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-1"
               placeholder="Khoa Công nghệ Thông tin"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Mô tả</label>
+            <label className="mb-1 block text-xs font-medium text-slate-700">Mô tả</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-1"
+              className="w-full rounded-[4px] border border-slate-300 px-2.5 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-1"
               rows={2}
               placeholder="Mô tả ngắn về khoa..."
             />
@@ -154,12 +154,12 @@ function DepartmentModal({ department, onClose, onSave }: { department?: Departm
           <div className="flex items-center justify-between">
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-[#026aa7] focus:ring-[#026aa7]" />
-              <span className="text-sm text-slate-700">Khoa đang hoạt động</span>
+              <span className="text-xs text-slate-700">Khoa đang hoạt động</span>
             </label>
           </div>
           <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200">Hủy</button>
-            <button type="submit" disabled={saving} className="inline-flex min-h-10 items-center gap-1 rounded-md bg-[#026aa7] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
+            <button type="button" onClick={onClose} className="h-8 rounded-[4px] bg-slate-100 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-200">Hủy</button>
+            <button type="submit" disabled={saving} className="inline-flex h-8 items-center gap-1 rounded-[4px] bg-[#026aa7] px-3 text-xs font-semibold text-white transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
               {saving ? 'Lưu...' : isEdit ? 'Cập nhật' : 'Thêm khoa'}
             </button>
           </div>
@@ -226,49 +226,48 @@ export function DepartmentsView({ onShowToast }: { onShowToast?: (msg: string, t
   };
 
   return (
-    <div className="w-full space-y-4 pb-12">
-      <section className="overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-2xs">
-        <div className="flex flex-wrap items-center justify-between gap-3 bg-[#026aa7] px-4 py-3 text-white">
-          <div className="flex min-w-0 items-center gap-2">
-            <Building2 className="h-5 w-5 shrink-0 text-white/90" aria-hidden="true" />
-            <div className="min-w-0">
-              <h1 className="text-base font-bold tracking-wide">Quản lý khoa</h1>
-              <p className="mt-0.5 text-xs text-white/80">
-                Danh sách đơn vị, trạng thái hoạt động và quy mô dữ liệu theo khoa
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
+    <div className="w-full space-y-1.5 pb-12">
+      <CompactActionBar
+        icon={Building2}
+        title="Quản lý Khoa / Đơn vị"
+        total={`(${departments.length} khoa)`}
+        actions={[
+          {
+            label: "Làm mới",
+            icon: RefreshCw,
+            onClick: () => void load(),
+            disabled: loading,
+            loading,
+          },
+          {
+            label: "Thêm Khoa",
+            icon: Plus,
+            variant: "primary",
+            onClick: () => {
               setIsCreatingDepartment(true);
               setModalDepartment(null);
-            }}
-            className="inline-flex min-h-9 items-center gap-1.5 rounded-md bg-white px-3 text-xs font-bold text-[#026aa7] transition-colors hover:bg-sky-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-          >
-            <Plus className="h-4 w-4" aria-hidden="true" />
-            Thêm khoa
-          </button>
-        </div>
-      </section>
-
-      <Panel padding="none" className="overflow-hidden rounded-xl border-slate-200/90 shadow-2xs">
+            },
+          },
+        ]}
+      />
+      <div className="space-y-1.5">
         {loadError && (
-          <div role="alert" className="flex flex-col gap-3 border-b border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 sm:flex-row sm:items-center sm:justify-between">
+          <div role="alert" className="flex flex-col gap-2 rounded-md border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800 sm:flex-row sm:items-center sm:justify-between">
             <span>{loadError}</span>
-            <button type="button" onClick={() => void load()} disabled={loading} className="inline-flex items-center gap-2 self-start rounded-md border border-rose-300 bg-white px-3 py-1.5 text-xs font-semibold text-rose-800 disabled:opacity-50 sm:self-auto">
+            <button type="button" onClick={() => void load()} disabled={loading} className="inline-flex h-8 items-center gap-2 self-start rounded-[4px] border border-rose-300 bg-white px-3 text-xs font-semibold text-rose-800 disabled:opacity-50 sm:self-auto">
               <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
               Thử tải lại
             </button>
           </div>
         )}
+        <div className="overflow-hidden rounded-md border border-slate-200">
         <div className="divide-y divide-slate-100 md:hidden">
           {loading ? (
             <p className="p-6 text-center text-sm text-slate-500">Đang tải danh sách khoa…</p>
           ) : loadError ? null : departments.length === 0 ? (
             <p className="p-6 text-center text-sm text-slate-500">Hiện chưa có khoa nào.</p>
           ) : departments.map((department) => (
-            <article key={department.id} className="space-y-3 p-4">
+            <article key={department.id} className="space-y-2 border-b border-slate-100 p-3 last:border-0">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 items-start gap-2.5">
                   <Building2 className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" />
@@ -277,7 +276,7 @@ export function DepartmentsView({ onShowToast }: { onShowToast?: (msg: string, t
                     <p className="mt-0.5 font-mono text-xs text-slate-500">{department.code}</p>
                   </div>
                 </div>
-                <span className={`shrink-0 rounded-md border px-2 py-0.5 text-[10px] font-semibold ${department.isActive ? 'border-[#7bc043]/40 bg-[#7bc043]/10 text-slate-800' : 'border-slate-200 bg-slate-100 text-slate-600'}`}>
+                <span className={`shrink-0 rounded-[3px] border px-1.5 py-0.5 font-mono text-[9.5px] font-semibold ${department.isActive ? 'border-[#7bc043]/40 bg-[#7bc043]/10 text-slate-800' : 'border-slate-200 bg-slate-100 text-slate-600'}`}>
                   {department.isActive ? 'Hoạt động' : 'Tạm ngưng'}
                 </span>
               </div>
@@ -291,10 +290,10 @@ export function DepartmentsView({ onShowToast }: { onShowToast?: (msg: string, t
               <div className="flex items-center justify-between gap-3">
                 <span className="text-[11px] text-slate-500">Tạo ngày {formatDate(department.createdAt)}</span>
                 <div className="flex items-center gap-1">
-                  <button type="button" onClick={() => { setIsCreatingDepartment(false); setModalDepartment(department); }} className="inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-600 transition-colors hover:bg-[#026aa7]/5 hover:text-[#026aa7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]" aria-label={`Sửa khoa ${department.name}`}>
+                  <button type="button" onClick={() => { setIsCreatingDepartment(false); setModalDepartment(department); }} className="inline-flex h-8 w-8 items-center justify-center rounded-[4px] text-slate-600 transition-colors hover:bg-[#026aa7]/5 hover:text-[#026aa7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]" aria-label={`Sửa khoa ${department.name}`}>
                     <Edit2 className="h-4 w-4" />
                   </button>
-                  <button type="button" onClick={() => void handleDelete(department)} className="rounded-md p-2 text-slate-600 hover:bg-rose-50 hover:text-rose-700" aria-label={`Xóa khoa ${department.name}`}>
+                  <button type="button" onClick={() => void handleDelete(department)} className="inline-flex h-8 w-8 items-center justify-center rounded-[4px] text-slate-600 hover:bg-rose-50 hover:text-rose-700" aria-label={`Xóa khoa ${department.name}`}>
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
@@ -303,33 +302,33 @@ export function DepartmentsView({ onShowToast }: { onShowToast?: (msg: string, t
           ))}
         </div>
         <div className="hidden overflow-x-auto md:block">
-          <table className="w-full text-sm">
+          <table className="w-full text-xs">
             <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Khoa</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Tên khoa</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Mô tả</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">Trạng thái</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Ngày tạo</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Số lượng</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">Thao tác</th>
+              <tr className="border-b border-slate-200 bg-slate-100/90">
+                <th className="px-2.5 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-600">Khoa</th>
+                <th className="px-2.5 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-600">Tên khoa</th>
+                <th className="px-2.5 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-600">Mô tả</th>
+                <th className="px-2.5 py-1.5 text-center text-[11px] font-semibold uppercase tracking-wider text-slate-600">Trạng thái</th>
+                <th className="px-2.5 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-600">Ngày tạo</th>
+                <th className="px-2.5 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-600">Số lượng</th>
+                <th className="px-2.5 py-1.5 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-600">Thao tác</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td className="px-4 py-8 text-center text-slate-400" colSpan={7}>
+                  <td className="px-2.5 py-6 text-center text-slate-400" colSpan={7}>
                     <div className="inline-flex items-center gap-2">
-                      <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#026aa7] border-t-transparent" />
+                      <div className="h-5 w-5 animate-spin rounded-[50%] border-2 border-[#026aa7] border-t-transparent" />
                       Đang tải...
                     </div>
                   </td>
                 </tr>
               ) : loadError ? (
-                <tr><td className="px-4 py-8 text-center text-slate-500" colSpan={7}>Không thể hiển thị dữ liệu khi tải danh sách khoa thất bại.</td></tr>
+                <tr><td className="px-2.5 py-6 text-center text-slate-500" colSpan={7}>Không thể hiển thị dữ liệu khi tải danh sách khoa thất bại.</td></tr>
               ) : departments.length === 0 ? (
                 <tr>
-                  <td className="px-4 py-8 text-center text-slate-400" colSpan={7}>
+                  <td className="px-2.5 py-6 text-center text-slate-400" colSpan={7}>
                     Hiện chưa có khoa nào.
                   </td>
                 </tr>
@@ -349,7 +348,8 @@ export function DepartmentsView({ onShowToast }: { onShowToast?: (msg: string, t
             </tbody>
           </table>
         </div>
-      </Panel>
+        </div>
+      </div>
 
       {(modalDepartment !== null || isCreatingDepartment) && (
         <DepartmentModal
@@ -370,9 +370,9 @@ export function DepartmentsView({ onShowToast }: { onShowToast?: (msg: string, t
 
       {deleting !== null && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30">
-          <div className="bg-white rounded-lg shadow-xl p-4 max-w-sm w-full mx-4">
+          <div className="w-full max-w-sm rounded-md bg-white p-4 shadow-xl mx-4">
             <div className="flex items-center gap-2 text-slate-800 font-medium">
-              <div className="w-5 h-5 border-2 border-slate-300 border-t-transparent rounded-full animate-spin" />
+              <div className="h-5 w-5 animate-spin rounded-[50%] border-2 border-slate-300 border-t-transparent" />
               Đang xóa...
             </div>
           </div>

@@ -181,22 +181,22 @@ export function GradingRulesConfigView({
     && employerRubric.ratingLevels.every((level) => level.label.trim() && level.description.trim());
 
   return (
-    <div className="w-full space-y-4 animate-in fade-in duration-200 font-sans pb-12">
+    <div className="w-full space-y-2 animate-in fade-in duration-200 font-sans pb-12">
       <CompactActionBar
         icon={BadgeCheck}
-        title="Quy chế điểm & deadline"
+        title="Quy chế Điểm & Deadline (F1004)"
         subtitle="Thiết lập trọng số, lịch báo cáo và ngưỡng đạt theo kỳ, khoa."
       />
 
-      <section className="space-y-6 rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs sm:p-5">
+      <section className="space-y-3 rounded-md border border-slate-200 bg-white p-3">
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label htmlFor="grading-semester" className="mb-1.5 block text-sm font-medium text-slate-700">Học kỳ</label>
+            <label htmlFor="grading-semester" className="mb-1 block text-xs font-medium text-slate-700">Học kỳ</label>
             <select
               id="grading-semester"
               value={semesterId}
               onChange={(event) => setSemesterId(event.target.value)}
-              className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
+              className="h-8 w-full rounded-[4px] border border-slate-200 bg-white px-2.5 text-xs text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
             >
               <option value="">Chọn học kỳ</option>
               {semesters.map((semester) => (
@@ -207,13 +207,13 @@ export function GradingRulesConfigView({
             </select>
           </div>
           <div>
-            <label htmlFor="grading-department" className="mb-1.5 block text-sm font-medium text-slate-700">Khoa áp dụng</label>
+            <label htmlFor="grading-department" className="mb-1 block text-xs font-medium text-slate-700">Khoa áp dụng</label>
             <select
               id="grading-department"
               value={departmentId}
               onChange={(event) => setDepartmentId(event.target.value)}
               disabled={isDepartmentAdmin}
-              className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] disabled:cursor-not-allowed disabled:opacity-70"
+              className="h-8 w-full rounded-[4px] border border-slate-200 bg-white px-2.5 text-xs text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] disabled:cursor-not-allowed disabled:opacity-70"
             >
               {isDepartmentAdmin ? (
                 <option value={departmentId}>
@@ -231,7 +231,7 @@ export function GradingRulesConfigView({
         </div>
 
         {rulesQuery.error && (
-          <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+          <div role="alert" className="rounded-md border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
             {getApiErrorMessage(rulesQuery.error)}
           </div>
         )}
@@ -239,11 +239,11 @@ export function GradingRulesConfigView({
           <p role="status" className="text-sm text-slate-600">Đang tải quy chế…</p>
         )}
         {!semesters.length && (
-          <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Chưa có học kỳ để cấu hình quy chế.</p>
+          <p className="rounded-md bg-amber-50 p-3 text-xs text-amber-900">Chưa có học kỳ để cấu hình quy chế.</p>
         )}
 
-        <fieldset disabled={rulesQuery.isLoading} className="space-y-4 rounded-xl border border-slate-200 p-4 disabled:opacity-70">
-          <legend className="px-2 text-sm font-semibold text-slate-900">Trọng số điểm</legend>
+        <fieldset disabled={rulesQuery.isLoading} className="space-y-3 rounded-md border border-slate-200 p-3 disabled:opacity-70">
+          <legend className="px-2 text-xs font-semibold text-slate-900">Trọng số điểm</legend>
           <div className="grid gap-4 sm:grid-cols-3">
             {([
               ["processScoreWeight", "Điểm quá trình"],
@@ -251,7 +251,7 @@ export function GradingRulesConfigView({
               ["employerScoreWeight", "Đánh giá doanh nghiệp"],
             ] as const).map(([field, label]) => (
               <div key={field}>
-                <label htmlFor={`weight-${field}`} className="mb-1.5 block text-sm font-medium text-slate-700">{label} (%)</label>
+                <label htmlFor={`weight-${field}`} className="mb-1 block text-xs font-medium text-slate-700">{label} (%)</label>
                 <div className="relative">
                   <input
                     id={`weight-${field}`}
@@ -261,23 +261,23 @@ export function GradingRulesConfigView({
                     step="1"
                     value={Math.round(rules[field] * 10000) / 100}
                     onChange={(event) => setWeight(field, event.target.value)}
-                    className="min-h-11 w-full rounded-lg border border-slate-300 px-3 pr-9 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
+                    className="h-8 w-20 rounded-[4px] border border-slate-200 px-2.5 pr-7 text-xs text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
                   />
-                  <span aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-500">%</span>
+                  <span aria-hidden="true" className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-500">%</span>
                 </div>
               </div>
             ))}
           </div>
-          <p aria-live="polite" className={`text-sm font-bold ${weightsAreValid ? "text-[#7bc043]" : "text-rose-700"}`}>
+          <p aria-live="polite" className={`text-xs font-bold ${weightsAreValid ? "text-[#7bc043]" : "text-rose-700"}`}>
             Tổng trọng số: {Math.round(weightTotal * 10000) / 100}% — {weightsAreValid ? "Hợp lệ" : "Cần bằng 100%"}
           </p>
         </fieldset>
 
-        <fieldset disabled={rulesQuery.isLoading} className="space-y-4 rounded-xl border border-slate-200 p-4 disabled:opacity-70">
-          <legend className="px-2 text-sm font-semibold text-slate-900">Báo cáo tuần & tiêu chuẩn đạt</legend>
+        <fieldset disabled={rulesQuery.isLoading} className="space-y-3 rounded-md border border-slate-200 p-3 disabled:opacity-70">
+          <legend className="px-2 text-xs font-semibold text-slate-900">Báo cáo tuần & tiêu chuẩn đạt</legend>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div>
-              <label htmlFor="required-weeks" className="mb-1.5 block text-sm font-medium text-slate-700">Số tuần bắt buộc</label>
+              <label htmlFor="required-weeks" className="mb-1 block text-xs font-medium text-slate-700">Số tuần bắt buộc</label>
               <input
                 id="required-weeks"
                 type="number"
@@ -285,22 +285,22 @@ export function GradingRulesConfigView({
                 max={selectedSemester?.totalWeeks || 52}
                 value={rules.requiredWeeklyReportsCount}
                 onChange={(event) => update("requiredWeeklyReportsCount", Number(event.target.value))}
-                className="min-h-11 w-full rounded-lg border border-slate-300 px-3 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
+                className="h-8 w-20 rounded-[4px] border border-slate-200 px-2.5 text-xs text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
               />
             </div>
             <div>
-              <label htmlFor="deadline-day" className="mb-1.5 block text-sm font-medium text-slate-700">Deadline mỗi tuần</label>
+              <label htmlFor="deadline-day" className="mb-1 block text-xs font-medium text-slate-700">Deadline mỗi tuần</label>
               <select
                 id="deadline-day"
                 value={rules.weeklyDeadlineDay}
                 onChange={(event) => update("weeklyDeadlineDay", Number(event.target.value))}
-                className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
+                className="h-8 w-full rounded-[4px] border border-slate-200 bg-white px-2.5 text-xs text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
               >
                 {WEEKDAYS.map((day) => <option key={day.value} value={day.value}>{day.label}</option>)}
               </select>
             </div>
             <div>
-              <label htmlFor="late-penalty" className="mb-1.5 block text-sm font-medium text-slate-700">Trừ điểm mỗi ngày trễ</label>
+              <label htmlFor="late-penalty" className="mb-1 block text-xs font-medium text-slate-700">Trừ điểm mỗi ngày trễ</label>
               <input
                 id="late-penalty"
                 type="number"
@@ -309,13 +309,13 @@ export function GradingRulesConfigView({
                 step="0.1"
                 value={rules.latePenaltyPointsPerDay}
                 onChange={(event) => update("latePenaltyPointsPerDay", Number(event.target.value))}
-                className="min-h-11 w-full rounded-lg border border-slate-300 px-3 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
+                className="h-8 w-20 rounded-[4px] border border-slate-200 px-2.5 text-xs text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
                 aria-describedby="late-penalty-help"
               />
               <p id="late-penalty-help" className="mt-1 text-xs text-slate-500">Điểm phần trăm bị trừ, cộng dồn theo ngày.</p>
             </div>
             <div>
-              <label htmlFor="minimum-score" className="mb-1.5 block text-sm font-medium text-slate-700">Điểm đạt tối thiểu</label>
+              <label htmlFor="minimum-score" className="mb-1 block text-xs font-medium text-slate-700">Điểm đạt tối thiểu</label>
               <input
                 id="minimum-score"
                 type="number"
@@ -324,11 +324,11 @@ export function GradingRulesConfigView({
                 step="0.1"
                 value={rules.minimumPassingScore}
                 onChange={(event) => update("minimumPassingScore", Number(event.target.value))}
-                className="min-h-11 w-full rounded-lg border border-slate-300 px-3 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
+                className="h-8 w-20 rounded-[4px] border border-slate-200 px-2.5 text-xs text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
               />
             </div>
           </div>
-          <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-800">
+          <label className="flex min-h-9 cursor-pointer items-center gap-3 rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-800">
             <input
               type="checkbox"
               checked={rules.requireFinalReportForExamEligibility}
@@ -356,7 +356,7 @@ export function GradingRulesConfigView({
             type="button"
             onClick={() => saveMutation.mutate()}
             disabled={!semesterId || !isValid || isBusy || !!rulesQuery.error}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[#026aa7] px-4 text-xs font-bold text-white transition hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-8 items-center justify-center gap-2 rounded-[4px] bg-[#026aa7] px-3 text-xs font-semibold text-white transition hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Save aria-hidden="true" className="h-4 w-4" />
             {saveMutation.isPending
@@ -368,7 +368,7 @@ export function GradingRulesConfigView({
         </div>
       </section>
 
-      <section className="space-y-5 rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs sm:p-5">
+      <section className="space-y-3 rounded-md border border-slate-200 bg-white p-3">
         <div>
           <h2 className="text-lg font-bold text-slate-900">Rubric đánh giá doanh nghiệp</h2>
           <p className="mt-1 text-sm leading-6 text-slate-600">
@@ -377,7 +377,7 @@ export function GradingRulesConfigView({
         </div>
 
         {rubricQuery.error && (
-          <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+          <div role="alert" className="rounded-md border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
             {getApiErrorMessage(rubricQuery.error)}
           </div>
         )}
@@ -385,7 +385,7 @@ export function GradingRulesConfigView({
           <p role="status" className="text-sm text-slate-600">Đang tải rubric…</p>
         )}
         {employerRubric.isInherited && (
-          <p className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm leading-6 text-sky-900">
+          <p className="rounded-md border border-sky-200 bg-sky-50 p-3 text-xs leading-5 text-sky-900">
             Đang kế thừa rubric toàn trường. Khi lưu, cấu hình này sẽ trở thành rubric riêng của khoa.
           </p>
         )}
@@ -398,7 +398,7 @@ export function GradingRulesConfigView({
               value={employerRubric.name}
               onChange={(event) => setEmployerRubric((current) => ({ ...current, name: event.target.value }))}
               maxLength={250}
-              className="min-h-11 w-full rounded-lg border border-slate-300 px-3 text-base text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
+              className="h-8 w-full rounded-[4px] border border-slate-200 px-2.5 text-xs text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
             />
           </div>
 
@@ -406,7 +406,7 @@ export function GradingRulesConfigView({
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <h3 className="font-semibold text-slate-900">Tiêu chí và trọng số</h3>
               <div className="flex items-center gap-3">
-                <span aria-live="polite" className={`text-sm font-semibold ${Math.abs(rubricWeightTotal - 100) < 0.01 ? "text-emerald-700" : "text-rose-700"}`}>
+                <span aria-live="polite" className={`text-xs font-semibold ${Math.abs(rubricWeightTotal - 100) < 0.01 ? "text-emerald-700" : "text-rose-700"}`}>
                   Tổng: {rubricWeightTotal.toLocaleString("vi-VN", { maximumFractionDigits: 2 })}%
                 </span>
                 <button
@@ -422,16 +422,16 @@ export function GradingRulesConfigView({
                       orderIndex: current.criteria.length + 1,
                     }],
                   }))}
-                  className="min-h-11 rounded-lg border border-slate-300 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="h-8 rounded-[4px] border border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Thêm tiêu chí
                 </button>
               </div>
             </div>
             {employerRubric.criteria.map((criterion, index) => (
-              <div key={criterion.id} className="grid gap-3 rounded-lg border border-slate-200 p-3 sm:grid-cols-[minmax(0,1fr)_120px_auto]">
+              <div key={criterion.id} className="grid gap-2 rounded-md border border-slate-200 p-2 sm:grid-cols-[minmax(0,1fr)_120px_auto]">
                 <div className="space-y-2">
-                  <label className="block text-sm font-medium text-slate-700">
+                  <label className="block text-xs font-medium text-slate-700">
                     Tiêu chí {index + 1}
                     <input
                       value={criterion.name}
@@ -441,10 +441,10 @@ export function GradingRulesConfigView({
                           itemIndex === index ? { ...item, name: event.target.value } : item),
                       }))}
                       maxLength={200}
-                      className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
+                      className="mt-1 h-8 w-full rounded-[4px] border border-slate-200 px-2.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
                     />
                   </label>
-                  <label className="block text-sm font-medium text-slate-700">
+                  <label className="block text-xs font-medium text-slate-700">
                     Mô tả (không bắt buộc)
                     <textarea
                       value={criterion.description ?? ""}
@@ -455,11 +455,11 @@ export function GradingRulesConfigView({
                       }))}
                       maxLength={500}
                       rows={2}
-                      className="mt-1 min-h-20 w-full rounded-lg border border-slate-300 p-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
+                      className="mt-1 min-h-16 w-full rounded-[4px] border border-slate-200 p-2.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
                     />
                   </label>
                 </div>
-                <label className="block text-sm font-medium text-slate-700">
+                <label className="block text-xs font-medium text-slate-700">
                   Trọng số (%)
                   <input
                     type="number"
@@ -472,7 +472,7 @@ export function GradingRulesConfigView({
                       criteria: current.criteria.map((item, itemIndex) =>
                         itemIndex === index ? { ...item, weight: Number(event.target.value) || 0 } : item),
                     }))}
-                    className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
+                    className="mt-1 h-8 w-20 rounded-[4px] border border-slate-200 px-2.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
                   />
                 </label>
                 <button
@@ -484,7 +484,7 @@ export function GradingRulesConfigView({
                     criteria: current.criteria.filter((_, itemIndex) => itemIndex !== index)
                       .map((item, itemIndex) => ({ ...item, orderIndex: itemIndex + 1 })),
                   }))}
-                  className="min-h-11 self-end rounded-lg border border-slate-300 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="h-8 self-end rounded-[4px] border border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Xóa
                 </button>
@@ -496,11 +496,11 @@ export function GradingRulesConfigView({
             <h3 className="font-semibold text-slate-900">Mô tả các mức đánh giá</h3>
             {employerRubric.ratingLevels.map((level, index) => (
               <div key={level.value} className="grid gap-3 rounded-lg border border-slate-200 p-3 sm:grid-cols-[70px_minmax(0,1fr)]">
-                <span className="flex min-h-11 items-center justify-center rounded-lg bg-slate-100 font-bold tabular-nums text-slate-800">
+                <span className="flex h-8 items-center justify-center rounded-md bg-slate-100 text-xs font-bold tabular-nums text-slate-800">
                   {level.value}
                 </span>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="block text-sm font-medium text-slate-700">
+                  <label className="block text-xs font-medium text-slate-700">
                     Nhãn
                     <input
                       value={level.label}
@@ -510,10 +510,10 @@ export function GradingRulesConfigView({
                           itemIndex === index ? { ...item, label: event.target.value } : item),
                       }))}
                       maxLength={100}
-                      className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
+                      className="mt-1 h-8 w-full rounded-[4px] border border-slate-200 px-2.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
                     />
                   </label>
-                  <label className="block text-sm font-medium text-slate-700">
+                  <label className="block text-xs font-medium text-slate-700">
                     Mô tả hành vi
                     <input
                       value={level.description}
@@ -523,7 +523,7 @@ export function GradingRulesConfigView({
                           itemIndex === index ? { ...item, description: event.target.value } : item),
                       }))}
                       maxLength={500}
-                      className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
+                      className="mt-1 h-8 w-full rounded-[4px] border border-slate-200 px-2.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
                     />
                   </label>
                 </div>
@@ -542,7 +542,7 @@ export function GradingRulesConfigView({
             type="button"
             onClick={() => saveRubricMutation.mutate()}
             disabled={!semesterId || !employerRubricIsValid || rubricQuery.isLoading || saveRubricMutation.isPending || !!rubricQuery.error}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[#026aa7] px-4 text-sm font-bold text-white transition hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-8 items-center justify-center gap-2 rounded-[4px] bg-[#026aa7] px-3 text-xs font-semibold text-white transition hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Save aria-hidden="true" className="h-4 w-4" />
             {saveRubricMutation.isPending ? "Đang lưu rubric…" : "Lưu rubric doanh nghiệp"}

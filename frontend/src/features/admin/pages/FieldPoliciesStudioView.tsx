@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Eye, EyeOff, FileSliders, Save, ShieldCheck } from "lucide-react";
 import { CompactActionBar } from "../../../components/common/CompactActionBar";
+import { CompactToggleSwitch } from "../../../components/common/CompactToggleSwitch";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { systemService } from "../../../services/system.service";
 import { systemAdminService } from "../../../services/systemAdmin.service";
@@ -96,26 +97,26 @@ export function FieldPoliciesStudioView({
   };
 
   return (
-    <div className="w-full space-y-4 animate-in fade-in duration-200 font-sans pb-12">
+    <div className="w-full space-y-2 animate-in fade-in duration-200 font-sans pb-12">
       <CompactActionBar
         icon={FileSliders}
-        title="Chính sách trường dữ liệu"
+        title="Chính sách Trường Dữ liệu (F1003)"
         subtitle="Quản lý quy tắc hiển thị và kiểm tra theo biểu mẫu, vai trò."
       >
         <button
           type="button"
           onClick={() => saveMutation.mutate()}
           disabled={saveMutation.isPending || policyQuery.isPending || policyQuery.isError}
-          className="il-btn il-btn-primary inline-flex items-center gap-2 disabled:pointer-events-none disabled:opacity-50"
+          className="inline-flex h-8 items-center gap-2 rounded-[4px] bg-[#026aa7] px-3 text-xs font-semibold text-white hover:bg-[#025a8e] disabled:pointer-events-none disabled:opacity-50"
         >
           <Save aria-hidden="true" className={`h-4 w-4 ${saveMutation.isPending ? "animate-pulse" : ""}`} />
           {saveMutation.isPending ? "Đang lưu..." : "Lưu chính sách"}
         </button>
       </CompactActionBar>
 
-      <section className="grid gap-3 rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs sm:grid-cols-2 sm:p-5">
+      <section className="grid gap-3 rounded-md border border-slate-200 bg-white p-3 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <label htmlFor="policy-form" className="text-sm font-semibold text-slate-800">Biểu mẫu</label>
+          <label htmlFor="policy-form" className="text-xs font-semibold text-slate-800">Biểu mẫu</label>
           <select
             id="policy-form"
             value={formCode}
@@ -123,13 +124,13 @@ export function FieldPoliciesStudioView({
               setFormCode(event.target.value);
               setRows([]);
             }}
-            className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:border-[#026aa7] focus:outline-none focus:ring-2 focus:ring-[#026aa7]/15"
+            className="h-8 w-full rounded-[4px] border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:border-[#026aa7] focus:outline-none focus:ring-2 focus:ring-[#026aa7]/15"
           >
             {FORMS.map((form) => <option key={form.code} value={form.code}>{form.label}</option>)}
           </select>
         </div>
         <div className="space-y-1.5">
-          <label htmlFor="policy-role" className="text-sm font-semibold text-slate-800">Vai trò áp dụng</label>
+          <label htmlFor="policy-role" className="text-xs font-semibold text-slate-800">Vai trò áp dụng</label>
           <select
             id="policy-role"
             value={roleId ?? ""}
@@ -138,7 +139,7 @@ export function FieldPoliciesStudioView({
               setRows([]);
             }}
             disabled={rolesQuery.isLoading}
-            className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:border-[#026aa7] focus:outline-none focus:ring-2 focus:ring-[#026aa7]/15 disabled:opacity-60"
+            className="h-8 w-full rounded-[4px] border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:border-[#026aa7] focus:outline-none focus:ring-2 focus:ring-[#026aa7]/15 disabled:opacity-60"
           >
             <option value="">Tất cả (Mặc định)</option>
             {roles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}
@@ -147,13 +148,13 @@ export function FieldPoliciesStudioView({
         </div>
       </section>
 
-      <section className="overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-2xs">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3">
+      <section className="overflow-hidden rounded-md border border-slate-200 bg-white">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-100/90 px-2.5 py-1.5">
           <div>
-            <h2 className="text-sm font-bold text-slate-800">{selectedForm.label}</h2>
+            <h2 className="text-xs font-bold text-slate-800">{selectedForm.label}</h2>
             <p className="mt-1 font-mono text-[11px] text-slate-500">{formCode}</p>
           </div>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-[#026aa7]/5 px-3 py-1 text-xs font-semibold text-[#026aa7]">
+          <span className="inline-flex items-center gap-1.5 rounded-[3px] border border-[#026aa7]/20 bg-[#026aa7]/5 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-[#026aa7]">
             <ShieldCheck aria-hidden="true" className="h-4 w-4" />
             {visibleCount} / {rows.length} trường đang hiển thị
           </span>
@@ -161,53 +162,48 @@ export function FieldPoliciesStudioView({
         {policyQuery.isPending ? (
           <p role="status" className="p-10 text-center text-xs text-slate-500">Đang tải chính sách trường...</p>
         ) : policyQuery.isError ? (
-          <div role="alert" className="m-4 rounded-lg border border-rose-200 bg-rose-50 p-4 text-xs text-rose-800">
+          <div role="alert" className="m-3 rounded-md border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
             Không thể tải chính sách trường. {getApiErrorMessage(policyQuery.error)}
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1000px] border-collapse text-left text-xs">
-              <thead className="bg-slate-50 text-slate-700">
+              <thead className="bg-slate-100/90 text-[11px] uppercase tracking-wider text-slate-600">
                 <tr>
-                  <th scope="col" className="border-b border-slate-200 px-3 py-3 font-bold">Mã trường</th>
-                  <th scope="col" className="border-b border-slate-200 px-3 py-3 font-bold">Tên gốc</th>
-                  <th scope="col" className="border-b border-slate-200 px-3 py-3 font-bold">Tên ghi đè</th>
+                  <th scope="col" className="border-b border-slate-200 px-2.5 py-1.5 font-semibold">Mã trường</th>
+                  <th scope="col" className="border-b border-slate-200 px-2.5 py-1.5 font-semibold">Tên gốc</th>
+                  <th scope="col" className="border-b border-slate-200 px-2.5 py-1.5 font-semibold">Tên ghi đè</th>
                   {BOOLEAN_FIELDS.map(([, label]) => (
-                    <th key={label} scope="col" className="border-b border-slate-200 px-3 py-3 text-center font-bold">{label}</th>
+                    <th key={label} scope="col" className="border-b border-slate-200 px-2.5 py-1.5 text-center font-semibold">{label}</th>
                   ))}
-                  <th scope="col" className="border-b border-slate-200 px-3 py-3 font-bold">Quy tắc Regex / Thông báo lỗi</th>
+                  <th scope="col" className="border-b border-slate-200 px-2.5 py-1.5 font-semibold">Quy tắc Regex / Thông báo lỗi</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row, index) => (
                   <tr key={row.fieldKey} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/80">
-                    <th scope="row" className="px-3 py-3 font-mono text-slate-700">{row.fieldKey}</th>
-                    <td className="px-3 py-3 text-slate-700">{row.label}</td>
-                    <td className="px-3 py-3">
+                    <th scope="row" className="px-2.5 py-1.5 font-mono text-xs text-slate-700">{row.fieldKey}</th>
+                    <td className="px-2.5 py-1.5 text-xs text-slate-700">{row.label}</td>
+                    <td className="px-2.5 py-1.5">
                       <input
                         aria-label={`Tên ghi đè ${row.fieldKey}`}
                         value={row.customLabel ?? ""}
                         onChange={(event) => updateRow(index, { customLabel: event.target.value || null })}
                         maxLength={200}
                         placeholder={row.label}
-                        className="min-h-10 w-44 rounded-lg border border-slate-300 px-2.5 text-xs focus:border-[#026aa7] focus:outline-none focus:ring-2 focus:ring-[#026aa7]/15"
+                        className="h-8 w-44 rounded-[4px] border border-slate-200 px-2.5 text-xs focus:border-[#026aa7] focus:outline-none focus:ring-2 focus:ring-[#026aa7]/15"
                       />
                     </td>
                     {BOOLEAN_FIELDS.map(([field, label]) => (
-                      <td key={field} className="px-3 py-3 text-center">
-                        <label className="inline-flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-lg hover:bg-slate-100">
-                          <span className="sr-only">{label} {row.fieldKey}</span>
-                          <input
-                            type="checkbox"
-                            aria-label={`${label} ${row.fieldKey}`}
-                            checked={row[field]}
-                            onChange={(event) => updateRow(index, { [field]: event.target.checked })}
-                            className="h-4 w-4 accent-[#026aa7]"
-                          />
-                        </label>
+                      <td key={field} className="px-2.5 py-1.5 text-center">
+                        <CompactToggleSwitch
+                          label={`${label} ${row.fieldKey}`}
+                          checked={row[field]}
+                          onChange={(checked) => updateRow(index, { [field]: checked })}
+                        />
                       </td>
                     ))}
-                    <td className="px-3 py-3">
+                    <td className="px-2.5 py-1.5">
                       <div className="grid gap-2">
                         <input
                           aria-label={`Regex ${row.fieldKey}`}
@@ -215,7 +211,7 @@ export function FieldPoliciesStudioView({
                           onChange={(event) => updateRow(index, { validationRegex: event.target.value || null })}
                           maxLength={500}
                           placeholder="^[A-Za-z0-9._%+-]+$"
-                          className="min-h-10 w-56 rounded-lg border border-slate-300 px-2.5 font-mono text-[11px] focus:border-[#026aa7] focus:outline-none focus:ring-2 focus:ring-[#026aa7]/15"
+                          className="h-8 w-56 rounded-[4px] border border-slate-200 px-2.5 font-mono text-xs focus:border-[#026aa7] focus:outline-none focus:ring-2 focus:ring-[#026aa7]/15"
                         />
                         <input
                           aria-label={`Thông báo lỗi ${row.fieldKey}`}
@@ -223,7 +219,7 @@ export function FieldPoliciesStudioView({
                           onChange={(event) => updateRow(index, { errorMessage: event.target.value || null })}
                           maxLength={500}
                           placeholder="Thông báo khi dữ liệu không hợp lệ"
-                          className="min-h-10 w-56 rounded-lg border border-slate-300 px-2.5 text-xs focus:border-[#026aa7] focus:outline-none focus:ring-2 focus:ring-[#026aa7]/15"
+                          className="h-8 w-56 rounded-[4px] border border-slate-200 px-2.5 text-xs focus:border-[#026aa7] focus:outline-none focus:ring-2 focus:ring-[#026aa7]/15"
                         />
                       </div>
                     </td>

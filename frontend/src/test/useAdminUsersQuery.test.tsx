@@ -132,6 +132,27 @@ describe("useAdminUsersQuery (slice Users — GĐ 3)", () => {
     );
   });
 
+  it.each([
+    ["superAdmin", "SuperAdmin"],
+    ["departmentAdmin", "DepartmentAdmin"],
+  ] as const)("lọc role=%s → chỉ gửi role tương ứng lên backend", async (role, backendRole) => {
+    getAll.mockResolvedValue(page([], 0));
+
+    const { result } = renderHook(() => useAdminUsersQuery(), {
+      wrapper: createWrapper(),
+    });
+    await waitFor(() => expect(result.current.isPending).toBe(false));
+
+    act(() => {
+      result.current.setRole(role);
+    });
+    await waitFor(() =>
+      expect(
+        getAll.mock.calls.some((call) => call[0]?.role === backendRole),
+      ).toBe(true),
+    );
+  });
+
   it("chuyển trang 2: keepPreviousData giữ dữ liệu cũ + đổi key", async () => {
     let resolvePage2!: (value: PaginatedResponse<UserDto>) => void;
 

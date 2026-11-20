@@ -52,6 +52,9 @@ describe("SysFunctionsManagerView", () => {
     });
 
     renderView(<SysFunctionsManagerView onShowToast={vi.fn()} />);
+    expect(await screen.findByRole("heading", {
+      name: "Danh mục Chức năng Hệ thống (F1001)",
+    })).toBeInTheDocument();
     const functionCode = await screen.findByText("SYSTEM.PERMISSIONS");
     fireEvent.click(functionCode.closest("button")!);
 
@@ -61,7 +64,7 @@ describe("SysFunctionsManagerView", () => {
     fireEvent.change(screen.getByLabelText("Đường dẫn (URL)"), {
       target: { value: "/admin/permissions" },
     });
-    fireEvent.click(screen.getByLabelText("Hiển thị trên Mega-Menu"));
+    fireEvent.click(screen.getByLabelText("Hiển thị trong menu điều hướng"));
     fireEvent.click(screen.getByRole("button", { name: "Lưu chức năng" }));
 
     await waitFor(() => {

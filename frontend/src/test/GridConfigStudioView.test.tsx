@@ -60,7 +60,7 @@ describe("GridConfigStudioView", () => {
       expect(screen.getByRole("columnheader", { name: "Mã sinh viên" })).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("checkbox", { name: "Ẩn cột Mã sinh viên" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Ẩn cột Mã sinh viên" }));
     await waitFor(() => {
       expect(screen.queryByRole("columnheader", { name: "Mã sinh viên" })).not.toBeInTheDocument();
     });

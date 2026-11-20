@@ -30,11 +30,22 @@ export function mapBackendRoleToAdminUserRole(
  * DepartmentAdmin) cần gửi nhiều giá trị cách nhau dấu phẩy.
  */
 export function mapAdminUserRoleToBackendRoles(
-  role: "all" | "admin" | "lecturer" | "student" | undefined,
+  role:
+    | "all"
+    | "admin"
+    | "superAdmin"
+    | "departmentAdmin"
+    | "lecturer"
+    | "student"
+    | undefined,
 ): string | undefined {
   switch (role) {
     case "admin":
       return "SuperAdmin,DepartmentAdmin";
+    case "superAdmin":
+      return "SuperAdmin";
+    case "departmentAdmin":
+      return "DepartmentAdmin";
     case "lecturer":
       return "Lecturer";
     case "student":

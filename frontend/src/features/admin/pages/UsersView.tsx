@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   Users,
-  Search,
   KeyRound,
   Lock,
   Unlock,
@@ -18,7 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { ConfirmDialog } from "../../../components/common/ConfirmDialog";
-import { Panel } from "../../../components/common/Panel";
+import { CompactActionBar } from "../../../components/common/CompactActionBar";
 import { EmptyState } from "../../../components/common/EmptyState";
 import { TableSkeleton } from "../../../components/common/SkeletonLoader";
 import { RequestErrorState } from "../../../components/common/RequestErrorState";
@@ -69,7 +68,7 @@ export const UsersView = ({
   /* ── Filter/pagination đồng bộ URL (?q=&role=&status=&page=) ────────── */
   const q = searchParams.get("q") ?? "";
   const roleParam = (searchParams.get("role") ?? "all") as
-    | "all" | "admin" | "lecturer" | "student";
+    | "all" | "admin" | "superAdmin" | "departmentAdmin" | "lecturer" | "student";
   const statusParam = (searchParams.get("status") ?? "all") as
     | "all" | "active" | "locked";
   const pageParam = Math.max(1, Number(searchParams.get("page")) || 1);
@@ -249,109 +248,44 @@ export const UsersView = ({
     );
 
   return (
-    <div className="w-full space-y-4 pb-12">
-      <section className="overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-2xs">
-        <div className="flex flex-wrap items-center justify-between gap-3 bg-[#026aa7] px-4 py-3 text-white">
-          <div className="flex min-w-0 items-center gap-2">
-            <Users className="h-5 w-5 shrink-0 text-white/90" aria-hidden="true" />
-            <div className="min-w-0">
-              <h1 className="text-base font-bold tracking-wide">Quản lý tài khoản</h1>
-              <p className="mt-0.5 text-xs text-white/80">
-                Tra cứu, phân quyền và quản lý trạng thái tài khoản trong hệ thống
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => void refetch()}
-              disabled={isFetching}
-              className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-white/30 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} aria-hidden="true" />
-              Làm mới
-            </button>
-            {canCreateUser && (
-              <button
-                type="button"
-                onClick={() => setIsCreateOpen(true)}
-                className="inline-flex min-h-9 items-center gap-1.5 rounded-md bg-white px-3 text-xs font-bold text-[#026aa7] transition-colors hover:bg-sky-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-              >
-                <UserPlus className="h-4 w-4" aria-hidden="true" />
-                Tạo tài khoản
-              </button>
-            )}
-          </div>
-        </div>
-      </section>
-
-      {isSuperAdmin && (
-        <Panel className="flex items-start gap-2.5 rounded-xl border-slate-200/90 shadow-2xs">
-          <Shield className="mt-0.5 h-4 w-4 shrink-0 text-[#026aa7]" aria-hidden="true" />
-          <p className="text-xs leading-relaxed text-slate-700">
-            <strong className="text-slate-900">Phân quyền quản lý tài khoản:</strong>{" "}
-            Quản trị hệ thống chỉ tạo và quản lý tài khoản Quản trị khoa. Tài khoản
-            Sinh viên và Giảng viên do Quản trị khoa trực tiếp phụ trách.
-          </p>
-        </Panel>
-      )}
-
-      <Panel className="space-y-4 rounded-xl border-slate-200/90 shadow-2xs">
-        <div className="flex flex-col gap-3 border-b border-slate-100 pb-3.5">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 className="text-base font-bold tracking-tight text-slate-900">
-                Danh sách tài khoản
-              </h2>
-              <p className="mt-0.5 text-xs font-medium text-slate-500">
-                Gộp quản lý Admin / Giảng viên / Sinh viên
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="inline-flex items-center rounded-md bg-slate-100 px-2.5 py-1 font-semibold text-slate-700">
-                {counts.total.toLocaleString("vi-VN")} tài khoản
-              </span>
-              <span className="inline-flex items-center rounded-md border border-rose-100 bg-rose-50 px-2.5 py-1 font-semibold text-rose-700">
-                {counts.locked.toLocaleString("vi-VN")} đang khóa
-              </span>
-              {isFetching && (
-                <span className="font-semibold text-[#026aa7]" role="status">Đang tải…</span>
-              )}
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2.5 pt-1">
-            <div className="relative min-w-[220px] flex-1 sm:max-w-xs">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" aria-hidden="true" />
-              <input
-                value={searchInput}
-                onChange={(e) => {
-                  setSearchInput(e.target.value);
-                  setSearch(e.target.value);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") applySearch();
-                }}
-                placeholder="Tìm mã, tên, email…"
-                aria-label="Tìm tài khoản"
-                className="h-9 w-full rounded-md border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-3 text-xs outline-none transition-colors focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
-              />
-            </div>
+    <div className="w-full space-y-2 pb-12">
+      <CompactActionBar
+        icon={Users}
+        title="Quản lý Người dùng & Gán Vai trò"
+        total={`(${counts.total.toLocaleString("vi-VN")} tài khoản)`}
+        badge={counts.locked > 0 ? `${counts.locked.toLocaleString("vi-VN")} khóa` : undefined}
+        search={{
+          value: searchInput,
+          onChange: (value) => {
+            setSearchInput(value);
+            setSearch(value);
+          },
+          onKeyDown: (event) => {
+            if (event.key === "Enter") applySearch();
+          },
+          placeholder: "Tìm mã, tên, email…",
+          ariaLabel: "Tìm tài khoản",
+        }}
+        filters={
+          <>
             <select
               value={filter.role}
-              onChange={(e) => setRole(e.target.value as typeof filter.role)}
+              onChange={(event) => setRole(event.target.value as typeof filter.role)}
               aria-label="Lọc theo vai trò"
-              className="h-9 cursor-pointer rounded-md border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700 outline-none transition-colors focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+              className="h-8 cursor-pointer rounded-[4px] border border-slate-200 bg-white px-2.5 text-xs text-slate-700 outline-none focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
             >
               <option value="all">Mọi vai trò</option>
-              <option value="admin">Admin</option>
+              <option value="superAdmin">SuperAdmin</option>
+              <option value="departmentAdmin">DepartmentAdmin</option>
+              <option value="admin">Tất cả Admin</option>
               <option value="lecturer">Giảng viên</option>
               <option value="student">Sinh viên</option>
             </select>
             <select
               value={filter.status}
-              onChange={(e) => setStatus(e.target.value as typeof filter.status)}
+              onChange={(event) => setStatus(event.target.value as typeof filter.status)}
               aria-label="Lọc theo trạng thái"
-              className="h-9 cursor-pointer rounded-md border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700 outline-none transition-colors focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+              className="h-8 cursor-pointer rounded-[4px] border border-slate-200 bg-white px-2.5 text-xs text-slate-700 outline-none focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
             >
               <option value="all">Mọi trạng thái</option>
               <option value="active">Hoạt động</option>
@@ -364,14 +298,43 @@ export const UsersView = ({
                   setSearchInput("");
                   clearFilters();
                 }}
-                className="inline-flex h-9 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+                className="inline-flex h-8 items-center gap-1 rounded-[4px] border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
               >
                 <X className="h-3.5 w-3.5" aria-hidden="true" />
-                Xóa bộ lọc
+                Xóa lọc
               </button>
             )}
-          </div>
+          </>
+        }
+        actions={[
+          {
+            label: "Làm mới",
+            icon: RefreshCw,
+            onClick: () => void refetch(),
+            disabled: isFetching,
+            loading: isFetching,
+          },
+          ...(canCreateUser
+            ? [{
+                label: "Thêm người dùng",
+                icon: UserPlus,
+                variant: "primary" as const,
+                onClick: () => setIsCreateOpen(true),
+              }]
+            : []),
+        ]}
+      />
+
+      {isSuperAdmin && (
+        <div className="flex items-start gap-2.5 rounded-md border border-slate-200 bg-white p-3">
+          <Shield className="mt-0.5 h-4 w-4 shrink-0 text-[#026aa7]" aria-hidden="true" />
+          <p className="text-xs leading-relaxed text-slate-700">
+            <strong className="text-slate-900">Phân quyền quản lý tài khoản:</strong>{" "}
+            Quản trị hệ thống chỉ tạo và quản lý tài khoản Quản trị khoa. Tài khoản
+            Sinh viên và Giảng viên do Quản trị khoa trực tiếp phụ trách.
+          </p>
         </div>
+      )}
 
         {/* ── LỖI: không bao giờ hiển thị nhầm là "không có dữ liệu" ── */}
         {isError && (
@@ -388,8 +351,8 @@ export const UsersView = ({
         {isPending && !isError && <TableSkeleton rows={6} columns={6} />}
 
         {!isPending && !isError && (
-        <>
-        <div className={`divide-y divide-slate-100 md:hidden ${isFetching ? "opacity-60" : ""}`} aria-busy={isFetching}>
+        <div className="overflow-hidden rounded-md border border-slate-200">
+        <div className={`divide-y divide-slate-100 p-3 md:hidden ${isFetching ? "opacity-60" : ""}`} aria-busy={isFetching}>
           {users.length === 0 ? (
             <div className="p-4">
               <EmptyState
@@ -410,7 +373,7 @@ export const UsersView = ({
                     <h3 className="truncate text-sm font-bold text-slate-900">{user.fullName}</h3>
                     <p className="mt-0.5 break-all text-[11px] text-slate-500">{user.code} · {user.email}</p>
                   </div>
-                  <span className={`shrink-0 rounded-md border px-2 py-0.5 text-[10px] font-bold ${STATUS_STYLE[user.status]}`}>
+                  <span className={`shrink-0 rounded-[3px] border px-1.5 py-0.5 font-mono text-[9.5px] font-bold ${STATUS_STYLE[user.status]}`}>
                     {STATUS_LABEL[user.status]}
                   </span>
                 </div>
@@ -447,13 +410,13 @@ export const UsersView = ({
             aria-busy={isFetching}
           >
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 font-bold">
-                <th className="py-2.5 pr-3">Người dùng</th>
-                <th className="py-2.5 pr-3">Vai trò</th>
-                <th className="py-2.5 pr-3">Đơn vị</th>
-                <th className="py-2.5 pr-3">Đăng nhập gần nhất</th>
-                <th className="py-2.5 pr-3">Trạng thái</th>
-                <th className="py-2.5 text-right">Thao tác</th>
+              <tr className="border-b border-slate-200 bg-slate-100/90 text-[11px] font-semibold uppercase tracking-wider text-slate-600">
+                <th className="px-2.5 py-1.5">Người dùng</th>
+                <th className="px-2.5 py-1.5">Vai trò</th>
+                <th className="px-2.5 py-1.5">Đơn vị</th>
+                <th className="px-2.5 py-1.5">Đăng nhập gần nhất</th>
+                <th className="px-2.5 py-1.5">Trạng thái</th>
+                <th className="px-2.5 py-1.5 text-right">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -466,25 +429,25 @@ export const UsersView = ({
                       : GraduationCap;
                 return (
                   <tr key={u.id} className="hover:bg-slate-50/80">
-                    <td className="py-3 pr-3">
+                    <td className="px-2.5 py-1.5">
                       <div className="font-bold text-slate-900">{u.fullName}</div>
                       <div className="text-[10px] text-slate-400 font-mono mt-0.5">
                         {u.code} · {u.email}
                       </div>
                     </td>
-                    <td className="py-3 pr-3">
+                    <td className="px-2.5 py-1.5">
                       <span className="inline-flex items-center gap-1 text-slate-700 font-semibold">
                         <RoleIcon className="w-3.5 h-3.5 text-slate-400" aria-hidden="true" />
                         {ROLE_LABEL[u.role]}
                       </span>
                     </td>
-                    <td className="py-3 pr-3 text-slate-600">
+                    <td className="px-2.5 py-1.5 text-slate-600">
                       {u.departmentOrClass}
                     </td>
-                    <td className="py-3 pr-3 text-slate-500">{u.lastLogin}</td>
-                    <td className="py-3 pr-3">
+                    <td className="px-2.5 py-1.5 text-slate-500">{u.lastLogin}</td>
+                    <td className="px-2.5 py-1.5">
                       <span
-                        className={`inline-flex px-2 py-0.5 rounded-md border text-[10px] font-bold ${STATUS_STYLE[u.status]}`}
+                        className={`inline-flex rounded-[3px] border px-1.5 py-0.5 font-mono text-[9.5px] font-bold ${STATUS_STYLE[u.status]}`}
                       >
                         {STATUS_LABEL[u.status]}
                       </span>
@@ -494,7 +457,7 @@ export const UsersView = ({
                         </span>
                       )}
                     </td>
-                    <td className="py-3 text-right">
+                    <td className="px-2.5 py-1.5 text-right">
                       {renderUserActions(u)}
                     </td>
                   </tr>
@@ -517,11 +480,11 @@ export const UsersView = ({
             </tbody>
           </table>
         </div>
-        </>
+        </div>
         )}
 
         {!isPending && !isError && pagination.total > 0 && (
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-slate-100 pt-3 text-xs text-slate-500">
+        <div className="flex flex-col justify-between gap-3 pt-1 text-xs text-slate-500 sm:flex-row sm:items-center">
           <div className="flex items-center gap-2">
             <span>
               Hiển thị {pagination.from}
@@ -532,7 +495,7 @@ export const UsersView = ({
               <select
                 value={pagination.pageSize}
                 onChange={(e) => setPageSize(Number(e.target.value))}
-                className="min-h-9 px-2 py-1 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-700 outline-none focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20 cursor-pointer"
+                className="h-8 cursor-pointer rounded-[4px] border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-700 outline-none focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
                 aria-label="Số tài khoản mỗi trang"
               >
                 {USERS_PAGE_SIZE_OPTIONS.map((size) => (
@@ -548,7 +511,7 @@ export const UsersView = ({
               type="button"
               onClick={() => goToPage(pagination.page - 1)}
               disabled={!pagination.hasPrev}
-              className="inline-flex h-9 w-9 items-center justify-center border border-slate-200 rounded-md hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] disabled:opacity-40 disabled:pointer-events-none"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-[4px] border border-slate-200 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] disabled:pointer-events-none disabled:opacity-40"
               aria-label="Trang trước"
             >
               <ChevronLeft className="w-4 h-4" aria-hidden="true" />
@@ -560,7 +523,7 @@ export const UsersView = ({
               type="button"
               onClick={() => goToPage(pagination.page + 1)}
               disabled={!pagination.hasNext}
-              className="inline-flex h-9 w-9 items-center justify-center border border-slate-200 rounded-md hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] disabled:opacity-40 disabled:pointer-events-none"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-[4px] border border-slate-200 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] disabled:pointer-events-none disabled:opacity-40"
               aria-label="Trang sau"
             >
               <ChevronRight className="w-4 h-4" aria-hidden="true" />
@@ -568,8 +531,6 @@ export const UsersView = ({
           </div>
         </div>
         )}
-      </Panel>
-
       <ConfirmDialog
         open={Boolean(resetTarget)}
         title="Đặt lại mật khẩu"
@@ -626,7 +587,7 @@ export const UsersView = ({
             role="dialog"
             aria-modal="true"
             aria-labelledby="reset-result-title"
-            className="w-full max-w-md space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-2xl"
+            className="w-full max-w-md space-y-4 rounded-md border border-slate-200 bg-white p-5 shadow-2xl"
           >
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -642,7 +603,7 @@ export const UsersView = ({
                 type="button"
                 onClick={() => setResetResult(null)}
                 aria-label="Đóng thông báo mật khẩu tạm"
-                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[4px] text-slate-500 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
               >
                 <X className="h-4 w-4" aria-hidden="true" />
               </button>
@@ -656,20 +617,20 @@ export const UsersView = ({
               readOnly
               value={resetResult.temporaryPassword}
               autoComplete="off"
-              className="min-h-11 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 font-mono text-sm text-slate-900"
+              className="h-8 w-full rounded-[4px] border border-slate-300 bg-slate-50 px-2.5 font-mono text-xs text-slate-900"
             />
             <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button
                 type="button"
                 onClick={() => setResetResult(null)}
-                className="min-h-11 rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
+                className="h-8 rounded-[4px] border border-slate-300 px-3 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
               >
                 Đóng
               </button>
               <button
                 type="button"
                 onClick={() => void copyTemporaryPassword()}
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[#026aa7] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2"
+                className="inline-flex h-8 items-center justify-center gap-2 rounded-[4px] bg-[#026aa7] px-3 text-xs font-semibold text-white transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2"
               >
                 <Copy className="h-4 w-4" aria-hidden="true" />
                 Sao chép mật khẩu
