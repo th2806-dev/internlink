@@ -27,6 +27,7 @@ export interface Semester {
    * (vd 14 → thực tập tuần 1..6 = tuần 14..19 của học kỳ). 1 = không lệch.
    */
   internshipStartWeek: number;
+  maxStudentsPerLecturer?: number;
   /** Chỉ tiêu sinh viên dự kiến do admin khoa nhập khi tạo kỳ (0 = chưa đặt). */
   targetStudents?: number;
   currentPhase: string;
@@ -77,6 +78,7 @@ const mapBackendToFrontend = (dto: BackendSemesterDto): Semester => {
     progressPercent: dto.progressPercent,
     totalWeeks: dto.totalWeeks,
     internshipStartWeek: dto.internshipStartWeek || 1,
+    maxStudentsPerLecturer: dto.maxStudentsPerLecturer || 0,
     targetStudents: dto.targetStudents || 0,
     currentPhase: dto.currentPhase,
     description: dto.description || "",
@@ -188,6 +190,7 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                   progressPercent: 0,
                   totalWeeks: 6,
                   internshipStartWeek: 1,
+                  maxStudentsPerLecturer: 0,
                   targetStudents: 0,
                   currentPhase: "",
                   description: "",
@@ -378,6 +381,7 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           progressPercent: 0,
           totalWeeks: 6,
           internshipStartWeek: 1,
+          maxStudentsPerLecturer: 0,
           currentPhase: "",
           description: "",
         };
@@ -424,6 +428,7 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         totalWeeks: data.totalWeeks || 6,
         internshipStartWeek: data.internshipStartWeek || 1,
         targetStudents: data.targetStudents || 0,
+        maxStudentsPerLecturer: data.maxStudentsPerLecturer || 30,
       });
       const mapped = mapBackendToFrontend(res);
       setSemesters((prev) => [mapped, ...prev]);
@@ -452,6 +457,7 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         totalWeeks: data.totalWeeks || 6,
         internshipStartWeek: data.internshipStartWeek || 1,
         targetStudents: data.targetStudents || 0,
+        maxStudentsPerLecturer: data.maxStudentsPerLecturer,
       });
       const mapped = mapBackendToFrontend(updated);
       setSemesters((prev) => prev.map((semester) => (semester.id === id ? mapped : semester)));

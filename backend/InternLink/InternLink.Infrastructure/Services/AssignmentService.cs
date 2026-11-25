@@ -1,5 +1,6 @@
 using InternLink.Application.DTOs;
 using InternLink.Application.Interfaces;
+using InternLink.Application.Common;
 using InternLink.Domain.Entities;
 using InternLink.Domain.Enums;
 using InternLink.Infrastructure.Persistence;
@@ -52,9 +53,15 @@ public class AssignmentService : IAssignmentService
         Guid targetSemesterId;
         if (request.SemesterId.HasValue && request.SemesterId.Value != Guid.Empty)
         {
-            var semesterExists = await _db.Semesters.AnyAsync(s => s.Id == request.SemesterId.Value && !s.IsDeleted);
-            if (!semesterExists)
+            var semester = await _db.Semesters
+                .FirstOrDefaultAsync(s => s.Id == request.SemesterId.Value && !s.IsDeleted);
+            if (semester == null)
                 throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.SemesterNotFoundById(request.SemesterId.Value));
+            if (departmentId.HasValue
+                && semester.DepartmentId.HasValue
+                && semester.DepartmentId != departmentId)
+                throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.SemesterNotFoundById(request.SemesterId.Value));
+            SemesterWritePolicy.EnsureWritable(semester);
             targetSemesterId = request.SemesterId.Value;
         }
         else
@@ -77,8 +84,45 @@ public class AssignmentService : IAssignmentService
             targetSemesterId = activeSemester.Id;
         }
 
-        var targetSemesterIsActive = await _db.Semesters
-            .AnyAsync(s => s.Id == targetSemesterId && s.Status == SemesterStatus.Active && !s.IsDeleted);
+        var targetSemester = await _db.Semesters
+            .FirstOrDefaultAsync(s => s.Id == targetSemesterId && !s.IsDeleted)
+            ?? throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.SemesterNotFoundById(targetSemesterId));
+        if (departmentId.HasValue
+            && targetSemester.DepartmentId.HasValue
+            && targetSemester.DepartmentId != departmentId)
+            throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.SemesterNotFoundById(targetSemesterId));
+        SemesterWritePolicy.EnsureWritable(targetSemester);
+        var targetSemesterIsActive = targetSemester.Status == SemesterStatus.Active;
+
+        var requestedStudentIds = request.StudentIds.Distinct().ToArray();
+        var validRequestedStudents = _db.Students
+            .Where(student => requestedStudentIds.Contains(student.PublicId) && !student.IsDeleted);
+        if (departmentId.HasValue)
+            validRequestedStudents = validRequestedStudents
+                .Where(student => student.DepartmentId == departmentId.Value);
+        var validRequestedStudentIds = await validRequestedStudents
+            .Select(student => student.PublicId)
+            .ToArrayAsync();
+        var lecturerInternships = _db.Internships
+            .Where(internship => internship.SemesterId == targetSemesterId
+                && internship.LecturerId == request.LecturerId
+                && !internship.IsDeleted);
+        if (departmentId.HasValue)
+            lecturerInternships = lecturerInternships
+                .Where(internship => internship.Student.DepartmentId == departmentId.Value);
+        var currentAssignmentCount = await lecturerInternships.CountAsync();
+        var alreadyAssignedStudentIds = await lecturerInternships
+            .Where(internship => validRequestedStudentIds.Contains(internship.StudentId))
+            .Select(internship => internship.StudentId)
+            .ToHashSetAsync();
+        var incomingAssignmentCount = validRequestedStudentIds
+            .Count(studentId => !alreadyAssignedStudentIds.Contains(studentId));
+        var lecturerCapacity = targetSemester.MaxStudentsPerLecturer > 0
+            ? targetSemester.MaxStudentsPerLecturer
+            : DefaultMaxCapacity;
+        if (currentAssignmentCount + incomingAssignmentCount > lecturerCapacity)
+            throw new InvalidOperationException(
+                $"Giảng viên đã vượt quá sức chứa {lecturerCapacity} sinh viên trong học kỳ này.");
 
         var result = new BulkAssignResultDto();
         var errors = new List<AssignmentErrorDto>();

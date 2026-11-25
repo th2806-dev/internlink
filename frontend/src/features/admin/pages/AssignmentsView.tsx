@@ -57,6 +57,7 @@ export const AssignmentsView = ({
   const selectedSemester = selectedSemesterId;
   const setSelectedSemester = selectSemester;
   const effectiveSemesterId = selectedSemester === "all" ? undefined : selectedSemester;
+  const maxStudentsPerLecturer = currentSemesterObj?.maxStudentsPerLecturer || 40;
   const apiMatrix = useAdminAssignmentMatrix(true, selectedSemesterId, onShowToast, toApiDepartmentId(selectedDepartmentId));
   const [activeTab, setActiveTab] = useState("by-lecturer");
 
@@ -717,11 +718,14 @@ export const AssignmentsView = ({
 
                         <div className="p-3 bg-slate-50 rounded-md border border-slate-200 text-right shrink-0">
                           <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">
-                            SV phân công
+                            SV / giới hạn
                           </span>
-                          <p className="text-2xl font-bold text-slate-900 tabular-nums">
-                            {activeLecturerStudents.length}
+                          <p className={`text-2xl font-bold tabular-nums ${activeLecturerStudents.length > maxStudentsPerLecturer ? "text-rose-700" : "text-slate-900"}`}>
+                            {activeLecturerStudents.length}/{maxStudentsPerLecturer}
                           </p>
+                          {activeLecturerStudents.length > maxStudentsPerLecturer && (
+                            <span className="text-[10px] font-semibold text-rose-700">Đang quá tải</span>
+                          )}
                         </div>
                       </div>
 
@@ -1361,7 +1365,9 @@ export const AssignmentsView = ({
                 </div>
 
                 <div className="space-y-2">
-                  {lecturersByAssignedCount.map((lec) => (
+                  {lecturersByAssignedCount.map((lec) => {
+                    const isOverloaded = lec.assignedCount > maxStudentsPerLecturer;
+                    return (
                     <div
                       key={lec.id}
                       className="p-3 bg-slate-50 rounded-md border border-slate-200 flex items-center justify-between text-xs"
@@ -1370,11 +1376,13 @@ export const AssignmentsView = ({
                         <p className="font-bold text-slate-900">{lec.fullName}</p>
                         <p className="text-[10px] text-slate-500">{lec.department}</p>
                       </div>
-                      <span className="font-mono font-bold text-slate-900 tabular-nums">
-                        {lec.assignedCount} SV
+                      <span className={`font-mono font-bold tabular-nums ${isOverloaded ? "text-rose-700" : "text-slate-900"}`}>
+                        {lec.assignedCount}/{maxStudentsPerLecturer} SV
+                        {isOverloaded && <span className="ml-2 font-sans">Quá tải</span>}
                       </span>
                     </div>
-                  ))}
+                    );
+                  })}
                   {lecturersByAssignedCount.length === 0 && (
                     <EmptyState
                       icon={ClipboardList}

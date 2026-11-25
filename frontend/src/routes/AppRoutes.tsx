@@ -266,13 +266,9 @@ export function AppRoutes() {
                 />
                 <Route
                   path="assignments"
-                  element={
-                    isSuperAdmin ? (
-                      <Navigate to="/admin/dashboard" replace />
-                    ) : (
-                      <AdminAssignmentsView onShowToast={showToast} />
-                    )
-                  }
+                  element={isDepartmentAdmin
+                    ? <AdminAssignmentsView onShowToast={showToast} />
+                    : <Navigate to="/admin/dashboard" replace />}
                 />
                 <Route
                   path="attendance"

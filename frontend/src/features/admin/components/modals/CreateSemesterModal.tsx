@@ -10,6 +10,7 @@ export interface SemesterModalFormValues {
   startDate: string; // yyyy-MM-dd for <input type="date">
   endDate: string;
   targetStudents: number;
+  maxStudentsPerLecturer: number;
   totalWeeks: number;
   /** Tuần tuyệt đối của học kỳ nơi Tuần thực tập 1 bắt đầu (vd 14 → TT 1..6 = HK 14..19). */
   internshipStartWeek: number;
@@ -41,6 +42,7 @@ export const CreateSemesterModal = ({
     totalWeeks?: number;
     internshipStartWeek?: number;
     targetStudents?: number;
+    maxStudentsPerLecturer?: number;
     description?: string;
   } | null;
 }) => {
@@ -50,6 +52,7 @@ export const CreateSemesterModal = ({
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [targetStudents, setTargetStudents] = useState("");
+  const [maxStudentsPerLecturer, setMaxStudentsPerLecturer] = useState("30");
   const [internshipEndWeek, setInternshipEndWeek] = useState("");
   // Mặc định 1 = kỳ nhập vào CHÍNH LÀ giai đoạn thực tập (tuần thực tập 1 = ngày bắt đầu kỳ).
   // Chỉ tăng lên (vd 14) khi StartDate là đầu CẢ học kỳ của trường chứ không riêng đợt thực tập.
@@ -71,6 +74,7 @@ export const CreateSemesterModal = ({
       setTargetStudents(
         editing.targetStudents == null ? "" : String(editing.targetStudents),
       );
+      setMaxStudentsPerLecturer(String(editing.maxStudentsPerLecturer ?? 30));
       const editingStartWeek = Math.min(52, Math.max(1, editing.internshipStartWeek ?? 1));
       const editingWeeks = Math.min(52, Math.max(1, editing.totalWeeks ?? 6));
       setInternshipStartWeek(
@@ -104,6 +108,7 @@ export const CreateSemesterModal = ({
       setStartDate("");
       setEndDate("");
       setTargetStudents("");
+      setMaxStudentsPerLecturer("30");
       setInternshipEndWeek("");
       setInternshipStartWeek("");
       setAutoFixedIsw(false);
@@ -194,6 +199,7 @@ export const CreateSemesterModal = ({
       startDate,
       endDate,
       targetStudents: parseInt(targetStudents) || 0,
+      maxStudentsPerLecturer: Math.min(200, Math.max(1, parseInt(maxStudentsPerLecturer) || 30)),
       totalWeeks: Math.min(52, Math.max(1, selectedDuration)),
       internshipStartWeek: Math.min(52, Math.max(1, parseInt(internshipStartWeek) || 1)),
       description: editing?.description,
@@ -353,6 +359,25 @@ export const CreateSemesterModal = ({
               placeholder="Chưa xác định"
               className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-900 outline-none focus:bg-white focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
             />
+          </div>
+
+          <div>
+            <label className="block font-bold text-slate-700 mb-1">
+              Số sinh viên tối đa mỗi giảng viên
+            </label>
+            <input
+              type="number"
+              min={1}
+              max={200}
+              step={1}
+              value={maxStudentsPerLecturer}
+              onChange={(e) => setMaxStudentsPerLecturer(e.target.value)}
+              required
+              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-900 outline-none focus:bg-white focus:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
+            />
+            <p className="mt-1 text-[11px] text-slate-500">
+              Hệ thống chặn phân công vượt mức này trong học kỳ.
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">

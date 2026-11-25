@@ -795,6 +795,14 @@ public class LecturerController : ControllerBase
         {
             return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
+            catch (InternLink.Application.Exceptions.TenantStorageQuotaExceededException ex)
+            {
+                return StatusCode(StatusCodes.Status413PayloadTooLarge, ApiResponse<object>.Fail(new ApiError
+                {
+                    Title = ex.Message,
+                    Status = StatusCodes.Status413PayloadTooLarge
+                }));
+            }
             catch (InvalidOperationException ex)
             {
                 return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = ex.Message }));

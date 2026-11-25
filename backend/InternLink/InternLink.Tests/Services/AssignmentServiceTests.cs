@@ -218,6 +218,61 @@ public class AssignmentServiceTests
     }
 
     [Fact]
+    public async Task BulkAssignAsync_ShouldRejectAssignmentsOverSemesterCapacity()
+    {
+        var (db, semester) = await GetDbWithSemesterAsync();
+        semester.MaxStudentsPerLecturer = 1;
+        var lecturer = new Lecturer { StaffCode = "GV001", FullName = "Lecturer" };
+        var students = new[]
+        {
+            new Student { StudentCode = "SV001", FullName = "Student 1" },
+            new Student { StudentCode = "SV002", FullName = "Student 2" }
+        };
+        db.Lecturers.Add(lecturer);
+        db.Students.AddRange(students);
+        await db.SaveChangesAsync();
+
+        var assign = () => CreateService(db).BulkAssignAsync(new BulkAssignRequest
+        {
+            LecturerId = lecturer.Id,
+            SemesterId = semester.Id,
+            StudentIds = students.Select(student => student.Id).ToList()
+        });
+
+        await assign.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("Giảng viên đã vượt quá sức chứa 1 sinh viên trong học kỳ này.");
+        (await db.Internships.CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task BulkAssignAsync_ShouldRejectLecturerOutsideDepartmentScope()
+    {
+        var (db, semester) = await GetDbWithSemesterAsync();
+        var requestedDepartment = new Department { Code = "CNTT", Name = "Công nghệ thông tin" };
+        var lecturerDepartment = new Department { Code = "QTKD", Name = "Quản trị kinh doanh" };
+        var lecturer = new Lecturer
+        {
+            StaffCode = "GV001",
+            FullName = "Lecturer",
+            DepartmentId = lecturerDepartment.Id
+        };
+        db.Departments.AddRange(requestedDepartment, lecturerDepartment);
+        db.Lecturers.Add(lecturer);
+        await db.SaveChangesAsync();
+
+        var assign = () => CreateService(db).BulkAssignAsync(new BulkAssignRequest
+        {
+            LecturerId = lecturer.Id,
+            SemesterId = semester.Id,
+            StudentIds = []
+        }, requestedDepartment.Id);
+
+        await assign.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("Giảng viên không thuộc khoa của bạn");
+        (await db.Internships.CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
     public async Task AutoAssignAsync_EvenStrategy_ShouldDistributeUnassignedStudents()
     {
         var (db, semester) = await GetDbWithSemesterAsync();

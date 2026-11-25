@@ -46,6 +46,7 @@ const EMPTY_SEMESTER = {
   studentsCount: null,
   placedStudents: null,
   companiesCount: null,
+  maxStudentsPerLecturer: 0,
   status: "upcoming" as const,
   progressPercent: null,
   currentPhase: "Chưa có dữ liệu kỳ thực tập",
@@ -112,6 +113,7 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
     totalWeeks?: number;
     internshipStartWeek?: number;
     targetStudents?: number;
+    maxStudentsPerLecturer?: number;
     description?: string;
   }>(null);
   const [importType, setImportType] = useState(null);
@@ -285,6 +287,7 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
                           totalWeeks: "totalWeeks" in currentActiveSem ? currentActiveSem.totalWeeks : undefined,
                           internshipStartWeek: "internshipStartWeek" in currentActiveSem ? currentActiveSem.internshipStartWeek : undefined,
                           targetStudents: "targetStudents" in currentActiveSem ? currentActiveSem.targetStudents : undefined,
+                          maxStudentsPerLecturer: currentActiveSem.maxStudentsPerLecturer,
                           description: currentActiveSem.description,
                         });
                         setShowCreateModal(true);
@@ -601,6 +604,7 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
                                     totalWeeks: sem.totalWeeks,
                                     internshipStartWeek: sem.internshipStartWeek,
                                     targetStudents: sem.targetStudents,
+                                    maxStudentsPerLecturer: sem.maxStudentsPerLecturer,
                                     description: sem.description,
                                   });
                                   setShowCreateModal(true);
@@ -723,6 +727,7 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
             startDate: data.startDate,
             endDate: data.endDate,
             targetStudents: data.targetStudents,
+            maxStudentsPerLecturer: data.maxStudentsPerLecturer,
             studentsCount: data.targetStudents,
             totalWeeks: data.totalWeeks,
             internshipStartWeek: data.internshipStartWeek,
@@ -740,6 +745,7 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
               totalWeeks: data.totalWeeks,
               internshipStartWeek: data.internshipStartWeek,
               targetStudents: data.targetStudents,
+              maxStudentsPerLecturer: data.maxStudentsPerLecturer,
               description: data.description,
             },
             onShowToast,
