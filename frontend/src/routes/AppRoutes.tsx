@@ -517,7 +517,9 @@ export function AppRoutes() {
                 />
                 <Route
                   path="config/grading-rules"
-                  element={<AdminGradingRulesConfigView onShowToast={showToast} />}
+                  element={isDepartmentAdmin
+                    ? <AdminGradingRulesConfigView onShowToast={showToast} />
+                    : <Navigate to="/admin/dashboard" replace />}
                 />
                 <Route
                   path="logs/audit"

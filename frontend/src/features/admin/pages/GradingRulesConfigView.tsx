@@ -73,13 +73,14 @@ export function GradingRulesConfigView({
 }) {
   const { semesters, departments, selectedSemesterId } = useSemester();
   const { isDepartmentAdmin } = useAdminCapabilities();
-  const [semesterId, setSemesterId] = useState(selectedSemesterId);
+  const [semesterId, setSemesterId] = useState(selectedSemesterId === "all" ? "" : selectedSemesterId);
   const [departmentId, setDepartmentId] = useState("");
+  const [activeEditor, setActiveEditor] = useState<"rules" | "rubric">("rules");
   const [rules, setRules] = useState<GradingRuleSet>(() =>
-    createDefaultRules(selectedSemesterId, null),
+    createDefaultRules(selectedSemesterId === "all" ? "" : selectedSemesterId, null),
   );
   const [employerRubric, setEmployerRubric] = useState<EmployerRubricConfig>(() =>
-    createDefaultEmployerRubric(selectedSemesterId),
+    createDefaultEmployerRubric(selectedSemesterId === "all" ? "" : selectedSemesterId),
   );
   const queryClient = useQueryClient();
   const rulesQuery = useQuery({
@@ -94,8 +95,13 @@ export function GradingRulesConfigView({
   });
 
   useEffect(() => {
-    if (selectedSemesterId && !semesterId) setSemesterId(selectedSemesterId);
-  }, [selectedSemesterId, semesterId]);
+    if (semesters.some((semester) => semester.id === semesterId)) return;
+    const preferredSemester = selectedSemesterId !== "all"
+      ? semesters.find((semester) => semester.id === selectedSemesterId)?.id
+      : undefined;
+    const nextSemesterId = preferredSemester ?? semesters[0]?.id ?? "";
+    if (nextSemesterId !== semesterId) setSemesterId(nextSemesterId);
+  }, [selectedSemesterId, semesterId, semesters]);
   useEffect(() => {
     if (isDepartmentAdmin && rulesQuery.data?.departmentId) {
       setDepartmentId(rulesQuery.data.departmentId);
@@ -186,9 +192,39 @@ export function GradingRulesConfigView({
         icon={BadgeCheck}
         title="Quy chế Điểm & Deadline (F1004)"
         subtitle="Thiết lập trọng số, lịch báo cáo và ngưỡng đạt theo kỳ, khoa."
-      />
+      >
+        {activeEditor === "rules" ? (
+          <button
+            type="button"
+            onClick={() => saveMutation.mutate()}
+            disabled={!semesterId || !isValid || isBusy || !!rulesQuery.error}
+            className="inline-flex h-8 items-center justify-center gap-2 rounded-[4px] bg-[#026aa7] px-3 text-xs font-semibold text-white transition hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Save aria-hidden="true" className="h-4 w-4" />
+            {saveMutation.isPending
+              ? "Đang áp dụng…"
+              : departmentId || isDepartmentAdmin
+                ? "Lưu quy chế"
+                : "Áp dụng mặc định toàn trường"}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => saveRubricMutation.mutate()}
+            disabled={!semesterId || !employerRubricIsValid || rubricQuery.isLoading || saveRubricMutation.isPending || !!rubricQuery.error}
+            className="inline-flex h-8 items-center justify-center gap-2 rounded-[4px] bg-[#026aa7] px-3 text-xs font-semibold text-white transition hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Save aria-hidden="true" className="h-4 w-4" />
+            {saveRubricMutation.isPending ? "Đang lưu rubric…" : "Lưu rubric doanh nghiệp"}
+          </button>
+        )}
+      </CompactActionBar>
 
-      <section className="space-y-3 rounded-md border border-slate-200 bg-white p-3">
+      <section aria-labelledby="grading-scope-heading" className="space-y-3 rounded-md border border-slate-200 bg-white p-3 shadow-md">
+        <div>
+          <h2 id="grading-scope-heading" className="text-sm font-bold text-slate-800">Phạm vi áp dụng</h2>
+          <p className="mt-0.5 text-xs text-slate-500">Chọn học kỳ và khoa cần cấu hình.</p>
+        </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <label htmlFor="grading-semester" className="mb-1 block text-xs font-medium text-slate-700">Học kỳ</label>
@@ -229,7 +265,42 @@ export function GradingRulesConfigView({
             </select>
           </div>
         </div>
+        {!semesters.length && (
+          <p role="status" className="rounded-md bg-amber-50 p-3 text-xs text-amber-900">
+            Chưa có học kỳ để cấu hình quy chế.
+          </p>
+        )}
+      </section>
 
+      <div role="group" aria-label="Nhóm cấu hình điểm" className="flex w-fit max-w-full flex-wrap gap-1 rounded-md border border-slate-200 bg-slate-100 p-1">
+        <button
+          type="button"
+          aria-pressed={activeEditor === "rules"}
+          onClick={() => setActiveEditor("rules")}
+          className={`h-8 rounded-[4px] px-3 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] ${
+            activeEditor === "rules"
+              ? "bg-white text-[#026aa7] shadow-sm"
+              : "text-slate-600 hover:bg-white/70 hover:text-slate-900"
+          }`}
+        >
+          Quy chế &amp; Deadline
+        </button>
+        <button
+          type="button"
+          aria-pressed={activeEditor === "rubric"}
+          onClick={() => setActiveEditor("rubric")}
+          className={`h-8 rounded-[4px] px-3 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] ${
+            activeEditor === "rubric"
+              ? "bg-white text-[#026aa7] shadow-sm"
+              : "text-slate-600 hover:bg-white/70 hover:text-slate-900"
+          }`}
+        >
+          Rubric doanh nghiệp
+        </button>
+      </div>
+
+      {activeEditor === "rules" && (
+      <section aria-label="Quy chế điểm và deadline" className="space-y-3 rounded-md border border-slate-200 bg-white p-3 shadow-md">
         {rulesQuery.error && (
           <div role="alert" className="rounded-md border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
             {getApiErrorMessage(rulesQuery.error)}
@@ -238,11 +309,7 @@ export function GradingRulesConfigView({
         {rulesQuery.isLoading && (
           <p role="status" className="text-sm text-slate-600">Đang tải quy chế…</p>
         )}
-        {!semesters.length && (
-          <p className="rounded-md bg-amber-50 p-3 text-xs text-amber-900">Chưa có học kỳ để cấu hình quy chế.</p>
-        )}
-
-        <fieldset disabled={rulesQuery.isLoading} className="space-y-3 rounded-md border border-slate-200 p-3 disabled:opacity-70">
+        <fieldset disabled={!semesterId || rulesQuery.isLoading} className="space-y-3 rounded-md border border-slate-200 p-3 disabled:opacity-70">
           <legend className="px-2 text-xs font-semibold text-slate-900">Trọng số điểm</legend>
           <div className="grid gap-4 sm:grid-cols-3">
             {([
@@ -273,7 +340,7 @@ export function GradingRulesConfigView({
           </p>
         </fieldset>
 
-        <fieldset disabled={rulesQuery.isLoading} className="space-y-3 rounded-md border border-slate-200 p-3 disabled:opacity-70">
+        <fieldset disabled={!semesterId || rulesQuery.isLoading} className="space-y-3 rounded-md border border-slate-200 p-3 disabled:opacity-70">
           <legend className="px-2 text-xs font-semibold text-slate-900">Báo cáo tuần & tiêu chuẩn đạt</legend>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div>
@@ -344,7 +411,7 @@ export function GradingRulesConfigView({
             Kiểm tra tổng trọng số phải bằng 100%, số tuần không vượt quá thời lượng kỳ và điểm đạt nằm trong khoảng 0–10.
           </p>
         )}
-        <div className="flex flex-col-reverse gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="border-t border-slate-100 pt-3">
           <p className="text-xs text-slate-500">
             {isDepartmentAdmin
               ? "Quy chế chỉ áp dụng cho khoa của bạn."
@@ -352,26 +419,15 @@ export function GradingRulesConfigView({
                 ? "Quy chế áp dụng cho khoa đã chọn."
                 : "Quy chế này sẽ là mặc định toàn trường."}
           </p>
-          <button
-            type="button"
-            onClick={() => saveMutation.mutate()}
-            disabled={!semesterId || !isValid || isBusy || !!rulesQuery.error}
-            className="inline-flex h-8 items-center justify-center gap-2 rounded-[4px] bg-[#026aa7] px-3 text-xs font-semibold text-white transition hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Save aria-hidden="true" className="h-4 w-4" />
-            {saveMutation.isPending
-              ? "Đang áp dụng…"
-              : departmentId || isDepartmentAdmin
-                ? "Lưu quy chế"
-                : "Áp dụng mặc định toàn trường"}
-          </button>
         </div>
       </section>
+      )}
 
-      <section className="space-y-3 rounded-md border border-slate-200 bg-white p-3">
+      {activeEditor === "rubric" && (
+      <section className="space-y-3 rounded-md border border-slate-200 bg-white p-3 shadow-md xl:max-h-[calc(100dvh-310px)] xl:overflow-y-auto">
         <div>
-          <h2 className="text-lg font-bold text-slate-900">Rubric đánh giá doanh nghiệp</h2>
-          <p className="mt-1 text-sm leading-6 text-slate-600">
+          <h2 className="text-sm font-bold text-slate-800">Rubric đánh giá doanh nghiệp</h2>
+          <p className="mt-1 text-xs leading-relaxed text-slate-600">
             Cấu hình 8–10 tiêu chí, trọng số tổng 100% và mô tả 5 mức lựa chọn. Mức N/A được xử lý riêng và không tính vào mẫu số điểm.
           </p>
         </div>
@@ -389,10 +445,15 @@ export function GradingRulesConfigView({
             Đang kế thừa rubric toàn trường. Khi lưu, cấu hình này sẽ trở thành rubric riêng của khoa.
           </p>
         )}
+        {!employerRubricIsValid && !rubricQuery.isLoading && !rubricQuery.error && (
+          <p role="alert" className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+            Cần 8–10 tiêu chí có tên, trọng số tổng đúng 100% và đủ mô tả cho 5 mức đánh giá.
+          </p>
+        )}
 
-        <fieldset disabled={rubricQuery.isLoading || saveRubricMutation.isPending} className="space-y-4 disabled:opacity-70">
+        <fieldset disabled={!semesterId || rubricQuery.isLoading || saveRubricMutation.isPending} className="space-y-3 disabled:opacity-70">
           <div>
-            <label htmlFor="employer-rubric-name" className="mb-1.5 block text-sm font-medium text-slate-700">Tên rubric</label>
+            <label htmlFor="employer-rubric-name" className="mb-1.5 block text-xs font-medium text-slate-700">Tên rubric</label>
             <input
               id="employer-rubric-name"
               value={employerRubric.name}
@@ -402,7 +463,7 @@ export function GradingRulesConfigView({
             />
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-2">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <h3 className="font-semibold text-slate-900">Tiêu chí và trọng số</h3>
               <div className="flex items-center gap-3">
@@ -429,9 +490,8 @@ export function GradingRulesConfigView({
               </div>
             </div>
             {employerRubric.criteria.map((criterion, index) => (
-              <div key={criterion.id} className="grid gap-2 rounded-md border border-slate-200 p-2 sm:grid-cols-[minmax(0,1fr)_120px_auto]">
-                <div className="space-y-2">
-                  <label className="block text-xs font-medium text-slate-700">
+              <div key={criterion.id} className="grid items-end gap-2 rounded-md border border-slate-200 p-2 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,2fr)_90px_auto]">
+                  <label className="block min-w-0 text-[11px] font-medium text-slate-700">
                     Tiêu chí {index + 1}
                     <input
                       value={criterion.name}
@@ -444,9 +504,10 @@ export function GradingRulesConfigView({
                       className="mt-1 h-8 w-full rounded-[4px] border border-slate-200 px-2.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
                     />
                   </label>
-                  <label className="block text-xs font-medium text-slate-700">
+                  <label className="block min-w-0 text-[11px] font-medium text-slate-700">
                     Mô tả (không bắt buộc)
-                    <textarea
+                    <input
+                      type="text"
                       value={criterion.description ?? ""}
                       onChange={(event) => setEmployerRubric((current) => ({
                         ...current,
@@ -454,12 +515,10 @@ export function GradingRulesConfigView({
                           itemIndex === index ? { ...item, description: event.target.value } : item),
                       }))}
                       maxLength={500}
-                      rows={2}
-                      className="mt-1 min-h-16 w-full rounded-[4px] border border-slate-200 p-2.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
+                      className="mt-1 h-8 w-full rounded-[4px] border border-slate-200 px-2.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
                     />
                   </label>
-                </div>
-                <label className="block text-xs font-medium text-slate-700">
+                <label className="block text-[11px] font-medium text-slate-700">
                   Trọng số (%)
                   <input
                     type="number"
@@ -492,63 +551,50 @@ export function GradingRulesConfigView({
             ))}
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-2">
             <h3 className="font-semibold text-slate-900">Mô tả các mức đánh giá</h3>
-            {employerRubric.ratingLevels.map((level, index) => (
-              <div key={level.value} className="grid gap-3 rounded-lg border border-slate-200 p-3 sm:grid-cols-[70px_minmax(0,1fr)]">
-                <span className="flex h-8 items-center justify-center rounded-md bg-slate-100 text-xs font-bold tabular-nums text-slate-800">
-                  {level.value}
-                </span>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="block text-xs font-medium text-slate-700">
-                    Nhãn
-                    <input
-                      value={level.label}
-                      onChange={(event) => setEmployerRubric((current) => ({
-                        ...current,
-                        ratingLevels: current.ratingLevels.map((item, itemIndex) =>
-                          itemIndex === index ? { ...item, label: event.target.value } : item),
-                      }))}
-                      maxLength={100}
-                      className="mt-1 h-8 w-full rounded-[4px] border border-slate-200 px-2.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
-                    />
-                  </label>
-                  <label className="block text-xs font-medium text-slate-700">
-                    Mô tả hành vi
-                    <input
-                      value={level.description}
-                      onChange={(event) => setEmployerRubric((current) => ({
-                        ...current,
-                        ratingLevels: current.ratingLevels.map((item, itemIndex) =>
-                          itemIndex === index ? { ...item, description: event.target.value } : item),
-                      }))}
-                      maxLength={500}
-                      className="mt-1 h-8 w-full rounded-[4px] border border-slate-200 px-2.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
-                    />
-                  </label>
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+              {employerRubric.ratingLevels.map((level, index) => (
+                <div key={level.value} className="grid gap-2 rounded-md border border-slate-200 p-2 sm:grid-cols-[44px_minmax(0,1fr)]">
+                  <span className="flex h-8 items-center justify-center rounded-[3px] bg-slate-100 text-xs font-bold tabular-nums text-slate-800">
+                    {level.value}
+                  </span>
+                  <div className="grid gap-2">
+                    <label className="block text-[11px] font-medium text-slate-700">
+                      Nhãn
+                      <input
+                        value={level.label}
+                        onChange={(event) => setEmployerRubric((current) => ({
+                          ...current,
+                          ratingLevels: current.ratingLevels.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, label: event.target.value } : item),
+                        }))}
+                        maxLength={100}
+                        className="mt-1 h-8 w-full rounded-[4px] border border-slate-200 px-2.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
+                      />
+                    </label>
+                    <label className="block text-[11px] font-medium text-slate-700">
+                      Mô tả hành vi
+                      <input
+                        value={level.description}
+                        onChange={(event) => setEmployerRubric((current) => ({
+                          ...current,
+                          ratingLevels: current.ratingLevels.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, description: event.target.value } : item),
+                        }))}
+                        maxLength={500}
+                        className="mt-1 h-8 w-full rounded-[4px] border border-slate-200 px-2.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
+                      />
+                    </label>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </fieldset>
 
-        {!employerRubricIsValid && !rubricQuery.isLoading && !rubricQuery.error && (
-          <p role="alert" className="text-sm text-rose-700">
-            Cần 8–10 tiêu chí có tên, trọng số tổng đúng 100% và đủ mô tả cho 5 mức đánh giá.
-          </p>
-        )}
-        <div className="flex justify-end border-t border-slate-100 pt-4">
-          <button
-            type="button"
-            onClick={() => saveRubricMutation.mutate()}
-            disabled={!semesterId || !employerRubricIsValid || rubricQuery.isLoading || saveRubricMutation.isPending || !!rubricQuery.error}
-            className="inline-flex h-8 items-center justify-center gap-2 rounded-[4px] bg-[#026aa7] px-3 text-xs font-semibold text-white transition hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Save aria-hidden="true" className="h-4 w-4" />
-            {saveRubricMutation.isPending ? "Đang lưu rubric…" : "Lưu rubric doanh nghiệp"}
-          </button>
-        </div>
       </section>
+      )}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 using InternLink.API.Authorization;
+using InternLink.Application.Common;
 using InternLink.Application.Interfaces;
 using InternLink.Domain.Entities;
 using InternLink.Domain.Entities.Rbac;
@@ -13,7 +14,7 @@ namespace InternLink.API.Controllers;
 
 [ApiController]
 [Route("api/v1/system/grading-rule-sets")]
-[Authorize]
+[Authorize(Policy = AdminPolicies.DepartmentAdmin)]
 [RequirePermission(SystemPermissionCodes.ConfigurationUpdate)]
 public sealed class SysGradingRuleSetsController : ControllerBase
 {
@@ -79,6 +80,7 @@ public sealed class SysGradingRuleSetsController : ControllerBase
             .FirstOrDefaultAsync(item => item.Id == semesterId && !item.IsDeleted, cancellationToken);
         if (semester == null)
             return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Không tìm thấy học kỳ." }));
+        SemesterWritePolicy.EnsureWritable(semester);
         var totalWeeks = semester.TotalWeeks > 0 ? semester.TotalWeeks : 6;
         if (request.RequiredWeeklyReportsCount > totalWeeks)
             return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = $"Số tuần bắt buộc không được vượt quá {totalWeeks} tuần của học kỳ." }));

@@ -123,6 +123,37 @@ public class RubricServiceTests
     }
 
     [Fact]
+    public async Task CreateAsync_ShouldRejectCriteriaWeightsThatDoNotTotalOneHundredPercent()
+    {
+        await using var db = GetDb();
+        var semester = new Semester
+        {
+            Name = "Học kỳ kiểm thử",
+            Term = "HK1",
+            AcademicYear = "2026-2027"
+        };
+        db.Semesters.Add(semester);
+        await db.SaveChangesAsync();
+        var service = new RubricService(db);
+        var request = new CreateRubricRequest
+        {
+            Name = "Rubric chưa đủ trọng số",
+            ApplicationMode = "Required",
+            Criteria =
+            [
+                new() { Name = "Chuyên môn", Weight = 40, MaxScore = 10 },
+                new() { Name = "Thái độ", Weight = 50, MaxScore = 10 }
+            ]
+        };
+
+        var create = () => service.CreateAsync(semester.Id, request, Guid.NewGuid());
+
+        await create.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("Tổng trọng số phải bằng 100%. Hiện tại: 90%");
+        (await db.EvaluationRubrics.CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
     public async Task GetEmployerConfig_PrefersDepartmentRubricAndFallsBackToSchoolRubric()
     {
         await using var db = GetDb();

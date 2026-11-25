@@ -14,7 +14,7 @@ namespace InternLink.API.Controllers;
 
 [ApiController]
 [Route("api/v1/system/employer-rubrics")]
-[Authorize]
+[Authorize(Policy = AdminPolicies.DepartmentAdmin)]
 [RequirePermission(SystemPermissionCodes.ConfigurationUpdate)]
 public sealed class SystemEmployerRubricsController : ControllerBase
 {

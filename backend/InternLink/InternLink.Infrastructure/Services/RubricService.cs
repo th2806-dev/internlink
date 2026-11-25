@@ -1,4 +1,5 @@
 using InternLink.Application.DTOs;
+using InternLink.Application.Common;
 using InternLink.Application.Interfaces;
 using InternLink.Domain.Entities;
 using InternLink.Domain.Enums;
@@ -80,6 +81,7 @@ public class RubricService : IRubricService
             .AsNoTracking()
             .FirstOrDefaultAsync(item => item.Id == semesterId && !item.IsDeleted, cancellationToken)
             ?? throw new KeyNotFoundException("Không tìm thấy học kỳ.");
+        SemesterWritePolicy.EnsureWritable(semester);
 
         if (departmentId.HasValue)
         {

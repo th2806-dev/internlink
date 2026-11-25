@@ -14,7 +14,7 @@ vi.mock("../contexts/SemesterContext", () => ({
       totalWeeks: 6,
     }],
     departments: [{ id: "department-1", name: "Khoa Công nghệ", code: "CNTT", isActive: true }],
-    selectedSemesterId: "semester-1",
+    selectedSemesterId: "all",
   }),
 }));
 
@@ -66,6 +66,12 @@ describe("GradingRulesConfigView", () => {
 
     expect(await screen.findByLabelText("Deadline mỗi tuần")).toHaveValue("5");
     await waitFor(() => {
+      expect(systemAdminService.getGradingRuleSet).toHaveBeenCalledWith("semester-1", null);
+      expect(systemAdminService.getEmployerRubric).toHaveBeenCalledWith("semester-1", null);
+    });
+    expect(systemAdminService.getGradingRuleSet).not.toHaveBeenCalledWith("all", expect.anything());
+    expect(systemAdminService.getEmployerRubric).not.toHaveBeenCalledWith("all", expect.anything());
+    await waitFor(() => {
       expect(screen.getByLabelText("Trừ điểm mỗi ngày trễ")).not.toBeDisabled();
     });
     fireEvent.change(screen.getByLabelText("Trừ điểm mỗi ngày trễ"), {
@@ -108,7 +114,9 @@ describe("GradingRulesConfigView", () => {
   it("loads the rubric editor with eight configurable criteria and five scale levels", async () => {
     renderView(<GradingRulesConfigView onShowToast={vi.fn()} />);
 
+    fireEvent.click(screen.getByRole("button", { name: "Rubric doanh nghiệp" }));
     expect(await screen.findByLabelText("Tên rubric")).toHaveValue("Rubric đánh giá doanh nghiệp");
+    expect(screen.queryByLabelText("Điểm quá trình (%)")).not.toBeInTheDocument();
     expect(screen.getAllByLabelText(/Tiêu chí \d+/)).toHaveLength(8);
     expect(screen.getAllByLabelText("Nhãn")).toHaveLength(5);
     expect(screen.getAllByLabelText("Mô tả hành vi")).toHaveLength(5);
