@@ -164,7 +164,7 @@ public class AdminSemestersController : ControllerBase
         if (!success)
             return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SemesterNotFound }));
 
-        return Ok(ApiResponse<object>.Ok(new { message = "Semester closed successfully" }));
+        return Ok(ApiResponse<object>.Ok(new { message = "Đã khóa sổ học kỳ. Dữ liệu trong kỳ chuyển sang chế độ chỉ đọc." }));
     }
 
     [HttpPost("{id:guid}/start")]
@@ -184,7 +184,7 @@ public class AdminSemestersController : ControllerBase
         }
         catch (InvalidOperationException ex)
         {
-            return Conflict(ApiResponse<object>.Fail(new ApiError { Title = ex.Message }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = ex.Message }));
         }
     }
 
@@ -205,7 +205,7 @@ public class AdminSemestersController : ControllerBase
         }
         catch (InvalidOperationException ex)
         {
-            return Conflict(ApiResponse<object>.Fail(new ApiError { Title = ex.Message }));
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = ex.Message }));
         }
     }
 
@@ -220,7 +220,7 @@ public class AdminSemestersController : ControllerBase
         if (!success)
             return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.SemesterNotFound }));
 
-        return Ok(ApiResponse<object>.Ok(new { message = "Semester deleted successfully" }));
+        return Ok(ApiResponse<object>.Ok(new { message = "Đã xóa học kỳ." }));
     }
 
     private async Task<bool> _deptCanAccessSemester(Guid id)

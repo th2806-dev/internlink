@@ -1,5 +1,6 @@
 using FluentAssertions;
 using InternLink.Application.DTOs;
+using InternLink.Application.Interfaces;
 using InternLink.Domain.Entities;
 using InternLink.Domain.Enums;
 using InternLink.Infrastructure.Persistence;
@@ -35,6 +36,62 @@ public class SemesterServiceTests
 
         semesters.Should().HaveCount(2);
         semesters.First().Status.Should().Be(SemesterStatus.Active);
+    }
+
+    [Fact]
+    public async Task GetAllSemestersAsync_WithTenantId_ShouldOnlyReturnThatTenantsSemesters()
+    {
+        var tenantId = Guid.NewGuid();
+        var otherTenantId = Guid.NewGuid();
+        var tenantSemesterId = Guid.NewGuid();
+        var otherTenantSemesterId = Guid.NewGuid();
+        var databaseName = Guid.NewGuid().ToString();
+        var seedTenantContext = new ScopedTenantContext();
+        seedTenantContext.SetTenantId(tenantId);
+        seedTenantContext.SetPlatformAdmin(true);
+        var seedOptions = new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase(databaseName)
+            .Options;
+        await using (var seedDb = new AppDbContext(seedOptions, seedTenantContext))
+        {
+            seedDb.Semesters.AddRange(
+                new Semester
+                {
+                    Id = tenantSemesterId,
+                    TenantId = tenantId,
+                    Name = "Tenant semester",
+                    Term = "Học kỳ I",
+                    AcademicYear = "2026 - 2027",
+                    CreatedAt = DateTime.UtcNow
+                },
+                new Semester
+                {
+                    Id = otherTenantSemesterId,
+                    TenantId = otherTenantId,
+                    Name = "Other tenant semester",
+                    Term = "Học kỳ I",
+                    AcademicYear = "2026 - 2027",
+                    CreatedAt = DateTime.UtcNow
+                });
+            await seedDb.SaveChangesAsync();
+        }
+
+        var tenantContext = new ScopedTenantContext();
+        tenantContext.SetTenantId(tenantId);
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase(databaseName)
+            .Options;
+        await using var db = new AppDbContext(options, tenantContext);
+
+        var service = new SemesterService(db);
+
+        var semesters = (await service.GetAllSemestersAsync(tenantId: tenantId)).ToList();
+        var otherTenantResult = await service.GetSemesterByIdAsync(
+            otherTenantSemesterId,
+            tenantId);
+
+        semesters.Should().ContainSingle().Which.Id.Should().Be(tenantSemesterId);
+        otherTenantResult.Should().BeNull();
     }
 
     [Fact]
@@ -188,7 +245,7 @@ public class SemesterServiceTests
             AcademicYear = "2026 - 2027",
             StartDate = new DateTime(2026, 9, 1),
             EndDate = new DateTime(2026, 10, 15),
-            Status = SemesterStatus.Completed,
+            Status = SemesterStatus.Active,
             CreatedAt = DateTime.UtcNow,
         };
         var studentUser = new User
@@ -221,11 +278,15 @@ public class SemesterServiceTests
         db.Students.Add(student);
         db.Internships.Add(internship);
         await db.SaveChangesAsync();
+        semester.Status = SemesterStatus.Completed;
+        await db.SaveChangesAsync();
 
-        var result = await new SemesterService(db).ReopenSemesterAsync(semester.Id);
+        var reopen = () => new SemesterService(db).ReopenSemesterAsync(semester.Id);
 
-        result!.Status.Should().Be(SemesterStatus.Active);
-        (await db.Users.FindAsync(studentUser.Id))!.IsActive.Should().BeTrue();
+        await reopen.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("Học kỳ đã khóa sổ, không thể thay đổi dữ liệu");
+        (await db.Semesters.FindAsync(semester.Id))!.Status.Should().Be(SemesterStatus.Completed);
+        (await db.Users.FindAsync(studentUser.Id))!.IsActive.Should().BeFalse();
         (await db.Internships.FindAsync(internship.Id))!.Status.Should().Be(InternshipStatus.InProgress);
     }
 
@@ -461,7 +522,7 @@ public class SemesterServiceTests
             Name = "Kỳ đã đóng",
             Term = "Học kỳ I",
             AcademicYear = "2025 - 2026",
-            Status = SemesterStatus.Completed,
+            Status = SemesterStatus.Active,
             TotalWeeks = 1,
             CreatedAt = DateTime.UtcNow
         };
@@ -502,6 +563,8 @@ public class SemesterServiceTests
             SubmittedAt = dueDate.AddHours(-1),
             CreatedAt = dueDate.AddHours(-2)
         });
+        await db.SaveChangesAsync();
+        semester.Status = SemesterStatus.Completed;
         await db.SaveChangesAsync();
 
         var result = (await new SemesterService(db).GetAllSemestersAsync()).Single();

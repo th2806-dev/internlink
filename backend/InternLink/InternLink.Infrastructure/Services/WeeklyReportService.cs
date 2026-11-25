@@ -1,6 +1,7 @@
 using AutoMapper;
 using InternLink.Application.Common;
 using InternLink.Application.DTOs;
+using InternLink.Application.Common;
 using InternLink.Application.Interfaces;
 using InternLink.Domain.Entities;
 using InternLink.Domain.Enums;
@@ -979,7 +980,7 @@ public class WeeklyReportService : IWeeklyReportService
         if (internship.Semester == null)
             return;
         if (internship.Semester.Status == SemesterStatus.Completed)
-            throw new InvalidOperationException("Kỳ thực tập đã đóng, không thể nộp hoặc cập nhật báo cáo.");
+            throw new InvalidOperationException(SemesterWritePolicy.LockedMessage);
 
         var schedule = await _db.SemesterReportSchedules
             .Where(item => item.SemesterId == internship.SemesterId && item.WeekNumber == weekNumber && !item.IsDeleted
@@ -999,8 +1000,8 @@ public class WeeklyReportService : IWeeklyReportService
 
     private static void EnsureSemesterOpenForReview(WeeklyReport report)
     {
-        +
-            throw new InvalidOperationException("Kỳ thực tập đã đóng, không thể nộp hoặc cập nhật báo cáo.");
+        if (report.Internship.Semester?.Status == SemesterStatus.Completed)
+            throw new InvalidOperationException(SemesterWritePolicy.LockedMessage);
     }
 
     public static string SanitizeStudentNameForFileName(string? studentName)

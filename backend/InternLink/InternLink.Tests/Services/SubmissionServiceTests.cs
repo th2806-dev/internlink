@@ -253,12 +253,14 @@ public class SubmissionServiceTests
             Id = Guid.NewGuid(),
             Name = "Học kỳ đã đóng",
             Term = "HK1",
-            +
+            AcademicYear = "2025-2026",
             Status = SemesterStatus.Active,
         };
         internship.SemesterId = semester.Id;
         internship.Semester = semester;
         await db.Semesters.AddAsync(semester);
+        await db.SaveChangesAsync();
+        semester.Status = SemesterStatus.Completed;
         await db.SaveChangesAsync();
         var service = CreateService(db);
 
@@ -271,7 +273,7 @@ public class SubmissionServiceTests
         });
 
         await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("Học kỳ thực tập đã kết thúc. Không thể nộp hoặc cập nhật hồ sơ.");
+            .WithMessage("Học kỳ đã khóa sổ, không thể thay đổi dữ liệu");
     }
 
     [Fact]

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using InternLink.Application.DTOs;
 using InternLink.Application.Interfaces;
+using InternLink.Application.Common;
 using InternLink.Domain.Entities;
 using InternLink.Domain.Enums;
 using InternLink.Infrastructure.Persistence;
@@ -20,9 +21,15 @@ public class SemesterService : ISemesterService
         _context = context;
     }
 
-    public async Task<IEnumerable<SemesterDto>> GetAllSemestersAsync(Guid? departmentId = null)
+    public async Task<IEnumerable<SemesterDto>> GetAllSemestersAsync(
+        Guid? departmentId = null,
+        Guid? tenantId = null,
+        CancellationToken cancellationToken = default)
     {
         var query = _context.Semesters.Where(s => !s.IsDeleted);
+
+        if (tenantId.HasValue)
+            query = query.Where(s => s.TenantId == tenantId.Value);
 
         // DepartmentAdmin: see their department's semesters plus legacy shared ones (DepartmentId = null).
         // Each department manages its own terms; shared terms are view-only for them.
@@ -36,7 +43,7 @@ public class SemesterService : ISemesterService
             .Include(s => s.ReportSchedules)
             .OrderByDescending(s => s.Status == SemesterStatus.Active)
             .ThenByDescending(s => s.CreatedAt)
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         return semesters.Select(MapToDto);
     }
@@ -66,21 +73,31 @@ public class SemesterService : ISemesterService
         return semester == null ? null : MapToDto(semester);
     }
 
-    public async Task<SemesterDto?> GetSemesterByIdAsync(Guid id)
+    public async Task<SemesterDto?> GetSemesterByIdAsync(
+        Guid id,
+        Guid? tenantId = null,
+        CancellationToken cancellationToken = default)
     {
-        var semester = await _context.Semesters
-            .Where(s => s.Id == id && !s.IsDeleted)
+        var query = _context.Semesters
+            .Where(s => s.Id == id && !s.IsDeleted);
+        if (tenantId.HasValue)
+            query = query.Where(s => s.TenantId == tenantId.Value);
+
+        var semester = await query
             .Include(s => s.Internships)
                 .ThenInclude(i => i.WeeklyReports)
             .Include(s => s.SemesterLecturers)
             .Include(s => s.ReportSchedules)
-            .FirstOrDefaultAsync();
+            .FirstOrDefaultAsync(cancellationToken);
 
         return semester == null ? null : MapToDto(semester);
     }
 
     public async Task<SemesterDto> CreateSemesterAsync(CreateSemesterDto dto)
     {
+        if (dto.Status == SemesterStatus.Completed)
+            throw new InvalidOperationException("Không thể tạo học kỳ mới ở trạng thái đã khóa sổ.");
+
         var schoolTerm = await GetConfiguredSchoolTermAsync(dto.AcademicYear, dto.Term);
         dto.StartDate = schoolTerm.StartDate;
         dto.EndDate = schoolTerm.EndDate;
@@ -123,6 +140,10 @@ public class SemesterService : ISemesterService
         if (semester == null)
             return null;
 
+        SemesterWritePolicy.EnsureWritable(semester);
+        if (dto.Status.HasValue && dto.Status.Value != semester.Status)
+            throw new InvalidOperationException("Trạng thái học kỳ chỉ có thể thay đổi qua thao tác bắt đầu hoặc khóa sổ.");
+
         var originalStartDate = semester.StartDate;
         var originalEndDate = semester.EndDate;
         var originalTotalWeeks = semester.TotalWeeks;
@@ -142,7 +163,6 @@ public class SemesterService : ISemesterService
         semester.AcademicYear = academicYear;
         semester.StartDate = schoolTerm.StartDate;
         semester.EndDate = schoolTerm.EndDate;
-        if (dto.Status.HasValue) semester.Status = dto.Status.Value;
         if (dto.Description != null) semester.Description = dto.Description;
         if (dto.MaxStudentsPerLecturer.HasValue) semester.MaxStudentsPerLecturer = dto.MaxStudentsPerLecturer.Value;
         if (dto.TotalWeeks.HasValue) semester.TotalWeeks = Math.Clamp(dto.TotalWeeks.Value, 1, 52);
@@ -212,10 +232,11 @@ public class SemesterService : ISemesterService
         if (semester == null)
             return null;
 
-        if (!allowCompleted && semester.Status == SemesterStatus.Completed)
-            throw new InvalidOperationException("A completed semester cannot be started again.");
+        SemesterWritePolicy.EnsureWritable(semester);
         if (allowCompleted && semester.Status != SemesterStatus.Completed)
             throw new InvalidOperationException("Chỉ có thể mở lại học kỳ đã kết thúc.");
+        if (allowCompleted)
+            throw new InvalidOperationException(SemesterWritePolicy.LockedMessage);
 
         // "One active semester" constraint is scoped per department:
         // each department runs its own terms independently.
@@ -290,6 +311,8 @@ public class SemesterService : ISemesterService
 
         if (semester == null)
             return false;
+        if (semester.Status == SemesterStatus.Completed)
+            return true;
 
         semester.Status = SemesterStatus.Completed;
         semester.UpdatedAt = DateTime.UtcNow;
@@ -343,6 +366,8 @@ public class SemesterService : ISemesterService
 
         if (semester == null)
             return false;
+
+        SemesterWritePolicy.EnsureWritable(semester);
 
         // Soft-delete cả con (audit mục 4.2): báo cáo query trực tiếp theo semesterId
         // sẽ không còn "thấy" dữ liệu kỳ đã xóa, không còn dữ liệu mồ côi.
@@ -492,15 +517,17 @@ public class SemesterService : ISemesterService
 
     public async Task<SemesterReportScheduleDto> UpdateReportScheduleAsync(Guid semesterId, int weekNumber, UpdateReportScheduleRequest request, Guid? lecturerId = null)
     {
+        var semester = await _context.Semesters
+            .FirstOrDefaultAsync(s => s.Id == semesterId && !s.IsDeleted);
+        if (semester == null)
+            throw new KeyNotFoundException(InternLink.Shared.Responses.ErrorMessage.SemesterNotFoundById(semesterId));
+        SemesterWritePolicy.EnsureWritable(semester);
+
         var schedule = await _context.SemesterReportSchedules
             .FirstOrDefaultAsync(s => s.SemesterId == semesterId && s.WeekNumber == weekNumber && s.LecturerId == lecturerId && !s.IsDeleted);
 
         if (schedule == null)
         {
-            var semester = await _context.Semesters.FirstOrDefaultAsync(s => s.Id == semesterId && !s.IsDeleted);
-            if (semester == null)
-                throw new KeyNotFoundException(InternLink.Shared.Responses.ErrorMessage.SemesterNotFoundById(semesterId));
-
             // Kế thừa mốc từ default schedule nếu GV tạo mới đè lên default
             var defaultSchedule = await _context.SemesterReportSchedules
                 .FirstOrDefaultAsync(s => s.SemesterId == semesterId && s.WeekNumber == weekNumber && s.LecturerId == null && !s.IsDeleted);

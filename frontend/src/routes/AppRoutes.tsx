@@ -94,7 +94,7 @@ import { useRealAppState } from "./useRealAppState";
 export function AppRoutes() {
   const { isLoggedIn, isBootstrapping, role, user, login, logout, switchRole } = useAuth();
   const isSuperAdmin = user?.backendRole === "SuperAdmin";
-+
+  const isDepartmentAdmin = user?.backendRole === "DepartmentAdmin";
   const { showToast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -255,14 +255,14 @@ export function AppRoutes() {
                 />
                 <Route
                   path="semesters"
-                  element={
+                  element={isDepartmentAdmin ? (
                     <AdminSemestersView
                       onShowToast={showToast}
                       onNavigateTab={(t) =>
                         navigate(`/admin/${t.replace("admin-", "")}`)
                       }
                     />
-                  }
+                  ) : <Navigate to="/admin/dashboard" replace />}
                 />
                 <Route
                   path="assignments"

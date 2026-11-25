@@ -216,7 +216,7 @@ public class WeeklyReportServiceTests
             Id = Guid.NewGuid(),
             Name = "Kỳ thực tập",
             Term = "Học kỳ I",
-            +
+            AcademicYear = "2026 - 2027",
             Status = SemesterStatus.Active,
             TotalWeeks = 1,
             CreatedAt = DateTime.UtcNow
@@ -430,7 +430,7 @@ public class WeeklyReportServiceTests
             Id = Guid.NewGuid(),
             Name = "Kỳ thực tập",
             Term = "Học kỳ I",
-            +
+            AcademicYear = "2026 - 2027",
             Status = SemesterStatus.Active,
             TotalWeeks = 1,
             CreatedAt = DateTime.UtcNow
@@ -469,7 +469,7 @@ public class WeeklyReportServiceTests
             Id = Guid.NewGuid(),
             Name = "Kỳ thực tập",
             Term = "Học kỳ I",
-            +
+            AcademicYear = "2026 - 2027",
             Status = SemesterStatus.Active,
             TotalWeeks = 1,
             CreatedAt = DateTime.UtcNow
@@ -508,7 +508,7 @@ public class WeeklyReportServiceTests
             Id = Guid.NewGuid(),
             Name = "Kỳ thực tập",
             Term = "Học kỳ I",
-            +
+            AcademicYear = "2026 - 2027",
             Status = SemesterStatus.Active,
             TotalWeeks = 1,
             CreatedAt = DateTime.UtcNow
@@ -517,6 +517,8 @@ public class WeeklyReportServiceTests
         report.Status = WeeklyReportStatus.Submitted;
         db.Semesters.Add(semester);
         await db.SaveChangesAsync();
+        semester.Status = SemesterStatus.Completed;
+        await db.SaveChangesAsync();
 
         var act = () => CreateService(db).ReviewAsync(
             report.Id,
@@ -524,7 +526,7 @@ public class WeeklyReportServiceTests
             new ReviewWeeklyReportRequest { Status = "Approved" });
 
         await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("Kỳ thực tập đã đóng, nhật ký đang ở chế độ chỉ xem.");
+            .WithMessage("Học kỳ đã khóa sổ, không thể thay đổi dữ liệu");
     }
 
     [Fact]

@@ -134,6 +134,12 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const backendRole = user?.backendRole;
 
   const refreshApiCounts = useCallback(async () => {
+    if (backendRole === "SuperAdmin") {
+      setSemesters([]);
+      setSelectedSemesterId("");
+      return;
+    }
+
     // Wait for AuthProvider to resolve the token before choosing the portal endpoint.
     if (!getStoredToken() || !role) return;
     try {
@@ -261,7 +267,7 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     let cancelled = false;
 
     const loadDepartments = async () => {
-      if (role !== "admin") {
+      if (role !== "admin" || backendRole === "SuperAdmin") {
         if (!cancelled) {
           setDepartments([]);
           setSelectedDepartmentId("all");
@@ -330,7 +336,7 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return () => {
       cancelled = true;
     };
-  }, [role, user?.backendRole, user?.departmentId, user?.id, user?.username, queryClient]);
+  }, [role, backendRole, user?.departmentId, user?.id, user?.username, queryClient]);
 
   const activeSemesterId = semesters.find((s) => s.status === "active")?.id ?? "";
 

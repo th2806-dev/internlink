@@ -4,6 +4,7 @@ using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Spreadsheet;
 using InternLink.Application.Common;
 using InternLink.Application.DTOs;
+using InternLink.Application.Common;
 using InternLink.Application.Interfaces;
 using InternLink.Domain.Entities;
 using InternLink.Domain.Enums;
@@ -432,7 +433,7 @@ public class InternshipGradingService : IInternshipGradingService
         if (actorLecturerId.HasValue && internship.LecturerId != actorLecturerId.Value) return null;
 
         if (internship.Semester?.Status == SemesterStatus.Completed)
-            throw new InvalidOperationException("Học kỳ thực tập đã kết thúc và khóa sổ. Không thể chỉnh sửa hoặc lưu điểm.");
+            throw new InvalidOperationException(SemesterWritePolicy.LockedMessage);
 
         if (dto.QualityScore.HasValue && !InternshipGradeCalculator.IsValidQualityLevel(dto.QualityScore))
             throw new ArgumentException("QualityScore phải là 1 trong các mức: 1.0, 2.0, 3.5, 4.0, 5.0");

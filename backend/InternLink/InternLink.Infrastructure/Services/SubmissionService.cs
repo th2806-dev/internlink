@@ -1,7 +1,7 @@
 using AutoMapper;
 using System.IO.Compression;
 using InternLink.Application.DTOs;
-+
+using InternLink.Application.Common;
 using InternLink.Application.Interfaces;
 using InternLink.Domain.Entities;
 using InternLink.Domain.Enums;
@@ -1589,7 +1589,7 @@ public class SubmissionService : ISubmissionService
             throw new InvalidOperationException("Sinh viên chưa được phân công đơn vị thực tập.");
 
         if (internship.Semester?.Status == SemesterStatus.Completed)
-            throw new InvalidOperationException(Học kỳ thực tập đã kết thúc. Không thể nộp hoặc cập nhật hồ sơ.);
+            throw new InvalidOperationException(SemesterWritePolicy.LockedMessage);
     }
 
     private string GetUploadRoot() => _env.ContentRootPath;

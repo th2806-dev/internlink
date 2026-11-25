@@ -13,7 +13,6 @@ import {
   Eye,
   FileUp,
   PlayCircle,
-  RotateCcw,
   ChevronLeft,
   ChevronRight,
   AlertCircle,
@@ -98,7 +97,6 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
     updateSemester,
     closeSemester,
     startSemester,
-    reopenSemester,
     duplicateSemester,
     refreshApiCounts,
   } = useSemester();
@@ -165,12 +163,6 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
   };
   const handleStartSemester = (semId: string) => {
     void startSemester(semId, onShowToast);
-  };
-  const handleReopenSemester = (semester: Semester) => {
-    const confirmed = window.confirm(
-      `Mở lại kỳ "${semester.name}"?\n\nKỳ sẽ chuyển sang trạng thái đang hoạt động và tài khoản liên kết của sinh viên, giảng viên sẽ được kích hoạt lại.`
-    );
-    if (confirmed) void reopenSemester(semester.id, onShowToast);
   };
   const activeSem = currentActiveSem;
   const hasRealSemester = !!currentActiveSem.id;
@@ -640,18 +632,6 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
                                 </button>
                               )}
 
-                              {sem.status === "completed" && (
-                                <button
-                                  type="button"
-                                  aria-label={`Mở lại ${sem.name}`}
-                                  onClick={() => handleReopenSemester(sem)}
-                                  className="p-1.5 hover:bg-blue-50 text-slate-600 hover:text-blue-700 rounded-lg transition-colors cursor-pointer"
-                                  title="Mở lại kỳ"
-                                >
-                                  <RotateCcw className="w-3.5 h-3.5" />
-                                </button>
-                              )}
-
                               {sem.status !== "completed" && (
                                 <button
                                   type="button"
@@ -802,8 +782,8 @@ export const SemestersView = ({ onShowToast, onNavigateTab }: { onShowToast: (ms
           <>
             Bạn đang yêu cầu kết thúc kỳ thực tập{" "}
             <strong>{semesterAwaitingCloseConfirmation?.name}</strong>. Kỳ sẽ
-            chuyển sang trạng thái đã hoàn thành. Tiếp tục để chọn cách xử lý
-            tài khoản sinh viên.
+            chuyển sang chế độ chỉ đọc và không thể mở khóa lại. Tiếp tục để
+            chọn cách xử lý tài khoản sinh viên.
           </>
         }
         confirmLabel="Tiếp tục"

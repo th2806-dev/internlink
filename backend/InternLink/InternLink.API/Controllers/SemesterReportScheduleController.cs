@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using InternLink.API.Extensions;
+using InternLink.Application.Common;
 using InternLink.Application.DTOs;
 using InternLink.Application.Interfaces;
 using InternLink.Domain.Enums;
@@ -70,7 +71,7 @@ public class SemesterReportScheduleController : ControllerBase
             .Select(semester => (SemesterStatus?)semester.Status)
             .SingleOrDefaultAsync();
         if (semesterStatus == SemesterStatus.Completed)
-            throw new InvalidOperationException("Học kỳ thực tập đã kết thúc và khóa sổ. Không thể chỉnh sửa cấu hình.");
+            throw new InvalidOperationException(SemesterWritePolicy.LockedMessage);
     }
 
     [HttpGet]

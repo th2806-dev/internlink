@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Linq.Expressions;
+using InternLink.Application.Common;
 using InternLink.Application.Interfaces;
 using InternLink.Domain.Common;
 using Microsoft.EntityFrameworkCore;
@@ -1318,15 +1319,234 @@ public class AppDbContext : DbContext
     public override int SaveChanges()
     {
         ValidateTenantWrites();
+        ValidateSemesterWrites();
         ProcessAuditLogs();
         return base.SaveChanges();
     }
 
-    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         ValidateTenantWrites();
+        await ValidateSemesterWritesAsync(cancellationToken);
         ProcessAuditLogs();
-        return base.SaveChangesAsync(cancellationToken);
+        return await base.SaveChangesAsync(cancellationToken);
+    }
+
+    private void ValidateSemesterWrites()
+    {
+        var references = CollectChangedSemesterReferences();
+        if (!references.HasReferences)
+            return;
+
+        if (references.InternshipIds.Count > 0)
+            AddRelatedSemesterIds(
+                references,
+                Internships.AsNoTracking()
+                    .Where(item => references.InternshipIds.Contains(item.PublicId))
+                    .Select(item => item.SemesterId)
+                    .ToArray());
+        if (references.AttendanceSessionIds.Count > 0)
+            AddRelatedSemesterIds(
+                references,
+                AttendanceSessions.AsNoTracking()
+                    .Where(item => references.AttendanceSessionIds.Contains(item.PublicId))
+                    .Select(item => (Guid?)item.SemesterId)
+                    .ToArray());
+        if (references.SubmissionIds.Count > 0)
+        {
+            var internshipIds = Submissions.AsNoTracking()
+                .Where(item => references.SubmissionIds.Contains(item.PublicId))
+                .Select(item => item.InternshipId)
+                .ToArray();
+            AddRelatedSemesterIds(
+                references,
+                Internships.AsNoTracking()
+                    .Where(item => internshipIds.Contains(item.PublicId))
+                    .Select(item => item.SemesterId)
+                    .ToArray());
+        }
+        if (references.WeeklyReportIds.Count > 0)
+        {
+            var internshipIds = WeeklyReports.AsNoTracking()
+                .Where(item => references.WeeklyReportIds.Contains(item.PublicId))
+                .Select(item => item.InternshipId)
+                .ToArray();
+            AddRelatedSemesterIds(
+                references,
+                Internships.AsNoTracking()
+                    .Where(item => internshipIds.Contains(item.PublicId))
+                    .Select(item => item.SemesterId)
+                    .ToArray());
+        }
+        if (references.RubricIds.Count > 0)
+            AddRelatedSemesterIds(
+                references,
+                EvaluationRubrics.AsNoTracking()
+                    .Where(item => references.RubricIds.Contains(item.PublicId))
+                    .Select(item => (Guid?)item.SemesterId)
+                    .ToArray());
+
+        if (references.NewlyCompletedSemesterIds.Overlaps(references.DependentDataSemesterIds))
+            throw new InvalidOperationException(SemesterWritePolicy.LockedMessage);
+
+        if (Semesters.AsNoTracking().Any(item =>
+                references.SemesterIds.Contains(item.PublicId)
+                && item.Status == SemesterStatus.Completed))
+            throw new InvalidOperationException(SemesterWritePolicy.LockedMessage);
+    }
+
+    private async Task ValidateSemesterWritesAsync(CancellationToken cancellationToken)
+    {
+        var references = CollectChangedSemesterReferences();
+        if (!references.HasReferences)
+            return;
+
+        if (references.InternshipIds.Count > 0)
+            AddRelatedSemesterIds(
+                references,
+                await Internships.AsNoTracking()
+                    .Where(item => references.InternshipIds.Contains(item.PublicId))
+                    .Select(item => item.SemesterId)
+                    .ToArrayAsync(cancellationToken));
+        if (references.AttendanceSessionIds.Count > 0)
+            AddRelatedSemesterIds(
+                references,
+                await AttendanceSessions.AsNoTracking()
+                    .Where(item => references.AttendanceSessionIds.Contains(item.PublicId))
+                    .Select(item => (Guid?)item.SemesterId)
+                    .ToArrayAsync(cancellationToken));
+        if (references.SubmissionIds.Count > 0)
+        {
+            var internshipIds = await Submissions.AsNoTracking()
+                .Where(item => references.SubmissionIds.Contains(item.PublicId))
+                .Select(item => item.InternshipId)
+                .ToArrayAsync(cancellationToken);
+            AddRelatedSemesterIds(
+                references,
+                await Internships.AsNoTracking()
+                    .Where(item => internshipIds.Contains(item.PublicId))
+                    .Select(item => item.SemesterId)
+                    .ToArrayAsync(cancellationToken));
+        }
+        if (references.WeeklyReportIds.Count > 0)
+        {
+            var internshipIds = await WeeklyReports.AsNoTracking()
+                .Where(item => references.WeeklyReportIds.Contains(item.PublicId))
+                .Select(item => item.InternshipId)
+                .ToArrayAsync(cancellationToken);
+            AddRelatedSemesterIds(
+                references,
+                await Internships.AsNoTracking()
+                    .Where(item => internshipIds.Contains(item.PublicId))
+                    .Select(item => item.SemesterId)
+                    .ToArrayAsync(cancellationToken));
+        }
+        if (references.RubricIds.Count > 0)
+            AddRelatedSemesterIds(
+                references,
+                await EvaluationRubrics.AsNoTracking()
+                    .Where(item => references.RubricIds.Contains(item.PublicId))
+                    .Select(item => (Guid?)item.SemesterId)
+                    .ToArrayAsync(cancellationToken));
+
+        if (references.NewlyCompletedSemesterIds.Overlaps(references.DependentDataSemesterIds))
+            throw new InvalidOperationException(SemesterWritePolicy.LockedMessage);
+
+        if (await Semesters.AsNoTracking().AnyAsync(item =>
+                references.SemesterIds.Contains(item.PublicId)
+                && item.Status == SemesterStatus.Completed,
+                cancellationToken))
+            throw new InvalidOperationException(SemesterWritePolicy.LockedMessage);
+    }
+
+    private SemesterWriteReferences CollectChangedSemesterReferences()
+    {
+        var references = new SemesterWriteReferences();
+        foreach (var entry in ChangeTracker.Entries()
+                     .Where(entry => entry.State is EntityState.Added or EntityState.Modified or EntityState.Deleted))
+        {
+            AddPropertyReferences(entry, "SemesterId", references.SemesterIds);
+            AddPropertyReferences(entry, "SemesterId", references.DependentDataSemesterIds);
+            AddPropertyReferences(entry, "InternshipId", references.InternshipIds);
+            AddPropertyReferences(entry, "AttendanceSessionId", references.AttendanceSessionIds);
+            AddPropertyReferences(entry, "SubmissionId", references.SubmissionIds);
+            AddPropertyReferences(entry, "WeeklyReportId", references.WeeklyReportIds);
+            AddPropertyReferences(entry, "RubricId", references.RubricIds);
+
+            if (entry.Entity is Semester semester)
+            {
+                var status = entry.State == EntityState.Added
+                    ? semester.Status
+                    : (SemesterStatus)entry.Property(nameof(Semester.Status)).CurrentValue!;
+                var originalStatus = entry.State == EntityState.Added
+                    ? SemesterStatus.Upcoming
+                    : (SemesterStatus)entry.Property(nameof(Semester.Status)).OriginalValue!;
+                if ((entry.State is EntityState.Modified or EntityState.Deleted)
+                    && originalStatus == SemesterStatus.Completed)
+                    throw new InvalidOperationException(SemesterWritePolicy.LockedMessage);
+                if (status == SemesterStatus.Completed)
+                {
+                    references.SemesterIds.Add(semester.PublicId);
+                    references.NewlyCompletedSemesterIds.Add(semester.PublicId);
+                }
+            }
+        }
+
+        references.SemesterIds.Remove(Guid.Empty);
+        return references;
+    }
+
+    private static void AddPropertyReferences(
+        Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry entry,
+        string propertyName,
+        ISet<Guid> references)
+    {
+        if (entry.Metadata.FindProperty(propertyName) == null)
+            return;
+
+        var property = entry.Property(propertyName);
+        AddReference(property.CurrentValue, references);
+        if (entry.State is EntityState.Modified or EntityState.Deleted)
+            AddReference(property.OriginalValue, references);
+    }
+
+    private static void AddReference(object? value, ISet<Guid> references)
+    {
+        if (value is Guid id && id != Guid.Empty)
+            references.Add(id);
+    }
+
+    private static void AddRelatedSemesterIds(
+        SemesterWriteReferences references,
+        IEnumerable<Guid?> semesterIds)
+    {
+        foreach (var semesterId in semesterIds)
+        {
+            if (semesterId.HasValue && semesterId.Value != Guid.Empty)
+            {
+                references.SemesterIds.Add(semesterId.Value);
+                references.DependentDataSemesterIds.Add(semesterId.Value);
+            }
+        }
+    }
+
+    private sealed class SemesterWriteReferences
+    {
+        public HashSet<Guid> SemesterIds { get; } = [];
+        public HashSet<Guid> NewlyCompletedSemesterIds { get; } = [];
+        public HashSet<Guid> DependentDataSemesterIds { get; } = [];
+        public HashSet<Guid> InternshipIds { get; } = [];
+        public HashSet<Guid> AttendanceSessionIds { get; } = [];
+        public HashSet<Guid> SubmissionIds { get; } = [];
+        public HashSet<Guid> WeeklyReportIds { get; } = [];
+        public HashSet<Guid> RubricIds { get; } = [];
+        public bool HasReferences =>
+            SemesterIds.Count > 0
+            || InternshipIds.Count > 0
+            || AttendanceSessionIds.Count > 0
+            || SubmissionIds.Count > 0
+            || WeeklyReportIds.Count > 0
+            || RubricIds.Count > 0;
     }
 
     private void ValidateTenantWrites()

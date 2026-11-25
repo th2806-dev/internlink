@@ -148,7 +148,7 @@ public sealed class InternshipGradingServiceTests
             TotalWeeks = 1,
             StartDate = DateTime.UtcNow.Date,
             EndDate = DateTime.UtcNow.Date.AddDays(30),
-            Status = SemesterStatus.Completed,
+            Status = SemesterStatus.Active,
         };
         var student = new Student
         {
@@ -177,6 +177,8 @@ public sealed class InternshipGradingServiceTests
         db.Internships.Add(internship);
         db.Evaluations.Add(evaluation);
         await db.SaveChangesAsync();
+        semester.Status = SemesterStatus.Completed;
+        await db.SaveChangesAsync();
 
         var service = new InternshipGradingService(
             db,
@@ -194,7 +196,7 @@ public sealed class InternshipGradingServiceTests
             actorLecturerId: null);
 
         await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("Học kỳ thực tập đã kết thúc và khóa sổ. Không thể chỉnh sửa hoặc lưu điểm.");
+            .WithMessage("Học kỳ đã khóa sổ, không thể thay đổi dữ liệu");
         (await db.Evaluations.SingleAsync()).OralExamScore.Should().Be(7.5m);
     }
 

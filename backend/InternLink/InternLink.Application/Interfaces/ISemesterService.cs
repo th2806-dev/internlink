@@ -7,12 +7,18 @@ namespace InternLink.Application.Interfaces;
 
 public interface ISemesterService
 {
-    Task<IEnumerable<SemesterDto>> GetAllSemestersAsync(Guid? departmentId = null);
+    Task<IEnumerable<SemesterDto>> GetAllSemestersAsync(
+        Guid? departmentId = null,
+        Guid? tenantId = null,
+        CancellationToken cancellationToken = default);
     /// <summary>
     /// Kỳ đang Active (thuần đọc). Ưu tiên kỳ riêng của khoa, fallback kỳ dùng chung.
     /// </summary>
     Task<SemesterDto?> GetActiveSemesterAsync(Guid? departmentId = null);
-    Task<SemesterDto?> GetSemesterByIdAsync(Guid id);
+    Task<SemesterDto?> GetSemesterByIdAsync(
+        Guid id,
+        Guid? tenantId = null,
+        CancellationToken cancellationToken = default);
     Task<SemesterDto> CreateSemesterAsync(CreateSemesterDto dto);
     Task<SemesterDto?> UpdateSemesterAsync(Guid id, UpdateSemesterDto dto);
     Task<SemesterDto?> StartSemesterAsync(Guid id);
