@@ -21,7 +21,7 @@ namespace InternLink.API.Controllers;
 
 [ApiController]
 [Route("api/v1/system/excel")]
-[Authorize(Policy = AdminPolicies.LegacyAdmin)]
+[Authorize(Policy = AdminPolicies.DepartmentAdmin)]
 [RequirePermission(SystemPermissionCodes.ExcelImport)]
 [RequestSizeLimit(MaxFileBytes)]
 public sealed class ExcelImportController : ControllerBase
@@ -187,6 +187,7 @@ public sealed class ExcelImportController : ControllerBase
     }
 
     [HttpPost("execute-import")]
+    [HttpPost("~/api/v1/admin/excel/import")]
     public async Task<ActionResult<ImportCommitResult>> ExecuteImport(
         [FromBody] ExecuteExcelImportRequest request,
         CancellationToken cancellationToken)
@@ -636,7 +637,7 @@ public sealed class ExcelImportController : ControllerBase
             effectiveTenantId = string.IsNullOrWhiteSpace(requestedTenantId)
                 ? claimedTenantId
                 : requestedTenantId.Trim();
-            return effectiveTenantId?.Length <= 50;
+            return effectiveTenantId == null || effectiveTenantId.Length <= 50;
         }
 
         effectiveTenantId = claimedTenantId;

@@ -7,6 +7,7 @@ import {
   FileSpreadsheet,
   FileUp,
   LoaderCircle,
+  RefreshCw,
   Save,
   UploadCloud,
 } from "lucide-react";
@@ -91,6 +92,42 @@ const PRESETS_ENDPOINT = "/api/v1/system/excel/mappings";
 const VALIDATE_ENDPOINT = "/api/v1/system/excel/validate";
 const EXECUTE_ENDPOINT = "/api/v1/system/excel/execute-import";
 const EMPTY_MAPPING: MappingState = {};
+const FIELD_LABELS: Record<string, string> = {
+  StudentCode: "Mã sinh viên",
+  FullName: "Họ và tên",
+  Email: "Email",
+  PhoneNumber: "Số điện thoại",
+  Phone: "Số điện thoại",
+  ClassName: "Lớp",
+  Class: "Lớp",
+  MajorName: "Ngành",
+  Major: "Ngành",
+  DepartmentId: "Khoa",
+  DepartmentCode: "Mã khoa",
+  DepartmentName: "Tên khoa",
+  ClassId: "Lớp",
+  StaffCode: "Mã giảng viên",
+  AcademicTitle: "Học hàm, học vị",
+  CompanyCode: "Mã doanh nghiệp",
+  TaxCode: "Mã số thuế",
+  CompanyName: "Tên doanh nghiệp",
+  Address: "Địa chỉ",
+  Website: "Trang web",
+  Industry: "Lĩnh vực hoạt động",
+  ContactPerson: "Người liên hệ",
+  ContactEmail: "Email liên hệ",
+  ContactPhone: "Điện thoại liên hệ",
+  Capacity: "Chỉ tiêu tiếp nhận",
+  StudentId: "Sinh viên",
+  CompanyId: "Doanh nghiệp",
+  LecturerId: "Giảng viên",
+  SemesterId: "Học kỳ",
+  Position: "Vị trí thực tập",
+  SupervisorName: "Người hướng dẫn",
+  SupervisorPhone: "Điện thoại người hướng dẫn",
+  SupervisorEmail: "Email người hướng dẫn",
+  SupervisorDepartment: "Bộ phận người hướng dẫn",
+};
 const FIELDS_BY_ENTITY: Record<TargetEntity, ImportField[]> = {
   Students: [
     { code: "StudentCode", label: "Mã số sinh viên", required: true, aliases: ["mssv", "ma sv", "ma sinh vien", "ma so sinh vien", "student code", "student id"] },
@@ -231,6 +268,7 @@ export default function SmartExcelImportView() {
   const [targetEntity, setTargetEntity] = useState<TargetEntity>("Students");
   const [mapping, setMapping] = useState<MappingState>(EMPTY_MAPPING);
   const [presets, setPresets] = useState<MappingPreset[]>([]);
+  const [presetError, setPresetError] = useState<string | null>(null);
   const [selectedPresetId, setSelectedPresetId] = useState("");
   const [presetName, setPresetName] = useState("");
   const [showSavePreset, setShowSavePreset] = useState(false);
@@ -258,9 +296,9 @@ export default function SmartExcelImportView() {
     try {
       const result = await apiRequestRaw<MappingPreset[]>(presetsUrl);
       setPresets(result);
-      setError(null);
+      setPresetError(null);
     } catch (cause) {
-      setError(getApiErrorMessage(cause));
+      setPresetError(getApiErrorMessage(cause));
     } finally {
       setBusy((current) => current === "presets" ? null : current);
     }
@@ -428,6 +466,7 @@ export default function SmartExcelImportView() {
     try {
       const saved = await apiRequestRaw<MappingPreset>(PRESETS_ENDPOINT, { method: "POST", body });
       setPresets((current) => [...current.filter((item) => item.id !== saved.id), saved]);
+      setPresetError(null);
       setSelectedPresetId(saved.id);
       setShowSavePreset(false);
       setPresetName("");
@@ -479,7 +518,7 @@ export default function SmartExcelImportView() {
   };
 
   const executeImport = async () => {
-    if (!preview?.fileId || !validation?.isValid || validation.errorRecordsCount > 0) return;
+    if (!preview?.fileId || !validation || validation.validRecordsCount === 0) return;
     setBusy("import");
     setError(null);
     try {
@@ -492,7 +531,6 @@ export default function SmartExcelImportView() {
         },
       });
       setCommitResult(result);
-      if (result.errorCount > 0) setValidation(null);
     } catch (cause) {
       setError(getApiErrorMessage(cause));
     } finally {
@@ -513,14 +551,14 @@ export default function SmartExcelImportView() {
   };
 
   return (
-    <main className="w-full space-y-4 animate-in fade-in duration-200 font-sans pb-12">
+    <main className="w-full space-y-3 animate-in fade-in duration-200 font-sans pb-6">
       <CompactActionBar
         icon={FileSpreadsheet}
         title="Smart Excel Import Studio"
         subtitle="Tải dữ liệu, ghép cột theo biểu mẫu của khoa và kiểm tra trước khi nhập."
       />
 
-      <nav aria-label="Các bước nhập dữ liệu" className="grid gap-3 sm:grid-cols-3">
+      <nav aria-label="Các bước nhập dữ liệu" className="grid gap-2 sm:grid-cols-3">
         {STEPS.map((item) => {
           const complete = item.number < step;
           const active = item.number === step;
@@ -531,7 +569,7 @@ export default function SmartExcelImportView() {
               onClick={() => item.number < step && setStep(item.number)}
               disabled={item.number > step || item.number === step}
               aria-current={active ? "step" : undefined}
-              className={`flex min-h-16 items-center gap-3 rounded-xl border px-4 py-3 text-left transition-colors disabled:cursor-default ${
+              className={`flex min-h-12 items-center gap-2 rounded-md border px-3 py-2 text-left transition-colors disabled:cursor-default ${
                 active
                   ? "border-[#026aa7] bg-blue-50 text-[#025a8e]"
                   : complete
@@ -539,14 +577,14 @@ export default function SmartExcelImportView() {
                     : "border-slate-200 bg-white text-slate-500"
               }`}
             >
-              <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
+              <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
                 complete ? "bg-[#7bc043] text-white" : active ? "bg-[#026aa7] text-white" : "bg-slate-100 text-slate-500"
               }`}>
                 {complete ? <Check aria-hidden="true" className="h-4 w-4" /> : item.number}
               </span>
               <span>
-                <span className="block text-xs font-semibold uppercase tracking-wide opacity-75">Bước {item.number}</span>
-                <span className="font-semibold">{item.title}</span>
+                <span className="block text-[10px] font-semibold uppercase tracking-wide opacity-75">Bước {item.number}</span>
+                <span className="text-xs font-semibold">{item.title}</span>
               </span>
             </button>
           );
@@ -554,16 +592,16 @@ export default function SmartExcelImportView() {
       </nav>
 
       {step === 1 && (
-        <section className="space-y-4 rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs sm:p-6">
+        <section className="space-y-3 rounded-md border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
           <div>
-            <h2 className="text-lg font-bold text-slate-900">Tải tệp Excel</h2>
-            <p className="mt-1 text-sm text-slate-600">Hỗ trợ .xlsx và .xls, dung lượng tối đa 10 MB.</p>
+            <h2 className="text-sm font-bold text-slate-900">Tải tệp Excel</h2>
+            <p className="mt-1 text-xs text-slate-600">Hỗ trợ .xlsx và .xls, dung lượng tối đa 10 MB.</p>
           </div>
           <div
             onDragOver={(event) => { event.preventDefault(); setIsDragging(true); }}
             onDragLeave={() => setIsDragging(false)}
             onDrop={(event) => { event.preventDefault(); setIsDragging(false); loadFile(event.dataTransfer.files[0]); }}
-            className={`rounded-xl border-2 border-dashed p-6 text-center transition-colors sm:p-10 ${
+            className={`rounded-md border-2 border-dashed p-4 text-center transition-colors sm:p-6 ${
               isDragging ? "border-[#026aa7] bg-blue-50/40" : "border-slate-300 bg-slate-50/60"
             }`}
           >
@@ -575,19 +613,19 @@ export default function SmartExcelImportView() {
               aria-label="Chọn tệp Excel"
               onChange={(event) => loadFile(event.target.files?.[0])}
             />
-            <UploadCloud aria-hidden="true" className="mx-auto h-9 w-9 text-[#026aa7]" />
-            <h3 className="mt-3 font-semibold text-slate-900">Kéo thả tệp Excel vào đây</h3>
-            <p className="mt-1 text-sm text-slate-600">Hoặc chọn tệp từ thiết bị của bạn.</p>
+            <UploadCloud aria-hidden="true" className="mx-auto h-8 w-8 text-[#026aa7]" />
+            <h3 className="mt-2 text-sm font-semibold text-slate-900">Kéo thả tệp Excel vào đây</h3>
+            <p className="mt-1 text-xs text-slate-600">Hoặc chọn tệp từ thiết bị của bạn.</p>
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 font-semibold text-slate-800 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
+              className="mt-3 inline-flex h-8 items-center gap-2 rounded-[4px] border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-800 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
             >
               <FileUp aria-hidden="true" className="h-4 w-4" />
               Chọn tệp
             </button>
             {file && (
-              <p className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+              <p className="mt-3 inline-flex items-center gap-2 text-xs font-medium text-slate-700">
                 <FileSpreadsheet aria-hidden="true" className="h-4 w-4 text-[#7bc043]" />
                 {file.name}
               </p>
@@ -595,7 +633,7 @@ export default function SmartExcelImportView() {
           </div>
 
           {busy === "preview" && (
-            <p role="status" className="flex items-center gap-2 text-sm text-slate-600">
+            <p role="status" className="flex items-center gap-2 text-xs text-slate-600">
               <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" />
               Đang phân tích workbook...
             </p>
@@ -603,33 +641,33 @@ export default function SmartExcelImportView() {
 
           {preview && (
             <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-              <label className="block text-sm font-semibold text-slate-800">
+              <label className="block text-xs font-semibold text-slate-800">
                 Sheet cần nhập
                 <select
                   aria-label="Chọn sheet"
                   value={selectedSheet}
                   onChange={(event) => changeSheet(event.target.value)}
                   disabled={busy !== null}
-                  className="mt-2 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-base font-normal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
+                  className="mt-1.5 h-8 w-full rounded-[4px] border border-slate-300 bg-white px-2.5 text-xs font-normal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
                 >
                   {(preview.sheetNames ?? [preview.selectedSheetName ?? "Sheet1"]).map((sheetName) => (
                     <option key={sheetName} value={sheetName}>{sheetName}</option>
                   ))}
                 </select>
               </label>
-              <p className="text-sm text-slate-600">
+              <p className="text-xs text-slate-600">
                 Tìm thấy <strong className="text-slate-900">{preview.headers.length}</strong> cột và{" "}
                 <strong className="text-slate-900">{preview.dataRowCount.toLocaleString("vi-VN")}</strong> dòng dữ liệu.
               </p>
             </div>
           )}
-          {error && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{error}</p>}
+          {error && <p role="alert" className="rounded-md border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-800">{error}</p>}
           <div className="flex justify-end border-t border-slate-100 pt-4">
             <button
               type="button"
               disabled={!preview || busy !== null}
               onClick={() => setStep(2)}
-              className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-[#026aa7] px-4 font-semibold text-white hover:bg-[#025a8e] disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-8 items-center gap-2 rounded-[4px] bg-[#026aa7] px-3 text-xs font-semibold text-white hover:bg-[#025a8e] disabled:cursor-not-allowed disabled:opacity-50"
             >
               Tiếp tục: ghép cột
               <ArrowRight aria-hidden="true" className="h-4 w-4" />
@@ -639,13 +677,13 @@ export default function SmartExcelImportView() {
       )}
 
       {step === 2 && preview && (
-        <section className="space-y-5 rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs sm:p-6">
+        <section className="space-y-3 rounded-md border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_220px_260px] lg:items-end">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">Ghép cột Excel với trường hệ thống</h2>
-              <p className="mt-1 text-sm text-slate-600">Gợi ý tự động dựa trên tên cột; bạn có thể thay đổi bất kỳ ánh xạ nào.</p>
+              <h2 className="text-sm font-bold text-slate-900">Ghép cột Excel với trường hệ thống</h2>
+              <p className="mt-1 text-xs text-slate-600">Gợi ý tự động dựa trên tên cột; bạn có thể thay đổi bất kỳ ánh xạ nào.</p>
             </div>
-            <label className="block text-sm font-semibold text-slate-800">
+            <label className="block text-xs font-semibold text-slate-800">
               Loại dữ liệu cần nạp
               <select
                 aria-label="Loại dữ liệu cần nạp"
@@ -655,21 +693,21 @@ export default function SmartExcelImportView() {
                   if (option) changeTargetEntity(option.value);
                 }}
                 disabled={busy !== null}
-                className="mt-2 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 font-normal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
+                className="mt-1.5 h-8 w-full rounded-[4px] border border-slate-300 bg-white px-2.5 text-xs font-normal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
               >
                 {TARGET_ENTITY_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
               </select>
             </label>
-            <label className="block text-sm font-semibold text-slate-800">
+            <label className="block text-xs font-semibold text-slate-800">
               Cấu hình mẫu đã lưu
               <select
                 aria-label="Chọn cấu hình mẫu"
                 value={selectedPresetId}
                 onChange={(event) => loadPreset(event.target.value)}
                 disabled={busy === "presets" || matchingPresets.length === 0}
-                className="mt-2 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 font-normal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
+                className="mt-1.5 h-8 w-full rounded-[4px] border border-slate-300 bg-white px-2.5 text-xs font-normal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
               >
                 <option value="">
                   {busy === "presets"
@@ -692,10 +730,10 @@ export default function SmartExcelImportView() {
                   .map(([, column]) => column),
               );
               return (
-                <label key={field.code} className="block rounded-lg border border-slate-200 p-4 text-sm font-semibold text-slate-800">
+                <label key={field.code} className="block rounded-md border border-slate-200 p-3 text-xs font-semibold text-slate-800">
                   <span className="flex items-center justify-between gap-2">
                     {field.label}
-                    <span className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                    <span className={`rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold ${
                       field.required ? "bg-rose-50 text-rose-800" : "bg-slate-100 text-slate-600"
                     }`}>
                       {field.required ? "Bắt buộc" : "Tùy chọn"}
@@ -705,7 +743,7 @@ export default function SmartExcelImportView() {
                     aria-label={`Ghép cột ${field.label}`}
                     value={selectedColumn}
                     onChange={(event) => changeMapping(field.code, event.target.value)}
-                    className="mt-3 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 font-normal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
+                    className="mt-2 h-8 w-full rounded-[4px] border border-slate-300 bg-white px-2.5 text-xs font-normal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
                   >
                     <option value="">Không ghép cột</option>
                     {preview.headers.map((header) => (
@@ -720,31 +758,31 @@ export default function SmartExcelImportView() {
           </div>
 
           {showSavePreset && (
-            <div className="grid gap-3 rounded-lg border border-blue-200 bg-blue-50/50 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
-              <label className="block text-sm font-semibold text-slate-800">
+            <div className="grid gap-3 rounded-md border border-blue-200 bg-blue-50/50 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
+              <label className="block text-xs font-semibold text-slate-800">
                 Tên cấu hình
                 <input
                   aria-label="Tên cấu hình mẫu"
                   value={presetName}
                   onChange={(event) => setPresetName(event.target.value)}
                   maxLength={200}
-                  className="mt-2 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 font-normal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
+                  className="mt-1.5 h-8 w-full rounded-[4px] border border-slate-300 bg-white px-2.5 text-xs font-normal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
                 />
               </label>
-              <label className="block text-sm font-semibold text-slate-800">
+              <label className="block text-xs font-semibold text-slate-800">
                 Mã cấu hình
                 <input
                   aria-label="Mã cấu hình mẫu"
                   value={presetCode}
                   readOnly
-                  className="mt-2 min-h-11 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 font-mono font-normal text-slate-700"
+                  className="mt-1.5 h-8 w-full rounded-[4px] border border-slate-300 bg-slate-100 px-2.5 text-xs font-normal text-slate-700"
                 />
               </label>
               <button
                 type="button"
                 onClick={() => void savePreset()}
                 disabled={!presetName.trim() || !presetCode || !mappedFields.length || busy !== null}
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[#026aa7] px-4 font-semibold text-white hover:bg-[#025a8e] disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex h-8 items-center justify-center gap-2 rounded-[4px] bg-[#026aa7] px-3 text-xs font-semibold text-white hover:bg-[#025a8e] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {busy === "save" ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : <Save aria-hidden="true" className="h-4 w-4" />}
                 Lưu cấu hình
@@ -752,12 +790,26 @@ export default function SmartExcelImportView() {
             </div>
           )}
 
-          {error && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{error}</p>}
+          {presetError && (
+            <div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              <span>Không tải được cấu hình mẫu đã lưu: {presetError} Bạn vẫn có thể ghép cột thủ công.</span>
+              <button
+                type="button"
+                onClick={() => void loadPresets()}
+                disabled={busy !== null}
+                className="inline-flex h-8 items-center gap-1.5 rounded-[4px] border border-amber-300 bg-white px-2.5 font-semibold hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <RefreshCw aria-hidden="true" className="h-3.5 w-3.5" />
+                Thử tải lại
+              </button>
+            </div>
+          )}
+          {error && <p role="alert" className="rounded-md border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-800">{error}</p>}
           <div className="flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
             <button
               type="button"
               onClick={() => setShowSavePreset((current) => !current)}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
+              className="inline-flex h-8 items-center justify-center gap-2 rounded-[4px] border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
             >
               <Save aria-hidden="true" className="h-4 w-4" />
               {showSavePreset ? "Đóng lưu cấu hình mẫu" : "Lưu cấu hình mẫu"}
@@ -766,7 +818,7 @@ export default function SmartExcelImportView() {
               <button
                 type="button"
                 onClick={() => setStep(1)}
-                className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 font-semibold text-slate-700 hover:bg-slate-50"
+                className="inline-flex h-8 items-center gap-2 rounded-[4px] border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
               >
                 <ArrowLeft aria-hidden="true" className="h-4 w-4" />
                 Quay lại
@@ -775,7 +827,7 @@ export default function SmartExcelImportView() {
                 type="button"
                 disabled={!mappingIsValid || busy !== null}
                 onClick={() => void validateImport()}
-                className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-[#026aa7] px-4 font-semibold text-white hover:bg-[#025a8e] disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex h-8 items-center gap-2 rounded-[4px] bg-[#026aa7] px-3 text-xs font-semibold text-white hover:bg-[#025a8e] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {busy === "validate" ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : <ArrowRight aria-hidden="true" className="h-4 w-4" />}
                 {busy === "validate" ? "Đang kiểm tra dữ liệu..." : "Kiểm tra dữ liệu"}
@@ -783,7 +835,7 @@ export default function SmartExcelImportView() {
             </div>
           </div>
           {!mappingIsValid && (
-            <p className="flex items-center gap-2 text-sm text-amber-800">
+            <p className="flex items-center gap-2 text-xs text-amber-800">
               <AlertCircle aria-hidden="true" className="h-4 w-4" />
               Hãy ghép đủ Mã số sinh viên và Họ và tên để tiếp tục.
             </p>
@@ -792,11 +844,11 @@ export default function SmartExcelImportView() {
       )}
 
       {step === 3 && preview && (
-        <section className="space-y-4 rounded-xl border border-slate-200/90 bg-white p-4 shadow-2xs sm:p-6">
+        <section className="space-y-3 rounded-md border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h2 className="text-lg font-bold text-slate-900">Xem trước dữ liệu đã ghép</h2>
-              <p className="mt-1 text-sm text-slate-600">
+              <p className="mt-1 text-xs text-slate-600">
                 {file?.name} · {selectedSheet} · Tối đa 5 dòng mẫu trên tổng {preview.dataRowCount.toLocaleString("vi-VN")} dòng.
               </p>
             </div>
@@ -804,7 +856,7 @@ export default function SmartExcelImportView() {
               {mappedFields.map((field) => (
                 <span
                   key={field.code}
-                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${
+                  className={`inline-flex items-center gap-1.5 rounded-[3px] px-2 py-1 text-[10px] font-semibold ${
                     field.required ? "bg-rose-50 text-rose-800" : "bg-slate-100 text-slate-700"
                   }`}
                 >
@@ -814,21 +866,21 @@ export default function SmartExcelImportView() {
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-lg border border-slate-200">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
+          <div className="overflow-x-auto rounded-md border border-slate-200">
+            <table className="min-w-full text-left text-xs">
+              <thead className="bg-slate-100/90 text-[11px] font-semibold uppercase tracking-wider text-slate-600">
                 <tr>
-                  <th scope="col" className="whitespace-nowrap px-4 py-3">Dòng</th>
+                  <th scope="col" className="whitespace-nowrap border-b border-r border-slate-200 px-2.5 py-1.5">Dòng</th>
                   {mappedFields.map((field) => {
                     const header = preview.headers.find((item) => item.column === mapping[field.code]);
                     return (
-                      <th scope="col" key={field.code} className="min-w-40 px-4 py-3">
+                      <th scope="col" key={field.code} className="min-w-40 border-b border-r border-slate-200 px-2.5 py-1.5">
                         <span className="flex flex-col gap-1.5">
                           <span>{field.label}</span>
                           <span className="normal-case font-normal text-slate-500">
                             {mapping[field.code]} · {header?.title}
                           </span>
-                          <span className={`w-fit rounded-full px-2 py-0.5 normal-case ${
+                          <span className={`w-fit rounded-[3px] px-1.5 py-0.5 normal-case ${
                             field.required ? "bg-rose-50 text-rose-800" : "bg-slate-100 text-slate-600"
                           }`}>
                             {field.required ? "Bắt buộc" : "Tùy chọn"}
@@ -842,19 +894,19 @@ export default function SmartExcelImportView() {
               <tbody className="divide-y divide-slate-100">
                 {preview.sampleRows.length === 0 ? (
                   <tr>
-                    <td colSpan={mappedFields.length + 1} className="px-4 py-8 text-center text-slate-500">
+                    <td colSpan={mappedFields.length + 1} className="px-2.5 py-6 text-center text-slate-500">
                       Sheet này chưa có dòng dữ liệu mẫu.
                     </td>
                   </tr>
                 ) : preview.sampleRows.map((row, rowIndex) => (
                   <tr key={rowIndex}>
-                    <th scope="row" className="whitespace-nowrap px-4 py-3 font-medium text-slate-500">
+                    <th scope="row" className="whitespace-nowrap border-b border-r border-slate-100 px-2.5 py-1.5 font-medium text-slate-500">
                       {(preview.headerRowIndex ?? 0) + rowIndex + 2}
                     </th>
                     {mappedFields.map((field) => {
                       const columnIndex = columnLetterToIndex(mapping[field.code]);
                       return (
-                        <td key={field.code} className="max-w-64 px-4 py-3 text-slate-700">
+                        <td key={field.code} className="max-w-64 border-b border-r border-slate-100 px-2.5 py-1.5 text-slate-700">
                           {row[columnIndex] || "—"}
                         </td>
                       );
@@ -866,21 +918,21 @@ export default function SmartExcelImportView() {
           </div>
 
           {validation && (
-            <section aria-label="Kết quả kiểm tra dữ liệu" className="space-y-4 rounded-lg border border-slate-200 bg-slate-50/70 p-4">
-              <div className="flex flex-wrap gap-2 text-sm font-semibold">
-                <span className="rounded-full bg-white px-3 py-1.5 text-slate-800">Tổng: {validation.totalRecords.toLocaleString("vi-VN")}</span>
-                <span className="rounded-full bg-[#7bc043]/15 px-3 py-1.5 text-[#315d12]">Hợp lệ: {validation.validRecordsCount.toLocaleString("vi-VN")}</span>
-                <span className="rounded-full bg-[#f0ad4e]/20 px-3 py-1.5 text-[#805000]">Cập nhật: {validation.warningRecordsCount.toLocaleString("vi-VN")}</span>
-                <span className="rounded-full bg-[#e74c3c]/10 px-3 py-1.5 text-[#a5281d]">Lỗi: {validation.errorRecordsCount.toLocaleString("vi-VN")}</span>
+            <section aria-label="Kết quả kiểm tra dữ liệu" className="space-y-3 rounded-md border border-slate-200 bg-slate-50/70 p-3">
+              <div className="flex flex-wrap gap-1.5 text-xs font-semibold">
+                <span className="rounded-[3px] bg-white px-2 py-1 text-slate-800">Tổng: {validation.totalRecords.toLocaleString("vi-VN")}</span>
+                <span className="rounded-[3px] bg-[#7bc043]/15 px-2 py-1 text-[#315d12]">Có thể nạp: {validation.validRecordsCount.toLocaleString("vi-VN")}</span>
+                <span className="rounded-[3px] bg-[#f0ad4e]/20 px-2 py-1 text-[#805000]">Cập nhật: {validation.warningRecordsCount.toLocaleString("vi-VN")}</span>
+                <span className="rounded-[3px] bg-[#e74c3c]/10 px-2 py-1 text-[#a5281d]">Lỗi: {validation.errorRecordsCount.toLocaleString("vi-VN")}</span>
               </div>
 
-              <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-                <table className="min-w-full text-left text-sm">
-                  <thead className="bg-slate-100 text-xs font-semibold uppercase tracking-wide text-slate-600">
+              <div className="overflow-x-auto rounded-md border border-slate-200 bg-white">
+                <table className="min-w-full text-left text-xs">
+                  <thead className="bg-slate-100/90 text-[11px] font-semibold uppercase tracking-wider text-slate-600">
                     <tr>
-                      <th scope="col" className="whitespace-nowrap px-4 py-3">Dòng Excel</th>
-                      <th scope="col" className="whitespace-nowrap px-4 py-3">Kết quả</th>
-                      <th scope="col" className="px-4 py-3">Chi tiết</th>
+                      <th scope="col" className="whitespace-nowrap border-b border-r border-slate-200 px-2.5 py-1.5">Dòng Excel</th>
+                      <th scope="col" className="whitespace-nowrap border-b border-r border-slate-200 px-2.5 py-1.5">Kết quả</th>
+                      <th scope="col" className="border-b border-r border-slate-200 px-2.5 py-1.5">Chi tiết</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -893,33 +945,33 @@ export default function SmartExcelImportView() {
                           : "bg-[#e74c3c]/10 text-[#a5281d]";
                       return (
                         <tr key={row.rowIndex}>
-                          <th scope="row" className="whitespace-nowrap px-4 py-3 font-medium text-slate-700">{row.rowIndex}</th>
-                          <td className="px-4 py-3">
-                            <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusStyle}`}>{statusLabel}</span>
+                          <th scope="row" className="whitespace-nowrap border-b border-r border-slate-100 px-2.5 py-1.5 font-medium text-slate-700">{row.rowIndex}</th>
+                          <td className="border-b border-r border-slate-100 px-2.5 py-1.5">
+                            <span className={`rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold ${statusStyle}`}>{statusLabel}</span>
                           </td>
-                          <td className="px-4 py-3 text-slate-700">
+                          <td className="border-b border-r border-slate-100 px-2.5 py-1.5 text-slate-700">
                             {row.issues.length
-                              ? row.issues.map((issue) => `${issue.fieldCode}: ${issue.errorMessage}`).join("; ")
+                              ? row.issues.map((issue) => `${FIELD_LABELS[issue.fieldCode] ?? "Dữ liệu"}: ${issue.errorMessage}`).join("; ")
                               : "Sẵn sàng nạp"}
                           </td>
                         </tr>
                       );
                     })}
                     {validation.rows.length === 0 && (
-                      <tr><td colSpan={3} className="px-4 py-6 text-center text-slate-500">Không có dòng dữ liệu để nạp.</td></tr>
+                      <tr><td colSpan={3} className="px-2.5 py-5 text-center text-slate-500">Không có dòng dữ liệu để nạp.</td></tr>
                     )}
                   </tbody>
                 </table>
               </div>
               {validation.rows.length > 100 && (
-                <p className="text-sm text-slate-600">Đang hiển thị 100/{validation.rows.length.toLocaleString("vi-VN")} dòng đầu tiên; tổng hợp phía trên bao gồm toàn bộ tệp.</p>
+                <p className="text-xs text-slate-600">Đang hiển thị 100/{validation.rows.length.toLocaleString("vi-VN")} dòng đầu tiên; tổng hợp phía trên bao gồm toàn bộ tệp.</p>
               )}
               {validation.errorReportUrl && (
                 <button
                   type="button"
                   onClick={() => void downloadErrorReport(validation.errorReportUrl!)}
                   disabled={busy !== null}
-                  className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-[#e74c3c]/40 bg-white px-3 font-semibold text-[#a5281d] hover:bg-red-50 disabled:opacity-50"
+                  className="inline-flex h-8 items-center gap-2 rounded-[4px] border border-[#e74c3c]/40 bg-white px-2.5 text-xs font-semibold text-[#a5281d] hover:bg-red-50 disabled:opacity-50"
                 >
                   {busy === "report" ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : <FileSpreadsheet aria-hidden="true" className="h-4 w-4" />}
                   Tải báo cáo lỗi Excel
@@ -929,15 +981,20 @@ export default function SmartExcelImportView() {
           )}
 
           {commitResult && (
-            <div role="status" className={`rounded-lg border p-4 ${commitResult.errorCount > 0 ? "border-[#e74c3c]/30 bg-red-50" : "border-[#7bc043]/40 bg-[#7bc043]/10"}`}>
+            <div role="status" className={`rounded-md border p-3 ${commitResult.errorCount > 0 ? "border-[#f0ad4e]/40 bg-amber-50" : "border-[#7bc043]/40 bg-[#7bc043]/10"}`}>
               <p className="font-semibold text-slate-900">
-                {commitResult.errorCount > 0 ? "Chưa thể nạp dữ liệu do phát sinh lỗi." : "Nạp dữ liệu thành công."}
+                {commitResult.errorCount > 0 && commitResult.successCount + commitResult.updatedCount > 0
+                  ? `Đã nạp thành công ${commitResult.successCount + commitResult.updatedCount}/${commitResult.totalProcessed} dòng. ${commitResult.errorCount} dòng lỗi.`
+                  : commitResult.errorCount > 0
+                    ? `Không có dòng hợp lệ để nạp. ${commitResult.errorCount} dòng lỗi.`
+                    : `Đã nạp thành công ${commitResult.successCount + commitResult.updatedCount}/${commitResult.totalProcessed} dòng.`}
               </p>
-              <p className="mt-1 text-sm text-slate-700">
-                Tổng: {commitResult.totalProcessed} · Đã tạo: {commitResult.successCount} · Đã cập nhật: {commitResult.updatedCount} · Lỗi: {commitResult.errorCount}
+              <p className="mt-1 text-xs text-slate-700">
+                Đã tạo: {commitResult.successCount} · Đã cập nhật: {commitResult.updatedCount}
+                {commitResult.errorCount > 0 && ` · Lỗi: ${commitResult.errorCount}`}
               </p>
               {!!commitResult.accountProvisioningWarnings?.length && (
-                <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-amber-900">
+                <ul className="mt-2 list-inside list-disc space-y-1 text-xs text-amber-900">
                   {commitResult.accountProvisioningWarnings.map((warning) => <li key={warning}>{warning}</li>)}
                 </ul>
               )}
@@ -946,7 +1003,7 @@ export default function SmartExcelImportView() {
                   type="button"
                   onClick={() => void downloadErrorReport(commitResult.errorReportUrl!)}
                   disabled={busy !== null}
-                  className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+                  className="mt-3 inline-flex h-8 items-center gap-2 rounded-[4px] border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
                 >
                   <FileSpreadsheet aria-hidden="true" className="h-4 w-4" />
                   Tải báo cáo lỗi Excel
@@ -955,13 +1012,13 @@ export default function SmartExcelImportView() {
             </div>
           )}
 
-          {error && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{error}</p>}
+          {error && <p role="alert" className="rounded-md border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-800">{error}</p>}
 
           <div className="flex justify-start border-t border-slate-100 pt-4">
             <button
               type="button"
               onClick={() => setStep(2)}
-              className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 font-semibold text-slate-700 hover:bg-slate-50"
+              className="inline-flex h-8 items-center gap-2 rounded-[4px] border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
             >
               <ArrowLeft aria-hidden="true" className="h-4 w-4" />
               Quay lại chỉnh mapping
@@ -969,11 +1026,13 @@ export default function SmartExcelImportView() {
             <button
               type="button"
               onClick={() => void executeImport()}
-              disabled={!validation?.isValid || validation.errorRecordsCount > 0 || busy !== null || commitResult !== null}
-              className="ml-auto inline-flex min-h-11 items-center gap-2 rounded-lg bg-[#026aa7] px-4 font-semibold text-white hover:bg-[#025a8e] disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={!validation || validation.validRecordsCount === 0 || busy !== null || commitResult !== null}
+              className="ml-auto inline-flex h-8 items-center gap-2 rounded-[4px] bg-[#026aa7] px-3 text-xs font-semibold text-white hover:bg-[#025a8e] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {busy === "import" ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : <FileUp aria-hidden="true" className="h-4 w-4" />}
-              {busy === "import" ? "Đang nạp..." : "Xác nhận nạp vào hệ thống"}
+              {busy === "import" ? "Đang nạp..." : validation?.errorRecordsCount
+                ? `Nạp ${validation.validRecordsCount.toLocaleString("vi-VN")} dòng hợp lệ`
+                : "Xác nhận nạp vào hệ thống"}
             </button>
           </div>
         </section>

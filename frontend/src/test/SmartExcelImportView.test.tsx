@@ -186,7 +186,7 @@ describe("SmartExcelImportView", () => {
     }));
 
     fireEvent.click(importButton);
-    expect(await screen.findByText("Nạp dữ liệu thành công.")).toBeInTheDocument();
+    expect(await screen.findByText("Đã nạp thành công 1/1 dòng.")).toBeInTheDocument();
     expect(apiRequestRaw).toHaveBeenNthCalledWith(4, "/api/v1/system/excel/execute-import", expect.objectContaining({
       method: "POST",
       body: expect.objectContaining({ fileId: "file-1", confirmImport: true }),
@@ -270,7 +270,7 @@ describe("SmartExcelImportView", () => {
     }));
 
     fireEvent.click(screen.getByRole("button", { name: "Xác nhận nạp vào hệ thống" }));
-    await screen.findByText("Nạp dữ liệu thành công.");
+    await screen.findByText("Đã nạp thành công 1/1 dòng.");
     expect(apiRequestRaw).toHaveBeenNthCalledWith(4, "/api/v1/system/excel/execute-import", expect.objectContaining({
       body: expect.objectContaining({
         mappingConfig: expect.objectContaining({ targetEntity: "Companies" }),
@@ -278,20 +278,32 @@ describe("SmartExcelImportView", () => {
     }));
   });
 
-  it("keeps commit disabled when validation reports errors and offers an error workbook", async () => {
+  it("commits valid rows when validation reports row errors and offers an error workbook", async () => {
     vi.mocked(apiRequestRaw)
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce(preview)
       .mockResolvedValueOnce({
         ...validImport,
         isValid: false,
-        validRecordsCount: 0,
+        totalRecords: 2,
+        validRecordsCount: 1,
         errorRecordsCount: 1,
-        rows: [{
-          rowIndex: 4,
-          status: "Error",
-          issues: [{ rowIndex: 4, fieldCode: "Email", errorMessage: "Email không đúng định dạng.", rawValue: "bad", severity: "Error" }],
-        }],
+        rows: [
+          { rowIndex: 4, status: "Valid", issues: [] },
+          {
+            rowIndex: 5,
+            status: "Error",
+            issues: [{ rowIndex: 5, fieldCode: "Email", errorMessage: "Email không đúng định dạng.", rawValue: "bad", severity: "Error" }],
+          },
+        ],
+        errorReportId: "report-1",
+        errorReportUrl: "/api/v1/system/excel/error-reports/report-1",
+      })
+      .mockResolvedValueOnce({
+        totalProcessed: 2,
+        successCount: 1,
+        updatedCount: 0,
+        errorCount: 1,
         errorReportId: "report-1",
         errorReportUrl: "/api/v1/system/excel/error-reports/report-1",
       });
@@ -301,13 +313,20 @@ describe("SmartExcelImportView", () => {
     await goToMappingStep();
     fireEvent.click(screen.getByRole("button", { name: "Kiểm tra dữ liệu" }));
 
-    expect(await screen.findByRole("button", { name: "Xác nhận nạp vào hệ thống" })).toBeDisabled();
+    const importButton = await screen.findByRole("button", { name: "Nạp 1 dòng hợp lệ" });
+    expect(importButton).toBeEnabled();
+    expect(screen.getByText("Email: Email không đúng định dạng.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Tải báo cáo lỗi Excel" }));
     await waitFor(() => expect(downloadAuthenticatedFile).toHaveBeenCalledWith(
       "/api/v1/system/excel/error-reports/report-1",
       "bao-cao-loi-nap-excel.xlsx",
     ));
-    expect(apiRequestRaw).not.toHaveBeenCalledWith("/api/v1/system/excel/execute-import", expect.anything());
+    fireEvent.click(importButton);
+    expect(await screen.findByText("Đã nạp thành công 1/2 dòng. 1 dòng lỗi.")).toBeInTheDocument();
+    expect(apiRequestRaw).toHaveBeenCalledWith("/api/v1/system/excel/execute-import", expect.objectContaining({
+      method: "POST",
+      body: expect.objectContaining({ fileId: "file-1", confirmImport: true }),
+    }));
   });
 
   it("loads a department preset into the mapping studio", async () => {
@@ -325,6 +344,24 @@ describe("SmartExcelImportView", () => {
     expect(screen.getByRole("combobox", { name: "Ghép cột Mã số sinh viên" })).toHaveValue("A");
     expect(screen.getByRole("combobox", { name: "Ghép cột Họ và tên" })).toHaveValue("B");
     expect(screen.getByRole("button", { name: "Kiểm tra dữ liệu" })).toBeEnabled();
+  });
+
+  it("keeps preset-list failures separate from workbook upload errors and supports retry", async () => {
+    vi.mocked(apiRequestRaw)
+      .mockRejectedValueOnce(new Error("HTTP 403"))
+      .mockResolvedValueOnce(preview)
+      .mockResolvedValueOnce([]);
+    render(<SmartExcelImportView />);
+    await uploadFile();
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    await goToMappingStep();
+    expect(screen.getByRole("status")).toHaveTextContent("Không tải được cấu hình mẫu đã lưu: HTTP 403");
+    expect(screen.getByRole("status")).toHaveTextContent("Bạn vẫn có thể ghép cột thủ công.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Thử tải lại" }));
+    await waitFor(() => expect(screen.queryByText(/Không tải được cấu hình mẫu đã lưu/)).not.toBeInTheDocument());
+    expect(apiRequestRaw).toHaveBeenCalledTimes(3);
   });
 
   it("saves the selected mappings as a reusable preset", async () => {

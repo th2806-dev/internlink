@@ -529,7 +529,9 @@ export function AppRoutes() {
                 />
                 <Route
                   path="config/import-excel"
-                  element={<SmartExcelImportView />}
+                  element={isDepartmentAdmin
+                    ? <SmartExcelImportView />
+                    : <Navigate to="/admin/dashboard" replace />}
                 />
                 <Route
                   path="*"

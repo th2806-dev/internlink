@@ -155,9 +155,140 @@ public class SmartExcelImportServiceTests
         report.Should().NotBeNull();
         using var workbook = new XLWorkbook(report!.FilePath);
         var sheet = workbook.Worksheet("Students");
-        sheet.Cell(1, 5).GetString().Should().Be("Kết quả");
+        sheet.Cell(1, 5).GetString().Should().Be("Dòng nguồn");
+        sheet.Cell(1, 6).GetString().Should().Be("Lý do lỗi");
         sheet.Cell(2, 1).GetString().Should().Be("SV001");
-        sheet.Cell(2, 5).GetString().Should().Contain("Email: Email không đúng định dạng.");
+        sheet.Cell(2, 6).GetString().Should().Contain("Email: Email không đúng định dạng.");
+    }
+
+    [Fact]
+    public async Task ValidateImportAsync_ClassifiesOnlyInvalidRowsAsErrors()
+    {
+        await using var db = CreateDb();
+        var (service, request) = await StageStudentRowsAsync(db,
+        [
+            ("SV001", "Student One", "student1@example.edu.vn", null),
+            ("SV002", "", "student2@example.edu.vn", null),
+            ("SV003", "Student Three", "not-an-email", null)
+        ]);
+
+        var result = await service.ValidateImportAsync(request, "admin", null, null, CancellationToken.None);
+
+        result.TotalRecords.Should().Be(3);
+        result.ValidRecordsCount.Should().Be(1);
+        result.ErrorRecordsCount.Should().Be(2);
+        result.Rows.Select(row => row.Status).Should().Equal("Valid", "Error", "Error");
+        result.Rows[1].Issues.Should().Contain(issue => issue.FieldCode == "FullName");
+        result.Rows[2].Issues.Should().Contain(issue => issue.FieldCode == "Email");
+    }
+
+    [Fact]
+    public async Task ValidateImportAsync_ReportsInvalidVietnamesePhoneAsRowError()
+    {
+        await using var db = CreateDb();
+        var (service, request) = await StageStudentRowsAsync(db,
+        [
+            ("SV001", "Student One", null, "sdt-khong-hop-le")
+        ]);
+
+        var result = await service.ValidateImportAsync(request, "admin", null, null, CancellationToken.None);
+
+        result.ErrorRecordsCount.Should().Be(1);
+        result.Errors.Should().ContainSingle(issue =>
+            issue.FieldCode == "PhoneNumber"
+            && issue.ErrorMessage.Contains("10 chữ số", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ExecuteImportAsync_PersistsValidRowsAndReportsInvalidRows()
+    {
+        await using var db = CreateDb();
+        db.SysRoles.Add(new SysRole { Code = nameof(Role.Student), Name = "Sinh viên", IsActive = true });
+        await db.SaveChangesAsync();
+        var (service, request) = await StageStudentRowsAsync(db,
+        [
+            ("SV001", "Student One", null, null),
+            ("SV002", "", null, null),
+            ("SV003", "Student Three", null, null)
+        ]);
+
+        var result = await service.ExecuteImportAsync(
+            new ExecuteExcelImportRequest(request.FileId, request.MappingConfig, true),
+            "admin", null, null, "admin", CancellationToken.None);
+
+        result.TotalProcessed.Should().Be(3);
+        result.SuccessCount.Should().Be(2);
+        result.UpdatedCount.Should().Be(0);
+        result.ErrorCount.Should().Be(1);
+        (await db.Students.Select(student => student.StudentCode).ToArrayAsync())
+            .Should().BeEquivalentTo("SV001", "SV003");
+    }
+
+    [Fact]
+    public async Task ExecuteImportAsync_AllowsRowsWithUpsertWarnings()
+    {
+        await using var db = CreateDb();
+        db.SysRoles.Add(new SysRole { Code = nameof(Role.Student), Name = "Sinh viên", IsActive = true });
+        db.Students.Add(new Student { StudentCode = "SV001", FullName = "Old name" });
+        await db.SaveChangesAsync();
+        var (service, request) = await StageStudentRowsAsync(db,
+        [
+            ("SV001", "Updated name", null, null),
+            ("SV002", "New student", null, null)
+        ]);
+        var validation = await service.ValidateImportAsync(request, "admin", null, null, CancellationToken.None);
+        validation.WarningRecordsCount.Should().Be(1);
+
+        var result = await service.ExecuteImportAsync(
+            new ExecuteExcelImportRequest(request.FileId, request.MappingConfig, true),
+            "admin", null, null, "admin", CancellationToken.None);
+
+        result.SuccessCount.Should().Be(1);
+        result.UpdatedCount.Should().Be(1);
+        result.ErrorCount.Should().Be(0);
+        (await db.Students.SingleAsync(student => student.StudentCode == "SV001")).FullName.Should().Be("Updated name");
+        (await db.Students.CountAsync()).Should().Be(2);
+    }
+
+    [Fact]
+    public async Task ValidateImportAsync_ErrorWorkbookContainsOnlyRowsWithErrors()
+    {
+        await using var db = CreateDb();
+        var (service, request) = await StageStudentRowsAsync(db,
+        [
+            ("SV001", "Student One", "duplicate@example.edu.vn", null),
+            ("SV002", "Student Two", "duplicate@example.edu.vn", null),
+            ("SV003", "Student Three", "student3@example.edu.vn", null)
+        ]);
+
+        var result = await service.ValidateImportAsync(request, "admin", null, null, CancellationToken.None);
+        var report = await service.GetErrorReportAsync(
+            result.ErrorReportId!.Value, "admin", null, null, CancellationToken.None);
+
+        result.ErrorRecordsCount.Should().Be(1);
+        using var workbook = new XLWorkbook(report!.FilePath);
+        var sheet = workbook.Worksheet("Students");
+        sheet.LastRowUsed()!.RowNumber().Should().Be(2);
+        sheet.Cell(2, 1).GetString().Should().Be("SV002");
+        sheet.Cell(2, 5).GetValue<int>().Should().Be(3);
+        sheet.Cell(2, 6).GetString().Should().Contain("Email bị lặp trong tệp");
+    }
+
+    [Fact]
+    public async Task ValidateImportAsync_ValidatesFiveHundredRowsInOneBatch()
+    {
+        await using var db = CreateDb();
+        var rows = Enumerable.Range(1, 500)
+            .Select(index => ($"SV{index:0000}", $"Student {index}", (string?)null, (string?)null))
+            .ToArray();
+        var (service, request) = await StageStudentRowsAsync(db, rows);
+
+        var result = await service.ValidateImportAsync(request, "admin", null, null, CancellationToken.None);
+
+        result.TotalRecords.Should().Be(500);
+        result.ValidRecordsCount.Should().Be(500);
+        result.ErrorRecordsCount.Should().Be(0);
+        result.Rows.Should().HaveCount(500);
     }
 
     [Fact]
@@ -431,6 +562,45 @@ public class SmartExcelImportServiceTests
             staged.FileId,
             new ExcelImportMappingConfig(
                 "Students", 2, null, null, "Students", mapping)));
+    }
+
+    private static async Task<(SmartExcelImportService Service, ExcelImportRequest Request)> StageStudentRowsAsync(
+        AppDbContext db,
+        IReadOnlyList<(string StudentCode, string FullName, string? Email, string? Phone)> rows)
+    {
+        var service = new SmartExcelImportService(
+            db,
+            new PasswordHasher<User>(),
+            new ExcelImportFileStore(Path.Combine(Path.GetTempPath(), "InternLinkTests", Guid.NewGuid().ToString("N"))));
+        using var workbook = new XLWorkbook();
+        var sheet = workbook.AddWorksheet("Students");
+        sheet.Cell(1, 1).Value = "MSSV";
+        sheet.Cell(1, 2).Value = "Họ tên";
+        sheet.Cell(1, 3).Value = "Email";
+        sheet.Cell(1, 4).Value = "Điện thoại";
+        for (var index = 0; index < rows.Count; index++)
+        {
+            sheet.Cell(index + 2, 1).Value = rows[index].StudentCode;
+            sheet.Cell(index + 2, 2).Value = rows[index].FullName;
+            sheet.Cell(index + 2, 3).Value = rows[index].Email;
+            sheet.Cell(index + 2, 4).Value = rows[index].Phone;
+        }
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        stream.Position = 0;
+        var staged = await service.StageAndAnalyzeExcelAsync(
+            stream, "students.xlsx", "Students", "admin", null, null, CancellationToken.None);
+        var mappings = new[]
+        {
+            new ExcelColumnMappingDto("StudentCode", "MSSV", 0, true, null, "TRIM"),
+            new ExcelColumnMappingDto("FullName", "Họ tên", 1, true, null, "TRIM"),
+            new ExcelColumnMappingDto("Email", "Email", 2, false, null, "TRIM"),
+            new ExcelColumnMappingDto("PhoneNumber", "Điện thoại", 3, false, null, "TRIM")
+        };
+        return (service, new ExcelImportRequest(
+            staged.FileId,
+            new ExcelImportMappingConfig("Students", 2, null, null, "Students", mappings)));
     }
 }
 
