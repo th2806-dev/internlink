@@ -6,7 +6,9 @@ import {
   downloadAuthenticatedFile,
   getApiErrorMessage,
   getStoredToken,
+  apiRequestRaw,
   setImpersonatedRoleCode,
+  setTenantImpersonationToken,
   setStoredToken,
 } from "../lib/apiClient";
 import { TOKEN_STORAGE_KEY } from "../config/env";
@@ -191,6 +193,46 @@ describe("apiClient", () => {
         status: 401,
         message: "Unauthorized access",
       });
+    });
+
+    it("expires only the tenant support token after an unauthorized response", async () => {
+      localStorage.setItem(TOKEN_STORAGE_KEY, "superadmin-token");
+      setTenantImpersonationToken("support-token");
+      sessionStorage.setItem("internlink:tenant-support-context", JSON.stringify({ tenantId: "tenant-1" }));
+      const expired = vi.fn();
+      const unauthorized = vi.fn();
+      window.addEventListener("internlink:tenant-support-expired", expired);
+      window.addEventListener("internlink:unauthorized", unauthorized);
+      vi.spyOn(globalThis, "fetch").mockResolvedValue({
+        ok: false,
+        status: 401,
+        text: vi.fn().mockResolvedValue(JSON.stringify({ error: { title: "Expired" } })),
+      } as unknown as Response);
+
+      await expect(apiRequest("/api/protected", { skipCache: true })).rejects.toMatchObject({ status: 401 });
+
+      expect(localStorage.getItem(TOKEN_STORAGE_KEY)).toBe("superadmin-token");
+      expect(sessionStorage.getItem("internlink:tenant-support-token")).toBeNull();
+      expect(sessionStorage.getItem("internlink:tenant-support-context")).toBeNull();
+      expect(expired).toHaveBeenCalledOnce();
+      expect(unauthorized).not.toHaveBeenCalled();
+      window.removeEventListener("internlink:tenant-support-expired", expired);
+      window.removeEventListener("internlink:unauthorized", unauthorized);
+    });
+
+    it("does not refresh the SuperAdmin token for unauthorized raw requests during support", async () => {
+      localStorage.setItem(TOKEN_STORAGE_KEY, "superadmin-token");
+      setTenantImpersonationToken("support-token");
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+        ok: false,
+        status: 401,
+        text: vi.fn().mockResolvedValue("Unauthorized"),
+      } as unknown as Response);
+
+      await expect(apiRequestRaw("/api/raw")).rejects.toMatchObject({ status: 401 });
+
+      expect(fetchSpy).toHaveBeenCalledOnce();
+      expect(localStorage.getItem(TOKEN_STORAGE_KEY)).toBe("superadmin-token");
     });
 
     it("throws ApiClientError when success is false in payload", async () => {

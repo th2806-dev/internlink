@@ -9,6 +9,8 @@ import {
   Calendar,
   Users,
   HardDrive,
+  Image as ImageIcon,
+  Upload,
   Save,
   RotateCcw,
   Send,
@@ -25,14 +27,39 @@ import {
 } from "../../../services/adminSettings.service";
 import { queryKeys } from "../../../lib/queryKeys";
 import { useAuth } from "../../../hooks/useAuth";
+import { formatBrandingText, resolveAppAssetUrl, useAppBranding } from "../../../contexts/AppBrandingContext";
+import { PLATFORM_PAGE_CONTENT_CLASS, PlatformPageHeader } from "../components/PlatformPageHeader";
 
 type FacultySettings = AdminFacultySettings;
 
 const EMPTY_FACULTY_SETTINGS: FacultySettings = {
+  appName: "",
+  appShortName: "",
+  browserTitle: "",
+  copyrightText: "",
+  appUrl: "",
+  appLogoUrl: "",
+  appFaviconUrl: "",
+  appPrimaryColor: "#026aa7",
   departmentName: "",
   supportEmail: "",
   phone: "",
   address: "",
+  companyName: "",
+  companyTaxCode: "",
+  companyAddress: "",
+  companyHotline: "",
+  billingEmail: "",
+  emailEnabled: true,
+  smtpHost: "smtp.gmail.com",
+  smtpPort: 587,
+  smtpUseSsl: true,
+  smtpUsername: "",
+  smtpPassword: "",
+  emailFromAddress: "",
+  emailFromName: "InternLink",
+  passwordResetPath: "/reset-password",
+  passwordResetTokenExpiryHours: 24,
   maxStudentsPerLecturer: 0,
   defaultReportDeadlineDay: "",
   maxFileSizeMb: 0,
@@ -48,6 +75,7 @@ export const SettingsView = ({
   onNavigateTab?: (tab: string) => void;
 }) => {
   const { user } = useAuth();
+  const { refreshBranding } = useAppBranding();
   const queryClient = useQueryClient();
   const settingsKey = queryKeys.admin.settings.data({
     backendRole: user?.backendRole ?? "",
@@ -61,6 +89,7 @@ export const SettingsView = ({
 
   const [isSaving, setIsSaving] = useState(false);
   const [isTestingEmail, setIsTestingEmail] = useState(false);
+  const [isUploadingBrandAsset, setIsUploadingBrandAsset] = useState<"logo" | "favicon" | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [savedSettings, setSavedSettings] = useState<FacultySettings>(EMPTY_FACULTY_SETTINGS);
   const isLoadingSettings = settingsQuery.isPending;
@@ -76,20 +105,12 @@ export const SettingsView = ({
 
   const handleSave = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!settings.departmentName.trim()) {
-      onShowToast("Vui lòng nhập Tên Khoa / Đơn vị quản lý.");
+    if (!settings.appName.trim() || !settings.appShortName.trim()) {
+      onShowToast("Tên ứng dụng và tên ngắn không được để trống.", "danger");
       return;
     }
-    if (!settings.supportEmail.trim()) {
-      onShowToast("Vui lòng nhập Email hỗ trợ.");
-      return;
-    }
-    if (settings.maxStudentsPerLecturer < 5 || settings.maxStudentsPerLecturer > 100) {
-      onShowToast("Số sinh viên tối đa mỗi giảng viên phải từ 5 đến 100.");
-      return;
-    }
-    if (settings.maxFileSizeMb < 5 || settings.maxFileSizeMb > 100) {
-      onShowToast("Dung lượng tệp phải từ 5 đến 100 MB.");
+    if (!settings.companyName.trim() || !settings.companyTaxCode.trim() || !settings.companyAddress.trim()) {
+      onShowToast("Vui lòng nhập đầy đủ tên công ty, MST và địa chỉ pháp nhân.", "danger");
       return;
     }
 
@@ -106,6 +127,7 @@ export const SettingsView = ({
       setSettings(updated);
       setSavedSettings(updated);
       queryClient.setQueryData(settingsKey, updated);
+      await refreshBranding();
       onShowToast("Đã lưu các thiết lập cài đặt thành công!");
     } catch (err) {
       onShowToast(`Không thể lưu cài đặt lên hệ thống. ${getApiErrorMessage(err)}`, "danger");
@@ -122,6 +144,7 @@ export const SettingsView = ({
         setSettings(res);
         setSavedSettings(res);
         queryClient.setQueryData(settingsKey, res);
+        await refreshBranding();
       onShowToast("Đã khôi phục tất cả cài đặt về giá trị mặc định của Khoa.");
     } catch (err) {
       onShowToast(`Không thể khôi phục cài đặt mặc định. ${getApiErrorMessage(err)}`, "danger");
@@ -153,11 +176,53 @@ export const SettingsView = ({
     }
   };
 
+  const handleBrandAssetUpload = async (
+    file: File | undefined,
+    type: "logo" | "favicon",
+  ) => {
+    if (!file) return;
+    setIsUploadingBrandAsset(type);
+    try {
+      const branding = await adminSettingsService.uploadBrandingAsset(file, type);
+      setSettings((current) => ({
+        ...current,
+        appLogoUrl: branding.appLogoUrl,
+        appFaviconUrl: branding.appFaviconUrl,
+      }));
+      setSavedSettings((current) => ({
+        ...current,
+        appLogoUrl: branding.appLogoUrl,
+        appFaviconUrl: branding.appFaviconUrl,
+      }));
+      await refreshBranding();
+      onShowToast(type === "logo" ? "Đã cập nhật logo ứng dụng." : "Đã cập nhật favicon.", "success");
+    } catch (reason) {
+      onShowToast(getApiErrorMessage(reason), "danger");
+    } finally {
+      setIsUploadingBrandAsset(null);
+    }
+  };
+
   return (
-    <div className="w-full min-w-0 space-y-1.5 pb-12 font-sans">
+    <div className="min-h-full w-full min-w-0 bg-slate-50 pb-12 font-sans">
+      <PlatformPageHeader
+        title="Cài đặt hệ thống"
+        description="Cấu hình thương hiệu, pháp nhân, email và kết nối nền tảng."
+        breadcrumbs={[
+          { label: "Quản trị nền tảng", href: "/admin/dashboard" },
+          { label: "Hệ thống" },
+          { label: "Cài đặt" },
+        ]}
+      />
       <CompactActionBar
         icon={Sliders}
         title="Cài đặt hệ thống"
+        subtitle="Cấu hình thương hiệu, pháp nhân, email và kết nối nền tảng."
+        hideTitle
+        badge={hasUnsavedChanges ? "Thay đổi chưa lưu" : "Đã đồng bộ"}
+        badgeColor={hasUnsavedChanges
+          ? "border-amber-200 bg-amber-50 text-amber-700"
+          : "border-[#7bc043]/30 bg-[#7bc043]/10 text-[#385d1b]"}
         actions={[
           {
             label: "Đặt lại mặc định",
@@ -176,6 +241,7 @@ export const SettingsView = ({
         ]}
       />
 
+      <main className={PLATFORM_PAGE_CONTENT_CLASS}>
       {settingsLoadError && (
         <div role="alert" className="flex flex-wrap items-start justify-between gap-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-900">
           <div className="flex items-start gap-2.5">
@@ -200,279 +266,205 @@ export const SettingsView = ({
       )}
 
       {isLoadingSettings && (
-        <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500">
+        <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 shadow-md">
           Đang tải cài đặt hiện tại…
         </div>
       )}
 
       {!isLoadingSettings && !settingsLoadError && <form onSubmit={handleSave} className="space-y-1.5">
         <fieldset disabled={isLoadingSettings || isSaving} className="space-y-1.5 disabled:opacity-70">
-        {/* SECTION 1: FACULTY CONTACT INFORMATION */}
-        <div className="space-y-2 rounded-md border border-slate-200 bg-white p-3">
-          <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
+        <div className="space-y-3 rounded-md border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="flex items-center gap-2.5 border-b border-slate-100 pb-3">
             <div className="rounded-md bg-[#026aa7]/5 p-2 text-[#026aa7]">
-              <Building2 className="w-5 h-5" />
+              <ImageIcon className="h-5 w-5" />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-slate-900">
-                1. Thông tin Liên hệ Khoa &amp; Ban Giám hiệu
-              </h2>
-              <p className="text-xs text-slate-500 font-medium">
-                Thông tin xuất hiện trên các văn bản, thông báo và hỗ trợ sinh viên liên hệ.
-              </p>
+              <h2 className="text-sm font-bold text-slate-900">Thông tin ứng dụng & thương hiệu</h2>
+              <p className="text-xs font-medium text-slate-500">Tên ứng dụng, logo, favicon và màu chủ đạo áp dụng cho toàn hệ thống.</p>
             </div>
           </div>
-
           <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">
-                Tên Khoa / Đơn vị chủ quản <span className="text-rose-500">*</span>
-              </label>
-              <div className="relative">
-                <Building2 className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  required
-                  value={settings.departmentName}
-                  onChange={(e) =>
-                    setSettings({ ...settings, departmentName: e.target.value })
-                  }
-                  placeholder="Ví dụ: Khoa Công nghệ Thông tin"
-                  className="h-8 w-full rounded-[4px] border border-slate-200 bg-slate-50 pl-9 pr-2.5 text-xs font-medium text-slate-900 outline-none focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">
-                Số điện thoại / Hotline văn phòng Khoa
-              </label>
-              <div className="relative">
-                <Phone className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={settings.phone}
-                  onChange={(e) =>
-                    setSettings({ ...settings, phone: e.target.value })
-                  }
-                  placeholder="Ví dụ: 0906891704"
-                  className="h-8 w-full rounded-[4px] border border-slate-200 bg-slate-50 pl-9 pr-2.5 text-xs font-medium text-slate-900 outline-none focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">
-                Email liên hệ hỗ trợ thực tập <span className="text-rose-500">*</span>
-              </label>
+            <label htmlFor="settings-app-name">
+              <span className="mb-1 block font-bold text-slate-700">Tên ứng dụng *</span>
+              <input id="settings-app-name" required value={settings.appName} onChange={(event) => setSettings({ ...settings, appName: event.target.value })} className="h-8 w-full rounded-[4px] border border-slate-200 bg-slate-50 px-2.5 text-xs text-slate-900 outline-none focus:border-[#026aa7] focus:bg-white" />
+            </label>
+            <label htmlFor="settings-app-short-name">
+              <span className="mb-1 block font-bold text-slate-700">Tên ngắn / thương hiệu *</span>
+              <input id="settings-app-short-name" required value={settings.appShortName} onChange={(event) => setSettings({ ...settings, appShortName: event.target.value })} className="h-8 w-full rounded-[4px] border border-slate-200 bg-slate-50 px-2.5 text-xs text-slate-900 outline-none focus:border-[#026aa7] focus:bg-white" />
+            </label>
+            <label htmlFor="settings-app-url" className="sm:col-span-2">
+              <span className="mb-1 block font-bold text-slate-700">URL công khai của ứng dụng *</span>
+              <input id="settings-app-url" required type="url" value={settings.appUrl} onChange={(event) => setSettings({ ...settings, appUrl: event.target.value })} placeholder="https://ten-don-vi.edu.vn" className="h-8 w-full rounded-[4px] border border-slate-200 bg-slate-50 px-2.5 text-xs text-slate-900 outline-none focus:border-[#026aa7] focus:bg-white" />
+            </label>
+            <label htmlFor="settings-browser-title" className="sm:col-span-2">
+              <span className="mb-1 block font-bold text-slate-700">Tiêu đề trình duyệt</span>
+              <input id="settings-browser-title" maxLength={160} value={settings.browserTitle} onChange={(event) => setSettings({ ...settings, browserTitle: event.target.value })} placeholder="{appName} - Nền tảng quản lý thực tập" className="h-8 w-full rounded-[4px] border border-slate-200 bg-slate-50 px-2.5 text-xs text-slate-900 outline-none focus:border-[#026aa7] focus:bg-white" />
+              <span className="mt-1 block text-[10px] text-slate-500">Có thể dùng {"{appName}"} để tự thay bằng tên ứng dụng.</span>
+            </label>
+            <label htmlFor="settings-copyright-text" className="sm:col-span-2">
+              <span className="mb-1 block font-bold text-slate-700">Copyright / chân trang</span>
+              <input id="settings-copyright-text" maxLength={250} value={settings.copyrightText} onChange={(event) => setSettings({ ...settings, copyrightText: event.target.value })} placeholder="© {year} {appName} · {companyName}" className="h-8 w-full rounded-[4px] border border-slate-200 bg-slate-50 px-2.5 text-xs text-slate-900 outline-none focus:border-[#026aa7] focus:bg-white" />
+              <span className="mt-1 block text-[10px] text-slate-500">Hỗ trợ {"{year}"}, {"{appName}"} và {"{companyName}"}.</span>
+              <span className="mt-1 block text-[10px] text-slate-600">
+                Xem trước: {formatBrandingText(settings.copyrightText || "© {year} {appName} · {companyName}", {
+                  appName: settings.appName || "Tên ứng dụng",
+                  companyName: settings.companyName || "Tên pháp nhân",
+                  year: new Date().getFullYear(),
+                })}
+              </span>
+            </label>
+            <label htmlFor="settings-app-primary-color">
+              <span className="mb-1 block font-bold text-slate-700">Màu thương hiệu chính</span>
               <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Mail className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="email"
-                    required
-                    value={settings.supportEmail}
-                    onChange={(e) =>
-                      setSettings({ ...settings, supportEmail: e.target.value })
-                    }
-                    placeholder="internlink.cntt@gmail.com"
-                    className="h-8 w-full rounded-[4px] border border-slate-200 bg-slate-50 pl-9 pr-2.5 text-xs font-medium text-slate-900 outline-none focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
-                  />
+                <input type="color" value={/^#[0-9A-Fa-f]{6}$/.test(settings.appPrimaryColor) ? settings.appPrimaryColor : "#026aa7"} onChange={(event) => setSettings({ ...settings, appPrimaryColor: event.target.value })} className="h-8 w-12 rounded-[4px] border border-slate-200 bg-white p-1" />
+                <input id="settings-app-primary-color" value={settings.appPrimaryColor} onChange={(event) => setSettings({ ...settings, appPrimaryColor: event.target.value })} className="h-8 min-w-0 flex-1 rounded-[4px] border border-slate-200 bg-slate-50 px-2.5 font-mono text-xs text-slate-900 outline-none focus:border-[#026aa7] focus:bg-white" />
+              </div>
+            </label>
+            <div className="flex items-end">
+              <div className="flex h-14 w-full items-center gap-3 rounded-[4px] border border-slate-200 bg-slate-50 px-3">
+                <img src={resolveAppAssetUrl(settings.appLogoUrl || "/logo/logo_internlink-02.png")} alt="Xem trước logo" className="h-10 w-10 object-contain" />
+                <div>
+                  <p className="text-xs font-bold" style={{ color: settings.appPrimaryColor }}>{settings.appName || "Tên ứng dụng"}</p>
+                  <p className="mt-0.5 text-[10px] text-slate-500">Xem trước thương hiệu</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleTestEmail}
-                  disabled={isTestingEmail}
-                  className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[4px] border border-slate-200 bg-slate-100 px-2.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-200 disabled:opacity-50"
-                  title="Gửi email kiểm tra"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>{isTestingEmail ? "Đang gửi..." : "Gửi thử"}</span>
-                </button>
               </div>
             </div>
-
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">
-                Địa chỉ văn phòng Khoa
-              </label>
-              <div className="relative">
-                <MapPin className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={settings.address}
-                  onChange={(e) =>
-                    setSettings({ ...settings, address: e.target.value })
-                  }
-                  placeholder="Ví dụ: Tòa nhà A, 227 Nguyễn Văn Cừ, Q.5, TP.HCM"
-                  className="h-8 w-full rounded-[4px] border border-slate-200 bg-slate-50 pl-9 pr-2.5 text-xs font-medium text-slate-900 outline-none focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
-                />
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="font-bold text-slate-700">Logo ứng dụng</p>
+                  <p className="mt-0.5 truncate text-[10px] text-slate-500">
+                    {settings.appLogoUrl ? "Logo hiện tại đã được thiết lập" : "PNG, JPG, WEBP hoặc SVG"}
+                  </p>
+                </div>
+                <label className={`relative inline-flex h-8 shrink-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded-[4px] border border-[#026aa7] bg-white px-2.5 text-[11px] font-semibold text-[#026aa7] transition-colors hover:bg-[#026aa7]/5 focus-within:ring-2 focus-within:ring-[#026aa7]/30 ${isUploadingBrandAsset !== null ? "pointer-events-none opacity-50" : ""}`}>
+                  <Upload aria-hidden="true" className="h-3.5 w-3.5" />
+                  {isUploadingBrandAsset === "logo" ? "Đang tải..." : settings.appLogoUrl ? "Thay logo" : "Chọn logo"}
+                  <input
+                    aria-label="Tải logo ứng dụng"
+                    type="file"
+                    accept=".png,.jpg,.jpeg,.webp,.svg,image/png,image/jpeg,image/webp,image/svg+xml"
+                    onChange={(event) => void handleBrandAssetUpload(event.target.files?.[0], "logo")}
+                    disabled={isUploadingBrandAsset !== null}
+                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                  />
+                </label>
+              </div>
+            </div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="font-bold text-slate-700">Favicon</p>
+                  <p className="mt-0.5 truncate text-[10px] text-slate-500">
+                    {settings.appFaviconUrl ? "Favicon hiện tại đã được thiết lập" : "PNG, JPG, WEBP hoặc SVG"}
+                  </p>
+                </div>
+                <label className={`relative inline-flex h-8 shrink-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded-[4px] border border-[#026aa7] bg-white px-2.5 text-[11px] font-semibold text-[#026aa7] transition-colors hover:bg-[#026aa7]/5 focus-within:ring-2 focus-within:ring-[#026aa7]/30 ${isUploadingBrandAsset !== null ? "pointer-events-none opacity-50" : ""}`}>
+                  <Upload aria-hidden="true" className="h-3.5 w-3.5" />
+                  {isUploadingBrandAsset === "favicon" ? "Đang tải..." : settings.appFaviconUrl ? "Thay favicon" : "Chọn favicon"}
+                  <input
+                    aria-label="Tải favicon"
+                    type="file"
+                    accept=".png,.jpg,.jpeg,.webp,.svg,image/png,image/jpeg,image/webp,image/svg+xml"
+                    onChange={(event) => void handleBrandAssetUpload(event.target.files?.[0], "favicon")}
+                    disabled={isUploadingBrandAsset !== null}
+                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                  />
+                </label>
               </div>
             </div>
           </div>
         </div>
-
-        {/* SECTION 2: INTERNSHIP RULES & PARAMETERS */}
-        <div className="space-y-2 rounded-md border border-slate-200 bg-white p-3">
-          <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
-            <div className="rounded-md bg-[#026aa7]/5 p-2 text-[#026aa7]">
-              <Calendar className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="text-sm font-bold text-slate-900">
-                2. Quy tắc Thực tập &amp; Hạn nộp Báo cáo
-              </h2>
-              <p className="text-xs text-slate-500 font-medium">
-                Thiết lập hạn mức phân công giảng viên, thời hạn nộp bài và dung lượng tệp cho phép.
-              </p>
+        {/* SECTION 1: FACULTY CONTACT INFORMATION */}
+        <div className="space-y-2 rounded-md border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="border-b border-slate-100 pb-3">
+            <h2 className="text-sm font-bold text-slate-900">Thông tin pháp nhân</h2>
+            <p className="mt-0.5 text-xs text-slate-500">Dùng chung cho bản in A4, hóa đơn và email thanh toán.</p>
+          </div>
+            <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">
+              <div>
+                <label htmlFor="settings-company-name" className="mb-1 block font-bold text-slate-700">Tên công ty <span className="text-rose-500">*</span></label>
+                <input id="settings-company-name" required value={settings.companyName} onChange={(event) => setSettings({ ...settings, companyName: event.target.value })} className="h-8 w-full rounded-[4px] border border-slate-200 bg-slate-50 px-2.5 text-xs text-slate-900 outline-none focus:border-[#026aa7] focus:bg-white" />
+              </div>
+              <div>
+                <label htmlFor="settings-company-tax-code" className="mb-1 block font-bold text-slate-700">Mã số thuế <span className="text-rose-500">*</span></label>
+                <input id="settings-company-tax-code" required value={settings.companyTaxCode} onChange={(event) => setSettings({ ...settings, companyTaxCode: event.target.value })} className="h-8 w-full rounded-[4px] border border-slate-200 bg-slate-50 px-2.5 text-xs text-slate-900 outline-none focus:border-[#026aa7] focus:bg-white" />
+              </div>
+              <div className="sm:col-span-2">
+                <label htmlFor="settings-company-address" className="mb-1 block font-bold text-slate-700">Địa chỉ pháp nhân <span className="text-rose-500">*</span></label>
+                <input id="settings-company-address" required value={settings.companyAddress} onChange={(event) => setSettings({ ...settings, companyAddress: event.target.value })} className="h-8 w-full rounded-[4px] border border-slate-200 bg-slate-50 px-2.5 text-xs text-slate-900 outline-none focus:border-[#026aa7] focus:bg-white" />
+              </div>
+              <div>
+                <label htmlFor="settings-company-hotline" className="mb-1 block font-bold text-slate-700">Hotline</label>
+                <input id="settings-company-hotline" value={settings.companyHotline} onChange={(event) => setSettings({ ...settings, companyHotline: event.target.value })} className="h-8 w-full rounded-[4px] border border-slate-200 bg-slate-50 px-2.5 text-xs text-slate-900 outline-none focus:border-[#026aa7] focus:bg-white" />
+              </div>
+              <div>
+                <label htmlFor="settings-billing-email" className="mb-1 block font-bold text-slate-700">Email thanh toán</label>
+                <input id="settings-billing-email" type="email" value={settings.billingEmail} onChange={(event) => setSettings({ ...settings, billingEmail: event.target.value })} className="h-8 w-full rounded-[4px] border border-slate-200 bg-slate-50 px-2.5 text-xs text-slate-900 outline-none focus:border-[#026aa7] focus:bg-white" />
+              </div>
             </div>
           </div>
 
+        <div className="space-y-3 rounded-md border border-slate-200 bg-white p-3 shadow-md">
+          <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
+            <div>
+              <h2 className="text-sm font-bold text-slate-900">Cấu hình Email / SMTP</h2>
+              <p className="mt-0.5 text-xs font-medium text-slate-500">Máy chủ thư, địa chỉ người gửi và đường dẫn đặt lại mật khẩu.</p>
+            </div>
+            <label className="flex items-center gap-2 text-xs font-bold text-slate-700">
+              <input type="checkbox" checked={settings.emailEnabled} onChange={(event) => setSettings({ ...settings, emailEnabled: event.target.checked })} className="h-4 w-4 accent-[#026aa7]" />
+              Bật gửi email
+            </label>
+          </div>
           <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-3">
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">
-                Số sinh viên tối đa / 1 Giảng viên
-              </label>
-              <div className="relative">
-                <Users className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="number"
-                  min={5}
-                  max={100}
-                  value={settings.maxStudentsPerLecturer}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      maxStudentsPerLecturer: Number(e.target.value),
-                    })
-                  }
-                  className="h-8 w-full rounded-[4px] border border-slate-200 bg-slate-50 pl-9 pr-2.5 text-xs font-semibold text-slate-900 outline-none focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
-                />
-              </div>
-              <span className="text-[11px] text-slate-400 mt-1 block">
-                Cảnh báo khi phân công vượt định mức.
-              </span>
-            </div>
-
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">
-                Hạn nộp báo cáo tuần mặc định
-              </label>
-              <select
-                value={settings.defaultReportDeadlineDay}
-                onChange={(e) =>
-                  setSettings({
-                    ...settings,
-                    defaultReportDeadlineDay: e.target.value,
-                  })
-                }
-                className="h-8 w-full rounded-[4px] border border-slate-200 bg-slate-50 px-2.5 text-xs font-medium text-slate-900 outline-none focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
-              >
-                <option value="Chủ Nhật (23:59)">Chủ Nhật (23:59 hàng tuần)</option>
-                <option value="Thứ Bảy (23:59)">Thứ Bảy (23:59 hàng tuần)</option>
-                <option value="Thứ Sáu (17:00)">Thứ Sáu (17:00 hàng tuần)</option>
-              </select>
-              <span className="text-[11px] text-slate-400 mt-1 block">
-                Mốc tính trễ hạn nộp báo cáo tuần.
-              </span>
-            </div>
-
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">
-                Dung lượng tệp đính kèm tối đa
-              </label>
-              <div className="relative">
-                <HardDrive className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="number"
-                  min={5}
-                  max={100}
-                  value={settings.maxFileSizeMb}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      maxFileSizeMb: Number(e.target.value),
-                    })
-                  }
-                  className="h-8 w-full rounded-[4px] border border-slate-200 bg-slate-50 pl-9 pr-2.5 text-xs font-semibold text-slate-900 outline-none focus:border-[#026aa7] focus:bg-white focus-visible:ring-2 focus-visible:ring-[#026aa7]/20"
-                />
-              </div>
-              <span className="text-[11px] text-slate-400 mt-1 block">
-                Giới hạn dung lượng mỗi tệp (MB).
-              </span>
-            </div>
-          </div>
-
-          <div className="space-y-2 pt-1">
-            <label className="flex items-center justify-between gap-3 rounded-md border border-slate-200/60 bg-slate-50 p-3 transition-colors hover:bg-slate-100/60">
-              <div>
-                <p className="text-xs font-bold text-slate-900">
-                  Cho phép sinh viên nộp trễ báo cáo tuần
-                </p>
-                <p className="text-[11px] text-slate-500 font-medium">
-                  Báo cáo nộp sau hạn chót vẫn được ghi nhận nhưng hiển thị nhãn &quot;Nộp trễ&quot; để GVHD theo dõi.
-                </p>
-              </div>
-              <input
-                type="checkbox"
-                checked={settings.allowLateSubmission}
-                onChange={(e) =>
-                  setSettings({
-                    ...settings,
-                    allowLateSubmission: e.target.checked,
-                  })
-                }
-                className="h-4 w-4 cursor-pointer rounded border-slate-300 text-[#026aa7] focus:ring-[#026aa7]"
-              />
+            <label htmlFor="settings-smtp-host">
+              <span className="mb-1 block font-bold text-slate-700">Máy chủ SMTP *</span>
+              <input id="settings-smtp-host" required={settings.emailEnabled} value={settings.smtpHost} onChange={(event) => setSettings({ ...settings, smtpHost: event.target.value })} placeholder="smtp.example.com" className="h-8 w-full rounded-[4px] border border-slate-200 bg-slate-50 px-2.5 text-xs outline-none focus:border-[#026aa7] focus:bg-white" />
             </label>
-
-            <label className="flex items-center justify-between gap-3 rounded-md border border-slate-200/60 bg-slate-50 p-3 transition-colors hover:bg-slate-100/60">
-              <div>
-                <p className="text-xs font-bold text-slate-900">
-                  Tự động khóa chỉnh sửa điểm khi học kỳ kết thúc
-                </p>
-                <p className="text-[11px] text-slate-500 font-medium">
-                  Ngăn chặn việc sửa đổi bảng điểm và báo cáo sau khi kỳ thực tập chính thức đóng.
-                </p>
-              </div>
-              <input
-                type="checkbox"
-                checked={settings.autoLockSemesterEnd}
-                onChange={(e) =>
-                  setSettings({
-                    ...settings,
-                    autoLockSemesterEnd: e.target.checked,
-                  })
-                }
-                className="h-4 w-4 cursor-pointer rounded border-slate-300 text-[#026aa7] focus:ring-[#026aa7]"
-              />
+            <label htmlFor="settings-smtp-port">
+              <span className="mb-1 block font-bold text-slate-700">Cổng SMTP *</span>
+              <input id="settings-smtp-port" required={settings.emailEnabled} type="number" min={1} max={65535} value={settings.smtpPort} onChange={(event) => setSettings({ ...settings, smtpPort: Number(event.target.value) })} className="h-8 w-full rounded-[4px] border border-slate-200 bg-slate-50 px-2.5 text-xs outline-none focus:border-[#026aa7] focus:bg-white" />
+            </label>
+            <label className="flex min-h-14 items-center gap-2 pt-5 text-xs font-bold text-slate-700">
+              <input type="checkbox" checked={settings.smtpUseSsl} onChange={(event) => setSettings({ ...settings, smtpUseSsl: event.target.checked })} className="h-4 w-4 accent-[#026aa7]" />
+              Dùng STARTTLS/SSL
+            </label>
+            <label htmlFor="settings-smtp-username">
+              <span className="mb-1 block font-bold text-slate-700">Tài khoản SMTP</span>
+              <input id="settings-smtp-username" value={settings.smtpUsername} onChange={(event) => setSettings({ ...settings, smtpUsername: event.target.value })} autoComplete="username" className="h-8 w-full rounded-[4px] border border-slate-200 bg-slate-50 px-2.5 text-xs outline-none focus:border-[#026aa7] focus:bg-white" />
+            </label>
+            <label htmlFor="settings-smtp-password">
+              <span className="mb-1 block font-bold text-slate-700">Mật khẩu SMTP</span>
+              <input id="settings-smtp-password" type="password" value={settings.smtpPassword} onChange={(event) => setSettings({ ...settings, smtpPassword: event.target.value })} autoComplete="new-password" placeholder="Nhập để thay đổi" className="h-8 w-full rounded-[4px] border border-slate-200 bg-slate-50 px-2.5 text-xs outline-none focus:border-[#026aa7] focus:bg-white" />
+            </label>
+            <label htmlFor="settings-email-from-address">
+              <span className="mb-1 block font-bold text-slate-700">Email người gửi *</span>
+              <input id="settings-email-from-address" required={settings.emailEnabled} type="email" value={settings.emailFromAddress} onChange={(event) => setSettings({ ...settings, emailFromAddress: event.target.value })} className="h-8 w-full rounded-[4px] border border-slate-200 bg-slate-50 px-2.5 text-xs outline-none focus:border-[#026aa7] focus:bg-white" />
+            </label>
+            <label htmlFor="settings-email-from-name">
+              <span className="mb-1 block font-bold text-slate-700">Tên người gửi</span>
+              <input id="settings-email-from-name" value={settings.emailFromName} onChange={(event) => setSettings({ ...settings, emailFromName: event.target.value })} className="h-8 w-full rounded-[4px] border border-slate-200 bg-slate-50 px-2.5 text-xs outline-none focus:border-[#026aa7] focus:bg-white" />
+            </label>
+            <label htmlFor="settings-password-reset-path">
+              <span className="mb-1 block font-bold text-slate-700">Đường dẫn reset mật khẩu</span>
+              <input id="settings-password-reset-path" value={settings.passwordResetPath} onChange={(event) => setSettings({ ...settings, passwordResetPath: event.target.value })} className="h-8 w-full rounded-[4px] border border-slate-200 bg-slate-50 px-2.5 text-xs outline-none focus:border-[#026aa7] focus:bg-white" />
+            </label>
+            <label htmlFor="settings-password-reset-expiry">
+              <span className="mb-1 block font-bold text-slate-700">Thời hạn mã reset (giờ)</span>
+              <input id="settings-password-reset-expiry" type="number" min={1} max={168} value={settings.passwordResetTokenExpiryHours} onChange={(event) => setSettings({ ...settings, passwordResetTokenExpiryHours: Number(event.target.value) })} className="h-8 w-full rounded-[4px] border border-slate-200 bg-slate-50 px-2.5 text-xs outline-none focus:border-[#026aa7] focus:bg-white" />
             </label>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-200 bg-white p-3">
-          <div className="flex items-center gap-2 text-xs text-slate-600 font-medium">
-            {hasUnsavedChanges ? (
-              <ShieldAlert className="w-4 h-4 text-amber-600" />
-            ) : (
-              <CheckCircle2 className="h-4 w-4 text-[#548a28]" />
-            )}
-            <span>
-              {hasUnsavedChanges
-                ? "Bạn còn thay đổi chưa lưu."
-                : "Cài đặt đã được đồng bộ."}
-            </span>
-          </div>
-
-        </div>
         </fieldset>
       </form>}
+      </main>
 
       {/* CONFIRM RESET DIALOG */}
       <ConfirmDialog
         open={showResetConfirm}
         title="Khôi phục cài đặt mặc định"
-        description="Bạn có chắc chắn muốn đặt lại toàn bộ thông tin Khoa và các tham số quy định thực tập về giá trị mặc định ban đầu?"
+        description="Bạn có chắc chắn muốn đặt lại toàn bộ thương hiệu, pháp nhân và cấu hình nền tảng về giá trị mặc định?"
         confirmLabel="Khôi phục mặc định"
         variant="danger"
         onConfirm={handleResetDefaults}

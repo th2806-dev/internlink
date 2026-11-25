@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ClipboardList, FileSearch, X } from "lucide-react";
 import { CompactActionBar } from "../../../components/common/CompactActionBar";
+import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
+import { PLATFORM_PAGE_CONTENT_CLASS, PlatformPageHeader } from "../components/PlatformPageHeader";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { systemAdminService } from "../../../services/systemAdmin.service";
 import type { AuditLogEntry } from "../../../types/systemAdmin";
@@ -39,12 +41,13 @@ const ACTION_STYLES: Record<AuditLogEntry["actionType"], string> = {
 };
 
 const ACTION_LABELS: Record<AuditLogEntry["actionType"], string> = {
-  CREATE: "CREATE",
-  UPDATE: "UPDATE",
-  SOFT_DELETE: "DELETE",
+  CREATE: "Tạo mới",
+  UPDATE: "Cập nhật",
+  SOFT_DELETE: "Xóa",
 };
 
 export function AuditLogsView() {
+  const { isSuperAdmin } = useAdminCapabilities();
   const today = useMemo(() => new Date(), []);
   const [fromDate, setFromDate] = useState(() => {
     const start = new Date(today);
@@ -89,16 +92,26 @@ export function AuditLogsView() {
   };
 
   return (
-    <div className="w-full space-y-2 animate-in fade-in duration-200 font-sans pb-12">
+    <div className={`min-h-full w-full bg-slate-50 pb-12 font-sans ${isSuperAdmin ? "" : "space-y-3"}`}>
+      <PlatformPageHeader
+        title="Nhật ký kiểm toán"
+        description="Tra cứu thay đổi dữ liệu và đối soát giá trị trước / sau thao tác."
+        breadcrumbs={[
+          { label: "Quản trị nền tảng", href: "/admin/dashboard" },
+          { label: "Quản trị & tuân thủ" },
+          { label: "Nhật ký kiểm toán" },
+        ]}
+        statistic={`${totalCount.toLocaleString("vi-VN")} bản ghi`}
+      />
       <CompactActionBar
         icon={ClipboardList}
-        title="Nhật ký Kiểm toán & Giám sát (F1006)"
+        title="Nhật ký kiểm toán"
         subtitle="Tra cứu thay đổi dữ liệu và đối soát giá trị trước / sau thao tác."
-        total={`${totalCount.toLocaleString("vi-VN")} bản ghi`}
+        hideTitle
         search={{
           value: tableName,
           onChange: (value) => handleFilterChange(() => setTableName(value)),
-          placeholder: "Bảng dữ liệu",
+          placeholder: "Tìm theo bảng dữ liệu",
           ariaLabel: "Bảng dữ liệu",
         }}
         filters={
@@ -130,15 +143,15 @@ export function AuditLogsView() {
               className="h-8 rounded-[4px] border border-slate-200 bg-white px-2.5 text-xs text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
             >
               <option value="">Tất cả thao tác</option>
-              <option value="CREATE">CREATE</option>
-              <option value="UPDATE">UPDATE</option>
-              <option value="SOFT_DELETE">DELETE</option>
+              <option value="CREATE">{ACTION_LABELS.CREATE}</option>
+              <option value="UPDATE">{ACTION_LABELS.UPDATE}</option>
+              <option value="SOFT_DELETE">{ACTION_LABELS.SOFT_DELETE}</option>
             </select>
           </div>
         }
       />
 
-      <>
+      <main className={isSuperAdmin ? PLATFORM_PAGE_CONTENT_CLASS : "space-y-3"}>
         {fromDate && toDate && fromDate > toDate && (
           <p role="alert" className="text-xs text-rose-700">Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.</p>
         )}
@@ -151,16 +164,16 @@ export function AuditLogsView() {
           <p role="status" className="py-3 text-center text-xs text-slate-600">Đang tải nhật ký…</p>
         ) : (
           <>
-            <div className="overflow-x-auto rounded-md border border-slate-200">
+            <div className="overflow-x-auto rounded-md border border-slate-200 shadow-sm">
               <table className="min-w-[1080px] w-full border-collapse text-xs">
                 <thead className="bg-slate-100/90 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-600">
                   <tr>
                     <th scope="col" className="px-2.5 py-1.5">Thời gian</th>
                     <th scope="col" className="px-2.5 py-1.5">Thao tác</th>
                     <th scope="col" className="px-2.5 py-1.5">Bảng dữ liệu</th>
-                    <th scope="col" className="px-2.5 py-1.5">Record ID</th>
+                    <th scope="col" className="px-2.5 py-1.5">Mã bản ghi</th>
                     <th scope="col" className="px-2.5 py-1.5">Người thực hiện</th>
-                    <th scope="col" className="px-2.5 py-1.5">IP Address</th>
+                    <th scope="col" className="px-2.5 py-1.5">Địa chỉ IP</th>
                     <th scope="col" className="px-2.5 py-1.5">Chức năng</th>
                     <th scope="col" className="px-2.5 py-1.5">Chi tiết</th>
                   </tr>
@@ -189,7 +202,7 @@ export function AuditLogsView() {
                           onClick={() => setSelectedLog(log)}
                           className="h-7 rounded-[4px] px-2 text-xs font-semibold text-[#026aa7] hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
                         >
-                          Xem Diff chi tiết
+                          Xem thay đổi
                         </button>
                       </td>
                     </tr>
@@ -227,7 +240,7 @@ export function AuditLogsView() {
             </div>
           </>
         )}
-      </>
+      </main>
 
       {selectedLog && (
         <div
@@ -255,7 +268,7 @@ export function AuditLogsView() {
               <button
                 type="button"
                 onClick={() => setSelectedLog(null)}
-                aria-label="Đóng chi tiết nhật ký"
+                aria-label="Đóng chi tiết thay đổi"
                 className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[4px] text-slate-500 hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
               >
                 <X aria-hidden="true" className="h-5 w-5" />
@@ -263,11 +276,11 @@ export function AuditLogsView() {
             </header>
             <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto p-4 md:grid-cols-2 md:p-5">
               <section aria-labelledby="audit-old-values-title" className="min-w-0 rounded-md border border-rose-200 bg-rose-50/70">
-                <h3 id="audit-old-values-title" className="border-b border-rose-200 px-4 py-3 text-sm font-semibold text-rose-900">Dữ liệu cũ</h3>
+                <h3 id="audit-old-values-title" className="border-b border-rose-200 px-4 py-3 text-sm font-semibold text-rose-900">Trước thay đổi</h3>
                 <pre className="max-h-[55dvh] overflow-auto whitespace-pre-wrap break-words p-4 text-xs leading-5 text-rose-950">{prettyJson(selectedLog.oldValuesJson)}</pre>
               </section>
               <section aria-labelledby="audit-new-values-title" className="min-w-0 rounded-md border border-[#7bc043]/30 bg-[#7bc043]/10">
-                <h3 id="audit-new-values-title" className="border-b border-[#7bc043]/30 px-4 py-3 text-sm font-semibold text-slate-900">Dữ liệu mới</h3>
+                <h3 id="audit-new-values-title" className="border-b border-[#7bc043]/30 px-4 py-3 text-sm font-semibold text-slate-900">Sau thay đổi</h3>
                 <pre className="max-h-[55dvh] overflow-auto whitespace-pre-wrap break-words p-4 text-xs leading-5 text-slate-800">{prettyJson(selectedLog.newValuesJson)}</pre>
               </section>
             </div>

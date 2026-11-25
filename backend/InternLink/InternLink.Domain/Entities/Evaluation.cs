@@ -5,8 +5,9 @@ namespace InternLink.Domain.Entities;
 /// <summary>
 /// Represents an evaluation/grading of a student's internship performance
 /// </summary>
-public class Evaluation : BaseEntity
+public class Evaluation : BaseEntity, ITenantScoped
 {
+    public Guid TenantId { get; set; }
     /// <summary>
     /// The internship being evaluated
     /// </summary>
@@ -134,7 +135,7 @@ public class Evaluation : BaseEntity
 
         try
         {
-            var scores = System.Text.Json.JsonSerializer.Deserialize<List<CriteriaScoreEntry>>(CriteriaScoresJson);
+            var scores = global::System.Text.Json.JsonSerializer.Deserialize<List<CriteriaScoreEntry>>(CriteriaScoresJson);
             if (scores == null || scores.Count == 0)
             {
                 CalculateFinalGrade();

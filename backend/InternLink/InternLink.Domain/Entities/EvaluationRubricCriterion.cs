@@ -4,8 +4,9 @@ namespace InternLink.Domain.Entities;
 /// A single criterion within an evaluation rubric.
 /// Examples: "Chuyên môn" (40%), "Thái độ" (20%), "Kỹ năng mềm" (20%), "Báo cáo cuối kỳ" (20%)
 /// </summary>
-public class EvaluationRubricCriterion : BaseEntity
+public class EvaluationRubricCriterion : BaseEntity, ITenantScoped
 {
+    public Guid TenantId { get; set; }
     /// <summary>
     /// The rubric this criterion belongs to
     /// </summary>

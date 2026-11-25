@@ -34,6 +34,7 @@ import {
 } from "recharts";
 import { Panel } from "../../../components/common/Panel";
 import { AdminKpiSection } from "../components/KpiSection";
+import { PlatformPageHeader } from "../components/PlatformPageHeader";
 import { WorkloadOverviewCard } from "../components/cards/WorkloadOverviewCard";
 import { AdminActivityTimeline } from "../components/ActivityTimeline";
 import {
@@ -286,32 +287,58 @@ export const DashboardView = ({
   } as const;
 
   return (
-    <div className="w-full space-y-4 pb-12 font-sans">
-      <section className="overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-2xs">
-        <div className="flex flex-wrap items-center justify-between gap-2 bg-[#026aa7] px-4 py-2.5 text-white">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-white/90" aria-hidden="true" />
-            <h1 className="text-xs font-bold tracking-wider sm:text-sm">
-              {isSuperAdmin
-                ? "CỔNG THÔNG TIN QUẢN TRỊ HỆ THỐNG"
-                : "CỔNG THÔNG TIN QUẢN TRỊ KHOA"}
-            </h1>
+    <div className="w-full space-y-3 pb-8 font-sans">
+      {isSuperAdmin && (
+        <PlatformPageHeader
+          title="Tổng quan hệ thống"
+          description="Theo dõi tình hình thực tập và hoạt động toàn trường."
+          breadcrumbs={[
+            { label: "Quản trị nền tảng" },
+            { label: "Tổng quan hệ thống" },
+          ]}
+          statistic={
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <span className="rounded-[3px] border border-slate-200 bg-white px-2 py-1 text-[10.5px] font-medium text-slate-600">
+                {selectedSemester?.id ? selectedSemester.name : "Chưa có học kỳ"}
+              </span>
+              <button
+                type="button"
+                disabled={isLoading}
+                onClick={() => void handleRefresh()}
+                className="inline-flex h-7 items-center gap-1.5 rounded-[4px] border border-slate-200 bg-white px-2.5 text-[11px] font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] disabled:cursor-wait disabled:opacity-60"
+              >
+                <RefreshCw className={`h-3 w-3 ${isLoading ? "animate-spin" : ""}`} aria-hidden="true" />
+                Làm mới
+              </button>
+            </div>
+          }
+        />
+      )}
+      <section className="overflow-hidden rounded-md border border-slate-200/90 bg-white shadow-sm">
+        {!isSuperAdmin && (
+          <div className="flex flex-wrap items-center justify-between gap-2 bg-[#026aa7] px-4 py-2.5 text-white">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-white/90" aria-hidden="true" />
+              <h1 className="text-xs font-bold tracking-wider sm:text-sm">
+                CỔNG THÔNG TIN QUẢN TRỊ KHOA
+              </h1>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="rounded-[3px] border border-white/20 bg-white/15 px-2 py-0.5 text-[10.5px] font-medium">
+                {selectedSemester?.id ? selectedSemester.name : "Chưa có học kỳ"}
+              </span>
+              <button
+                type="button"
+                disabled={isLoading}
+                onClick={() => void handleRefresh()}
+                className="inline-flex h-8 items-center gap-1.5 rounded-[4px] bg-white/15 px-2.5 text-[11px] font-medium transition-colors hover:bg-white/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-wait disabled:opacity-60"
+              >
+                <RefreshCw className={`h-3 w-3 ${isLoading ? "animate-spin" : ""}`} aria-hidden="true" />
+                Làm mới
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="rounded-md border border-white/20 bg-white/15 px-2 py-0.5 text-[10.5px] font-medium">
-              {selectedSemester?.id ? selectedSemester.name : "Chưa có học kỳ"}
-            </span>
-            <button
-              type="button"
-              disabled={isLoading}
-              onClick={() => void handleRefresh()}
-              className="inline-flex min-h-8 items-center gap-1.5 rounded-md bg-white/15 px-2.5 text-[11px] font-medium transition-colors hover:bg-white/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-wait disabled:opacity-60"
-            >
-              <RefreshCw className={`h-3 w-3 ${isLoading ? "animate-spin" : ""}`} aria-hidden="true" />
-              Làm mới
-            </button>
-          </div>
-        </div>
+        )}
 
         <div className="flex flex-col gap-3 border-b border-slate-100 px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4">
           <div>
@@ -319,11 +346,11 @@ export const DashboardView = ({
             <p className="mt-0.5 text-xs text-slate-600">Xuất hồ sơ đánh giá sinh viên (ZIP) hoặc bảng tổng hợp kết quả (Excel).</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button type="button" disabled={Boolean(accreditationExport) || !reportSemesterId || reportSemesterId === "all"} onClick={() => void handleAccreditationExport("c22")} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
+            <button type="button" disabled={Boolean(accreditationExport) || !reportSemesterId || reportSemesterId === "all"} onClick={() => void handleAccreditationExport("c22")} className="inline-flex h-8 items-center gap-2 rounded-[4px] border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
               {accreditationExport === "c22" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Download className="h-4 w-4" aria-hidden="true" />}
               Hồ sơ đánh giá SV (ZIP)
             </button>
-            <button type="button" disabled={Boolean(accreditationExport) || !reportSemesterId || reportSemesterId === "all"} onClick={() => void handleAccreditationExport("c23")} className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-[#026aa7] px-3 text-xs font-bold text-white hover:bg-[#025a8e] disabled:cursor-not-allowed disabled:opacity-50">
+            <button type="button" disabled={Boolean(accreditationExport) || !reportSemesterId || reportSemesterId === "all"} onClick={() => void handleAccreditationExport("c23")} className="inline-flex h-8 items-center gap-2 rounded-[4px] bg-[#026aa7] px-3 text-xs font-bold text-white hover:bg-[#025a8e] disabled:cursor-not-allowed disabled:opacity-50">
               {accreditationExport === "c23" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Download className="h-4 w-4" aria-hidden="true" />}
               Bảng tổng hợp kết quả (Excel)
             </button>
@@ -370,7 +397,7 @@ export const DashboardView = ({
                   value={selectedDepartmentId}
                   onChange={(event) => selectDepartment(event.target.value)}
                   disabled={!isSuperAdmin || departments.length === 0}
-                  className="h-9 w-full appearance-none rounded-lg border border-slate-300 bg-white px-3.5 pr-8 text-xs font-medium text-slate-800 shadow-2xs hover:border-slate-400 focus:border-[#026aa7] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/20 disabled:cursor-default disabled:text-slate-500"
+                  className="h-8 w-full appearance-none rounded-[4px] border border-slate-300 bg-white px-2.5 pr-8 text-xs font-medium text-slate-800 hover:border-slate-400 focus:border-[#026aa7] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/20 disabled:cursor-default disabled:text-slate-500"
                 >
                   {isSuperAdmin && <option value="all">Tất cả các khoa</option>}
                   {departments.map((department) => (
@@ -392,7 +419,7 @@ export const DashboardView = ({
                   value={selectedSemester.id === "all" ? "" : selectedSemester.academicYear}
                   onChange={(event) => handleAcademicYearChange(event.target.value)}
                   disabled={academicYears.length === 0}
-                  className="h-9 w-full appearance-none rounded-lg border border-slate-300 bg-white px-3.5 pr-8 text-xs font-medium text-slate-800 shadow-2xs hover:border-slate-400 focus:border-[#026aa7] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/20 disabled:cursor-default disabled:text-slate-500"
+                  className="h-8 w-full appearance-none rounded-[4px] border border-slate-300 bg-white px-2.5 pr-8 text-xs font-medium text-slate-800 hover:border-slate-400 focus:border-[#026aa7] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/20 disabled:cursor-default disabled:text-slate-500"
                 >
                   <option value="">{academicYears.length === 0 ? "Chưa cập nhật" : "Chọn năm học"}</option>
                   {academicYears.map((year) => <option key={year} value={year}>{year}</option>)}
@@ -409,7 +436,7 @@ export const DashboardView = ({
                   value={selectedSemester.id === "all" ? "" : selectedSemester.term}
                   onChange={(event) => handleTermChange(event.target.value)}
                   disabled={terms.length === 0}
-                  className="h-9 w-full appearance-none rounded-lg border border-slate-300 bg-white px-3.5 pr-8 text-xs font-medium text-slate-800 shadow-2xs hover:border-slate-400 focus:border-[#026aa7] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/20 disabled:cursor-default disabled:text-slate-500"
+                  className="h-8 w-full appearance-none rounded-[4px] border border-slate-300 bg-white px-2.5 pr-8 text-xs font-medium text-slate-800 hover:border-slate-400 focus:border-[#026aa7] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]/20 disabled:cursor-default disabled:text-slate-500"
                 >
                   <option value="">{terms.length === 0 ? "Chưa cập nhật" : "Chọn học kỳ"}</option>
                   {terms.map((term) => <option key={term} value={term}>{term}</option>)}
@@ -448,7 +475,7 @@ export const DashboardView = ({
       />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <Panel className="flex min-h-[360px] flex-col rounded-xl border border-slate-200/90 shadow-2xs">
+          <Panel className="flex min-h-[360px] flex-col rounded-md border border-slate-200/90 shadow-sm">
             <div className="grid gap-3 border-b border-slate-100 pb-3 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
               <div className="text-center sm:col-start-2 sm:row-start-1">
                 <h2 className="text-sm font-bold text-slate-900">
@@ -594,7 +621,7 @@ export const DashboardView = ({
               </div>
             )}
           </Panel>
-          <Panel className="flex min-h-[360px] flex-col rounded-xl border border-slate-200/90 shadow-2xs">
+          <Panel className="flex min-h-[360px] flex-col rounded-md border border-slate-200/90 shadow-sm">
             <div className="border-b border-slate-100 pb-3 text-center">
                 <h2 className="text-sm font-bold text-slate-900">
                   {isSuperAdmin ? "Kết quả thực tập" : "Phân bổ phân công hướng dẫn"}
@@ -688,7 +715,7 @@ export const DashboardView = ({
                     </div>
                   {!isSuperAdmin && (
                     <div className="mt-1 grid grid-cols-2 gap-2">
-                      <div className="rounded-lg border border-slate-100 bg-slate-50 p-2.5">
+                      <div className="rounded-md border border-slate-100 bg-slate-50 p-2.5">
                         <div className="mb-1 h-1 w-8 rounded-full bg-[#026aa7]" />
                         <p className="text-[11px] font-medium text-slate-600">Đã phân công</p>
                         <p className="mt-0.5 text-sm font-bold text-slate-900">
@@ -696,7 +723,7 @@ export const DashboardView = ({
                           <span className="ml-1 text-[10px] font-medium text-slate-500">({assignedRate}%)</span>
                         </p>
                       </div>
-                      <div className="rounded-lg border border-slate-100 bg-slate-50 p-2.5">
+                      <div className="rounded-md border border-slate-100 bg-slate-50 p-2.5">
                         <div className="mb-1 h-1 w-8 rounded-full bg-amber-500" />
                         <p className="text-[11px] font-medium text-slate-600">Chưa phân công</p>
                         <p className="mt-0.5 text-sm font-bold text-slate-900">
@@ -730,7 +757,7 @@ export const DashboardView = ({
 
       {!isSuperAdmin && (
         <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-2">
-          <Panel className="flex h-full flex-col space-y-4 rounded-xl border border-slate-200/90 shadow-2xs">
+          <Panel className="flex h-full flex-col space-y-4 rounded-md border border-slate-200/90 shadow-sm">
             <div className="flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 pb-3">
               <div>
                 <h2 className="text-sm font-bold text-slate-900">Tiến độ nộp hồ sơ thực tập</h2>
@@ -747,20 +774,20 @@ export const DashboardView = ({
             ) : (
               <>
                 <div className="grid flex-1 grid-cols-2 gap-3 xl:grid-cols-4">
-                  <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+                  <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
                     <p className="flex items-center gap-1.5 text-xs text-slate-500"><Users className="h-3.5 w-3.5" aria-hidden="true" /> Sinh viên</p>
                     <p className="mt-2 text-2xl font-bold text-slate-900">{semesterReportMetrics.studentCount}</p>
                   </div>
-                  <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+                  <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
                     <p className="flex items-center gap-1.5 text-xs text-slate-500"><Building2 className="h-3.5 w-3.5" aria-hidden="true" /> Doanh nghiệp</p>
                     <p className="mt-2 text-2xl font-bold text-slate-900">{semesterReportMetrics.companyCount}</p>
                   </div>
-                  <div className="rounded-lg border border-slate-100 bg-[#7bc043]/10 p-3">
+                  <div className="rounded-md border border-slate-100 bg-[#7bc043]/10 p-3">
                     <p className="flex items-center gap-1.5 text-xs text-slate-600"><CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" /> Đúng hạn</p>
                     <p className="mt-2 text-2xl font-bold text-[#7bc043]">{semesterReportMetrics.onTimeRate == null ? "—" : `${semesterReportMetrics.onTimeRate}%`}</p>
                     <p className="mt-0.5 text-[10px] text-slate-500">{semesterReportMetrics.onTime}/{semesterReportMetrics.dueCount} báo cáo</p>
                   </div>
-                  <div className="rounded-lg border border-slate-100 bg-amber-50/60 p-3">
+                  <div className="rounded-md border border-slate-100 bg-amber-50/60 p-3">
                     <p className="flex items-center gap-1.5 text-xs text-slate-600"><Clock3 className="h-3.5 w-3.5" aria-hidden="true" /> Trễ / thiếu</p>
                     <p className="mt-2 text-2xl font-bold text-amber-800">{semesterReportMetrics.late + semesterReportMetrics.missing}</p>
                     <p className="mt-0.5 text-[10px] text-slate-500">{semesterReportMetrics.late} trễ · {semesterReportMetrics.missing} thiếu</p>
@@ -789,7 +816,7 @@ export const DashboardView = ({
               </>
             )}
           </Panel>
-          <Panel className="flex h-full flex-col rounded-xl border border-slate-200/90 shadow-2xs">
+          <Panel className="flex h-full flex-col rounded-md border border-slate-200/90 shadow-sm">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
                 <h2 className="text-sm font-bold text-slate-900">Sinh viên theo tình trạng thực tập</h2>
@@ -832,7 +859,7 @@ export const DashboardView = ({
       )}
 
       {!isSuperAdmin && (
-        <Panel className="rounded-xl border border-slate-200/90 shadow-2xs">
+        <Panel className="rounded-md border border-slate-200/90 shadow-sm">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <div>
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
@@ -843,7 +870,7 @@ export const DashboardView = ({
                 Các mục đang thiếu dữ liệu hoặc cần thao tác
               </p>
             </div>
-            <span className="text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-md">
+            <span             className="rounded-[3px] border border-amber-100 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
               {isLoading ? "…" : `${actionItems.length} mục`}
             </span>
           </div>
@@ -880,10 +907,10 @@ export const DashboardView = ({
 
       {!isSuperAdmin && (
         <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-12">
-          <Panel className="lg:col-span-7 rounded-xl border border-slate-200/90 shadow-2xs">
+          <Panel className="rounded-md border border-slate-200/90 shadow-sm lg:col-span-7">
             <WorkloadOverviewCard stats={stats} isLoading={isLoading} />
           </Panel>
-          <Panel className="lg:col-span-5 rounded-xl border border-slate-200/90 shadow-2xs">
+          <Panel className="rounded-md border border-slate-200/90 shadow-sm lg:col-span-5">
             <AdminActivityTimeline
               activities={stats?.recentActivities}
               isLoading={isLoading}

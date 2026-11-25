@@ -45,6 +45,9 @@ export interface CurrentUserDto {
   mustChangePassword: boolean;
   isArchiveReadOnly?: boolean;
   departmentId?: string | null;
+  tenantId?: string | null;
+  isImpersonating?: boolean;
+  impersonationExpiresAt?: string | null;
   createdAt?: string | null;
 }
 

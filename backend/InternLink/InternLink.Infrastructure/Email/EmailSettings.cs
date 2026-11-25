@@ -4,10 +4,17 @@ public sealed class EmailSettings
 {
     public const string SectionName = "Email";
 
+    public string AppName { get; set; } = "InternLink";
+
     /// <summary>
     /// When true, use SMTP. When false, log emails (dev-friendly).
     /// </summary>
     public bool Enabled { get; set; }
+    public bool EmailEnabled
+    {
+        get => Enabled;
+        set => Enabled = value;
+    }
 
     public string SmtpHost { get; set; } = "localhost";
     public int SmtpPort { get; set; } = 587;

@@ -57,13 +57,20 @@ public sealed class DatabaseBackupService : IDatabaseBackupService
         }
     }
 
-    public async Task<BackupFileDto> CreateBackupAsync(CancellationToken cancellationToken)
+    public Task<BackupFileDto> CreateBackupAsync(CancellationToken cancellationToken) =>
+        CreateBackupAsync(isScheduled: false, cancellationToken);
+
+    public Task<BackupFileDto> CreateScheduledBackupAsync(CancellationToken cancellationToken) =>
+        CreateBackupAsync(isScheduled: true, cancellationToken);
+
+    private async Task<BackupFileDto> CreateBackupAsync(bool isScheduled, CancellationToken cancellationToken)
     {
         await OperationLock.WaitAsync(cancellationToken);
         try
         {
             EnsureBackupDirectory();
-            var fileName = $"{_databaseName}_{DateTime.UtcNow:yyyyMMdd_HHmmss_fff}Z.bak";
+            var backupKind = isScheduled ? "Scheduled_" : string.Empty;
+            var fileName = $"{_databaseName}_{backupKind}{DateTime.UtcNow:yyyyMMdd_HHmmss_fff}Z.bak";
             var destination = GetBackupPath(fileName);
 
             await using var connection = new SqlConnection(_connectionString);
@@ -71,6 +78,9 @@ public sealed class DatabaseBackupService : IDatabaseBackupService
             await BackupDatabaseAsync(connection, destination, cancellationToken);
 
             var file = new FileInfo(destination);
+            if (isScheduled)
+                PruneScheduledBackups();
+
             _logger.LogInformation("Database backup created: {BackupFileName}", fileName);
             return new BackupFileDto(file.Name, file.Length, new DateTimeOffset(file.LastWriteTimeUtc, TimeSpan.Zero));
         }
@@ -83,6 +93,12 @@ public sealed class DatabaseBackupService : IDatabaseBackupService
         {
             OperationLock.Release();
         }
+    }
+
+    private void PruneScheduledBackups()
+    {
+        foreach (var fileName in ScheduledDatabaseBackupRetention.Prune(_backupDirectory, _databaseName))
+            _logger.LogInformation("Expired scheduled database backup deleted: {BackupFileName}", fileName);
     }
 
     public Task<FileStream?> OpenBackupAsync(string fileName, CancellationToken cancellationToken)

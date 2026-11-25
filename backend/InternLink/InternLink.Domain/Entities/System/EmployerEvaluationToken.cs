@@ -1,7 +1,8 @@
 namespace InternLink.Domain.Entities.Rbac;
 
-public class EmployerEvaluationToken : BaseEntity
+public class EmployerEvaluationToken : BaseEntity, ITenantScoped
 {
+    public Guid TenantId { get; set; }
     public string Token { get; set; } = null!;
     public Guid InternshipId { get; set; }
     public Internship Internship { get; set; } = null!;

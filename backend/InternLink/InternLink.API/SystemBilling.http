@@ -1,0 +1,115 @@
+@baseUrl = https://localhost:7109
+@accessToken = replace-with-superadmin-token
+@tenantId = 00000000-0000-0000-0000-000000000001
+@invoiceId = 00000000-0000-0000-0000-000000000002
+@priceId = 36ac8b4e-2352-4601-a4c9-54c3758872e5
+@bankId = replace-with-six-digit-bank-bin
+@accountNo = replace-with-beneficiary-account-number
+@accountName = replace-with-account-holder-name
+@merchantCity = replace-with-city
+
+### Get VietQR beneficiary settings
+GET {{baseUrl}}/api/v1/system/billing/vietqr-settings
+Authorization: Bearer {{accessToken}}
+
+### Update VietQR beneficiary settings
+PUT {{baseUrl}}/api/v1/system/billing/vietqr-settings
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "bankId": "{{bankId}}",
+  "accountNo": "{{accountNo}}",
+  "accountName": "{{accountName}}",
+  "merchantCity": "{{merchantCity}}"
+}
+
+### List tenant billing invoices
+GET {{baseUrl}}/api/v1/system/billing/invoices?page=1&pageSize=25
+Authorization: Bearer {{accessToken}}
+
+### List all price versions and options
+GET {{baseUrl}}/api/v1/system/billing/price-catalog
+Authorization: Bearer {{accessToken}}
+
+### List currently effective, VAT-configured prices for invoice creation
+GET {{baseUrl}}/api/v1/system/billing/price-catalog?currentOnly=true
+Authorization: Bearer {{accessToken}}
+
+### Get a price version by ID
+GET {{baseUrl}}/api/v1/system/billing/price-catalog/{{priceId}}
+Authorization: Bearer {{accessToken}}
+
+### Create a new effective-dated price
+POST {{baseUrl}}/api/v1/system/billing/price-catalog
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "planCode": "PRO",
+  "billingCycleMonths": 12,
+  "baseAmountVnd": 25000000,
+  "taxRatePercent": 10,
+  "effectiveFrom": "2026-12-01T00:00:00Z",
+  "effectiveTo": null
+}
+
+### Update a price version or end its effective period
+PUT {{baseUrl}}/api/v1/system/billing/price-catalog/{{priceId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "planCode": "PRO",
+  "billingCycleMonths": 12,
+  "baseAmountVnd": 25000000,
+  "taxRatePercent": 10,
+  "effectiveFrom": "2026-11-23T00:00:00Z",
+  "effectiveTo": "2026-12-01T00:00:00Z",
+  "isActive": true
+}
+
+### Update standard plan quotas (new invoices and license terms only)
+PUT {{baseUrl}}/api/v1/system/billing/price-catalog/plans/PRO
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "maxStudentsQuota": 2000,
+  "maxLecturersQuota": 100,
+  "storageQuotaBytes": 107374182400
+}
+
+### Filter invoices by tenant and status
+GET {{baseUrl}}/api/v1/system/billing/invoices?tenantId={{tenantId}}&status=PendingPayment
+Authorization: Bearer {{accessToken}}
+
+### Create a VietQR invoice
+POST {{baseUrl}}/api/v1/system/billing/invoices
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "tenantId": "{{tenantId}}",
+  "planCode": "PRO",
+  "billingCycleMonths": 12,
+  "paymentMethod": "VietQR",
+  "dueDate": "2027-01-31T23:59:59Z"
+}
+
+### Get invoice detail
+GET {{baseUrl}}/api/v1/system/billing/invoices/{{invoiceId}}
+Authorization: Bearer {{accessToken}}
+
+### Generate a VietQR payment payload
+GET {{baseUrl}}/api/v1/system/billing/invoices/{{invoiceId}}/vietqr
+Authorization: Bearer {{accessToken}}
+
+### Confirm payment using the bank transfer reference
+POST {{baseUrl}}/api/v1/system/billing/invoices/{{invoiceId}}/mark-paid
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "paymentReference": "BANK-TRANSFER-REFERENCE"
+}

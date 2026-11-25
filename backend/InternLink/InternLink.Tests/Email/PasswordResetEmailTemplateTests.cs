@@ -12,7 +12,8 @@ public class PasswordResetEmailTemplateTests
         InstitutionName = "Trường Đại học Demo",
         SupportEmail = "daotao@demo.edu.vn",
         FromAddress = "noreply@demo.edu.vn",
-        FromName = "InternLink"
+        FromName = "InternLink",
+        AppName = "CampusERP"
     };
 
     [Fact]
@@ -29,6 +30,7 @@ public class PasswordResetEmailTemplateTests
         var rendered = PasswordResetEmailTemplate.Build(request, CreateSettings());
 
         rendered.Subject.Should().Contain("Mật khẩu");
+        rendered.Subject.Should().Contain("CampusERP");
         rendered.PlainTextBody.Should().Contain("Nguyen Van A");
         rendered.PlainTextBody.Should().Contain("2421160052");
         rendered.PlainTextBody.Should().Contain("NewTemp123!");

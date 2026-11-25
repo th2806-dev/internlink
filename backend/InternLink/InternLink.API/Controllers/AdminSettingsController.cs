@@ -60,4 +60,49 @@ public class AdminSettingsController : ControllerBase
         var settings = await _settingsService.ResetSettingsAsync();
         return Ok(ApiResponse<AdminSettingsDto>.Ok(settings));
     }
+
+    /// <summary>Gets public application branding for login and portal surfaces.</summary>
+    [AllowAnonymous]
+    [HttpGet("branding")]
+    public async Task<IActionResult> GetBranding()
+    {
+        var branding = await _settingsService.GetBrandingAsync();
+        return Ok(ApiResponse<AppBrandingResponse>.Ok(branding));
+    }
+
+    /// <summary>Uploads a configured application logo or favicon.</summary>
+    [HttpPost("branding/upload")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(5 * 1024 * 1024)]
+    public async Task<IActionResult> UploadBrandingAsset(
+        IFormFile file,
+        [FromForm] string type)
+    {
+        if (file == null || file.Length == 0)
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Vui lòng chọn tệp logo." }));
+
+        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (extension is not (".jpg" or ".jpeg" or ".png" or ".webp" or ".svg"))
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Chỉ hỗ trợ JPG, PNG, WEBP hoặc SVG." }));
+
+        var key = type?.Trim().ToLowerInvariant() switch
+        {
+            "favicon" => "AppFaviconUrl",
+            "logo" => "AppLogoUrl",
+            _ => null
+        };
+        if (key == null)
+            return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = "Loại tài sản thương hiệu không hợp lệ." }));
+
+        var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "branding");
+        Directory.CreateDirectory(uploadsDir);
+        var fileName = $"{(key == "AppLogoUrl" ? "logo" : "favicon")}-{Guid.NewGuid():N}{extension}";
+        var filePath = Path.Combine(uploadsDir, fileName);
+        await using (var stream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None))
+            await file.CopyToAsync(stream);
+
+        var url = $"/uploads/branding/{fileName}";
+        await _settingsService.UpdateBrandingAssetAsync(key, url);
+        return Ok(ApiResponse<AppBrandingResponse>.Ok(await _settingsService.GetBrandingAsync()));
+    }
 }

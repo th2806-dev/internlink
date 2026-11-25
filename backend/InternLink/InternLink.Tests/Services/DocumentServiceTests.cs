@@ -4,6 +4,7 @@ using InternLink.Application.DTOs;
 using InternLink.Application.Mappings;
 using InternLink.Domain.Entities;
 using InternLink.Domain.Enums;
+using InternLink.Application.Interfaces;
 using InternLink.Infrastructure.Persistence;
 using InternLink.Infrastructure.Services;
 using Microsoft.AspNetCore.Hosting;
@@ -40,7 +41,7 @@ public class DocumentServiceTests
         var envMock = new Mock<IWebHostEnvironment>();
         envMock.Setup(e => e.ContentRootPath).Returns(AppDomain.CurrentDomain.BaseDirectory);
 
-        return new DocumentService(db, _mapper, envMock.Object);
+        return new DocumentService(db, _mapper, envMock.Object, Mock.Of<ITenantStorageQuotaService>());
     }
 
     private static async Task<(User StudentUser, User LecturerUser, User StrangerUser, User AdminUser, Internship Internship, Document DocWithInternship)> SeedDataAsync(AppDbContext db)

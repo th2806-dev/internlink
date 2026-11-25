@@ -30,6 +30,7 @@ export interface CompactActionBarProps {
   actions?: CompactAction[];
   children?: ReactNode;
   className?: string;
+  hideTitle?: boolean;
 }
 
 export function CompactActionBar({
@@ -44,14 +45,15 @@ export function CompactActionBar({
   actions = [],
   children,
   className = "",
+  hideTitle = false,
 }: CompactActionBarProps) {
   return (
     <div
-      className={`flex min-h-9 w-full flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-slate-200 bg-white px-2 py-1 ${className}`}
+      className={`flex min-h-10 w-full flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-slate-200 bg-white px-2 py-1 ${className}`}
     >
       <div className="flex min-w-0 flex-1 items-center gap-2">
         {Icon && <Icon aria-hidden="true" className="h-4 w-4 shrink-0 text-[#026aa7]" />}
-        <h1 className="shrink-0 text-sm font-bold text-slate-800">{title}</h1>
+        {!hideTitle && <h1 className="shrink-0 text-sm font-bold text-slate-800">{title}</h1>}
         {total != null && (
           <span className="shrink-0 text-xs font-medium tabular-nums text-slate-500">
             {total}

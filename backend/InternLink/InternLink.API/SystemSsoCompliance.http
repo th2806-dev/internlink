@@ -1,0 +1,67 @@
+@baseUrl = http://localhost:7109/api/v1/system
+@token = replace-with-superadmin-token
+@tenantId = replace-with-tenant-guid
+
+### Get tenant SSO metadata (client secret is always masked)
+GET {{baseUrl}}/tenants/{{tenantId}}/sso
+Authorization: Bearer {{token}}
+
+### Save or update tenant SSO configuration
+PUT {{baseUrl}}/tenants/{{tenantId}}/sso
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "providerType": "AzureAD",
+  "clientId": "replace-with-application-client-id",
+  "clientSecret": "replace-with-client-secret",
+  "discoveryUrl": "https://login.microsoftonline.com/replace-with-directory-id/v2.0/.well-known/openid-configuration",
+  "allowedEmailDomains": ["example.edu.vn", "students.example.edu.vn"],
+  "isEnforced": false
+}
+
+### Test a public OIDC discovery endpoint (does not save the configuration)
+POST {{baseUrl}}/tenants/{{tenantId}}/sso/test-discovery
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "providerType": "AzureAD",
+  "discoveryUrl": "https://login.microsoftonline.com/replace-with-directory-id/v2.0/.well-known/openid-configuration"
+}
+
+### Unlink SSO and restore traditional sign-in
+DELETE {{baseUrl}}/tenants/{{tenantId}}/sso
+Authorization: Bearer {{token}}
+
+### List data-retention policies
+GET {{baseUrl}}/compliance/policies
+Authorization: Bearer {{token}}
+
+### Change the default student-identity retention period
+PUT {{baseUrl}}/compliance/policies/STUDENT_PII
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "retentionYears": 3,
+  "isEnabled": true
+}
+
+### Preview eligible student profiles; all active internships must be Completed
+GET {{baseUrl}}/compliance/anonymize/preview
+Authorization: Bearer {{token}}
+
+### Execute only after reviewing the current preview count; irreversible identity changes
+POST {{baseUrl}}/compliance/anonymize/execute
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "expectedEligibleCount": 1,
+  "confirmationPhrase": "ANONYMIZE"
+}
+
+### List compliance execution history
+GET {{baseUrl}}/compliance/audit-logs?page=1&pageSize=25
+Authorization: Bearer {{token}}

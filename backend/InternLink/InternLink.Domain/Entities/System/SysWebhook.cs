@@ -2,8 +2,9 @@ using InternLink.Domain.Entities;
 
 namespace InternLink.Domain.Entities.Rbac;
 
-public class SysWebhook : BaseEntity
+public class SysWebhook : BaseEntity, ITenantScoped
 {
+    public Guid TenantId { get; set; }
     public string WebhookUrl { get; set; } = null!;
     public string EventType { get; set; } = null!;
     public string SecretKey { get; set; } = null!;

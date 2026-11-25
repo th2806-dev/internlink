@@ -3,8 +3,10 @@ import { Link } from "react-router-dom";
 import { AlertCircle, ArrowLeft, CheckCircle2, Loader2, Mail } from "lucide-react";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { authService } from "../../../services/auth.service";
+import { resolveAppAssetUrl, useAppBranding } from "../../../contexts/AppBrandingContext";
 
 export function ForgotPasswordPage() {
+  const { branding } = useAppBranding();
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -33,8 +35,8 @@ export function ForgotPasswordPage() {
       <div className="w-full max-w-md il-panel p-6 sm:p-8">
         <div className="mb-6 flex flex-col items-center text-center">
           <img
-            src="/logo/logo_internlink-02.png"
-            alt="InternLink"
+            src={resolveAppAssetUrl(branding.appLogoUrl)}
+            alt={branding.appName}
             className="h-12 w-auto object-contain mb-4"
             onError={(e) => {
               (e.currentTarget as HTMLImageElement).style.display = "none";

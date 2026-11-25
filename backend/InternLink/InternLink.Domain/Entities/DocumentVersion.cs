@@ -4,8 +4,9 @@ namespace InternLink.Domain.Entities;
 /// Stores a historical snapshot of a Document file each time it is uploaded or replaced.
 /// Similar to WeeklyReportVersion but for general Documents.
 /// </summary>
-public class DocumentVersion : BaseEntity
+public class DocumentVersion : BaseEntity, ITenantScoped
 {
+    public Guid TenantId { get; set; }
     public Guid DocumentId { get; set; }
     public Document Document { get; set; } = null!;
 

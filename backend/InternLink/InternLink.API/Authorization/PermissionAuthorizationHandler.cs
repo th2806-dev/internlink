@@ -27,17 +27,28 @@ public sealed class PermissionAuthorizationHandler : AuthorizationHandler<Permis
             return;
 
         var cancellationToken = _httpContextAccessor.HttpContext?.RequestAborted ?? CancellationToken.None;
-        var hasPermission = await _context.SysUsers
-            .Where(user => user.PublicId == userId
-                && user.IsActive
-                && user.LegacyUser.IsActive
-                && !user.LegacyUser.IsDeleted)
-            .SelectMany(user => user.Roles)
-            .SelectMany(userRole => userRole.Role.Permissions.Where(permission => permission.IsGranted))
-            .AnyAsync(permission =>
-                permission.Function.Code == requirement.PermissionCode &&
-                permission.Function.IsActive,
-                cancellationToken);
+        var hasPermission = context.User.HasClaim("is_impersonating", "true")
+            ? await _context.SysRoles
+                .IgnoreQueryFilters()
+                .Where(role => role.Code == "DepartmentAdmin" && role.IsActive && !role.IsDeleted)
+                .SelectMany(role => role.Permissions)
+                .AnyAsync(permission =>
+                    permission.IsGranted
+                    && permission.Function.Code == requirement.PermissionCode
+                    && permission.Function.IsActive
+                    && !permission.Function.IsDeleted,
+                    cancellationToken)
+            : await _context.SysUsers
+                .Where(user => user.PublicId == userId
+                    && user.IsActive
+                    && user.LegacyUser.IsActive
+                    && !user.LegacyUser.IsDeleted)
+                .SelectMany(user => user.Roles)
+                .SelectMany(userRole => userRole.Role.Permissions.Where(permission => permission.IsGranted))
+                .AnyAsync(permission =>
+                    permission.Function.Code == requirement.PermissionCode &&
+                    permission.Function.IsActive,
+                    cancellationToken);
 
         if (hasPermission)
             context.Succeed(requirement);

@@ -1,16 +1,32 @@
 using System.Text.Json;
+using System.Linq.Expressions;
+using InternLink.Application.Interfaces;
+using InternLink.Domain.Common;
 using Microsoft.EntityFrameworkCore;
 using InternLink.Domain.Entities;
 using InternLink.Domain.Entities.Rbac;
+using InternLink.Domain.Entities.System;
 using InternLink.Domain.Enums;
 
 namespace InternLink.Infrastructure.Persistence;
 
 public class AppDbContext : DbContext
 {
-    public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
+    private readonly IScopedTenantContext _tenantContext;
+
+    public AppDbContext(DbContextOptions<AppDbContext> options)
+        : this(options, new UnresolvedTenantContext())
     {
     }
+
+    public AppDbContext(
+        DbContextOptions<AppDbContext> options,
+        IScopedTenantContext tenantContext) : base(options)
+    {
+        _tenantContext = tenantContext;
+    }
+
+    public Guid CurrentTenantId => _tenantContext.TenantId;
 
     public DbSet<Department> Departments { get; set; } = null!;
     public DbSet<User> Users { get; set; } = null!;
@@ -58,7 +74,21 @@ public class AppDbContext : DbContext
     public DbSet<EmployerEvaluationToken> EmployerEvaluationTokens { get; set; } = null!;
     public DbSet<SysAuditLog> SysAuditLogs { get; set; } = null!;
     public DbSet<SysWebhook> SysWebhooks { get; set; } = null!;
+    public DbSet<SysWebhookDeliveryLog> SysWebhookDeliveryLogs { get; set; } = null!;
     public DbSet<SysFieldPolicy> SysFieldPolicies { get; set; } = null!;
+    public DbSet<SysDailyJob> SysDailyJobs { get; set; } = null!;
+    public DbSet<SysJobExecution> SysJobExecutions { get; set; } = null!;
+    public DbSet<SysTenant> SysTenants { get; set; } = null!;
+    public DbSet<SysTenantLicense> SysTenantLicenses { get; set; } = null!;
+    public DbSet<SysBillingPlan> SysBillingPlans { get; set; } = null!;
+    public DbSet<SysBillingPriceCatalog> SysBillingPriceCatalogs { get; set; } = null!;
+    public DbSet<SysTenantBillingInvoice> SysTenantBillingInvoices { get; set; } = null!;
+    public DbSet<SysTenantImpersonationSession> SysTenantImpersonationSessions { get; set; } = null!;
+    public DbSet<SysTenantSsoConfig> SysTenantSsoConfigs { get; set; } = null!;
+    public DbSet<SysApiKey> SysApiKeys { get; set; } = null!;
+    public DbSet<SysDataRetentionPolicy> SysDataRetentionPolicies { get; set; } = null!;
+    public DbSet<SysComplianceLog> SysComplianceLogs { get; set; } = null!;
+    public DbSet<SysPlatformAnnouncement> SysPlatformAnnouncements { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -453,6 +483,7 @@ public class AppDbContext : DbContext
             b.Property(x => x.IsUsed).HasDefaultValue(false);
             b.Property(x => x.IsRevoked).HasDefaultValue(false);
             b.Property(x => x.CreatedByIp).HasMaxLength(50);
+            b.Property(x => x.UserAgent).HasMaxLength(512);
             b.Property(x => x.RevokedByIp).HasMaxLength(50);
             b.Property(x => x.ReplacedByToken).HasMaxLength(256);
             b.Property(x => x.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
@@ -901,6 +932,50 @@ public class AppDbContext : DbContext
             b.HasQueryFilter(x => !x.IsDeleted);
         });
 
+        modelBuilder.Entity<SysWebhookDeliveryLog>(b =>
+        {
+            b.ToTable("Sys_WebhookDeliveryLogs");
+            b.HasKey(x => x.AutoId);
+            b.Property(x => x.EventType).IsRequired().HasMaxLength(100);
+            b.Property(x => x.PayloadJson).IsRequired().HasColumnType("nvarchar(max)");
+            b.Property(x => x.Status).IsRequired().HasMaxLength(30);
+            b.Property(x => x.ResponseBody).HasMaxLength(4000);
+            b.Property(x => x.ErrorMessage).HasMaxLength(2000);
+            b.HasIndex(x => x.PublicId).IsUnique();
+            b.HasIndex(x => new { x.TenantId, x.Status, x.StartedAt });
+            b.HasIndex(x => new { x.DeliveryId, x.AttemptNumber }).IsUnique();
+            b.HasQueryFilter(x => !x.IsDeleted);
+        });
+
+        modelBuilder.Entity<SysDailyJob>(b =>
+        {
+            b.ToTable("Sys_DailyJobs");
+            b.HasKey(x => x.AutoId);
+            b.Property(x => x.JobCode).IsRequired().HasMaxLength(100);
+            b.Property(x => x.JobName).IsRequired().HasMaxLength(200);
+            b.Property(x => x.CronExpression).IsRequired().HasMaxLength(100);
+            b.Property(x => x.Description).HasMaxLength(1000);
+            b.Property(x => x.Status).IsRequired().HasMaxLength(30);
+            b.Property(x => x.LastErrorMessage).HasMaxLength(2000);
+            b.HasIndex(x => x.PublicId).IsUnique();
+            b.HasIndex(x => x.JobCode).IsUnique();
+            b.HasQueryFilter(x => !x.IsDeleted);
+        });
+
+        modelBuilder.Entity<SysJobExecution>(b =>
+        {
+            b.ToTable("Sys_JobExecutions");
+            b.HasKey(x => x.AutoId);
+            b.Property(x => x.JobCode).IsRequired().HasMaxLength(100);
+            b.Property(x => x.Status).IsRequired().HasMaxLength(30);
+            b.Property(x => x.TriggeredBy).IsRequired().HasMaxLength(200);
+            b.Property(x => x.ResultSummary).HasMaxLength(4000);
+            b.Property(x => x.ErrorMessage).HasMaxLength(2000);
+            b.HasIndex(x => x.PublicId).IsUnique();
+            b.HasIndex(x => new { x.JobCode, x.StartedAt });
+            b.HasQueryFilter(x => !x.IsDeleted);
+        });
+
         modelBuilder.Entity<SysFieldPolicy>(b =>
         {
             b.ToTable("Sys_FieldPolicies");
@@ -921,6 +996,306 @@ public class AppDbContext : DbContext
                 .HasForeignKey(x => x.RoleId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
+
+        modelBuilder.Entity<SysTenant>(b =>
+        {
+            b.ToTable("Sys_Tenants");
+            b.HasKey(x => x.AutoId);
+            b.Property(x => x.TenantCode).IsRequired().HasMaxLength(20);
+            b.Property(x => x.Name).IsRequired().HasMaxLength(200);
+            b.Property(x => x.LegalName).IsRequired().HasMaxLength(250);
+            b.Property(x => x.Domain).HasMaxLength(253);
+            b.Property(x => x.Subdomain).IsRequired().HasMaxLength(63);
+            b.Property(x => x.LogoUrl).HasMaxLength(500);
+            b.Property(x => x.ContactEmail).IsRequired().HasMaxLength(200);
+            b.Property(x => x.ContactPhone).IsRequired().HasMaxLength(50);
+            b.Property(x => x.Status)
+                .HasDefaultValue(TenantStatus.Active)
+                .HasSentinel((TenantStatus)0);
+            b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+            b.HasIndex(x => x.PublicId).IsUnique();
+            b.HasIndex(x => x.TenantCode).IsUnique();
+            b.HasIndex(x => x.Subdomain).IsUnique();
+            b.HasIndex(x => x.Domain).IsUnique().HasFilter("[Domain] IS NOT NULL");
+        });
+
+        modelBuilder.Entity<SysTenantLicense>(b =>
+        {
+            b.ToTable("Sys_TenantLicenses");
+            b.HasKey(x => x.AutoId);
+            b.Property(x => x.LicenseTier)
+                .HasDefaultValue(LicenseTier.Standard)
+                .HasSentinel((LicenseTier)0);
+            b.Property(x => x.MaxStudentsQuota).HasDefaultValue(5000);
+            b.Property(x => x.MaxLecturersQuota).HasDefaultValue(200);
+            b.Property(x => x.StorageQuotaBytes).HasDefaultValue(107374182400L);
+            b.Property(x => x.CurrentStorageBytes).HasDefaultValue(0L);
+            b.Property(x => x.StorageUsageInitializedAt);
+            b.Property(x => x.AutoRenew).HasDefaultValue(false);
+            b.Property(x => x.IsActive).HasDefaultValue(true);
+            b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+            b.HasIndex(x => x.PublicId).IsUnique();
+            b.HasOne(x => x.Tenant)
+                .WithMany(x => x.Licenses)
+                .HasForeignKey(x => x.TenantId)
+                .HasPrincipalKey(x => x.PublicId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<SysTenantBillingInvoice>(b =>
+        {
+            b.ToTable("Sys_TenantBillingInvoices");
+            b.HasKey(x => x.AutoId);
+            b.Property(x => x.InvoiceNumber).IsRequired().HasMaxLength(40);
+            b.Property(x => x.PlanCode).IsRequired().HasMaxLength(20);
+            b.Property(x => x.BaseAmountVnd).HasPrecision(18, 0);
+            b.Property(x => x.TaxRatePercent).HasPrecision(5, 2);
+            b.Property(x => x.TaxAmountVnd).HasPrecision(18, 0);
+            b.Property(x => x.AmountVnd).HasPrecision(18, 0);
+            b.Property(x => x.BillingCycleMonths).IsRequired();
+            b.Property(x => x.MaxStudentsQuota).IsRequired();
+            b.Property(x => x.MaxLecturersQuota).IsRequired();
+            b.Property(x => x.StorageQuotaBytes).IsRequired();
+            b.Property(x => x.Status)
+                .HasDefaultValue(TenantBillingInvoiceStatus.PendingPayment)
+                .IsConcurrencyToken();
+            b.Property(x => x.PaymentMethod).IsRequired().HasMaxLength(30);
+            b.Property(x => x.PaymentReference).HasMaxLength(100);
+            b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+            b.HasIndex(x => x.PublicId).IsUnique();
+            b.HasIndex(x => x.InvoiceNumber).IsUnique();
+            b.HasIndex(x => new { x.TenantId, x.Status, x.CreatedAt });
+            b.HasOne(x => x.Tenant)
+                .WithMany(x => x.BillingInvoices)
+                .HasForeignKey(x => x.TenantId)
+                .HasPrincipalKey(x => x.PublicId)
+                .OnDelete(DeleteBehavior.Restrict);
+            b.HasOne(x => x.BillingPriceCatalog)
+                .WithMany(x => x.Invoices)
+                .HasForeignKey(x => x.BillingPriceCatalogId)
+                .HasPrincipalKey(x => x.PublicId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<SysBillingPriceCatalog>(b =>
+        {
+            b.ToTable("Sys_BillingPriceCatalog");
+            b.HasKey(x => x.AutoId);
+            b.Property(x => x.PlanCode).IsRequired().HasMaxLength(20);
+            b.Property(x => x.BillingCycleMonths).IsRequired();
+            b.Property(x => x.BaseAmountVnd).HasPrecision(18, 0);
+            b.Property(x => x.TaxRatePercent).HasPrecision(5, 2);
+            b.Property(x => x.EffectiveFrom).IsRequired();
+            b.Property(x => x.IsActive).HasDefaultValue(true);
+            b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+            b.HasIndex(x => x.PublicId).IsUnique();
+            b.HasIndex(x => new { x.PlanCode, x.BillingCycleMonths, x.IsActive, x.EffectiveFrom });
+        });
+
+        modelBuilder.Entity<SysBillingPlan>(b =>
+        {
+            b.ToTable("Sys_BillingPlans");
+            b.HasKey(x => x.AutoId);
+            b.Property(x => x.PlanCode).IsRequired().HasMaxLength(20);
+            b.Property(x => x.LicenseTier).IsRequired();
+            b.Property(x => x.MaxStudentsQuota).IsRequired();
+            b.Property(x => x.MaxLecturersQuota).IsRequired();
+            b.Property(x => x.StorageQuotaBytes).IsRequired();
+            b.Property(x => x.IsActive).HasDefaultValue(true);
+            b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+            b.HasIndex(x => x.PublicId).IsUnique();
+            b.HasIndex(x => x.PlanCode).IsUnique();
+            b.HasData(
+                new SysBillingPlan
+                {
+                    AutoId = 1,
+                    PublicId = new Guid("06232e7d-86cc-4afb-b6c1-5a8e7dba1401"),
+                    PlanCode = "STANDARD",
+                    LicenseTier = LicenseTier.Standard,
+                    MaxStudentsQuota = 500,
+                    MaxLecturersQuota = 25,
+                    StorageQuotaBytes = 20L * 1024 * 1024 * 1024,
+                    IsActive = true,
+                    CreatedAt = new DateTime(2026, 11, 24, 0, 0, 0, DateTimeKind.Utc),
+                    IsDeleted = false
+                },
+                new SysBillingPlan
+                {
+                    AutoId = 2,
+                    PublicId = new Guid("06232e7d-86cc-4afb-b6c1-5a8e7dba1402"),
+                    PlanCode = "PRO",
+                    LicenseTier = LicenseTier.Professional,
+                    MaxStudentsQuota = 2000,
+                    MaxLecturersQuota = 100,
+                    StorageQuotaBytes = 100L * 1024 * 1024 * 1024,
+                    IsActive = true,
+                    CreatedAt = new DateTime(2026, 11, 24, 0, 0, 0, DateTimeKind.Utc),
+                    IsDeleted = false
+                },
+                new SysBillingPlan
+                {
+                    AutoId = 3,
+                    PublicId = new Guid("06232e7d-86cc-4afb-b6c1-5a8e7dba1403"),
+                    PlanCode = "ENTERPRISE",
+                    LicenseTier = LicenseTier.Enterprise,
+                    MaxStudentsQuota = 10000,
+                    MaxLecturersQuota = 500,
+                    StorageQuotaBytes = 500L * 1024 * 1024 * 1024,
+                    IsActive = true,
+                    CreatedAt = new DateTime(2026, 11, 24, 0, 0, 0, DateTimeKind.Utc),
+                    IsDeleted = false
+                });
+        });
+
+        modelBuilder.Entity<SysTenantImpersonationSession>(b =>
+        {
+            b.ToTable("Sys_TenantImpersonationSessions");
+            b.HasKey(x => x.AutoId);
+            b.Property(x => x.ImpersonatedByUserId).IsRequired();
+            b.Property(x => x.StartedAt).IsRequired();
+            b.Property(x => x.ExpiresAt).IsRequired();
+            b.Property(x => x.IsActive).HasDefaultValue(true);
+            b.Property(x => x.Reason).HasMaxLength(1000);
+            b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+            b.HasIndex(x => x.PublicId).IsUnique();
+            b.HasIndex(x => new { x.TenantId, x.IsActive, x.ExpiresAt });
+            b.HasOne(x => x.Tenant)
+                .WithMany(x => x.ImpersonationSessions)
+                .HasForeignKey(x => x.TenantId)
+                .HasPrincipalKey(x => x.PublicId)
+                .OnDelete(DeleteBehavior.Restrict);
+            b.HasOne(x => x.ImpersonatedByUser)
+                .WithMany()
+                .HasForeignKey(x => x.ImpersonatedByUserId)
+                .HasPrincipalKey(x => x.PublicId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<SysTenantSsoConfig>(b =>
+        {
+            b.ToTable("Sys_TenantSsoConfigs");
+            b.HasKey(x => x.AutoId);
+            b.Property(x => x.ProviderType).IsRequired().HasMaxLength(50);
+            b.Property(x => x.ClientId).IsRequired().HasMaxLength(200);
+            b.Property(x => x.EncryptedClientSecret).IsRequired().HasMaxLength(2048);
+            b.Property(x => x.DiscoveryUrl).IsRequired().HasMaxLength(2048);
+            b.Property(x => x.AllowedEmailDomains).IsRequired().HasMaxLength(1000);
+            b.Property(x => x.IsEnforced).HasDefaultValue(false);
+            b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+            b.HasIndex(x => x.PublicId).IsUnique();
+            b.HasOne(x => x.Tenant)
+                .WithMany(x => x.SsoConfigs)
+                .HasForeignKey(x => x.TenantId)
+                .HasPrincipalKey(x => x.PublicId)
+                .OnDelete(DeleteBehavior.Restrict);
+            b.HasIndex(x => x.TenantId).IsUnique().HasFilter("[IsDeleted] = 0");
+            b.HasQueryFilter(x => !x.IsDeleted);
+        });
+
+        modelBuilder.Entity<SysDataRetentionPolicy>(b =>
+        {
+            b.ToTable("Sys_DataRetentionPolicies");
+            b.HasKey(x => x.AutoId);
+            b.Property(x => x.Code).IsRequired().HasMaxLength(100);
+            b.Property(x => x.Name).IsRequired().HasMaxLength(200);
+            b.Property(x => x.Description).IsRequired().HasMaxLength(1000);
+            b.Property(x => x.RetentionYears).IsRequired();
+            b.Property(x => x.IsEnabled).HasDefaultValue(true);
+            b.HasIndex(x => x.PublicId).IsUnique();
+            b.HasIndex(x => x.Code).IsUnique();
+        });
+
+        modelBuilder.Entity<SysComplianceLog>(b =>
+        {
+            b.ToTable("Sys_ComplianceLogs");
+            b.HasKey(x => x.AutoId);
+            b.Property(x => x.OperationCode).IsRequired().HasMaxLength(100);
+            b.Property(x => x.Status).IsRequired().HasMaxLength(30);
+            b.Property(x => x.TriggeredBy).IsRequired().HasMaxLength(200);
+            b.Property(x => x.Details).HasMaxLength(1000);
+            b.HasIndex(x => x.PublicId).IsUnique();
+            b.HasIndex(x => new { x.OperationCode, x.ExecutedAt });
+        });
+
+        modelBuilder.Entity<SysPlatformAnnouncement>(b =>
+        {
+            b.ToTable("Sys_PlatformAnnouncements");
+            b.HasKey(x => x.AutoId);
+            b.Property(x => x.Title).IsRequired().HasMaxLength(200);
+            b.Property(x => x.Content).IsRequired().HasMaxLength(5000);
+            b.Property(x => x.Type).IsRequired().HasConversion<int>();
+            b.Property(x => x.TargetAudience).IsRequired().HasConversion<int>();
+            b.Property(x => x.StartsAt).IsRequired();
+            b.Property(x => x.EndsAt).IsRequired();
+            b.Property(x => x.IsActive).HasDefaultValue(true);
+            b.Property(x => x.ShowBanner).HasDefaultValue(false);
+            b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+            b.HasIndex(x => x.PublicId).IsUnique();
+            b.HasIndex(x => new { x.TenantId, x.IsActive, x.StartsAt, x.EndsAt });
+            b.HasIndex(x => x.TargetTenantId);
+            b.HasOne<SysTenant>()
+                .WithMany()
+                .HasForeignKey(x => x.TargetTenantId)
+                .HasPrincipalKey(x => x.PublicId)
+                .OnDelete(DeleteBehavior.Restrict);
+            b.HasQueryFilter(x => !x.IsDeleted);
+        });
+
+        modelBuilder.Entity<SysApiKey>(b =>
+        {
+            b.ToTable("Sys_ApiKeys");
+            b.HasKey(x => x.AutoId);
+            b.Property(x => x.Name).IsRequired().HasMaxLength(200);
+            b.Property(x => x.KeyPrefix).IsRequired().HasMaxLength(32);
+            b.Property(x => x.KeyHash).IsRequired().HasMaxLength(64);
+            b.Property(x => x.ScopesJson).IsRequired().HasColumnType("nvarchar(max)");
+            b.Property(x => x.RateLimitPerMinute).HasDefaultValue(120);
+            b.Property(x => x.IsActive).HasDefaultValue(true);
+            b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+            b.HasIndex(x => x.PublicId).IsUnique();
+            b.HasIndex(x => x.KeyPrefix).IsUnique();
+            b.HasIndex(x => x.KeyHash).IsUnique();
+            b.HasOne(x => x.Tenant)
+                .WithMany(x => x.ApiKeys)
+                .HasForeignKey(x => x.TenantId)
+                .HasPrincipalKey(x => x.PublicId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        ApplyTenantQueryFilters(modelBuilder);
+    }
+
+    private void ApplyTenantQueryFilters(ModelBuilder modelBuilder)
+    {
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes()
+                     .Where(entityType => typeof(ITenantScoped).IsAssignableFrom(entityType.ClrType)))
+        {
+            var parameter = Expression.Parameter(entityType.ClrType, "entity");
+            var tenantProperty = Expression.Call(
+                typeof(EF),
+                nameof(EF.Property),
+                [typeof(Guid)],
+                parameter,
+                Expression.Constant(nameof(ITenantScoped.TenantId)));
+            var tenantFilter = Expression.Equal(
+                tenantProperty,
+                Expression.Property(Expression.Constant(this), nameof(CurrentTenantId)));
+
+            foreach (var existingFilter in entityType.GetDeclaredQueryFilters())
+            {
+                var existingExpression = existingFilter.Expression;
+                if (existingExpression == null)
+                    continue;
+
+                var existingBody = new ReplaceParameterExpressionVisitor(
+                    existingExpression.Parameters[0], parameter)
+                    .Visit(existingExpression.Body)!;
+                tenantFilter = Expression.AndAlso(tenantFilter, existingBody);
+            }
+
+            entityType.SetQueryFilter(Expression.Lambda(tenantFilter, parameter));
+            modelBuilder.Entity(entityType.ClrType).HasIndex(nameof(ITenantScoped.TenantId));
+        }
     }
 
     private static readonly HashSet<string> SensitivePropertyNames = new(StringComparer.OrdinalIgnoreCase)
@@ -929,25 +1304,77 @@ public class AppDbContext : DbContext
         "PasswordHash",
         "Password",
         "RefreshToken",
-        "Token"
+        "Token",
+        "KeyHash",
+        "EncryptedClientSecret",
+        "FullName",
+        "DisplayName",
+        "Email",
+        "Phone",
+        "ResumeUrl",
+        "AvatarUrl"
     };
 
     public override int SaveChanges()
     {
+        ValidateTenantWrites();
         ProcessAuditLogs();
         return base.SaveChanges();
     }
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
+        ValidateTenantWrites();
         ProcessAuditLogs();
         return base.SaveChangesAsync(cancellationToken);
+    }
+
+    private void ValidateTenantWrites()
+    {
+        if (CurrentTenantId == Guid.Empty || _tenantContext.IsPlatformAdmin)
+            return;
+
+        foreach (var entry in ChangeTracker.Entries()
+                     .Where(entry => entry.Entity is ITenantScoped
+                         && entry.State is EntityState.Added or EntityState.Modified or EntityState.Deleted))
+        {
+            var tenantScoped = (ITenantScoped)entry.Entity;
+            if (entry.State == EntityState.Added && tenantScoped.TenantId == Guid.Empty)
+                tenantScoped.TenantId = CurrentTenantId;
+
+            if (tenantScoped.TenantId != CurrentTenantId)
+                throw new InvalidOperationException("The entity tenant does not match the current request tenant.");
+        }
+    }
+
+    private sealed class UnresolvedTenantContext : IScopedTenantContext
+    {
+        public Guid TenantId => Guid.Empty;
+        public bool IsResolved => false;
+        public bool IsPlatformAdmin => false;
+
+        public void SetTenantId(Guid tenantId) =>
+            throw new InvalidOperationException("Tenant resolution is not available for this DbContext.");
+
+        public void SetPlatformAdmin(bool isPlatformAdmin) =>
+            throw new InvalidOperationException("Tenant resolution is not available for this DbContext.");
+    }
+
+    private sealed class ReplaceParameterExpressionVisitor(
+        ParameterExpression source,
+        ParameterExpression replacement) : ExpressionVisitor
+    {
+        protected override Expression VisitParameter(ParameterExpression node) =>
+            node == source ? replacement : base.VisitParameter(node);
     }
 
     private void ProcessAuditLogs()
     {
         var entries = ChangeTracker.Entries()
-            .Where(e => e.Entity is not SysAuditLog && e.Entity is not SysLoginLog && (e.State == EntityState.Added || e.State == EntityState.Modified || e.State == EntityState.Deleted))
+            .Where(e => e.Entity is not SysAuditLog
+                && e.Entity is not SysLoginLog
+                && e.Entity is not SysComplianceLog
+                && (e.State == EntityState.Added || e.State == EntityState.Modified || e.State == EntityState.Deleted))
             .ToList();
 
         if (entries.Count == 0) return;
@@ -979,6 +1406,12 @@ public class AppDbContext : DbContext
                 }
             }
 
+            var auditTenantId = entry.Entity is ITenantScoped tenantScoped
+                ? tenantScoped.TenantId
+                : entry.Entity is SysTenant sysTenant
+                    ? sysTenant.PublicId
+                    : CurrentTenantId;
+
             if (entry.State == EntityState.Added)
             {
                 var newValues = new Dictionary<string, object?>();
@@ -992,6 +1425,7 @@ public class AppDbContext : DbContext
 
                 logsToAdd.Add(new SysAuditLog
                 {
+                    TenantId = auditTenantId,
                     TableName = tableName,
                     ActionType = "CREATE",
                     RecordId = recordId,
@@ -1014,6 +1448,7 @@ public class AppDbContext : DbContext
 
                 logsToAdd.Add(new SysAuditLog
                 {
+                    TenantId = auditTenantId,
                     TableName = tableName,
                     ActionType = "UPDATE",
                     RecordId = recordId,
@@ -1044,6 +1479,7 @@ public class AppDbContext : DbContext
 
                     logsToAdd.Add(new SysAuditLog
                     {
+                        TenantId = auditTenantId,
                         TableName = tableName,
                         ActionType = "SOFT_DELETE",
                         RecordId = recordId,
@@ -1064,6 +1500,7 @@ public class AppDbContext : DbContext
 
                     logsToAdd.Add(new SysAuditLog
                     {
+                        TenantId = auditTenantId,
                         TableName = tableName,
                         ActionType = "DELETE",
                         RecordId = recordId,

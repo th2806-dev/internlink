@@ -16,13 +16,13 @@ public static class ForgotPasswordEmailTemplate
         ArgumentNullException.ThrowIfNull(settings);
 
         var greeting = $"Kính gửi {request.FullName},";
-        var subject = "[InternLink] Yêu cầu đặt lại mật khẩu";
+        var subject = $"[{settings.AppName}] Yêu cầu đặt lại mật khẩu";
         var expiryHours = settings.PasswordResetTokenExpiryHours;
 
         var plain = $"""
             {greeting}
 
-            Ban Quản lý Thực tập {settings.InstitutionName} nhận được yêu cầu đặt lại mật khẩu tài khoản InternLink của bạn.
+            Ban Quản lý Thực tập {settings.InstitutionName} nhận được yêu cầu đặt lại mật khẩu tài khoản {settings.AppName} của bạn.
 
             Nhấn vào liên kết sau để đặt mật khẩu mới (hiệu lực {expiryHours} giờ):
             {request.ResetLink}
@@ -42,7 +42,7 @@ public static class ForgotPasswordEmailTemplate
               <p>{WebUtility.HtmlEncode(greeting)}</p>
               <p>
                 Ban Quản lý Thực tập <strong>{WebUtility.HtmlEncode(settings.InstitutionName)}</strong>
-                nhận được yêu cầu đặt lại mật khẩu tài khoản InternLink của bạn.
+                nhận được yêu cầu đặt lại mật khẩu tài khoản {WebUtility.HtmlEncode(settings.AppName)} của bạn.
               </p>
               <p>
                 <a href="{WebUtility.HtmlEncode(request.ResetLink)}">Nhấn vào đây để đặt mật khẩu mới</a>

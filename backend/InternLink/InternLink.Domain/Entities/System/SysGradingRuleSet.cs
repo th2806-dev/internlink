@@ -1,7 +1,8 @@
 namespace InternLink.Domain.Entities.Rbac;
 
-public class SysGradingRuleSet : BaseEntity
+public class SysGradingRuleSet : BaseEntity, ITenantScoped
 {
+    public Guid TenantId { get; set; }
     public Guid SemesterId { get; set; }
     public Guid? DepartmentId { get; set; }
     public string RuleSetName { get; set; } = null!;

@@ -43,7 +43,12 @@ public class WeeklyReportServiceTests
     {
         var environment = new Mock<IWebHostEnvironment>();
         environment.Setup(item => item.ContentRootPath).Returns(contentRootPath ?? Directory.GetCurrentDirectory());
-        return new WeeklyReportService(db, _mapper, notificationService ?? Mock.Of<INotificationService>(), environment.Object);
+        return new WeeklyReportService(
+            db,
+            _mapper,
+            notificationService ?? Mock.Of<INotificationService>(),
+            environment.Object,
+            Mock.Of<ITenantStorageQuotaService>());
     }
 
     private static async Task<(User StudentUser, User LecturerUser, User StrangerUser, User AdminUser, Internship Internship, WeeklyReport Report)> SeedDataAsync(AppDbContext db)
@@ -211,7 +216,7 @@ public class WeeklyReportServiceTests
             Id = Guid.NewGuid(),
             Name = "Kỳ thực tập",
             Term = "Học kỳ I",
-            AcademicYear = "2026 - 2027",
+            +
             Status = SemesterStatus.Active,
             TotalWeeks = 1,
             CreatedAt = DateTime.UtcNow
@@ -425,7 +430,7 @@ public class WeeklyReportServiceTests
             Id = Guid.NewGuid(),
             Name = "Kỳ thực tập",
             Term = "Học kỳ I",
-            AcademicYear = "2026 - 2027",
+            +
             Status = SemesterStatus.Active,
             TotalWeeks = 1,
             CreatedAt = DateTime.UtcNow
@@ -464,7 +469,7 @@ public class WeeklyReportServiceTests
             Id = Guid.NewGuid(),
             Name = "Kỳ thực tập",
             Term = "Học kỳ I",
-            AcademicYear = "2026 - 2027",
+            +
             Status = SemesterStatus.Active,
             TotalWeeks = 1,
             CreatedAt = DateTime.UtcNow
@@ -503,8 +508,8 @@ public class WeeklyReportServiceTests
             Id = Guid.NewGuid(),
             Name = "Kỳ thực tập",
             Term = "Học kỳ I",
-            AcademicYear = "2026 - 2027",
-            Status = SemesterStatus.Completed,
+            +
+            Status = SemesterStatus.Active,
             TotalWeeks = 1,
             CreatedAt = DateTime.UtcNow
         };

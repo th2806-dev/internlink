@@ -17,6 +17,7 @@ import { useAuth } from "../../../hooks/useAuth";
 import { useLecturerNavStats } from "../../../hooks/useLecturerNavStats";
 import { toApiSemesterId, useSemester } from "../../../contexts/SemesterContext";
 import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
+import { resolveAppAssetUrl, useAppBranding } from "../../../contexts/AppBrandingContext";
 
 type NavItem = {
   id: string;
@@ -41,6 +42,7 @@ export const Sidebar = ({
   onClose?: () => void;
 }) => {
   const { user } = useAuth();
+  const { branding } = useAppBranding();
   // Badge sidebar theo HỌC KỲ đang chọn ("all" → toàn bộ kỳ) — đổi kỳ là tự reload,
   // khớp số liệu với các trang bên trong.
   const { selectedSemesterId } = useSemester();
@@ -150,8 +152,8 @@ export const Sidebar = ({
         <div className="p-4 border-b border-slate-200/90 flex items-center gap-3 bg-gradient-to-b from-blue-50/40 to-white">
           <div className="p-1.5 bg-[#026aa7]/10 border border-[#026aa7]/20 rounded-lg shrink-0">
             <img
-              src="/logo/logo_internlink-02.png"
-              alt="InternLink Mark Logo"
+              src={resolveAppAssetUrl(branding.appLogoUrl)}
+              alt={`${branding.appName} Mark Logo`}
               className="w-7 h-7 object-contain"
             />
           </div>

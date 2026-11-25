@@ -21,10 +21,12 @@ import {
   Award,
 } from "lucide-react";
 import { useAuth } from "../../../hooks/useAuth";
+import { formatBrandingText, resolveAppAssetUrl, useAppBranding } from "../../../contexts/AppBrandingContext";
 
 export function LandingPage() {
   const navigate = useNavigate();
   const { isLoggedIn, role, user } = useAuth();
+  const { branding } = useAppBranding();
   const [activeTab, setActiveTab] = useState<"school" | "enterprise" | "student">("school");
 
   return (
@@ -34,20 +36,17 @@ export function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-18 flex items-center justify-between">
           {/* Logo & School Badge */}
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#026aa7] to-[#025a8e] flex items-center justify-center shadow-lg shadow-blue-500/20">
-              <GraduationCap className="w-6 h-6 text-white" />
+            <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-lg shadow-blue-500/20">
+              <img src={resolveAppAssetUrl(branding.appLogoUrl)} alt="" className="h-8 w-8 object-contain" />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-xl font-black tracking-tight text-white">
-                  Intern<span className="text-blue-500">Link</span>
-                </span>
-                <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full bg-[#026aa7]/10 text-[#7bc043] border border-[#026aa7]/20">
-                  v2.0 Production
+                  {branding.appShortName}
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 hidden sm:block">
-                Trường Cao đẳng Giao thông Vận tải TP.HCM (HCMCT)
+                Nền tảng quản lý thực tập
               </p>
             </div>
           </div>
@@ -431,7 +430,7 @@ export function LandingPage() {
       <section className="py-20 relative overflow-hidden bg-gradient-to-b from-slate-950 to-[#025a8e]/20 border-t border-slate-800">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight">
-            Sẵn sàng chuyển đổi số kỳ thực tập cùng InternLink?
+            Sẵn sàng chuyển đổi số kỳ thực tập cùng {branding.appName}?
           </h2>
           <p className="mt-4 text-base text-slate-300 max-w-xl mx-auto">
             Hệ thống luôn mở sẵn sàng chào đón sinh viên, giảng viên và các doanh nghiệp đối tác tham gia hợp tác đào tạo.
@@ -444,7 +443,7 @@ export function LandingPage() {
               Đăng nhập Cổng Thực tập ngay
             </button>
             <a
-              href="mailto:internlink.cntt@gmail.com"
+              href={`mailto:${branding.billingEmail}`}
               className="px-8 py-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-base border border-slate-700 transition-all"
             >
               Liên hệ hợp tác Doanh nghiệp
@@ -461,15 +460,18 @@ export function LandingPage() {
               IL
             </div>
             <div>
-              <div className="font-bold text-slate-300 text-sm">InternLink Platform</div>
-              <div>Khoa Công nghệ Thông tin — Trường CĐ Giao thông Vận tải TP.HCM</div>
+              <div className="font-bold text-slate-300 text-sm">{branding.appName} Platform</div>
+              <div>{branding.companyName}</div>
             </div>
           </div>
           <div className="text-center sm:text-right">
-            <div>
-              Phát triển bởi <strong>Thạch Hiền</strong> (Project Lead) & Đội ngũ Kỹ thuật
+            <div className="text-slate-600">
+              {formatBrandingText(branding.copyrightText, {
+                appName: branding.appName,
+                companyName: branding.companyName,
+                year: new Date().getFullYear(),
+              })}
             </div>
-            <div className="mt-1 text-slate-600">© 2026 InternLink. All rights reserved.</div>
           </div>
         </div>
       </footer>

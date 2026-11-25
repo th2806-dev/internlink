@@ -11,9 +11,11 @@ import {
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { authService } from "../../../services/auth.service";
 import { useAuth } from "../../../hooks/useAuth";
+import { resolveAppAssetUrl, useAppBranding } from "../../../contexts/AppBrandingContext";
 
 export function ChangePasswordPage() {
   const { isLoggedIn, role, clearMustChangePassword } = useAuth();
+  const { branding } = useAppBranding();
   const navigate = useNavigate();
 
   const [currentPassword, setCurrentPassword] = useState("");
@@ -70,8 +72,8 @@ export function ChangePasswordPage() {
       <div className="w-full max-w-md il-panel p-6 sm:p-8">
         <div className="mb-6 flex flex-col items-center text-center">
           <img
-            src="/logo/logo_internlink-02.png"
-            alt="InternLink"
+            src={resolveAppAssetUrl(branding.appLogoUrl)}
+            alt={branding.appName}
             className="h-12 w-auto object-contain mb-4"
             onError={(e) => {
               (e.currentTarget as HTMLImageElement).style.display = "none";

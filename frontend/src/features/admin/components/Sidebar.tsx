@@ -1,58 +1,18 @@
-import {
-  Archive,
-  Bell,
-  Building2,
-  Calendar,
-  CalendarCheck,
-  CircleHelp,
-  ClipboardList,
-  Columns3,
-  DatabaseBackup,
-  FileSliders,
-  FileSpreadsheet,
-  FileText,
-  LayoutDashboard,
-  ScrollText,
-  Settings,
-  Shield,
-  UserRound,
-  UserRoundPlus,
-  Users,
-  X,
-  type LucideIcon,
-} from "lucide-react";
+import { X } from "lucide-react";
 import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
 import type { AuthUser } from "../../../contexts/AuthContext";
 import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
 import { useSystemMenu } from "../../../hooks/useSystemMenu";
 import type { AdminNavStats } from "../../../hooks/useAdminNavStats";
 import { formatCountBadge } from "../../../lib/userDisplay";
-import { getSystemMenuItemId, getSystemMenuRoutes } from "../../../lib/systemMenu";
-
-const MENU_ICONS: Record<string, LucideIcon> = {
-  Archive,
-  Bell,
-  Building2,
-  Calendar,
-  CalendarCheck,
-  ClipboardList,
-  Columns3,
-  DatabaseBackup,
-  FileSliders,
-  FileSpreadsheet,
-  FileText,
-  LayoutDashboard,
-  ScrollText,
-  Settings,
-  Shield,
-  UserRound,
-  UserRoundPlus,
-  Users,
-};
-
-export function getMenuIcon(iconName: string | null): LucideIcon {
-  return iconName ? MENU_ICONS[iconName] ?? CircleHelp : CircleHelp;
-}
+import {
+  getSuperAdminMenuGroup,
+  getSystemMenuItemId,
+  getSystemMenuRoutes,
+  sortSuperAdminRoutes,
+} from "../../../lib/systemMenu";
+import { getMenuIcon } from "../../../lib/menuIconRegistry";
+import { resolveAppAssetUrl, useAppBranding } from "../../../contexts/AppBrandingContext";
 
 export const Sidebar = ({
   activeTab,
@@ -69,9 +29,13 @@ export const Sidebar = ({
   isOpen?: boolean;
   onClose?: () => void;
 }) => {
-  const { roleDisplayLabel } = useAdminCapabilities();
+  const { branding } = useAppBranding();
+  const { isSuperAdmin, roleDisplayLabel } = useAdminCapabilities();
   const menuQuery = useSystemMenu();
-  const routes = getSystemMenuRoutes(menuQuery.data ?? []);
+  const routes = sortSuperAdminRoutes(getSystemMenuRoutes(menuQuery.data ?? []).map((route) => ({
+    ...route,
+    groupName: isSuperAdmin ? getSuperAdminMenuGroup(route.item) : route.groupName,
+  })));
   const sections = routes.reduce<{ title: string; items: typeof routes }[]>(
     (groups, route) => {
       const section = groups.find((group) => group.title === route.groupName);
@@ -114,15 +78,14 @@ export const Sidebar = ({
           <div className="flex items-center gap-3">
             <div className="shrink-0 rounded-lg border border-[#026aa7]/20 bg-[#026aa7]/10 p-1.5">
               <img
-                src="/logo/logo_internlink-02.png"
-                alt="InternLink"
+                src={resolveAppAssetUrl(branding.appLogoUrl)}
+                alt={branding.appName}
                 className="h-7 w-7 object-contain"
               />
             </div>
             <div>
               <div className="flex items-center text-lg font-bold leading-none tracking-tight">
-                <span className="text-slate-900">Intern</span>
-                <span className="text-[#026aa7]">Link</span>
+                <span className="text-slate-900">{branding.appShortName}</span>
               </div>
               <p className="mt-1 inline-block rounded bg-[#026aa7]/10 px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-[#026aa7]">
                 {user?.backendRole === "SuperAdmin" ? "QUẢN TRỊ HỆ THỐNG" : "QUẢN TRỊ KHOA"}

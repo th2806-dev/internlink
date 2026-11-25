@@ -1,0 +1,127 @@
+@baseUrl = http://localhost:7109/api/v1/system
+@token = replace-with-superadmin-token
+@tenantId = replace-with-tenant-guid
+@apiKeyId = replace-with-api-key-guid
+@webhookId = replace-with-webhook-guid
+@deliveryId = replace-with-delivery-guid
+@jobCode = REPORT_DEADLINE_SCAN
+
+### List tenant API keys (secrets and hashes are omitted)
+GET {{baseUrl}}/tenants/{{tenantId}}/api-keys
+Authorization: Bearer {{token}}
+
+### Get API key metadata
+GET {{baseUrl}}/tenants/{{tenantId}}/api-keys/{{apiKeyId}}
+Authorization: Bearer {{token}}
+
+### Create an API key (copy the one-time secret from the response)
+POST {{baseUrl}}/tenants/{{tenantId}}/api-keys
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "SIS integration",
+  "scopes": ["students.read", "reports.read"],
+  "rateLimitPerMinute": 120,
+  "expiresAt": "2027-12-31T23:59:59Z"
+}
+
+### Update API key metadata
+PUT {{baseUrl}}/tenants/{{tenantId}}/api-keys/{{apiKeyId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "SIS integration (production)",
+  "scopes": ["students.read", "reports.read"],
+  "rateLimitPerMinute": 240,
+  "expiresAt": "2027-12-31T23:59:59Z",
+  "isActive": true
+}
+
+### Rotate an API key secret (copy the one-time secret from the response)
+POST {{baseUrl}}/tenants/{{tenantId}}/api-keys/{{apiKeyId}}/rotate-secret
+Authorization: Bearer {{token}}
+
+### Revoke an API key (expected 204)
+DELETE {{baseUrl}}/tenants/{{tenantId}}/api-keys/{{apiKeyId}}
+Authorization: Bearer {{token}}
+
+### List tenant webhooks
+GET {{baseUrl}}/tenants/{{tenantId}}/webhooks
+Authorization: Bearer {{token}}
+
+### Get webhook metadata
+GET {{baseUrl}}/tenants/{{tenantId}}/webhooks/{{webhookId}}
+Authorization: Bearer {{token}}
+
+### Create a webhook (replace URL with an HTTPS endpoint you control)
+POST {{baseUrl}}/tenants/{{tenantId}}/webhooks
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "url": "https://your-public-https-endpoint.example/webhooks/internlink",
+  "eventType": "student.created"
+}
+
+### Update webhook metadata
+PUT {{baseUrl}}/tenants/{{tenantId}}/webhooks/{{webhookId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "url": "https://your-public-https-endpoint.example/webhooks/internlink",
+  "eventType": "student.created",
+  "isActive": true
+}
+
+### Send a signed test event (requires an active, reachable endpoint)
+POST {{baseUrl}}/tenants/{{tenantId}}/webhooks/{{webhookId}}/test
+Authorization: Bearer {{token}}
+
+### Delete a webhook (expected 204)
+DELETE {{baseUrl}}/tenants/{{tenantId}}/webhooks/{{webhookId}}
+Authorization: Bearer {{token}}
+
+### List dead-letter deliveries
+GET {{baseUrl}}/tenants/{{tenantId}}/webhook-deliveries/dead-letter-queue
+Authorization: Bearer {{token}}
+
+### Retry a dead-letter delivery
+POST {{baseUrl}}/tenants/{{tenantId}}/webhook-deliveries/{{deliveryId}}/retry
+Authorization: Bearer {{token}}
+
+### Get SQL, Redis, S3, and SMTP probe results
+GET {{baseUrl}}/health/probes
+Authorization: Bearer {{token}}
+
+### List jobs and recent execution history
+GET {{baseUrl}}/jobs
+Authorization: Bearer {{token}}
+
+### Trigger a job immediately
+POST {{baseUrl}}/jobs/{{jobCode}}/run
+Authorization: Bearer {{token}}
+
+### Enable or disable a job
+PATCH {{baseUrl}}/jobs/{{jobCode}}/enabled
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "isEnabled": false
+}
+
+### Configure the recurring database backup schedule (daily at 02:00 Vietnam time)
+PUT {{baseUrl}}/jobs/DB_BACKUP/schedule
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "cronExpression": "0 2 * * *"
+}
+
+### Missing tenant example (expected 404)
+GET {{baseUrl}}/tenants/00000000-0000-0000-0000-000000000000/api-keys
+Authorization: Bearer {{token}}

@@ -6,8 +6,9 @@ namespace InternLink.Domain.Entities;
 /// Represents a user account request (password reset, unlock, info change, etc.)
 /// Submitted by users, processed by SuperAdmin.
 /// </summary>
-public class AccountRequest : BaseEntity
+public class AccountRequest : BaseEntity, ITenantScoped
 {
+    public Guid TenantId { get; set; }
     /// <summary>
     /// Who submitted the request (User ID). Null for anonymous/guest requests.
     /// </summary>

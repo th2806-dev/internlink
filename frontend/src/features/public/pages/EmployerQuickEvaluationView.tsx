@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { useParams } from "react-router-dom";
 import { CheckCircle2, LoaderCircle, Printer } from "lucide-react";
 import { apiRequestRaw } from "../../../lib/apiClient";
+import { useAppBranding } from "../../../contexts/AppBrandingContext";
 
 type EvaluationContext = {
   studentName: string;
@@ -43,6 +44,7 @@ type EvaluationReceipt = {
 type ScoreValues = Record<string, number | null | undefined>;
 
 export default function EmployerQuickEvaluationView() {
+  const { branding } = useAppBranding();
   const { token = "" } = useParams();
   const [context, setContext] = useState<EvaluationContext | null>(null);
   const [receipt, setReceipt] = useState<EvaluationReceipt | null>(null);
@@ -172,7 +174,7 @@ export default function EmployerQuickEvaluationView() {
     <main className="min-h-dvh bg-slate-50 px-4 py-6 sm:py-10">
       <div className="mx-auto max-w-3xl space-y-5">
         <header className="rounded-xl bg-[#026aa7] px-5 py-4 text-white shadow-2xs sm:px-8">
-          <p className="text-sm font-semibold uppercase tracking-wide text-white/80">InternLink · Đánh giá doanh nghiệp</p>
+          <p className="text-sm font-semibold uppercase tracking-wide text-white/80">{branding.appName} · Đánh giá doanh nghiệp</p>
           <h1 className="mt-2 text-2xl font-bold sm:text-3xl">Đánh giá sinh viên thực tập</h1>
           <p className="mt-2 text-sm leading-6 text-white/90">Biểu mẫu bảo mật một lần, liên kết có hiệu lực trong 15 ngày.</p>
         </header>

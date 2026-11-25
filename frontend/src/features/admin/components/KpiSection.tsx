@@ -44,7 +44,7 @@ function AdminKpiCard({
           <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
             {title}
           </span>
-          <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${iconClassName}`}>
+          <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-[4px] ${iconClassName}`}>
             <Icon className="h-4 w-4" aria-hidden="true" />
           </span>
         </div>
@@ -58,7 +58,7 @@ function AdminKpiCard({
   );
 
   const className =
-    "flex flex-col justify-between rounded-lg border border-slate-200/90 bg-white p-4 text-left shadow-2xs transition-all";
+    "flex flex-col justify-between rounded-md border border-slate-200/90 bg-white p-3.5 text-left shadow-sm transition-colors";
 
   if (onClick) {
     return (
@@ -87,7 +87,7 @@ export const AdminKpiSection = ({
 }: AdminKpiSectionProps) => (
   <section
     aria-label="Tổng quan chỉ số"
-    className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
+    className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4"
   >
     <AdminKpiCard
       title="Giảng viên"

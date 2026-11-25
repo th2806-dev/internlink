@@ -23,22 +23,20 @@ public class WeeklyReportService : IWeeklyReportService
     private readonly IMapper _mapper;
     private readonly INotificationService _notificationService;
     private readonly IWebHostEnvironment? _env;
-
-    public WeeklyReportService(AppDbContext db, IMapper mapper, INotificationService notificationService)
-        : this(db, mapper, notificationService, (IWebHostEnvironment?)null)
-    {
-    }
+    private readonly ITenantStorageQuotaService _storageQuota;
 
     public WeeklyReportService(
         AppDbContext db,
         IMapper mapper,
         INotificationService notificationService,
-        IWebHostEnvironment? env)
+        IWebHostEnvironment? env,
+        ITenantStorageQuotaService storageQuota)
     {
         _db = db;
         _mapper = mapper;
         _notificationService = notificationService;
         _env = env;
+        _storageQuota = storageQuota;
     }
 
     public async Task<WeeklyReportDto?> GetByIdAsync(Guid id)
@@ -223,39 +221,76 @@ public class WeeklyReportService : IWeeklyReportService
             1,
             extension);
         var savedFileName = CreateReportFileName(request.WeekNumber, internship.Student?.FullName, savedVersion, extension);
-        var (relativePath, _) = await SaveFileAsync(fileStream, savedFileName, request.InternshipId);
-        var report = new WeeklyReport
+        var reservedBytes = fileSize;
+        await _storageQuota.ReserveAsync(internship.TenantId, reservedBytes);
+        string? relativePath = null;
+        var databaseCommitted = false;
+        try
         {
-            Id = Guid.NewGuid(),
-            InternshipId = request.InternshipId,
-            WeekNumber = request.WeekNumber,
-            Version = savedVersion,
-            Title = request.Title,
-            Content = string.IsNullOrWhiteSpace(request.Content) ? savedFileName : request.Content,
-            FileName = savedFileName,
-            FileUrl = relativePath,
-            FileSize = fileSize,
-            MimeType = mimeType,
-            Status = WeeklyReportStatus.Draft,
-            CreatedAt = DateTime.UtcNow,
-        };
+            (relativePath, _) = await SaveFileAsync(fileStream, savedFileName, request.InternshipId);
+            var actualSize = new FileInfo(ResolveUploadPath(relativePath)).Length;
+            if (actualSize > reservedBytes)
+            {
+                await _storageQuota.ReserveAsync(internship.TenantId, actualSize - reservedBytes);
+                reservedBytes = actualSize;
+            }
+            else if (actualSize < reservedBytes)
+            {
+                await _storageQuota.ReleaseAsync(internship.TenantId, reservedBytes - actualSize);
+                reservedBytes = actualSize;
+            }
 
-        _db.WeeklyReports.Add(report);
-        await _db.SaveChangesAsync();
-        _db.WeeklyReportVersions.Add(new WeeklyReportVersion
+            var report = new WeeklyReport
+            {
+                Id = Guid.NewGuid(),
+                InternshipId = request.InternshipId,
+                WeekNumber = request.WeekNumber,
+                Version = savedVersion,
+                Title = request.Title,
+                Content = string.IsNullOrWhiteSpace(request.Content) ? savedFileName : request.Content,
+                FileName = savedFileName,
+                FileUrl = relativePath,
+                FileSize = actualSize,
+                MimeType = mimeType,
+                Status = WeeklyReportStatus.Draft,
+                CreatedAt = DateTime.UtcNow,
+            };
+
+            _db.WeeklyReports.Add(report);
+            await _db.SaveChangesAsync();
+            databaseCommitted = true;
+            _db.WeeklyReportVersions.Add(new WeeklyReportVersion
+            {
+                Id = Guid.NewGuid(),
+                WeeklyReportId = report.Id,
+                Version = report.Version,
+                FileName = savedFileName,
+                FileUrl = relativePath,
+                FileSize = actualSize,
+                MimeType = mimeType,
+                UploadedById = userId,
+                UploadedAt = DateTime.UtcNow,
+            });
+            await _db.SaveChangesAsync();
+            return _mapper.Map<WeeklyReportDto>(report);
+        }
+        catch
         {
-            Id = Guid.NewGuid(),
-            WeeklyReportId = report.Id,
-            Version = report.Version,
-            FileName = savedFileName,
-            FileUrl = relativePath,
-            FileSize = fileSize,
-            MimeType = mimeType,
-            UploadedById = userId,
-            UploadedAt = DateTime.UtcNow,
-        });
-        await _db.SaveChangesAsync();
-        return _mapper.Map<WeeklyReportDto>(report);
+            if (!databaseCommitted)
+            {
+                try
+                {
+                    if (relativePath != null)
+                        DeleteStoredFile(relativePath);
+                }
+                finally
+                {
+                    await _storageQuota.ReleaseAsync(internship.TenantId, reservedBytes);
+                }
+            }
+
+            throw;
+        }
     }
 
     public async Task<WeeklyReportDto?> UpdateDraftAsync(Guid id, Guid userId, UpdateWeeklyReportRequest request)
@@ -306,35 +341,72 @@ public class WeeklyReportService : IWeeklyReportService
             report.Version + 1,
             extension);
         var savedFileName = CreateReportFileName(report.WeekNumber, report.Internship.Student?.FullName, savedVersion, extension);
-        var (relativePath, _) = await SaveFileAsync(fileStream, savedFileName, report.InternshipId);
-        if (!string.IsNullOrWhiteSpace(request.Title))
-            report.Title = request.Title;
-        if (!string.IsNullOrWhiteSpace(request.Content))
-            report.Content = request.Content;
-        else if (string.IsNullOrWhiteSpace(report.Content)
-            || string.Equals(report.Content, report.FileName, StringComparison.Ordinal))
-            report.Content = savedFileName;
-        report.FileName = savedFileName;
-        report.FileUrl = relativePath;
-        report.FileSize = fileSize;
-        report.MimeType = mimeType;
-        report.Version = savedVersion;
-        report.UpdatedAt = DateTime.UtcNow;
-        await _db.SaveChangesAsync();
-        _db.WeeklyReportVersions.Add(new WeeklyReportVersion
+        var reservedBytes = fileSize;
+        await _storageQuota.ReserveAsync(report.Internship.TenantId, reservedBytes);
+        string? relativePath = null;
+        var databaseCommitted = false;
+        try
         {
-            Id = Guid.NewGuid(),
-            WeeklyReportId = report.Id,
-            Version = report.Version,
-            FileName = savedFileName,
-            FileUrl = relativePath,
-            FileSize = fileSize,
-            MimeType = mimeType,
-            UploadedById = userId,
-            UploadedAt = DateTime.UtcNow,
-        });
-        await _db.SaveChangesAsync();
-        return _mapper.Map<WeeklyReportDto>(report);
+            (relativePath, _) = await SaveFileAsync(fileStream, savedFileName, report.InternshipId);
+            var actualSize = new FileInfo(ResolveUploadPath(relativePath)).Length;
+            if (actualSize > reservedBytes)
+            {
+                await _storageQuota.ReserveAsync(report.Internship.TenantId, actualSize - reservedBytes);
+                reservedBytes = actualSize;
+            }
+            else if (actualSize < reservedBytes)
+            {
+                await _storageQuota.ReleaseAsync(report.Internship.TenantId, reservedBytes - actualSize);
+                reservedBytes = actualSize;
+            }
+
+            if (!string.IsNullOrWhiteSpace(request.Title))
+                report.Title = request.Title;
+            if (!string.IsNullOrWhiteSpace(request.Content))
+                report.Content = request.Content;
+            else if (string.IsNullOrWhiteSpace(report.Content)
+                || string.Equals(report.Content, report.FileName, StringComparison.Ordinal))
+                report.Content = savedFileName;
+            report.FileName = savedFileName;
+            report.FileUrl = relativePath;
+            report.FileSize = actualSize;
+            report.MimeType = mimeType;
+            report.Version = savedVersion;
+            report.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+            databaseCommitted = true;
+            _db.WeeklyReportVersions.Add(new WeeklyReportVersion
+            {
+                Id = Guid.NewGuid(),
+                WeeklyReportId = report.Id,
+                Version = report.Version,
+                FileName = savedFileName,
+                FileUrl = relativePath,
+                FileSize = actualSize,
+                MimeType = mimeType,
+                UploadedById = userId,
+                UploadedAt = DateTime.UtcNow,
+            });
+            await _db.SaveChangesAsync();
+            return _mapper.Map<WeeklyReportDto>(report);
+        }
+        catch
+        {
+            if (!databaseCommitted)
+            {
+                try
+                {
+                    if (relativePath != null)
+                        DeleteStoredFile(relativePath);
+                }
+                finally
+                {
+                    await _storageQuota.ReleaseAsync(report.Internship.TenantId, reservedBytes);
+                }
+            }
+
+            throw;
+        }
     }
 
     public async Task<WeeklyReportFileDownloadDto?> DownloadFileAsync(Guid id, Guid userId, bool isLecturerOrAdmin)
@@ -927,8 +999,8 @@ public class WeeklyReportService : IWeeklyReportService
 
     private static void EnsureSemesterOpenForReview(WeeklyReport report)
     {
-        if (report.Internship.Semester?.Status == SemesterStatus.Completed)
-            throw new InvalidOperationException("Kỳ thực tập đã đóng, nhật ký đang ở chế độ chỉ xem.");
+        +
+            throw new InvalidOperationException("Kỳ thực tập đã đóng, không thể nộp hoặc cập nhật báo cáo.");
     }
 
     public static string SanitizeStudentNameForFileName(string? studentName)
@@ -996,8 +1068,19 @@ public class WeeklyReportService : IWeeklyReportService
         Directory.CreateDirectory(uploadPath);
         var savedFileName = Path.GetFileName(originalFileName);
         var fullPath = Path.Combine(uploadPath, savedFileName);
-        await using var stream = new FileStream(fullPath, FileMode.CreateNew);
-        await fileStream.CopyToAsync(stream);
+        var created = false;
+        try
+        {
+            await using var stream = new FileStream(fullPath, FileMode.CreateNew);
+            created = true;
+            await fileStream.CopyToAsync(stream);
+        }
+        catch
+        {
+            if (created && File.Exists(fullPath))
+                File.Delete(fullPath);
+            throw;
+        }
         return (
             Path.Combine(UploadFolder, internshipId.ToString(), savedFileName).Replace("\\", "/"),
             savedFileName);

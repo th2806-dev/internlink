@@ -6,6 +6,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import { ToastProvider } from "./contexts/ToastContext";
 import { SemesterProvider } from "./contexts/SemesterContext";
 import { AppRoutes } from "./routes/AppRoutes";
+import { AppBrandingProvider } from "./contexts/AppBrandingContext";
 import { queryClient } from "./lib/queryClient";
 
 // Devtools chỉ tải trong môi trường dev (không rơi vào bundle production).
@@ -20,6 +21,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <ThemeProvider>
+          <AppBrandingProvider>
           <AuthProvider>
             <SemesterProvider>
               <ToastProvider>
@@ -27,6 +29,7 @@ export default function App() {
               </ToastProvider>
             </SemesterProvider>
           </AuthProvider>
+          </AppBrandingProvider>
         </ThemeProvider>
       </BrowserRouter>
       {import.meta.env.DEV && (

@@ -2,12 +2,19 @@ import type { ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useSystemMenu } from "../../../hooks/useSystemMenu";
 import { findSystemMenuRoute, getSystemMenuRoutes } from "../../../lib/systemMenu";
+import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
 
 export function AdminMenuRouteGuard({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
   const menuQuery = useSystemMenu();
+  const { isSuperAdmin } = useAdminCapabilities();
+  const isInternalToolRoute = [
+    "/admin/config/grid",
+    "/admin/config/field-policies",
+  ].some((route) => pathname === route || pathname.startsWith(`${route}/`));
 
   if (pathname === "/admin/account") return children;
+  if (isInternalToolRoute && import.meta.env.DEV && isSuperAdmin) return children;
   if (menuQuery.isPending) {
     return (
       <p role="status" className="rounded-lg border border-slate-200 bg-white p-5 text-sm text-slate-600">

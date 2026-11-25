@@ -1,7 +1,8 @@
 namespace InternLink.Domain.Entities;
 
-public class SubmissionAsset : BaseEntity
+public class SubmissionAsset : BaseEntity, ITenantScoped
 {
+    public Guid TenantId { get; set; }
     public Guid SubmissionId { get; set; }
     public Submission Submission { get; set; } = null!;
 

@@ -39,4 +39,36 @@ public class JwtServiceTests
         token.Audiences.Should().Contain("InternLinkClientsTest");
         token.Claims.Should().Contain(c => c.Type == JwtRegisteredClaimNames.Sub && c.Value == userId);
     }
+
+    [Fact]
+    public void CreateToken_WithTenantId_ShouldIncludeTenantClaim()
+    {
+        var service = CreateService();
+        var tenantId = Guid.NewGuid();
+
+        var token = new JwtSecurityTokenHandler().ReadJwtToken(
+            service.CreateToken(Guid.NewGuid().ToString(), tenantId: tenantId));
+
+        token.Claims.Should().Contain(c => c.Type == "tenant_id" && c.Value == tenantId.ToString());
+    }
+
+    [Fact]
+    public void CreateTenantImpersonationToken_HasDepartmentAdminTenantAndSessionClaimsAnd30MinuteLifetime()
+    {
+        var service = CreateService();
+        var userId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+        var before = DateTime.UtcNow;
+
+        var result = service.CreateTenantImpersonationToken(userId.ToString(), tenantId, sessionId);
+
+        var token = new JwtSecurityTokenHandler().ReadJwtToken(result.Token);
+        token.Claims.Should().Contain(c => c.Type == "tenant_id" && c.Value == tenantId.ToString());
+        token.Claims.Should().Contain(c => c.Type == "is_impersonating" && c.Value == "true");
+        token.Claims.Should().Contain(c => c.Type == "impersonation_session_id" && c.Value == sessionId.ToString());
+        token.Claims.Should().Contain(c =>
+            c.Type == System.Security.Claims.ClaimTypes.Role && c.Value == "DepartmentAdmin");
+        result.ExpiresAt.Should().BeCloseTo(before.AddMinutes(30), TimeSpan.FromSeconds(2));
+    }
 }

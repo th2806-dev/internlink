@@ -199,7 +199,7 @@ export function BackupsView({
           </div>
         )}
 
-        <div className="overflow-hidden rounded-md border border-slate-200">
+        <div className="overflow-hidden rounded-md border border-slate-200 shadow-md">
         <div className="divide-y divide-slate-100 md:hidden">
           {isLoading ? (
             <p className="px-4 py-8 text-center text-sm text-slate-500">Đang tải danh sách…</p>
@@ -261,7 +261,7 @@ export function BackupsView({
         </div>
         </div>
 
-      <div className="flex items-start gap-3 rounded-md border border-slate-200 bg-white p-3">
+      <div className="flex items-start gap-3 rounded-md border border-slate-200 bg-white p-3 shadow-md">
         <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
         <div className="text-xs leading-relaxed text-amber-900">
           <p className="font-semibold">Lưu ý khi khôi phục</p>

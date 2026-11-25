@@ -17,11 +17,16 @@ public class AuthController : ControllerBase
 {
     private readonly IAuthService _auth;
     private readonly AppDbContext _db;
+    private readonly ITenantStorageQuotaService _storageQuota;
 
-    public AuthController(IAuthService auth, AppDbContext db)
+    public AuthController(
+        IAuthService auth,
+        AppDbContext db,
+        ITenantStorageQuotaService storageQuota)
     {
         _auth = auth;
         _db = db;
+        _storageQuota = storageQuota;
     }
 
     [HttpPost("login")]
@@ -31,7 +36,8 @@ public class AuthController : ControllerBase
         try
         {
             var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
-            var token = await _auth.LoginAsync(request, ipAddress);
+            var userAgent = HttpContext.Request.Headers["User-Agent"].ToString();
+            var token = await _auth.LoginAsync(request, ipAddress, userAgent);
             return Ok(ApiResponse<LoginResponse>.Ok(token));
         }
         catch (UnauthorizedAccessException ex)
@@ -54,7 +60,8 @@ public class AuthController : ControllerBase
         try
         {
             var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
-            var response = await _auth.RefreshTokenAsync(request, ipAddress);
+            var userAgent = HttpContext.Request.Headers["User-Agent"].ToString();
+            var response = await _auth.RefreshTokenAsync(request, ipAddress, userAgent);
             return Ok(ApiResponse<LoginResponse>.Ok(response));
         }
         catch (UnauthorizedAccessException ex)
@@ -113,6 +120,19 @@ public class AuthController : ControllerBase
         if (userId == null) return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
         var user = await _auth.GetCurrentUserAsync(userId.Value);
         if (user == null) return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.UserNotFound }));
+        if (User.HasClaim("is_impersonating", "true"))
+        {
+            if (!User.IsInRole("DepartmentAdmin")
+                || !Guid.TryParse(User.FindFirst("tenant_id")?.Value, out var tenantId))
+                return Forbid();
+
+            user.Role = "DepartmentAdmin";
+            user.TenantId = tenantId;
+            user.IsImpersonating = true;
+            var expiresAt = User.FindFirst("exp")?.Value;
+            if (long.TryParse(expiresAt, out var expiresAtUnix))
+                user.ImpersonationExpiresAt = DateTimeOffset.FromUnixTimeSeconds(expiresAtUnix);
+        }
         return Ok(ApiResponse<CurrentUserResponse>.Ok(user));
     }
 
@@ -129,13 +149,19 @@ public class AuthController : ControllerBase
             .OrderByDescending(t => t.CreatedAt)
             .ToListAsync();
         var currentId = tokens.FirstOrDefault()?.Id;
-        var sessions = tokens.Select(token => new AuthSessionDto
+        var sessions = tokens.Select(token =>
         {
-            Id = token.Id.ToString(),
-            Ip = token.CreatedByIp,
-            LastActive = token.UpdatedAt ?? token.CreatedAt,
-            CreatedAt = token.CreatedAt,
-            IsCurrent = token.Id == currentId,
+            var (device, browser) = ParseUserAgent(token.UserAgent);
+            return new AuthSessionDto
+            {
+                Id = token.Id.ToString(),
+                Device = device,
+                Browser = browser,
+                Ip = token.CreatedByIp,
+                LastActive = token.UpdatedAt ?? token.CreatedAt,
+                CreatedAt = token.CreatedAt,
+                IsCurrent = token.Id == currentId,
+            };
         }).ToList();
 
         return Ok(ApiResponse<IReadOnlyList<AuthSessionDto>>.Ok(sessions));
@@ -148,21 +174,63 @@ public class AuthController : ControllerBase
         var userId = User.GetUserId();
         if (userId == null) return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.Unauthorized }));
 
-        var tokens = await _db.RefreshTokens
+        var username = await _db.Users
             .AsNoTracking()
-            .Where(t => t.UserId == userId.Value && !t.IsDeleted)
-            .OrderByDescending(t => t.CreatedAt)
+            .Where(user => user.Id == userId.Value)
+            .Select(user => user.Username)
+            .SingleOrDefaultAsync();
+        if (username == null)
+            return NotFound(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.UserNotFound }));
+
+        var activity = await _db.SysLoginLogs
+            .AsNoTracking()
+            .Where(log => log.Username == username && !log.IsDeleted)
+            .OrderByDescending(log => log.LoginAt)
             .Take(Math.Clamp(limit, 1, 100))
+            .Select(log => new AuthActivityDto
+            {
+                Id = log.Id.ToString(),
+                Action = log.Status == "SUCCESS" ? "Đăng nhập thành công" : "Đăng nhập thất bại",
+                Ip = log.IpAddress,
+                Time = log.LoginAt,
+            })
             .ToListAsync();
-        var activity = tokens.Select(token => new AuthActivityDto
-        {
-            Id = token.Id.ToString(),
-            Action = token.IsRevoked || token.IsUsed ? "Phiên đăng nhập đã kết thúc" : "Đăng nhập hệ thống",
-            Ip = token.CreatedByIp,
-            Time = token.CreatedAt,
-        }).ToList();
 
         return Ok(ApiResponse<IReadOnlyList<AuthActivityDto>>.Ok(activity));
+    }
+
+    private static (string Device, string Browser) ParseUserAgent(string? userAgent)
+    {
+        if (string.IsNullOrWhiteSpace(userAgent))
+            return ("Thiết bị cũ", "Không xác định");
+
+        var device = userAgent.Contains("iPad", StringComparison.OrdinalIgnoreCase)
+            ? "iPad"
+            : userAgent.Contains("iPhone", StringComparison.OrdinalIgnoreCase)
+                ? "iPhone"
+                : userAgent.Contains("Android", StringComparison.OrdinalIgnoreCase)
+                    ? "Android"
+                    : userAgent.Contains("Windows", StringComparison.OrdinalIgnoreCase)
+                        ? "Windows"
+                        : userAgent.Contains("Mac OS X", StringComparison.OrdinalIgnoreCase)
+                            ? "macOS"
+                            : userAgent.Contains("Linux", StringComparison.OrdinalIgnoreCase)
+                                ? "Linux"
+                                : "Thiết bị không xác định";
+
+        var browser = userAgent.Contains("Edg/", StringComparison.OrdinalIgnoreCase)
+            ? "Microsoft Edge"
+            : userAgent.Contains("OPR/", StringComparison.OrdinalIgnoreCase)
+                ? "Opera"
+                : userAgent.Contains("Firefox/", StringComparison.OrdinalIgnoreCase)
+                    ? "Mozilla Firefox"
+                    : userAgent.Contains("Chrome/", StringComparison.OrdinalIgnoreCase)
+                        ? "Google Chrome"
+                        : userAgent.Contains("Safari/", StringComparison.OrdinalIgnoreCase)
+                            ? "Safari"
+                            : "Trình duyệt không xác định";
+
+        return (device, browser);
     }
 
     [HttpPost("change-password")]
@@ -246,15 +314,111 @@ public class AuthController : ControllerBase
         if (ext is not (".jpg" or ".jpeg" or ".png" or ".webp"))
             return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = InternLink.Shared.Responses.ErrorMessage.OnlyImageSupported }));
 
-        var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "avatars");
-        Directory.CreateDirectory(uploadsDir);
-        var fileName = $"{userId}{ext}";
-        var filePath = Path.Combine(uploadsDir, fileName);
-        await using var stream = new FileStream(filePath, FileMode.Create);
-        await file.CopyToAsync(stream);
+        var quotaManaged = !User.IsInRole("SuperAdmin");
+        var tenantId = _db.CurrentTenantId;
+        if (quotaManaged && tenantId == Guid.Empty)
+            throw new InvalidOperationException("Không xác định được tenant để kiểm tra hạn mức lưu trữ.");
 
-        var avatarUrl = $"/uploads/avatars/{fileName}";
-        await _auth.UpdateAvatarAsync(userId.Value, avatarUrl);
-        return Ok(ApiResponse<object>.Ok(new { avatarUrl }));
+        var previousAvatarUrl = await _db.Users
+            .Where(user => user.Id == userId.Value && !user.IsDeleted)
+            .Select(user => user.AvatarUrl)
+            .FirstOrDefaultAsync();
+
+        var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "avatars");
+        var fileName = $"{userId}_{Guid.NewGuid():N}{ext}";
+        var filePath = Path.Combine(uploadsDir, fileName);
+        var reservedBytes = file.Length;
+        var reservationMade = false;
+        var databaseCommitted = false;
+        try
+        {
+            if (quotaManaged)
+            {
+                await _storageQuota.ReserveAsync(tenantId, reservedBytes);
+                reservationMade = true;
+            }
+
+            Directory.CreateDirectory(uploadsDir);
+            await using (var stream = new FileStream(filePath, FileMode.CreateNew))
+            {
+                await file.CopyToAsync(stream);
+                if (quotaManaged && stream.Length > reservedBytes)
+                {
+                    await _storageQuota.ReserveAsync(tenantId, stream.Length - reservedBytes);
+                    reservedBytes = stream.Length;
+                }
+                else if (quotaManaged && stream.Length < reservedBytes)
+                {
+                    await _storageQuota.ReleaseAsync(tenantId, reservedBytes - stream.Length);
+                    reservedBytes = stream.Length;
+                }
+            }
+
+            var avatarUrl = $"/uploads/avatars/{fileName}";
+            await _auth.UpdateAvatarAsync(userId.Value, avatarUrl);
+            databaseCommitted = true;
+
+            var previousFilePath = ResolveAvatarPath(previousAvatarUrl, uploadsDir);
+            if (previousFilePath != null && System.IO.File.Exists(previousFilePath))
+            {
+                var previousSize = new FileInfo(previousFilePath).Length;
+                System.IO.File.Delete(previousFilePath);
+                if (quotaManaged)
+                    await _storageQuota.ReleaseAsync(tenantId, previousSize);
+            }
+
+            return Ok(ApiResponse<object>.Ok(new { avatarUrl }));
+        }
+        catch (TenantStorageQuotaExceededException ex)
+        {
+            if (!databaseCommitted)
+            {
+                if (System.IO.File.Exists(filePath))
+                    System.IO.File.Delete(filePath);
+                if (reservationMade)
+                    await _storageQuota.ReleaseAsync(tenantId, reservedBytes);
+            }
+
+            return StatusCode(StatusCodes.Status413PayloadTooLarge, ApiResponse<object>.Fail(new ApiError
+            {
+                Title = ex.Message,
+                Status = StatusCodes.Status413PayloadTooLarge
+            }));
+        }
+        catch
+        {
+            if (!databaseCommitted)
+            {
+                if (System.IO.File.Exists(filePath))
+                    System.IO.File.Delete(filePath);
+                if (reservationMade)
+                    await _storageQuota.ReleaseAsync(tenantId, reservedBytes);
+            }
+
+            throw;
+        }
+    }
+
+    private static string? ResolveAvatarPath(string? avatarUrl, string uploadsDir)
+    {
+        if (string.IsNullOrWhiteSpace(avatarUrl) ||
+            Uri.TryCreate(avatarUrl, UriKind.Absolute, out var uri) &&
+            (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+        {
+            return null;
+        }
+
+        var normalizedUrl = avatarUrl.Replace('\\', '/').TrimStart('/');
+        if (!normalizedUrl.StartsWith("uploads/avatars/", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var fullDirectory = Path.GetFullPath(uploadsDir);
+        var fullPath = Path.GetFullPath(Path.Combine(
+            Directory.GetCurrentDirectory(),
+            "wwwroot",
+            normalizedUrl.Replace('/', Path.DirectorySeparatorChar)));
+        return fullPath.StartsWith(fullDirectory + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+            ? fullPath
+            : null;
     }
 }

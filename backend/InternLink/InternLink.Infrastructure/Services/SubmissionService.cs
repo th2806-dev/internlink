@@ -1,6 +1,7 @@
 using AutoMapper;
 using System.IO.Compression;
 using InternLink.Application.DTOs;
++
 using InternLink.Application.Interfaces;
 using InternLink.Domain.Entities;
 using InternLink.Domain.Enums;
@@ -19,6 +20,7 @@ public class SubmissionService : ISubmissionService
     private readonly IMapper _mapper;
     private readonly INotificationService _notificationService;
     private readonly IWebHostEnvironment _env;
+    private readonly ITenantStorageQuotaService _storageQuota;
 
     private const string UploadFolder = "uploads/submissions";
     private static readonly string[] AllowedExtensions =
@@ -32,12 +34,14 @@ public class SubmissionService : ISubmissionService
         AppDbContext db,
         IMapper mapper,
         INotificationService notificationService,
-        IWebHostEnvironment env)
+        IWebHostEnvironment env,
+        ITenantStorageQuotaService storageQuota)
     {
         _db = db;
         _mapper = mapper;
         _notificationService = notificationService;
         _env = env;
+        _storageQuota = storageQuota;
     }
 
     public async Task<SubmissionDto?> GetByIdAsync(Guid id)
@@ -202,6 +206,15 @@ public class SubmissionService : ISubmissionService
         string originalFileName,
         string? contentType = null)
     {
+        var internship = await _db.Internships
+            .Include(item => item.Student)
+            .FirstOrDefaultAsync(item => item.Id == request.InternshipId && !item.IsDeleted);
+        if (internship == null)
+            throw new InvalidOperationException(InternLink.Shared.Responses.ErrorMessage.InternshipNotFound);
+        if (internship.Student?.UserId != userId)
+            throw new UnauthorizedAccessException(InternLink.Shared.Responses.ErrorMessage.NotOwnerInternship);
+        EnsureSubmissionAllowedForInternship(internship);
+
         var type = Enum.TryParse<SubmissionType>(request.Type, true, out var parsedType)
             ? parsedType
             : (SubmissionType?)null;
@@ -212,9 +225,6 @@ public class SubmissionService : ISubmissionService
         var preserveFileName = false;
         if (type.HasValue && HasCanonicalSubmissionFileName(type.Value))
         {
-            var internship = await _db.Internships
-                .Include(item => item.Student)
-                .FirstOrDefaultAsync(item => item.Id == request.InternshipId && !item.IsDeleted);
             var version = await GetNextSubmissionVersionAsync(request.InternshipId, type.Value);
             canonicalName = CreateCanonicalSubmissionFileName(
                 type.Value,
@@ -227,23 +237,59 @@ public class SubmissionService : ISubmissionService
                 internship?.Student?.Class);
             preserveFileName = true;
         }
-        var (relativePath, savedFileName) = await SaveSubmissionFileAsync(
-            fileStream,
-            canonicalName,
-            request.InternshipId,
-            preserveFileName);
+        if (!fileStream.CanSeek)
+            throw new InvalidOperationException("Không thể xác định dung lượng tệp trước khi tải lên.");
 
-        request.FileName = savedFileName;
-        request.FileUrl = relativePath;
+        var reservedBytes = fileStream.Length - fileStream.Position;
+        await _storageQuota.ReserveAsync(internship.TenantId, reservedBytes);
+        string? relativePath = null;
         try
         {
+            var savedFile = await SaveSubmissionFileAsync(
+                fileStream,
+                canonicalName,
+                request.InternshipId,
+                preserveFileName);
+            relativePath = savedFile.RelativePath;
+            var actualSize = new FileInfo(ResolveUploadPath(relativePath)).Length;
+            if (actualSize > reservedBytes)
+            {
+                await _storageQuota.ReserveAsync(internship.TenantId, actualSize - reservedBytes);
+                reservedBytes = actualSize;
+            }
+            else if (actualSize < reservedBytes)
+            {
+                await _storageQuota.ReleaseAsync(internship.TenantId, reservedBytes - actualSize);
+                reservedBytes = actualSize;
+            }
+
+            request.FileName = savedFile.SavedFileName;
+            request.FileUrl = relativePath;
             return await CreateAsync(userId, request, allowArchiveReportFile: type == SubmissionType.ArchiveReport);
         }
         catch
         {
-            var fullPath = ResolveUploadPath(relativePath);
-            if (File.Exists(fullPath))
-                File.Delete(fullPath);
+            var committed = relativePath != null &&
+                await _db.Submissions.IgnoreQueryFilters().AnyAsync(submission =>
+                    submission.TenantId == internship.TenantId &&
+                    submission.FileUrl == relativePath);
+            if (!committed)
+            {
+                try
+                {
+                    if (relativePath != null)
+                    {
+                        var fullPath = ResolveUploadPath(relativePath);
+                        if (File.Exists(fullPath))
+                            File.Delete(fullPath);
+                    }
+                }
+                finally
+                {
+                    await _storageQuota.ReleaseAsync(internship.TenantId, reservedBytes);
+                }
+            }
+
             throw;
         }
     }
@@ -304,75 +350,130 @@ public class SubmissionService : ISubmissionService
         if (type == SubmissionType.FinalReport)
             await EnsureFinalReportSubmissionWindowOpenAsync(internship);
 
-        var version = HasCanonicalSubmissionFileName(type)
-            ? await GetNextSubmissionVersionAsync(request.InternshipId, type)
-            : 1;
-        var submission = new Submission
+        var reservedBytes = 0L;
+        foreach (var file in fileItems)
         {
-            Id = Guid.NewGuid(),
-            InternshipId = request.InternshipId,
-            Type = type,
-            Status = SubmissionStatus.Submitted,
-            Version = version,
-            Title = request.Title,
-            Description = request.Description,
-            EmployerScore = request.EmployerScore,
-            SubmittedAt = DateTime.UtcNow,
-            CreatedAt = DateTime.UtcNow,
-        };
-
-        for (var index = 0; index < fileItems.Count; index++)
-        {
-            var file = fileItems[index];
-            var useCanonicalName = HasCanonicalSubmissionFileName(type);
-            var fileName = useCanonicalName
-                ? CreateCanonicalSubmissionFileName(
-                    type,
-                    internship.Student?.FullName,
-                    version,
-                    index + 1,
-                    fileItems.Count,
-                    Path.GetExtension(file.FileName),
-                    internship.Student?.StudentCode,
-                    internship.Student?.Class)
-                : file.FileName;
-            var (relativePath, savedFileName) = await SaveSubmissionFileAsync(
-                file.Stream,
-                fileName,
-                request.InternshipId,
-                useCanonicalName);
-            submission.Assets.Add(new SubmissionAsset
-            {
-                Id = Guid.NewGuid(),
-                Label = useCanonicalName ? savedFileName : file.FileName,
-                FileName = savedFileName,
-                FileUrl = relativePath,
-                AssetType = "file",
-                FileSize = file.Length,
-                MimeType = file.ContentType,
-                UploadedAt = DateTime.UtcNow,
-                CreatedAt = DateTime.UtcNow,
-            });
-            await file.Stream.DisposeAsync();
+            if (file.Length < 0)
+                throw new ArgumentOutOfRangeException(nameof(files), "File length cannot be negative.");
+            reservedBytes = checked(reservedBytes + file.Length);
         }
 
-        foreach (var link in linkItems)
+        await _storageQuota.ReserveAsync(internship.TenantId, reservedBytes);
+        var createdFiles = new List<string>();
+        var actualBytes = 0L;
+        var databaseCommitted = false;
+        try
         {
-            submission.Assets.Add(new SubmissionAsset
+            var version = HasCanonicalSubmissionFileName(type)
+                ? await GetNextSubmissionVersionAsync(request.InternshipId, type)
+                : 1;
+            var submission = new Submission
             {
                 Id = Guid.NewGuid(),
-                Label = string.IsNullOrWhiteSpace(link.Label) ? link.Url : link.Label,
-                FileUrl = link.Url.Trim(),
-                AssetType = "link",
-                UploadedAt = DateTime.UtcNow,
+                InternshipId = request.InternshipId,
+                Type = type,
+                Status = SubmissionStatus.Submitted,
+                Version = version,
+                Title = request.Title,
+                Description = request.Description,
+                EmployerScore = request.EmployerScore,
+                SubmittedAt = DateTime.UtcNow,
                 CreatedAt = DateTime.UtcNow,
-            });
-        }
+            };
 
-        _db.Submissions.Add(submission);
-        await _db.SaveChangesAsync();
-        await NotifyLecturerOfSubmissionAsync(internship, submission);
-        return (await GetByIdAsync(submission.Id))!;
+            for (var index = 0; index < fileItems.Count; index++)
+            {
+                var file = fileItems[index];
+                var useCanonicalName = HasCanonicalSubmissionFileName(type);
+                var fileName = useCanonicalName
+                    ? CreateCanonicalSubmissionFileName(
+                        type,
+                        internship.Student?.FullName,
+                        version,
+                        index + 1,
+                        fileItems.Count,
+                        Path.GetExtension(file.FileName),
+                        internship.Student?.StudentCode,
+                        internship.Student?.Class)
+                    : file.FileName;
+                var (relativePath, savedFileName) = await SaveSubmissionFileAsync(
+                    file.Stream,
+                    fileName,
+                    request.InternshipId,
+                    useCanonicalName);
+                createdFiles.Add(relativePath);
+                var actualFileSize = new FileInfo(ResolveUploadPath(relativePath)).Length;
+                actualBytes = checked(actualBytes + actualFileSize);
+                if (actualBytes > reservedBytes)
+                {
+                    await _storageQuota.ReserveAsync(internship.TenantId, actualBytes - reservedBytes);
+                    reservedBytes = actualBytes;
+                }
+                submission.Assets.Add(new SubmissionAsset
+                {
+                    Id = Guid.NewGuid(),
+                    Label = useCanonicalName ? savedFileName : file.FileName,
+                    FileName = savedFileName,
+                    FileUrl = relativePath,
+                    AssetType = "file",
+                    FileSize = actualFileSize,
+                    MimeType = file.ContentType,
+                    UploadedAt = DateTime.UtcNow,
+                    CreatedAt = DateTime.UtcNow,
+                });
+            }
+
+            if (actualBytes < reservedBytes)
+            {
+                await _storageQuota.ReleaseAsync(internship.TenantId, reservedBytes - actualBytes);
+                reservedBytes = actualBytes;
+            }
+
+            foreach (var link in linkItems)
+            {
+                submission.Assets.Add(new SubmissionAsset
+                {
+                    Id = Guid.NewGuid(),
+                    Label = string.IsNullOrWhiteSpace(link.Label) ? link.Url : link.Label,
+                    FileUrl = link.Url.Trim(),
+                    AssetType = "link",
+                    UploadedAt = DateTime.UtcNow,
+                    CreatedAt = DateTime.UtcNow,
+                });
+            }
+
+            _db.Submissions.Add(submission);
+            await _db.SaveChangesAsync();
+            databaseCommitted = true;
+            await NotifyLecturerOfSubmissionAsync(internship, submission);
+            return (await GetByIdAsync(submission.Id))!;
+        }
+        catch
+        {
+            if (!databaseCommitted)
+            {
+                try
+                {
+                    foreach (var relativePath in createdFiles)
+                    {
+                        var fullPath = ResolveUploadPath(relativePath);
+                        if (File.Exists(fullPath))
+                            File.Delete(fullPath);
+                    }
+                }
+                finally
+                {
+                    await _storageQuota.ReleaseAsync(internship.TenantId, reservedBytes);
+                }
+            }
+
+            throw;
+        }
+        finally
+        {
+            foreach (var file in fileItems)
+                await file.Stream.DisposeAsync();
+        }
     }
 
     public async Task<SubmissionDto?> ResubmitAsync(Guid id, Guid userId, ResubmitRequest request)
@@ -504,16 +605,34 @@ public class SubmissionService : ISubmissionService
                 existing.Internship.Student?.StudentCode,
                 existing.Internship.Student?.Class)
             : originalFileName;
-        var (relativePath, savedFileName) = await SaveSubmissionFileAsync(
-            fileStream,
-            fileName,
-            existing.InternshipId,
-            useCanonicalName);
+        if (!fileStream.CanSeek)
+            throw new InvalidOperationException("Không thể xác định dung lượng tệp trước khi tải lên.");
 
-        request.FileName = savedFileName;
-        request.FileUrl = relativePath;
+        var reservedBytes = fileStream.Length - fileStream.Position;
+        await _storageQuota.ReserveAsync(existing.TenantId, reservedBytes);
+        string? relativePath = null;
         try
         {
+            var savedFile = await SaveSubmissionFileAsync(
+                fileStream,
+                fileName,
+                existing.InternshipId,
+                useCanonicalName);
+            relativePath = savedFile.RelativePath;
+            var actualSize = new FileInfo(ResolveUploadPath(relativePath)).Length;
+            if (actualSize > reservedBytes)
+            {
+                await _storageQuota.ReserveAsync(existing.TenantId, actualSize - reservedBytes);
+                reservedBytes = actualSize;
+            }
+            else if (actualSize < reservedBytes)
+            {
+                await _storageQuota.ReleaseAsync(existing.TenantId, reservedBytes - actualSize);
+                reservedBytes = actualSize;
+            }
+
+            request.FileName = savedFile.SavedFileName;
+            request.FileUrl = relativePath;
             var resubmission = await ResubmitAsync(
                 id,
                 userId,
@@ -521,19 +640,38 @@ public class SubmissionService : ISubmissionService
                 allowArchiveReportFile: existing.Type == SubmissionType.ArchiveReport);
             if (resubmission != null)
                 return resubmission;
+
+            var orphanedFilePath = ResolveUploadPath(relativePath);
+            if (File.Exists(orphanedFilePath))
+                File.Delete(orphanedFilePath);
+            await _storageQuota.ReleaseAsync(existing.TenantId, reservedBytes);
+            return null;
         }
         catch
         {
-            var fullPath = ResolveUploadPath(relativePath);
-            if (File.Exists(fullPath))
-                File.Delete(fullPath);
+            var committed = relativePath != null &&
+                await _db.Submissions.IgnoreQueryFilters().AnyAsync(submission =>
+                    submission.TenantId == existing.TenantId &&
+                    submission.FileUrl == relativePath);
+            if (!committed)
+            {
+                try
+                {
+                    if (relativePath != null)
+                    {
+                        var fullPath = ResolveUploadPath(relativePath);
+                        if (File.Exists(fullPath))
+                            File.Delete(fullPath);
+                    }
+                }
+                finally
+                {
+                    await _storageQuota.ReleaseAsync(existing.TenantId, reservedBytes);
+                }
+            }
+
             throw;
         }
-
-        var orphanedFilePath = ResolveUploadPath(relativePath);
-        if (File.Exists(orphanedFilePath))
-            File.Delete(orphanedFilePath);
-        return null;
     }
 
     public async Task<SubmissionFileDownloadDto?> DownloadFileAsync(
@@ -1315,11 +1453,20 @@ public class SubmissionService : ISubmissionService
         var relativePath = Path.Combine(UploadFolder, internshipId.ToString(), uniqueFileName)
             .Replace("\\", "/");
 
-        await using (var stream = new FileStream(
-            fullPath,
-            preserveFileName ? FileMode.CreateNew : FileMode.Create))
+        var created = false;
+        try
         {
+            await using var stream = new FileStream(
+                fullPath,
+                preserveFileName ? FileMode.CreateNew : FileMode.Create);
+            created = true;
             await fileStream.CopyToAsync(stream);
+        }
+        catch
+        {
+            if (created && File.Exists(fullPath))
+                File.Delete(fullPath);
+            throw;
         }
 
         return (relativePath, uniqueFileName);
@@ -1442,7 +1589,7 @@ public class SubmissionService : ISubmissionService
             throw new InvalidOperationException("Sinh viên chưa được phân công đơn vị thực tập.");
 
         if (internship.Semester?.Status == SemesterStatus.Completed)
-            throw new InvalidOperationException("Học kỳ thực tập đã kết thúc. Không thể nộp hoặc cập nhật hồ sơ.");
+            throw new InvalidOperationException(Học kỳ thực tập đã kết thúc. Không thể nộp hoặc cập nhật hồ sơ.);
     }
 
     private string GetUploadRoot() => _env.ContentRootPath;
@@ -1506,7 +1653,9 @@ public class SubmissionService : ISubmissionService
 
             try
             {
+                var fileSize = new FileInfo(fullPath).Length;
                 File.Delete(fullPath);
+                await _storageQuota.ReleaseAsync(submission.TenantId, fileSize);
             }
             catch (IOException ex)
             {

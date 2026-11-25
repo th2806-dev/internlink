@@ -46,6 +46,7 @@ public class AuthServiceTests
         jwt.Setup(j => j.CreateTokenWithMetadata(
                 It.IsAny<string>(),
                 It.IsAny<IEnumerable<string>?>(),
+                It.IsAny<Guid?>(),
                 It.IsAny<Guid?>()))
             .Returns(("test-jwt", "test-jwt-id", DateTime.UtcNow.AddHours(1)));
 
@@ -102,13 +103,17 @@ public class AuthServiceTests
 
         await CreateService(db).LoginAsync(
             new LoginRequest { Username = user.Username, Password = "valid-password" },
-            "192.0.2.11");
+            "192.0.2.11",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Edg/131.0.0.0");
 
         var loginLog = await db.SysLoginLogs.SingleAsync();
         loginLog.Username.Should().Be(user.Username);
         loginLog.IpAddress.Should().Be("192.0.2.11");
         loginLog.Status.Should().Be("SUCCESS");
         loginLog.LoginAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromMinutes(1));
+
+        var refreshToken = await db.RefreshTokens.SingleAsync();
+        refreshToken.UserAgent.Should().Contain("Edg/131.0.0.0");
     }
 
     [Fact]
@@ -140,7 +145,7 @@ public class AuthServiceTests
             Name = "Kỳ đã kết thúc",
             Term = "Học kỳ I",
             AcademicYear = "2025 - 2026",
-            Status = SemesterStatus.Completed,
+            Status = SemesterStatus.Active,
             CreatedAt = DateTime.UtcNow,
         };
         db.Users.Add(user);
@@ -154,6 +159,8 @@ public class AuthServiceTests
             Status = InternshipStatus.Completed,
             CreatedAt = DateTime.UtcNow,
         });
+        await db.SaveChangesAsync();
+        semester.Status = SemesterStatus.Completed;
         await db.SaveChangesAsync();
 
         var currentUser = await CreateService(db).GetCurrentUserAsync(user.Id);

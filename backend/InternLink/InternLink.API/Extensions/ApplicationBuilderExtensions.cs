@@ -20,6 +20,9 @@ public static class ApplicationBuilderExtensions
             logger.LogInformation("Applying database migrations...");
             var context = services.GetRequiredService<AppDbContext>();
             await context.Database.MigrateAsync();
+            await SystemRbacSeeder.SeedTenantAsync(
+                context,
+                services.GetRequiredService<IScopedTenantContext>());
 
             // Fresh environment: seed ONLY the single SuperAdmin account.
             // Business data (departments, semesters, students...) is entered manually via the UI.

@@ -12,5 +12,8 @@ public sealed class CurrentUserResponse
     public bool MustChangePassword { get; set; }
     public bool IsArchiveReadOnly { get; set; }
     public Guid? DepartmentId { get; set; }
+    public Guid? TenantId { get; set; }
+    public bool IsImpersonating { get; set; }
+    public DateTimeOffset? ImpersonationExpiresAt { get; set; }
     public DateTime CreatedAt { get; set; }
 }

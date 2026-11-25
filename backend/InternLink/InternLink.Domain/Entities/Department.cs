@@ -5,8 +5,9 @@ namespace InternLink.Domain.Entities;
 /// SuperAdmin (DepartmentId = null) sees all departments.
 /// DepartmentAdmin sees only their assigned department.
 /// </summary>
-public class Department : BaseEntity
+public class Department : BaseEntity, ITenantScoped
 {
+    public Guid TenantId { get; set; }
     /// <summary>
     /// Short code, e.g. "CNTT", "QTKD", "KT".
     /// </summary>

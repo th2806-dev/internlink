@@ -15,16 +15,30 @@ export class ApiClientError extends Error {
 }
 
 export function getStoredToken(): string | null {
+  if (isTenantImpersonating())
+    return sessionStorage.getItem(IMPERSONATION_TOKEN_KEY);
   return localStorage.getItem(TOKEN_STORAGE_KEY);
 }
 
 export function setStoredToken(token: string | null): void {
+  if (isTenantImpersonating()) return;
   if (token) localStorage.setItem(TOKEN_STORAGE_KEY, token);
   else localStorage.removeItem(TOKEN_STORAGE_KEY);
 }
 
 export function getStoredRefreshToken(): string | null {
+  if (isTenantImpersonating()) return null;
   return localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
+}
+
+export function setTenantImpersonationToken(token: string): void {
+  sessionStorage.setItem(IMPERSONATION_TOKEN_KEY, token);
+  sessionStorage.setItem(IMPERSONATION_ACTIVE_KEY, "true");
+}
+
+export function clearTenantImpersonationToken(): void {
+  sessionStorage.removeItem(IMPERSONATION_TOKEN_KEY);
+  sessionStorage.removeItem(IMPERSONATION_ACTIVE_KEY);
 }
 
 export function setStoredRefreshToken(token: string | null): void {
@@ -37,6 +51,8 @@ export function clearAuthTokens(): void {
   localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
   sessionStorage.removeItem("internlink:impersonated-role");
   sessionStorage.removeItem("internlink:impersonation-context");
+  sessionStorage.removeItem("internlink:tenant-support-context");
+  clearTenantImpersonationToken();
 }
 
 export function getImpersonatedRoleCode(): string | null {
@@ -70,6 +86,12 @@ let refreshPromise: Promise<string | null> | null = null;
 const inFlightGetRequests = new Map<string, Promise<unknown>>();
 const apiGetCache = new Map<string, { data: unknown; expiresAt: number }>();
 const DEFAULT_GET_CACHE_TTL = 20_000; // 20s cache for GET
+const IMPERSONATION_TOKEN_KEY = "internlink:tenant-support-token";
+const IMPERSONATION_ACTIVE_KEY = "internlink:tenant-support-active";
+
+export function isTenantImpersonating(): boolean {
+  return sessionStorage.getItem(IMPERSONATION_ACTIVE_KEY) === "true";
+}
 
 export function clearApiCache(): void {
   apiGetCache.clear();
@@ -84,6 +106,20 @@ function dispatchUnauthorized(): void {
       }),
     );
   }
+}
+
+function handleUnauthorizedResponse(): void {
+  if (isTenantImpersonating()) {
+    clearTenantImpersonationToken();
+    sessionStorage.removeItem("internlink:tenant-support-context");
+    clearApiCache();
+    if (typeof window !== "undefined")
+      window.dispatchEvent(new CustomEvent("internlink:tenant-support-expired"));
+    return;
+  }
+
+  clearAuthTokens();
+  dispatchUnauthorized();
 }
 
 async function attemptRefreshToken(): Promise<string | null> {
@@ -208,7 +244,7 @@ export async function apiRequest<T>(
     });
 
     // Handle Token Expiry & Automatic Refresh Token Flow
-    if (res.status === 401 && auth && !_retry && !path.includes("/api/Auth/login") && !path.includes("/api/Auth/refresh-token")) {
+    if (res.status === 401 && auth && !isTenantImpersonating() && !_retry && !path.includes("/api/Auth/login") && !path.includes("/api/Auth/refresh-token")) {
       if (!refreshPromise) {
         refreshPromise = attemptRefreshToken().finally(() => {
           refreshPromise = null;
@@ -229,14 +265,7 @@ export async function apiRequest<T>(
     const payload = await parseJson<T>(res);
 
     if (res.status === 401) {
-      clearAuthTokens();
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(
-          new CustomEvent("internlink:unauthorized", {
-            detail: { status: 401, message: "Phiên đăng nhập đã hết hạn hoặc không hợp lệ." },
-          }),
-        );
-      }
+      handleUnauthorizedResponse();
     }
 
     if (!res.ok || payload.success === false) {
@@ -324,7 +353,7 @@ export async function apiRequestRaw<T>(
   });
 
   // Handle Token Expiry & Automatic Refresh Token Flow
-  if (res.status === 401 && auth && !_retry && !path.includes("/api/Auth/login") && !path.includes("/api/Auth/refresh-token")) {
+  if (res.status === 401 && auth && !isTenantImpersonating() && !_retry && !path.includes("/api/Auth/login") && !path.includes("/api/Auth/refresh-token")) {
     if (!refreshPromise) {
       refreshPromise = attemptRefreshToken().finally(() => {
         refreshPromise = null;
@@ -342,16 +371,7 @@ export async function apiRequestRaw<T>(
 
   const text = await res.text();
   if (!res.ok) {
-    if (res.status === 401) {
-      clearAuthTokens();
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(
-          new CustomEvent("internlink:unauthorized", {
-            detail: { status: 401, message: "Phiên đăng nhập đã hết hạn." },
-          }),
-        );
-      }
-    }
+    if (res.status === 401) handleUnauthorizedResponse();
     let msg = res.status === 401 ? "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại." : `HTTP ${res.status}`;
     try {
       const err = JSON.parse(text) as { message?: string; title?: string };
@@ -411,6 +431,7 @@ export async function downloadAuthenticatedFile(
       : options.body,
   });
   if (!res.ok) {
+    if (res.status === 401) handleUnauthorizedResponse();
     let msg = `HTTP ${res.status}`;
     try {
       const err = (await res.json()) as ApiResponse<unknown>;

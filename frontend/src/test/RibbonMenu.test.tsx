@@ -10,6 +10,10 @@ vi.mock("../hooks/useSystemMenu", () => ({
   useSystemMenu: mocks.useSystemMenu,
 }));
 
+vi.mock("../hooks/useAdminCapabilities", () => ({
+  useAdminCapabilities: () => ({ isSuperAdmin: false }),
+}));
+
 const menu: SystemMenuItem[] = [
   {
     code: "DASHBOARD",

@@ -2,8 +2,9 @@ using InternLink.Domain.Common;
 
 namespace InternLink.Domain.Entities;
 
-public class LecturerSemesterSummary : BaseEntity
+public class LecturerSemesterSummary : BaseEntity, ITenantScoped
 {
+    public Guid TenantId { get; set; }
     public Guid SemesterId { get; set; }
     public Semester Semester { get; set; } = null!;
     public Guid LecturerId { get; set; }

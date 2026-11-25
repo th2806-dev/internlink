@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { useParams } from "react-router-dom";
 import { CheckCircle2, LoaderCircle, ShieldCheck } from "lucide-react";
 import { apiRequestRaw } from "../../../lib/apiClient";
+import { useAppBranding } from "../../../contexts/AppBrandingContext";
 
 type AcceptancePreview = {
   referenceCode: string;
@@ -43,6 +44,7 @@ const inputClass =
   "mt-1.5 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-base text-slate-900 outline-none focus-visible:border-[#026aa7] focus-visible:ring-2 focus-visible:ring-[#026aa7]/20";
 
 export default function CompanyQuickAcceptanceView() {
+  const { branding } = useAppBranding();
   const { token = "" } = useParams();
   const [preview, setPreview] = useState<AcceptancePreview | null>(null);
   const [confirmation, setConfirmation] = useState<AcceptanceConfirmation | null>(null);
@@ -169,7 +171,7 @@ export default function CompanyQuickAcceptanceView() {
     <main className="min-h-dvh bg-slate-50 px-4 py-6 sm:py-12">
       <div className="mx-auto max-w-xl space-y-4">
         <header className="rounded-2xl bg-[#026aa7] p-5 text-white shadow-sm sm:p-7">
-          <p className="text-sm font-semibold tracking-wide text-white/85">InternLink · Cổng doanh nghiệp</p>
+          <p className="text-sm font-semibold tracking-wide text-white/85">{branding.appName} · Cổng doanh nghiệp</p>
           <h1 className="mt-2 text-2xl font-bold sm:text-3xl">Xác nhận tiếp nhận thực tập</h1>
           <p className="mt-2 text-sm leading-6 text-white/90">Liên kết được bảo vệ và có thời hạn; chỉ xác nhận khi thông tin sinh viên chính xác.</p>
         </header>

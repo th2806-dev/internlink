@@ -2,8 +2,9 @@ using InternLink.Domain.Enums;
 
 namespace InternLink.Domain.Entities;
 
-public class Internship : BaseEntity
+public class Internship : BaseEntity, ITenantScoped
 {
+    public Guid TenantId { get; set; }
     public Guid StudentId { get; set; }
     public Student Student { get; set; } = null!;
 

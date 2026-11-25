@@ -68,7 +68,7 @@ public class StudentServiceTests
             Name = "Kỳ đã kết thúc",
             Term = "Học kỳ I",
             AcademicYear = "2025 - 2026",
-            Status = SemesterStatus.Completed,
+            Status = SemesterStatus.Active,
             CreatedAt = DateTime.UtcNow,
         };
         var completedInternship = new Internship
@@ -83,6 +83,8 @@ public class StudentServiceTests
         db.Students.Add(student);
         db.Semesters.Add(completedSemester);
         db.Internships.Add(completedInternship);
+        await db.SaveChangesAsync();
+        completedSemester.Status = SemesterStatus.Completed;
         await db.SaveChangesAsync();
 
         (await service.IsArchiveReadOnlyAsync(userId)).Should().BeTrue();
@@ -712,7 +714,7 @@ public class StudentServiceTests
         var db = GetInMemoryDbContext();
         var service = CreateService(db);
 
-        var oldSemester = new Semester { Id = Guid.NewGuid(), Name = "Old Semester", Term = "Học kỳ I", AcademicYear = "2025 - 2026", Status = SemesterStatus.Completed, CreatedAt = DateTime.UtcNow.AddMonths(-6) };
+        var oldSemester = new Semester { Id = Guid.NewGuid(), Name = "Old Semester", Term = "Học kỳ I", AcademicYear = "2025 - 2026", Status = SemesterStatus.Active, CreatedAt = DateTime.UtcNow.AddMonths(-6) };
         var newSemester = new Semester { Id = Guid.NewGuid(), Name = "New Semester", Term = "Học kỳ II", AcademicYear = "2025 - 2026", Status = SemesterStatus.Active, CreatedAt = DateTime.UtcNow };
 
         var existingStudent = new Student
@@ -736,6 +738,8 @@ public class StudentServiceTests
         db.Semesters.AddRange(oldSemester, newSemester);
         db.Students.Add(existingStudent);
         db.Internships.Add(oldInternship);
+        await db.SaveChangesAsync();
+        oldSemester.Status = SemesterStatus.Completed;
         await db.SaveChangesAsync();
 
         using var stream = CreateStudentExcel(

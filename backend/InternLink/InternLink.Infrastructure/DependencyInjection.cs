@@ -1,4 +1,5 @@
 using System.Text;
+using System.IdentityModel.Tokens.Jwt;
 using InternLink.Application.Interfaces;
 using InternLink.Shared.Authorization;
 using InternLink.Infrastructure.Email;
@@ -9,6 +10,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
+using Hangfire;
+using Hangfire.SqlServer;
 
 namespace InternLink.Infrastructure;
 
@@ -21,7 +24,20 @@ public static class DependencyInjection
         services.AddDbContext<Persistence.AppDbContext>(options =>
             options.UseSqlServer(connection)
                    .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning)));
+        services.AddHangfire(configuration => configuration
+            .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+            .UseSimpleAssemblyNameTypeSerializer()
+            .UseRecommendedSerializerSettings()
+            .UseSqlServerStorage(connection, new SqlServerStorageOptions
+            {
+                PrepareSchemaIfNecessary = true
+            }));
+        services.AddHangfireServer();
+        services.AddScoped<TenantLicenseMonitoringJobs>();
+        services.AddScoped<Application.Interfaces.IScopedTenantContext, ScopedTenantContext>();
         services.AddScoped<Application.Interfaces.IUnitOfWork, Persistence.UnitOfWork>();
+        services.AddScoped<Application.Interfaces.ITenantStorageQuotaService, TenantStorageQuotaService>();
+        services.AddScoped<ISystemTenantExportService, SystemTenantExportService>();
 
         // Jwt settings
         var jwtSection = configuration.GetSection("Jwt");
@@ -62,6 +78,31 @@ public static class DependencyInjection
                         context.Token = accessToken;
                     }
                     return Task.CompletedTask;
+                },
+                OnTokenValidated = async context =>
+                {
+                    var principal = context.Principal;
+                    var jwtId = principal?.FindFirst(JwtRegisteredClaimNames.Jti)?.Value
+                        ?? principal?.FindFirst("jti")?.Value;
+                    var impersonationSessionId = Guid.TryParse(
+                        principal?.FindFirst("impersonation_session_id")?.Value,
+                        out var sessionId)
+                        ? sessionId
+                        : (Guid?)null;
+                    var tenantId = Guid.TryParse(
+                        principal?.FindFirst("tenant_id")?.Value,
+                        out var parsedTenantId)
+                        ? parsedTenantId
+                        : (Guid?)null;
+                    var validator = context.HttpContext.RequestServices
+                        .GetRequiredService<IAuthenticationSessionValidator>();
+                    var isActive = await validator.IsTokenActiveAsync(
+                        jwtId,
+                        impersonationSessionId,
+                        tenantId,
+                        context.HttpContext.RequestAborted);
+                    if (!isActive)
+                        context.Fail("The login session is no longer active.");
                 }
             };
         });
@@ -144,9 +185,32 @@ public static class DependencyInjection
 
         // System settings (DB-backed)
         services.AddScoped<Application.Interfaces.ISettingsService, Services.SettingsService>();
+        services.AddScoped<Application.Interfaces.ISystemCatalogService, Services.SystemCatalogService>();
         services.AddScoped<InternLink.Application.Interfaces.IDatabaseBackupService, Services.DatabaseBackupService>();
         services.AddScoped<ISysFunctionService, SysFunctionService>();
         services.AddScoped<ISysFieldPolicyService, SysFieldPolicyService>();
+        services.AddScoped<ISystemTenantService, SystemTenantService>();
+        services.AddScoped<ISystemApiGatewayService, SystemApiGatewayService>();
+        services.AddScoped<ISystemHealthService, SystemHealthService>();
+        services.AddScoped<ISystemJobsService, SystemJobsService>();
+        services.AddSingleton<ISystemJobScheduleManager, SystemJobScheduleManager>();
+        services.AddScoped<ISystemTenantSsoService, SystemTenantSsoService>();
+        services.AddScoped<ISystemComplianceService, SystemComplianceService>();
+        services.AddScoped<ISystemBillingService, SystemBillingService>();
+        services.AddScoped<ITenantBillingNotificationService, TenantBillingNotificationService>();
+        services.AddScoped<IBillingPaymentReceiptQueue, HangfireBillingPaymentReceiptQueue>();
+        services.AddScoped<IPlatformAnnouncementService, PlatformAnnouncementService>();
+        services.AddScoped<ISystemSecurityService, SystemSecurityService>();
+        services.AddScoped<IAuthenticationSessionValidator, AuthenticationSessionValidator>();
+        services.AddSingleton<IVietQrPayloadGenerator, VietQrPayloadGenerator>();
+        services.Configure<VietQrSettings>(configuration.GetSection(VietQrSettings.SectionName));
+        services.AddScoped<ITenantImpersonationService, TenantImpersonationService>();
+        services.AddHttpClient(SystemApiGatewayService.WebhookHttpClientName, client =>
+            client.Timeout = TimeSpan.FromSeconds(10))
+            .ConfigurePrimaryHttpMessageHandler(SystemApiGatewayService.CreateWebhookHttpHandler);
+        services.AddHttpClient(SystemTenantSsoService.DiscoveryHttpClientName, client =>
+            client.Timeout = TimeSpan.FromSeconds(10))
+            .ConfigurePrimaryHttpMessageHandler(SystemApiGatewayService.CreateWebhookHttpHandler);
 
         // Account requests management
         services.AddScoped<IAccountRequestService, Services.AccountRequestService>();

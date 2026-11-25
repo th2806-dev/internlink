@@ -1,9 +1,11 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import { CircleHelp } from "lucide-react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AdminMenuRouteGuard } from "../features/admin/components/AdminMenuRouteGuard";
 import { Sidebar } from "../features/admin/components/Sidebar";
-import { findSystemMenuRoute, getSystemMenuRoutes } from "../lib/systemMenu";
+import { getMenuIcon, isRegisteredMenuIcon } from "../lib/menuIconRegistry";
+import { findSystemMenuRoute, getSuperAdminMenuGroup, getSystemMenuRoutes } from "../lib/systemMenu";
 import type { SystemMenuItem } from "../types/system";
 
 const mocks = vi.hoisted(() => ({ useSystemMenu: vi.fn() }));
@@ -62,6 +64,73 @@ describe("database-driven admin navigation", () => {
     expect(getSystemMenuRoutes(menu)).toHaveLength(1);
   });
 
+  it("keeps the SuperAdmin function manager visible as a menu route", () => {
+    const menuWithFunctionManager: SystemMenuItem[] = [{
+      ...menu[0],
+      code: "SYSTEM",
+      name: "Hệ thống",
+      moduleCode: "SYSTEM",
+      children: [{
+        ...menu[0].children[0],
+        code: "SYSTEM.FUNCTIONS",
+        name: "Quản lý chức năng",
+        moduleCode: "SYSTEM",
+        funcUrl: "/admin/functions",
+      }],
+    }];
+
+    expect(getSystemMenuRoutes(menuWithFunctionManager)).toHaveLength(1);
+    expect(findSystemMenuRoute(menuWithFunctionManager, "/admin/functions")?.item.code)
+      .toBe("SYSTEM.FUNCTIONS");
+  });
+
+  it("maps the executive menu into five platform navigation groups", () => {
+    const moduleCodes = [
+      ["DASHBOARD", "DASHBOARD"],
+      ["TENANTS", "TENANTS"],
+      ["LICENSES", "LICENSES"],
+      ["SSO_HUB", "SSO_HUB"],
+      ["API_GATEWAY", "API_GATEWAY"],
+      ["OBSERVABILITY", "OBSERVABILITY"],
+      ["SYSTEM.BACKUPS", "SYSTEM"],
+      ["COMPLIANCE", "COMPLIANCE"],
+      ["AUDIT.LOGS", "AUDIT"],
+      ["SYSTEM.PERMISSIONS", "SYSTEM"],
+      ["ACCOUNTS.USERS", "ACCOUNTS"],
+    ];
+    const groups = new Set(moduleCodes.map(([code, moduleCode]) =>
+      getSuperAdminMenuGroup({
+        ...menu[0],
+        code,
+        moduleCode,
+      }),
+    ));
+
+    expect(groups).toEqual(new Set([
+      "CHỈ HUY NỀN TẢNG",
+      "ĐƠN VỊ & BẢN QUYỀN",
+      "KẾT NỐI & TÍCH HỢP",
+      "HẠ TẦNG & JOBS",
+      "QUẢN TRỊ & TUÂN THỦ",
+    ]));
+  });
+
+  it("registers seeded ERP icons and avoids a question-mark fallback for unknown names", () => {
+    const seededIcons = [
+      "Activity", "Award", "Bell", "Building2", "Calendar", "CalendarCheck",
+      "ClipboardList", "Columns3", "DatabaseBackup", "FileSliders",
+      "FileSpreadsheet", "FileText", "KeyRound", "LayoutDashboard",
+      "ScrollText", "Settings", "Shield", "ShieldCheck", "UserRound",
+      "UserRoundPlus", "Users", "Webhook",
+    ];
+
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    expect(seededIcons.every(isRegisteredMenuIcon)).toBe(true);
+    expect(getMenuIcon("UnknownSeededIcon")).not.toBe(CircleHelp);
+    expect(warn).toHaveBeenCalledWith("Unsupported menu icon: UnknownSeededIcon");
+    warn.mockRestore();
+  });
+
   it("lets a menu route override its inherited group using API metadata", () => {
     const groupedMenu: SystemMenuItem[] = [
       {
@@ -106,6 +175,28 @@ describe("database-driven admin navigation", () => {
 
     expect(screen.getByRole("alert")).toHaveTextContent("Bạn không có quyền truy cập");
     expect(screen.queryByText("Protected page")).not.toBeInTheDocument();
+  });
+
+  it("offers a permitted-menu fallback when a SuperAdmin opens an operational deep link", () => {
+    setMenuData([{
+      ...menu[0],
+      code: "DASHBOARD",
+      name: "Tổng quan điều hành nền tảng",
+      moduleCode: "DASHBOARD",
+      funcUrl: "/admin/dashboard",
+      children: [],
+    }]);
+    render(
+      <MemoryRouter initialEntries={["/admin/students"]}>
+        <AdminMenuRouteGuard>
+          <span>Students page</span>
+        </AdminMenuRouteGuard>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Bạn không có quyền truy cập");
+    expect(screen.getByRole("link", { name: "Mở Tổng quan điều hành nền tảng" })).toHaveAttribute("href", "/admin/dashboard");
+    expect(screen.queryByText("Students page")).not.toBeInTheDocument();
   });
 
   it("renders permitted route content when VIEW is present in the returned menu", () => {

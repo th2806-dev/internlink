@@ -7,8 +7,9 @@ namespace InternLink.Domain.Entities;
 /// appears for new assignments in that term, while existing internships keep
 /// showing. Absence of a row means the company is linked by default.
 /// </summary>
-public class SemesterCompany : BaseEntity
+public class SemesterCompany : BaseEntity, ITenantScoped
 {
+    public Guid TenantId { get; set; }
     public Guid SemesterId { get; set; }
     public Semester Semester { get; set; } = null!;
 

@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Award,
+  Activity,
   Bell,
   Building,
   Building2,
@@ -31,6 +32,7 @@ import type { LucideIcon } from "lucide-react";
 import { CompactActionBar } from "../../../components/common/CompactActionBar";
 import { CompactToggleSwitch as PermissionSwitch } from "../../../components/common/CompactToggleSwitch";
 import { getApiErrorMessage } from "../../../lib/apiClient";
+import { PLATFORM_PAGE_CONTENT_CLASS, PlatformPageHeader } from "../components/PlatformPageHeader";
 import { systemAdminService } from "../../../services/systemAdmin.service";
 import type { RolePermissionRow } from "../../../types/systemAdmin";
 
@@ -46,7 +48,16 @@ const PERMISSIONS: { key: PermissionKey; label: string }[] = [
   { key: "canImport", label: "Nhập Excel" },
   { key: "canPrint", label: "In phiếu" },
   { key: "canApprove", label: "Phê duyệt" },
+  { key: "canLock", label: "Khóa" },
 ];
+
+const LOCK_MODULES = new Set(["TENANTS", "LICENSES", "API_GATEWAY", "OBSERVABILITY"]);
+
+function supportsPermission(row: RolePermissionRow, key: PermissionKey): boolean {
+  if (key === "canPrint") return !LOCK_MODULES.has(row.moduleCode);
+  if (key === "canLock") return LOCK_MODULES.has(row.moduleCode);
+  return true;
+}
 
 const FUNCTION_GROUP_METADATA: Record<string, { label: string; icon: LucideIcon }> = {
   DASHBOARD: { label: "TỔNG QUAN", icon: LayoutDashboard },
@@ -70,6 +81,12 @@ const FUNCTION_GROUP_METADATA: Record<string, { label: string; icon: LucideIcon 
   AUDIT: { label: "NHẬT KÝ & BÁO CÁO", icon: ScrollText },
   IT_CONFIG: { label: "CẤU HÌNH KỸ THUẬT", icon: Wrench },
   API_WEBHOOK: { label: "TÍCH HỢP API & WEBHOOK", icon: Webhook },
+  TENANTS: { label: "ĐƠN VỊ TRIỂN KHAI", icon: Building2 },
+  LICENSES: { label: "BẢN QUYỀN & QUOTA", icon: Award },
+  API_GATEWAY: { label: "API GATEWAY & WEBHOOK HUB", icon: Webhook },
+  OBSERVABILITY: { label: "GIÁM SÁT HỆ THỐNG", icon: Activity },
+  SSO_HUB: { label: "CỔNG ĐỊNH DANH SSO", icon: KeyRound },
+  COMPLIANCE: { label: "TUÂN THỦ & VÒNG ĐỜI DỮ LIỆU", icon: Shield },
 };
 
 interface PermissionGroup {
@@ -165,7 +182,7 @@ export function PermissionMatrixView({
   const updateRows = (update: (row: RolePermissionRow) => RolePermissionRow) =>
     setRows((current) => current.map(update));
   const toggleColumn = (key: PermissionKey, checked: boolean) =>
-    updateRows((row) => ({ ...row, [key]: checked }));
+    updateRows((row) => supportsPermission(row, key) ? { ...row, [key]: checked } : row);
   const toggleRow = (moduleCode: string, checked: boolean) =>
     updateRows((row) =>
       row.moduleCode === moduleCode
@@ -177,8 +194,9 @@ export function PermissionMatrixView({
             canDelete: checked,
             canExport: checked,
             canImport: checked,
-            canPrint: checked,
+            canPrint: LOCK_MODULES.has(row.moduleCode) ? false : checked,
             canApprove: checked,
+            canLock: LOCK_MODULES.has(row.moduleCode) ? checked : false,
           }
         : row,
     );
@@ -194,8 +212,9 @@ export function PermissionMatrixView({
             canDelete: checked,
             canExport: checked,
             canImport: checked,
-            canPrint: checked,
+            canPrint: LOCK_MODULES.has(row.moduleCode) ? false : checked,
             canApprove: checked,
+            canLock: LOCK_MODULES.has(row.moduleCode) ? checked : false,
           }
         : row,
     );
@@ -209,14 +228,26 @@ export function PermissionMatrixView({
   const error = rolesQuery.error ?? permissionsQuery.error;
 
   return (
-    <div className="w-full space-y-4 animate-in fade-in duration-200 font-sans pb-12">
+    <div className="min-h-full w-full bg-slate-50 pb-12 font-sans">
+      <PlatformPageHeader
+        title="Ma trận phân quyền"
+        description="Thiết lập quyền truy cập theo vai trò, phân hệ và thao tác."
+        breadcrumbs={[
+          { label: "Quản trị nền tảng", href: "/admin/dashboard" },
+          { label: "Quản trị & tuân thủ" },
+          { label: "Phân quyền chức năng" },
+        ]}
+        statistic={rows.length ? `${functionGroups.length} phân hệ · ${PERMISSIONS.length} quyền` : undefined}
+      />
       <CompactActionBar
         icon={KeyRound}
         title="Ma trận phân quyền"
         subtitle="Cấp quyền theo phân hệ, chức năng và thao tác."
+        hideTitle
       />
 
-      <section className="space-y-3 rounded-md border border-slate-200 bg-white p-3">
+      <main className={PLATFORM_PAGE_CONTENT_CLASS}>
+      <section className="space-y-3 rounded-md border border-slate-200 bg-white p-3 shadow-sm">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="grid w-full gap-3 sm:max-w-2xl sm:grid-cols-2">
             <div>
@@ -288,7 +319,7 @@ export function PermissionMatrixView({
           <p className="rounded-md bg-slate-50 p-4 text-sm text-slate-600">Chưa có vai trò nào được cấu hình.</p>
         ) : (
           <div className="overflow-x-auto rounded-md border border-slate-200">
-            <table className="min-w-[1160px] w-full border-separate border-spacing-0 text-sm">
+            <table className="min-w-[1160px] w-full border-separate border-spacing-0 text-xs">
               <thead className="bg-slate-100/90 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-600">
                 <tr>
                   <th scope="col" className="sticky left-0 z-20 min-w-56 border-b border-r border-slate-200 bg-white px-4 py-1.5">Phân hệ / chức năng</th>
@@ -300,7 +331,7 @@ export function PermissionMatrixView({
                         <span>{label}</span>
                         <PermissionSwitch
                           label={`Cấp quyền cột ${label} cho tất cả phân hệ`}
-                          checked={rows.length > 0 && rows.every((row) => row[key])}
+                          checked={rows.some((row) => supportsPermission(row, key)) && rows.filter((row) => supportsPermission(row, key)).every((row) => row[key])}
                           onChange={(checked) => toggleColumn(key, checked)}
                         />
                       </div>
@@ -311,7 +342,7 @@ export function PermissionMatrixView({
               <tbody className="divide-y divide-slate-100">
                 {visibleFunctionGroups.map((group) => {
                   const groupGranted = group.rows.length > 0
-                    && group.rows.every((row) => PERMISSIONS.every(({ key }) => row[key]));
+                    && group.rows.every((row) => PERMISSIONS.filter(({ key }) => supportsPermission(row, key)).every(({ key }) => row[key]));
                   const GroupIcon = group.icon;
 
                   return (
@@ -343,7 +374,7 @@ export function PermissionMatrixView({
                         <td colSpan={PERMISSIONS.length} className="border-y border-blue-100" />
                       </tr>
                       {group.rows.map((row) => {
-                        const allGranted = PERMISSIONS.every(({ key }) => row[key]);
+                        const allGranted = PERMISSIONS.filter(({ key }) => supportsPermission(row, key)).every(({ key }) => row[key]);
                         return (
                           <tr key={row.moduleCode} className="hover:bg-slate-50/80">
                             <th scope="row" className="sticky left-0 z-20 border-r border-slate-200 bg-white px-4 py-2.5 text-left font-medium text-slate-900">
@@ -369,8 +400,9 @@ export function PermissionMatrixView({
                               <td key={key} className="px-2 py-1 text-center">
                                 <PermissionSwitch
                                   label={`${row.functionName}: ${label}`}
-                                  checked={row[key]}
+                                  checked={supportsPermission(row, key) && row[key]}
                                   onChange={(checked) => toggleCell(row.moduleCode, key, checked)}
+                                  disabled={!supportsPermission(row, key)}
                                 />
                               </td>
                             ))}
@@ -381,7 +413,7 @@ export function PermissionMatrixView({
                   );
                 })}
                 {!sortedRows.length && (
-                  <tr><td colSpan={11} className="px-4 py-8 text-center text-slate-500">Vai trò này chưa có danh mục chức năng.</td></tr>
+                  <tr><td colSpan={12} className="px-4 py-8 text-center text-slate-500">Vai trò này chưa có danh mục chức năng.</td></tr>
                 )}
               </tbody>
             </table>
@@ -393,6 +425,7 @@ export function PermissionMatrixView({
           </p>
         )}
       </section>
+      </main>
     </div>
   );
 }

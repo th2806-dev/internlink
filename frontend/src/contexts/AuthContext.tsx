@@ -164,7 +164,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           mustChangePassword: me.mustChangePassword,
         });
       } catch {
-        clearAuthTokens();
+        const fallbackToken = getStoredToken();
+        if (!fallbackToken || fallbackToken === token) {
+          clearAuthTokens();
+          return;
+        }
+
+        try {
+          const me = await authService.getMe();
+          if (cancelled) return;
+          login({
+            token: fallbackToken,
+            user: mapMeToAuthUser(me),
+            mustChangePassword: me.mustChangePassword,
+          });
+        } catch {
+          clearAuthTokens();
+        }
       } finally {
         if (!cancelled) setIsBootstrapping(false);
       }

@@ -14,6 +14,7 @@ import { getApiErrorMessage } from "../../lib/apiClient";
 import { mapBackendRole } from "../../lib/roleMap";
 import { authService } from "../../services/auth.service";
 import type { UserRole } from "../../contexts/AuthContext";
+import { formatBrandingText, resolveAppAssetUrl, useAppBranding } from "../../contexts/AppBrandingContext";
 
 interface LoginUser {
   username: string;
@@ -32,6 +33,7 @@ interface LoginPortalProps {
 }
 
 export function LoginPortal({ onLoginSuccess }: LoginPortalProps) {
+  const { branding } = useAppBranding();
   const navigate = useNavigate();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -190,8 +192,8 @@ export function LoginPortal({ onLoginSuccess }: LoginPortalProps) {
             {/* Logo Header */}
             <div className="mb-6 flex justify-center">
               <img
-                src="/logo/logo_internlink-01.png"
-                alt="InternLink Logo"
+                src={resolveAppAssetUrl(branding.appLogoUrl)}
+                alt={`${branding.appName} Logo`}
                 className="w-auto object-contain h-16 lg:h-20 transition-transform duration-300"
               />
             </div>
@@ -344,7 +346,11 @@ export function LoginPortal({ onLoginSuccess }: LoginPortalProps) {
 
           {/* Minimal Footer Inside Floating Box */}
           <div className="w-full border-t border-slate-100 pt-4 text-center text-[10px] font-medium text-slate-400">
-            <p>© 2026 InternLink · Developed by th.2806.dev</p>
+            <p>{formatBrandingText(branding.copyrightText, {
+              appName: branding.appName,
+              companyName: branding.companyName,
+              year: new Date().getFullYear(),
+            })}</p>
           </div>
         </div>
       </div>

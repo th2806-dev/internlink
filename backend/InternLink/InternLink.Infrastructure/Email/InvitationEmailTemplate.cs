@@ -34,9 +34,9 @@ public static class InvitationEmailTemplate
 
         var subject = request.Role switch
         {
-            InvitationRole.Lecturer => "[InternLink] Thư mời tham gia hệ thống hướng dẫn thực tập",
-            InvitationRole.DepartmentAdmin => "[InternLink] Thư mời tham gia hệ thống với vai trò Admin khoa",
-            _ => "[InternLink] Thư mời tham gia hệ thống quản lý thực tập"
+            InvitationRole.Lecturer => $"[{settings.AppName}] Thư mời tham gia hệ thống hướng dẫn thực tập",
+            InvitationRole.DepartmentAdmin => $"[{settings.AppName}] Thư mời tham gia hệ thống với vai trò Admin khoa",
+            _ => $"[{settings.AppName}] Thư mời tham gia hệ thống quản lý thực tập"
         };
 
         var capabilities = request.Role switch
@@ -72,7 +72,7 @@ public static class InvitationEmailTemplate
         var plain = $"""
             {greeting}
 
-            {institution} trân trọng mời bạn tham gia Hệ thống Quản lý Thực tập InternLink
+            {institution} trân trọng mời bạn tham gia Hệ thống Quản lý Thực tập {settings.AppName}
             với vai trò {roleLabel}.
 
             Thông tin đăng nhập:
@@ -99,7 +99,7 @@ public static class InvitationEmailTemplate
               <p>{WebUtility.HtmlEncode(greeting)}</p>
               <p>
                 <strong>{WebUtility.HtmlEncode(institution)}</strong> trân trọng mời bạn tham gia
-                <strong>Hệ thống Quản lý Thực tập InternLink</strong>
+                <strong>Hệ thống Quản lý Thực tập {WebUtility.HtmlEncode(settings.AppName)}</strong>
                 với vai trò <strong>{WebUtility.HtmlEncode(roleLabel)}</strong>.
               </p>
               <p><strong>Thông tin đăng nhập:</strong></p>

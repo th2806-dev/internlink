@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowDown,
   ArrowUp,
+  ChevronDown,
+  ChevronRight,
   ClipboardList,
   Columns3,
   FileSliders,
@@ -21,6 +23,7 @@ import {
 import { CompactActionBar } from "../../../components/common/CompactActionBar";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { systemService } from "../../../services/system.service";
+import { PLATFORM_PAGE_CONTENT_CLASS, PlatformPageHeader } from "../components/PlatformPageHeader";
 import type { SaveSysFunction, SysFunction } from "../../../types/system";
 
 type ToastHandler = (message: string, type?: "primary" | "success" | "warning" | "danger" | "info") => void;
@@ -95,6 +98,15 @@ function findFunction(items: SysFunction[], id: string): SysFunction | undefined
   return undefined;
 }
 
+function findAncestorIds(items: SysFunction[], targetId: string, ancestors: string[] = []): string[] {
+  for (const item of items) {
+    if (item.id === targetId) return ancestors;
+    const result = findAncestorIds(item.children, targetId, [...ancestors, item.id]);
+    if (result.length) return result;
+  }
+  return [];
+}
+
 function collectDescendantIds(item: SysFunction): Set<string> {
   return new Set([item.id, ...item.children.flatMap((child) => [...collectDescendantIds(child)])]);
 }
@@ -148,6 +160,7 @@ export function SysFunctionsManagerView({
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
   const [draft, setDraft] = useState<SaveSysFunction>(EMPTY_DRAFT);
   const treeQuery = useQuery({
     queryKey: ["system-functions", "tree"],
@@ -185,6 +198,18 @@ export function SysFunctionsManagerView({
       isExport: selected.isExport,
     });
   }, [isCreating, selected]);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    const ancestors = findAncestorIds(tree, selectedId);
+    if (!ancestors.length) return;
+
+    setExpandedIds((current) => {
+      const next = new Set(current);
+      ancestors.forEach((id) => next.add(id));
+      return next.size === current.size ? current : next;
+    });
+  }, [selectedId, tree]);
 
   const refreshTree = () =>
     queryClient.invalidateQueries({ queryKey: ["system-functions", "tree"] });
@@ -251,6 +276,26 @@ export function SysFunctionsManagerView({
         }`}
         style={{ marginLeft: depth * 14 }}
       >
+        {item.children.length > 0 ? (
+          <button
+            type="button"
+            aria-label={`${expandedIds.has(item.id) ? "Thu gọn" : "Mở"} nhóm ${item.name}`}
+            aria-expanded={expandedIds.has(item.id)}
+            onClick={() => setExpandedIds((current) => {
+              const next = new Set(current);
+              if (next.has(item.id)) next.delete(item.id);
+              else next.add(item.id);
+              return next;
+            })}
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[4px] text-slate-500 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]"
+          >
+            {expandedIds.has(item.id)
+              ? <ChevronDown aria-hidden="true" className="h-4 w-4" />
+              : <ChevronRight aria-hidden="true" className="h-4 w-4" />}
+          </button>
+        ) : (
+          <span aria-hidden="true" className="w-7 shrink-0" />
+        )}
         <button
           type="button"
           onClick={() => {
@@ -290,7 +335,7 @@ export function SysFunctionsManagerView({
           <ArrowDown aria-hidden="true" className="h-4 w-4" />
         </button>
       </div>
-      {item.children.length > 0 && (
+      {item.children.length > 0 && expandedIds.has(item.id) && (
         <ul className="mt-1 space-y-1">
           {item.children.map((child) => renderNode(child, depth + 1))}
         </ul>
@@ -304,13 +349,22 @@ export function SysFunctionsManagerView({
   const selectedIcon = ICONS[draft.iconName as keyof typeof ICONS] ?? Folder;
 
   return (
-    <div className="w-full space-y-1.5 animate-in fade-in duration-200 font-sans pb-12">
+    <div className="min-h-full w-full bg-slate-50 pb-12 font-sans">
+      <PlatformPageHeader
+        title="Quản lý chức năng hệ thống"
+        description="Tổ chức cây chức năng, liên kết màn hình và điều chỉnh quyền khả dụng."
+        breadcrumbs={[
+          { label: "Quản trị nền tảng", href: "/admin/dashboard" },
+          { label: "Quản trị & tuân thủ" },
+          { label: "Chức năng hệ thống" },
+        ]}
+        statistic={`${flattened.length} chức năng`}
+      />
       <CompactActionBar
         icon={Settings}
-        title="Danh mục Chức năng Hệ thống (F1001)"
+        title="Chức năng hệ thống"
         subtitle="Tổ chức cây chức năng, liên kết màn hình và điều chỉnh quyền khả dụng."
-        badge="FUNCTION STUDIO"
-        badgeColor="border-[#026aa7]/20 bg-[#026aa7]/5 text-[#026aa7]"
+        hideTitle
       >
         <button type="button" onClick={startCreate} className="inline-flex h-8 items-center gap-2 rounded-[4px] bg-[#026aa7] px-3 text-xs font-semibold text-white hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7]">
           <Plus aria-hidden="true" className="h-4 w-4" />
@@ -327,16 +381,35 @@ export function SysFunctionsManagerView({
         </button>
       </CompactActionBar>
 
+      <main className={PLATFORM_PAGE_CONTENT_CLASS}>
       <div className="grid gap-2 xl:grid-cols-[minmax(0,3fr)_minmax(360px,2fr)]">
-        <section className="space-y-2 rounded-md border border-slate-200 bg-white p-3" aria-label="Cây chức năng">
+        <section className="flex min-h-0 flex-col space-y-2 rounded-md border border-slate-200 bg-white p-3 shadow-sm xl:h-[calc(100dvh-150px)]" aria-label="Cây chức năng">
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="text-sm font-bold text-slate-800">Cây chức năng</h2>
               <p className="mt-1 text-xs text-slate-500">Dùng nút lên/xuống để sắp xếp; chọn chức năng để chỉnh sửa.</p>
             </div>
-            <span className="rounded-[3px] border border-slate-200 bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-600">
-              {flattened.length} mục
-            </span>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <span className="rounded-[3px] border border-slate-200 bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-600">
+                {flattened.length} mục
+              </span>
+              <button
+                type="button"
+                onClick={() => setExpandedIds(new Set(flattened.filter((item) => item.children.length).map((item) => item.id)))}
+                disabled={!flattened.some((item) => item.children.length)}
+                className="h-7 rounded-[4px] border border-slate-200 px-2 text-[11px] font-semibold text-slate-600 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] disabled:opacity-50"
+              >
+                Mở tất cả
+              </button>
+              <button
+                type="button"
+                onClick={() => setExpandedIds(new Set())}
+                disabled={expandedIds.size === 0}
+                className="h-7 rounded-[4px] border border-slate-200 px-2 text-[11px] font-semibold text-slate-600 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] disabled:opacity-50"
+              >
+                Thu gọn
+              </button>
+            </div>
           </div>
           {treeQuery.isPending ? (
             <p role="status" className="py-12 text-center text-xs text-slate-500">Đang tải cây chức năng...</p>
@@ -351,11 +424,13 @@ export function SysFunctionsManagerView({
               <p className="mt-1 text-[11px] text-slate-500">Thêm chức năng đầu tiên để bắt đầu cấu hình menu.</p>
             </div>
           ) : (
-            <ul className="space-y-1">{tree.map((item) => renderNode(item))}</ul>
+            <ul aria-label="Danh sách chức năng" className="min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain pr-1">
+              {tree.map((item) => renderNode(item))}
+            </ul>
           )}
         </section>
 
-        <section className="space-y-2 rounded-md border border-slate-200 bg-white p-3" aria-label="Chi tiết chức năng">
+        <section className="space-y-2 rounded-md border border-slate-200 bg-white p-3 shadow-sm xl:max-h-[calc(100dvh-150px)] xl:overflow-y-auto" aria-label="Chi tiết chức năng">
           <div className="flex items-start justify-between gap-3">
             <div>
               <h2 className="text-sm font-bold text-slate-800">
@@ -557,6 +632,7 @@ export function SysFunctionsManagerView({
           )}
         </section>
       </div>
+      </main>
     </div>
   );
 }

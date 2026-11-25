@@ -16,18 +16,52 @@ public class JwtService : IJwtService
         _settings = settings.Value;
     }
 
-    public string CreateToken(string userId, IEnumerable<string>? roles = null, Guid? departmentId = null)
+    public string CreateToken(
+        string userId,
+        IEnumerable<string>? roles = null,
+        Guid? departmentId = null,
+        Guid? tenantId = null)
     {
-        return CreateTokenWithMetadata(userId, roles, departmentId).Token;
+        return CreateTokenWithMetadata(userId, roles, departmentId, tenantId).Token;
     }
 
-    public (string Token, string JwtId, DateTime ExpiresAt) CreateTokenWithMetadata(string userId, IEnumerable<string>? roles = null, Guid? departmentId = null)
+    public (string Token, string JwtId, DateTime ExpiresAt) CreateTokenWithMetadata(
+        string userId,
+        IEnumerable<string>? roles = null,
+        Guid? departmentId = null,
+        Guid? tenantId = null)
     {
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_settings.Secret ?? string.Empty));
-        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
         var jwtId = Guid.NewGuid().ToString();
         var expiresAt = DateTime.UtcNow.AddMinutes(_settings.ExpiresInMinutes > 0 ? _settings.ExpiresInMinutes : 60);
+        var claims = CreateBaseClaims(userId, jwtId, roles, departmentId, tenantId);
+        return (CreateSignedToken(claims, expiresAt), jwtId, expiresAt);
+    }
 
+    public (string Token, DateTime ExpiresAt) CreateTenantImpersonationToken(
+        string userId,
+        Guid tenantId,
+        Guid sessionId)
+    {
+        var jwtId = Guid.NewGuid().ToString();
+        var expiresAt = DateTime.UtcNow.AddMinutes(30);
+        var claims = CreateBaseClaims(
+            userId,
+            jwtId,
+            new[] { "DepartmentAdmin" },
+            departmentId: null,
+            tenantId);
+        claims.Add(new Claim("is_impersonating", "true"));
+        claims.Add(new Claim("impersonation_session_id", sessionId.ToString()));
+        return (CreateSignedToken(claims, expiresAt), expiresAt);
+    }
+
+    private List<Claim> CreateBaseClaims(
+        string userId,
+        string jwtId,
+        IEnumerable<string>? roles,
+        Guid? departmentId,
+        Guid? tenantId)
+    {
         var claims = new List<Claim>
         {
             new(JwtRegisteredClaimNames.Sub, userId),
@@ -36,15 +70,21 @@ public class JwtService : IJwtService
         };
 
         if (roles != null)
-        {
-            claims.AddRange(roles.Select(r => new Claim(ClaimTypes.Role, r)));
-        }
+            claims.AddRange(roles.Select(role => new Claim(ClaimTypes.Role, role)));
 
-        // Department-based scoping claim
         if (departmentId.HasValue)
-        {
             claims.Add(new Claim("DepartmentId", departmentId.Value.ToString()));
-        }
+
+        if (tenantId.HasValue)
+            claims.Add(new Claim("tenant_id", tenantId.Value.ToString()));
+
+        return claims;
+    }
+
+    private string CreateSignedToken(IEnumerable<Claim> claims, DateTime expiresAt)
+    {
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_settings.Secret ?? string.Empty));
+        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
         var token = new JwtSecurityToken(
             issuer: _settings.Issuer,
@@ -52,9 +92,7 @@ public class JwtService : IJwtService
             claims: claims,
             expires: expiresAt,
             signingCredentials: creds);
-
-        var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
-        return (tokenString, jwtId, expiresAt);
+        return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
     public ClaimsPrincipal? GetPrincipalFromExpiredToken(string token)

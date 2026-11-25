@@ -134,6 +134,7 @@ if (builder.Configuration.GetValue<bool>("Security:EnforceHttps", false))
 
 // 4. Authentication & Authorization cho API
 app.UseAuthentication();
+app.UseMiddleware<InternLink.API.Middlewares.TenantResolutionMiddleware>();
 app.UseAuthorization();
 app.UseMiddleware<InternLink.API.Middleware.StudentArchiveReadOnlyMiddleware>();
 
@@ -143,5 +144,22 @@ app.MapCustomHealthChecks();
 app.MapFallbackToFile("index.html");
 
 await app.MigrateAndSeedDatabaseAsync();
+
+await app.Services.GetRequiredService<InternLink.Application.Interfaces.ISystemJobScheduleManager>()
+    .SynchronizeDatabaseBackupScheduleAsync(CancellationToken.None);
+
+var recurringJobs = app.Services.GetRequiredService<Hangfire.IRecurringJobManager>();
+recurringJobs.AddOrUpdate(
+    "tenant-license-expiry-reminders",
+    Hangfire.Common.Job.FromExpression<InternLink.Infrastructure.Services.TenantLicenseMonitoringJobs>(
+        job => job.ScanExpiringLicensesAsync(CancellationToken.None)),
+    Hangfire.Cron.Daily(2),
+    new Hangfire.RecurringJobOptions());
+recurringJobs.AddOrUpdate(
+    "tenant-license-quota-alerts",
+    Hangfire.Common.Job.FromExpression<InternLink.Infrastructure.Services.TenantLicenseMonitoringJobs>(
+        job => job.ScanQuotaUsageAsync(CancellationToken.None)),
+    Hangfire.Cron.Daily(3),
+    new Hangfire.RecurringJobOptions());
 
 app.Run();

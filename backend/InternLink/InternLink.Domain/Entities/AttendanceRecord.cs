@@ -2,8 +2,9 @@ using InternLink.Domain.Enums;
 
 namespace InternLink.Domain.Entities;
 
-public class AttendanceRecord : BaseEntity
+public class AttendanceRecord : BaseEntity, ITenantScoped
 {
+    public Guid TenantId { get; set; }
     public Guid AttendanceSessionId { get; set; }
     public AttendanceSession AttendanceSession { get; set; } = null!;
 

@@ -35,6 +35,7 @@
 | File | Nội dung |
 |:---|:---|
 | [`INTERNLINK_COMMERCIAL_MASTER_BLUEPRINT.md`](INTERNLINK_COMMERCIAL_MASTER_BLUEPRINT.md) | **[KIM CHỈ NAM]** Chiến lược thương mại hóa B2B SaaS ngách Quản trị Thực tập Đại học/Cao đẳng, Tam giác giá trị & Lộ trình 4 giai đoạn |
+| [`PLAN_SUPERADMIN_LEVEL0_FINAL_UPGRADE.md`](PLAN_SUPERADMIN_LEVEL0_FINAL_UPGRADE.md) | Kế hoạch bàn giao hoàn tất SuperAdmin Cấp 0, cổng nghiệm thu và lộ trình tiếp nối Cấp 1–2 |
 | [`UI_REFACTOR_MASTER_PLAN.md`](UI_REFACTOR_MASTER_PLAN.md) | **[KẾ HOẠCH REFACTOR]** Kế hoạch chi tiết chuẩn hóa 100% UI theo UI Design System V2.0, xóa bỏ mã màu cấm và chuẩn hóa container |
 | [`SPRINT_COMM_2_MASTER_SPECIFICATION.md`](SPRINT_COMM_2_MASTER_SPECIFICATION.md) | **[SPRINT COMM-2]** Đặc tả kiến trúc & Kế hoạch triển khai khép kín vòng đời thực tập: Tiếp nhận DN (Magic Link), Cổng xác thực (/verify), SignalR Notification |
 | [`TKS_ENTERPRISE_SYNTHESIS_AND_INTERNLINK_ROADMAP.md`](TKS_ENTERPRISE_SYNTHESIS_AND_INTERNLINK_ROADMAP.md) | Phân tích chuyên sâu & trích lọc tinh hoa kiến trúc ERP/WMS thực tế từ doanh nghiệp TKSolution cho InternLink |

@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SysFunctionsManagerView } from "../features/admin/pages/SysFunctionsManagerView";
 import { systemService } from "../services/system.service";
@@ -53,8 +54,14 @@ describe("SysFunctionsManagerView", () => {
 
     renderView(<SysFunctionsManagerView onShowToast={vi.fn()} />);
     expect(await screen.findByRole("heading", {
-      name: "Danh mục Chức năng Hệ thống (F1001)",
+      name: "Quản lý chức năng hệ thống",
     })).toBeInTheDocument();
+    expect(screen.queryByText("F1001")).not.toBeInTheDocument();
+    const expandSystemGroup = await screen.findByRole("button", {
+      name: "Mở nhóm Hệ thống",
+    });
+    expect(expandSystemGroup).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(expandSystemGroup);
     const functionCode = await screen.findByText("SYSTEM.PERMISSIONS");
     fireEvent.click(functionCode.closest("button")!);
 
@@ -84,5 +91,9 @@ function renderView(ui: React.ReactNode) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+  return render(
+    <MemoryRouter>
+      <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
+    </MemoryRouter>,
+  );
 }

@@ -1,7 +1,8 @@
 namespace InternLink.Domain.Entities.Rbac;
 
-public class SysUser : BaseEntity
+public class SysUser : BaseEntity, ITenantScoped
 {
+    public Guid TenantId { get; set; }
     public string UserName { get; set; } = null!;
     public string? DisplayName { get; set; }
     public bool IsActive { get; set; } = true;

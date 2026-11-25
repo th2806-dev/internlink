@@ -3,8 +3,9 @@ using InternLink.Domain.Enums;
 
 namespace InternLink.Domain.Entities;
 
-public class Semester : BaseEntity, IDepartmentScoped
+public class Semester : BaseEntity, ITenantScoped, IDepartmentScoped
 {
+    public Guid TenantId { get; set; }
     public string Name { get; set; } = null!;
     public string Term { get; set; } = null!; // "Học kỳ I", "Học kỳ II", "Học kỳ Hè"
     public string AcademicYear { get; set; } = null!; // "2025 - 2026"

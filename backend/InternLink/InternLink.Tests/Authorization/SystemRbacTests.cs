@@ -40,15 +40,101 @@ public class SystemRbacTests
         var studentView = await context.SysFunctions.SingleAsync(function => function.Code == "STUDENTS.VIEW");
         var superAdminStudentView = await context.SysRolePermissions.SingleAsync(permission =>
             permission.SysRoleId == superAdmin.AutoId && permission.SysFunctionId == studentView.AutoId);
-        superAdminStudentView.IsGranted = false;
+        superAdminStudentView.IsGranted.Should().BeFalse();
         await context.SaveChangesAsync();
         await SystemRbacSeeder.SeedAsync(context);
-        superAdminStudentView.IsGranted.Should().BeTrue();
+        superAdminStudentView.IsGranted.Should().BeFalse();
+        (await context.SysRolePermissions
+            .Where(permission => permission.SysRoleId == superAdmin.AutoId && permission.IsGranted)
+            .Join(context.SysFunctions, permission => permission.SysFunctionId, function => function.AutoId,
+                (_, function) => function.ModuleCode)
+            .Distinct()
+            .ToArrayAsync())
+            .Should().BeSubsetOf(new[]
+            {
+                "DASHBOARD", "SYSTEM", "ACCOUNTS", "AUDIT", "TENANTS", "LICENSES",
+                "API_GATEWAY", "OBSERVABILITY", "SSO_HUB", "COMPLIANCE", "BILLING",
+                "ANNOUNCEMENTS", "SECURITY_SESSIONS"
+            });
 
-        (await context.SysFunctions.CountAsync(function => function.ParentId == null)).Should().Be(21);
-        (await context.SysFunctions.CountAsync(function => function.IsAction)).Should().Be(174);
+        (await context.SysFunctions.CountAsync(function => function.ParentId == null)).Should().Be(30);
+        (await context.SysFunctions.CountAsync(function => function.IsAction)).Should().Be(246);
+        var tenantMenuItem = await context.SysFunctions.SingleAsync(function => function.Code == "F1010");
+        tenantMenuItem.ModuleCode.Should().Be("TENANTS");
+        tenantMenuItem.FuncUrl.Should().Be("/admin/tenants");
+        tenantMenuItem.IconName.Should().Be("Building2");
+        var licenseMenuItem = await context.SysFunctions.SingleAsync(function => function.Code == "F1011");
+        licenseMenuItem.ModuleCode.Should().Be("LICENSES");
+        licenseMenuItem.FuncUrl.Should().Be("/admin/licenses");
+        licenseMenuItem.IconName.Should().Be("Award");
+        (await context.SysFunctions
+            .Where(function => (function.ModuleCode == "TENANTS" || function.ModuleCode == "LICENSES")
+                && function.IsAction)
+            .Select(function => function.Code)
+            .ToArrayAsync())
+            .Should().BeEquivalentTo(
+                "TENANTS.VIEW", "TENANTS.CREATE", "TENANTS.UPDATE", "TENANTS.DELETE",
+                "TENANTS.EXPORT", "TENANTS.IMPORT", "TENANTS.APPROVE", "TENANTS.LOCK",
+                "LICENSES.VIEW", "LICENSES.CREATE", "LICENSES.UPDATE", "LICENSES.DELETE",
+                "LICENSES.EXPORT", "LICENSES.IMPORT", "LICENSES.APPROVE", "LICENSES.LOCK");
+        var tenantActionIds = await context.SysFunctions
+            .Where(function => (function.ModuleCode == "TENANTS" || function.ModuleCode == "LICENSES")
+                && function.IsAction)
+            .Select(function => function.AutoId)
+            .ToArrayAsync();
+        (await context.SysRolePermissions.CountAsync(permission =>
+            permission.SysRoleId == superAdmin.AutoId
+            && tenantActionIds.Contains(permission.SysFunctionId)
+            && permission.IsGranted)).Should().Be(16);
+        var gatewayActionCodes = await context.SysFunctions
+            .Where(function => (function.ModuleCode == "API_GATEWAY" || function.ModuleCode == "OBSERVABILITY")
+                && function.IsAction)
+            .Select(function => function.Code)
+            .ToArrayAsync();
+        gatewayActionCodes.Should().BeEquivalentTo(
+            "API_GATEWAY.VIEW", "API_GATEWAY.CREATE", "API_GATEWAY.UPDATE", "API_GATEWAY.DELETE",
+            "API_GATEWAY.EXPORT", "API_GATEWAY.IMPORT", "API_GATEWAY.APPROVE", "API_GATEWAY.LOCK",
+            "OBSERVABILITY.VIEW", "OBSERVABILITY.CREATE", "OBSERVABILITY.UPDATE", "OBSERVABILITY.DELETE",
+            "OBSERVABILITY.EXPORT", "OBSERVABILITY.IMPORT", "OBSERVABILITY.APPROVE", "OBSERVABILITY.LOCK");
+        var gatewayActionIds = await context.SysFunctions
+            .Where(function => (function.ModuleCode == "API_GATEWAY" || function.ModuleCode == "OBSERVABILITY")
+                && function.IsAction)
+            .Select(function => function.AutoId)
+            .ToArrayAsync();
+        (await context.SysRolePermissions.CountAsync(permission =>
+            permission.SysRoleId == superAdmin.AutoId
+            && gatewayActionIds.Contains(permission.SysFunctionId)
+            && permission.IsGranted)).Should().Be(16);
+        var ssoMenuItem = await context.SysFunctions.SingleAsync(function => function.Code == "F1012");
+        ssoMenuItem.ModuleCode.Should().Be("SSO_HUB");
+        ssoMenuItem.FuncUrl.Should().Be("/admin/sso-hub");
+        var complianceMenuItem = await context.SysFunctions.SingleAsync(function => function.Code == "F1015");
+        complianceMenuItem.ModuleCode.Should().Be("COMPLIANCE");
+        complianceMenuItem.FuncUrl.Should().Be("/admin/compliance");
+        var complianceActionIds = await context.SysFunctions
+            .Where(function => (function.ModuleCode == "SSO_HUB" || function.ModuleCode == "COMPLIANCE")
+                && function.IsAction)
+            .Select(function => function.AutoId)
+            .ToArrayAsync();
+        (await context.SysRolePermissions.CountAsync(permission =>
+            permission.SysRoleId == superAdmin.AutoId
+            && complianceActionIds.Contains(permission.SysFunctionId)
+            && permission.IsGranted)).Should().Be(16);
+        (await context.SysDataRetentionPolicies.SingleAsync(policy => policy.Code == "WEEKLY_REPORT"))
+            .RetentionYears.Should().Be(3);
+        (await context.SysDataRetentionPolicies.SingleAsync(policy => policy.Code == "INTERNSHIP_EVALUATION"))
+            .RetentionYears.Should().Be(5);
+        (await context.SysDataRetentionPolicies.SingleAsync(policy => policy.Code == "STUDENT_PII"))
+            .RetentionYears.Should().Be(3);
         (await context.SysFunctions.SingleAsync(function => function.Code == "SYSTEM.PERMISSIONS"))
             .Description.Should().Be("PHÂN QUYỀN F1005");
+        var functionManager = await context.SysFunctions.SingleAsync(function =>
+            function.Code == "SYSTEM.FUNCTIONS");
+        functionManager.FuncUrl.Should().Be("/admin/functions");
+        functionManager.IsVisibleInMenu.Should().BeTrue();
+        (await context.SysRolePermissions.SingleAsync(permission =>
+            permission.SysRoleId == superAdmin.AutoId && permission.SysFunctionId == functionManager.AutoId))
+            .IsGranted.Should().BeTrue();
         (await context.SysFunctions
             .Where(function => function.ModuleCode == "LECTURER" && function.IsAction)
             .Select(function => function.Code)
@@ -102,7 +188,8 @@ public class SystemRbacTests
             .Should().Be(7);
 
         var gridMenuItem = await context.SysFunctions.SingleAsync(function => function.Code == "CONFIG.GRID");
-        gridMenuItem.FuncUrl.Should().Be("/admin/config/grid");
+        gridMenuItem.FuncUrl.Should().BeNull();
+        gridMenuItem.IsVisibleInMenu.Should().BeFalse();
         gridMenuItem.IconName.Should().Be("Columns3");
         gridMenuItem.IsVisibleInMenu = false;
         gridMenuItem.Name = "Bảng cấu hình riêng";
@@ -121,8 +208,8 @@ public class SystemRbacTests
         var persistedGridMenuItem = await context.SysFunctions.SingleAsync(function =>
             function.Code == "CONFIG.GRID");
         persistedGridMenuItem.IsVisibleInMenu.Should().BeFalse();
-        persistedGridMenuItem.Name.Should().Be("Bảng cấu hình riêng");
-        persistedGridMenuItem.FuncUrl.Should().Be("/admin/custom-grid");
+        persistedGridMenuItem.Name.Should().Be("Cấu hình bảng");
+        persistedGridMenuItem.FuncUrl.Should().BeNull();
         persistedGridMenuItem.IconName.Should().Be("Star");
         var persistedStudentCodePolicy = await context.SysFieldPolicies.SingleAsync(policy =>
             policy.FormCode == "FORM_STUDENT_PROFILE" && policy.FieldKey == "StudentCode");
@@ -179,6 +266,65 @@ public class SystemRbacTests
         visibleMenu.Should().Contain(item => item.FuncUrl == "/admin/companies");
         visibleMenu.Single(item => item.Code == "STUDENTS").GroupName
             .Should().Be("GIAI ĐOẠN 1 · CHUẨN BỊ KỲ");
+    }
+
+    [Fact]
+    public async Task GetMyMenu_KeepsSuperAdminOnPlatformModulesAndDepartmentAdminOnOperations()
+    {
+        await using var context = CreateContext();
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            Username = "platform-admin",
+            PasswordHash = "hash",
+            Role = Role.SuperAdmin
+        };
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+        await SystemRbacSeeder.SeedAsync(context);
+
+        var controller = new SysFunctionsController(context, new SysFunctionService(context));
+        controller.ControllerContext = CreateMenuControllerContext(user.PublicId, nameof(Role.SuperAdmin));
+
+        var menu = GetMenu(await controller.GetMyMenu(CancellationToken.None));
+        var routes = menu.Where(item => !string.IsNullOrWhiteSpace(item.FuncUrl))
+            .Select(item => item.FuncUrl)
+            .ToArray();
+
+        routes.Should().Contain(
+            "/admin/dashboard",
+            "/admin/announcements",
+            "/admin/tenants",
+            "/admin/licenses",
+            "/admin/settings",
+            "/admin/sso-hub",
+            "/admin/api-gateway",
+            "/admin/observability",
+            "/admin/security/sessions",
+            "/admin/billing",
+            "/admin/compliance",
+            "/admin/logs/audit",
+            "/admin/system/permissions",
+            "/admin/users");
+        menu.Single(item => item.FuncUrl == "/admin/settings").Name
+            .Should().Be("Cài đặt hệ thống & thương hiệu");
+        routes.Should().NotContain(
+            "/admin/departments",
+            "/admin/functions",
+            "/admin/backups",
+            "/admin/config/grid",
+            "/admin/config/field-policies",
+            "/admin/config/grading-rules",
+            "/admin/config/import-excel",
+            "/admin/semesters",
+            "/admin/students",
+            "/admin/lecturers",
+            "/admin/companies",
+            "/admin/assignments",
+            "/admin/report-archive",
+            "/admin/attendance",
+            "/admin/summary",
+            "/admin/templates");
     }
 
     [Fact]
@@ -262,6 +408,83 @@ public class SystemRbacTests
     }
 
     [Fact]
+    public async Task SavePermissions_SuperAdminCannotGrantOperationalModules()
+    {
+        await using var context = CreateContext();
+        await SystemRbacSeeder.SeedAsync(context);
+
+        var superAdmin = await context.SysRoles.SingleAsync(role => role.Code == nameof(Role.SuperAdmin));
+        var moduleCodes = await context.SysFunctions
+            .Where(function => function.IsActive && function.ParentId == null)
+            .Select(function => function.ModuleCode)
+            .Distinct()
+            .ToArrayAsync();
+        var matrix = moduleCodes.Select(moduleCode =>
+            new SaveSysRolePermissionMatrixRowDto(
+                moduleCode, true, true, true, true, true, true, true, true, true))
+            .ToArray();
+
+        var result = await new SysRolesController(context)
+            .SavePermissions(superAdmin.AutoId, matrix, CancellationToken.None);
+
+        result.Should().BeOfType<OkObjectResult>();
+        (await IsPermissionGrantedAsync(context, superAdmin.AutoId, "STUDENTS.VIEW")).Should().BeFalse();
+        (await IsPermissionGrantedAsync(context, superAdmin.AutoId, "SEMESTERS.DELETE")).Should().BeFalse();
+        (await IsPermissionGrantedAsync(context, superAdmin.AutoId, "TENANTS.VIEW")).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ResetPermissions_SuperAdminRestoresPlatformOnlyGrants()
+    {
+        await using var context = CreateContext();
+        await SystemRbacSeeder.SeedAsync(context);
+
+        var superAdmin = await context.SysRoles.SingleAsync(role => role.Code == nameof(Role.SuperAdmin));
+        var studentView = await context.SysFunctions.SingleAsync(function => function.Code == "STUDENTS.VIEW");
+        var tenantView = await context.SysFunctions.SingleAsync(function => function.Code == "TENANTS.VIEW");
+        var studentPermission = await context.SysRolePermissions.SingleAsync(permission =>
+            permission.SysRoleId == superAdmin.AutoId && permission.SysFunctionId == studentView.AutoId);
+        var tenantPermission = await context.SysRolePermissions.SingleAsync(permission =>
+            permission.SysRoleId == superAdmin.AutoId && permission.SysFunctionId == tenantView.AutoId);
+        studentPermission.IsGranted = true;
+        tenantPermission.IsGranted = false;
+        await context.SaveChangesAsync();
+
+        var result = await new SysRolesController(context)
+            .ResetPermissions(superAdmin.AutoId, CancellationToken.None);
+
+        result.Should().BeOfType<OkObjectResult>();
+        (await IsPermissionGrantedAsync(context, superAdmin.AutoId, "STUDENTS.VIEW")).Should().BeFalse();
+        (await IsPermissionGrantedAsync(context, superAdmin.AutoId, "TENANTS.VIEW")).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ResetPermissions_DepartmentAdminRetainsOperationalGrantsOnly()
+    {
+        await using var context = CreateContext();
+        await SystemRbacSeeder.SeedAsync(context);
+
+        var departmentAdmin = await context.SysRoles.SingleAsync(role =>
+            role.Code == nameof(Role.DepartmentAdmin));
+        var systemView = await context.SysFunctions.SingleAsync(function => function.Code == "SYSTEM.VIEW");
+        var studentView = await context.SysFunctions.SingleAsync(function => function.Code == "STUDENTS.VIEW");
+        var systemPermission = await context.SysRolePermissions.SingleAsync(permission =>
+            permission.SysRoleId == departmentAdmin.AutoId && permission.SysFunctionId == systemView.AutoId);
+        var studentPermission = await context.SysRolePermissions.SingleAsync(permission =>
+            permission.SysRoleId == departmentAdmin.AutoId && permission.SysFunctionId == studentView.AutoId);
+        systemPermission.IsGranted = true;
+        studentPermission.IsGranted = false;
+        await context.SaveChangesAsync();
+
+        var result = await new SysRolesController(context)
+            .ResetPermissions(departmentAdmin.AutoId, CancellationToken.None);
+
+        result.Should().BeOfType<OkObjectResult>();
+        (await IsPermissionGrantedAsync(context, departmentAdmin.AutoId, "SYSTEM.VIEW")).Should().BeFalse();
+        (await IsPermissionGrantedAsync(context, departmentAdmin.AutoId, "STUDENTS.VIEW")).Should().BeTrue();
+    }
+
+    [Fact]
     public async Task PermissionAuthorizationHandler_GrantsOperationalPermissionsAndDeniesPlatformImportForDepartmentAdmin()
     {
         await using var context = CreateContext();
@@ -304,6 +527,11 @@ public class SystemRbacTests
         await handler.HandleAsync(adminContext);
         adminContext.HasSucceeded.Should().BeTrue();
 
+        var studentViewRequirement = new PermissionRequirement("STUDENTS.VIEW");
+        var adminStudentViewContext = CreateAuthorizationContext(admin.Id, studentViewRequirement);
+        await handler.HandleAsync(adminStudentViewContext);
+        adminStudentViewContext.HasSucceeded.Should().BeFalse();
+
         var studentContext = CreateAuthorizationContext(student.Id, requirement);
         await handler.HandleAsync(studentContext);
         studentContext.HasSucceeded.Should().BeFalse();
@@ -318,6 +546,10 @@ public class SystemRbacTests
         studentExportContext.HasSucceeded.Should().BeFalse();
 
         var excelImportRequirement = new PermissionRequirement(SystemPermissionCodes.ExcelImport);
+        var superAdminImportContext = CreateAuthorizationContext(admin.Id, excelImportRequirement);
+        await handler.HandleAsync(superAdminImportContext);
+        superAdminImportContext.HasSucceeded.Should().BeFalse();
+
         var departmentAdminContext = CreateAuthorizationContext(departmentAdmin.Id, excelImportRequirement);
         await handler.HandleAsync(departmentAdminContext);
         departmentAdminContext.HasSucceeded.Should().BeFalse();
@@ -348,6 +580,14 @@ public class SystemRbacTests
             .Options;
         return new AppDbContext(options);
     }
+
+    private static Task<bool> IsPermissionGrantedAsync(AppDbContext context, long roleId, string functionCode) =>
+        context.SysRolePermissions
+            .Join(context.SysFunctions, permission => permission.SysFunctionId, function => function.AutoId,
+                (permission, function) => new { permission.SysRoleId, permission.IsGranted, function.Code })
+            .Where(item => item.SysRoleId == roleId && item.Code == functionCode)
+            .Select(item => item.IsGranted)
+            .SingleAsync();
 
     private static AuthorizationHandlerContext CreateAuthorizationContext(
         Guid userId,

@@ -1,8 +1,102 @@
 @import "tailwindcss";
 @import "./styles/designTokens.css";
 
+html,
+body,
+#root {
+  height: 100%;
+  min-height: 100%;
+  overflow: hidden;
+}
+
+.admin-main-scroll {
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+}
+
 @theme {
   --font-sans: "Be Vietnam Pro", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
   --font-display: "Montserrat", "Space Grotesk", sans-serif;
   --font-mono: "JetBrains Mono", monospace;
+}
+
+@page billing-statement {
+  size: A4 portrait;
+  margin: 10mm;
+}
+
+@media print {
+  html,
+  body {
+    width: 100%;
+    height: auto !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    background: white !important;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  #printable-billing-statement,
+  #printable-billing-statement * {
+    visibility: visible !important;
+  }
+
+  .billing-print-overlay {
+    position: fixed !important;
+    inset: 0 !important;
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    background: white !important;
+    z-index: 99999 !important;
+  }
+
+  .billing-print-overlay > section {
+    width: 190mm !important;
+    max-width: 190mm !important;
+    max-height: none !important;
+    overflow: visible !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  #printable-billing-statement {
+    page: billing-statement;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    box-sizing: border-box !important;
+    width: 190mm !important;
+    max-width: 190mm !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    color: #111827 !important;
+    font-size: 9pt !important;
+  }
+
+  #printable-billing-statement .billing-print-no-print {
+    display: none !important;
+  }
+
+  #printable-billing-statement .billing-print-table th,
+  #printable-billing-statement .billing-print-table td {
+    padding: 1.5mm !important;
+  }
+
+  #printable-billing-statement .billing-print-payment,
+  #printable-billing-statement .billing-print-signatures {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
 }

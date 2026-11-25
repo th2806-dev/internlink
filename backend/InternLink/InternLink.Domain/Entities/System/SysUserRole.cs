@@ -1,7 +1,8 @@
 namespace InternLink.Domain.Entities.Rbac;
 
-public class SysUserRole : BaseEntity
+public class SysUserRole : BaseEntity, ITenantScoped
 {
+    public Guid TenantId { get; set; }
     public long SysUserId { get; set; }
     public SysUser User { get; set; } = null!;
 

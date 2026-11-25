@@ -1,8 +1,14 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { UserRound } from "lucide-react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ProfileStudioHeader, type ProfileStudioTab } from "../components/common/ProfileStudio";
+import {
+  ProfileAuditPanel,
+  ProfileStudioHeader,
+  type ProfileStudioTab,
+  type ProfileTabItem,
+} from "../components/common/ProfileStudio";
 import { AccountView as StudentAccountView } from "../features/student/pages/AccountView";
 import { authService } from "../services/auth.service";
 import { systemService } from "../services/system.service";
@@ -133,6 +139,79 @@ describe("Profile Studio", () => {
     expect(screen.getAllByRole("tab")).toHaveLength(3);
     fireEvent.click(screen.getByRole("tab", { name: "Nhật ký đăng nhập" }));
     expect(mocks.onTabChange).toHaveBeenCalledWith("login-history");
+  });
+
+  it("supports a customized two-tab profile navigation", () => {
+    const tabs: ProfileTabItem<"overview" | "login-history">[] = [
+      { id: "overview", label: "Tổng quan hồ sơ", icon: UserRound },
+      { id: "login-history", label: "Nhật ký đăng nhập & Thiết bị", icon: UserRound },
+    ];
+
+    render(
+      <ProfileStudioHeader
+        name="Nguyen Van A"
+        role="Quản trị khoa"
+        activeTab="overview"
+        onTabChange={mocks.onTabChange}
+        tabs={tabs}
+      />,
+    );
+
+    expect(screen.getAllByRole("tab")).toHaveLength(2);
+    expect(screen.queryByRole("tab", { name: /Lịch sử thao tác/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Nhật ký đăng nhập & Thiết bị" }));
+    expect(mocks.onTabChange).toHaveBeenCalledWith("login-history");
+  });
+
+  it("renders a custom profile banner image", () => {
+    const { container } = render(
+      <ProfileStudioHeader
+        name="Nguyen Van A"
+        role="Quản trị khoa"
+        activeTab="overview"
+        onTabChange={mocks.onTabChange}
+        bannerUrl="https://example.com/banner.jpg"
+      />,
+    );
+
+    expect(container.querySelector("img")).toHaveAttribute(
+      "src",
+      "https://example.com/banner.jpg",
+    );
+    expect(container.querySelector("img")).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("shows active devices and login history in the login-history tab", async () => {
+    vi.mocked(authService.getSessions).mockResolvedValue([
+      {
+        id: "session-1",
+        device: "Windows",
+        browser: "Chrome",
+        ip: "192.0.2.10",
+        location: "Hà Nội",
+        lastActive: "2026-11-20T08:30:00Z",
+        createdAt: "2026-11-20T08:00:00Z",
+        isCurrent: true,
+      },
+    ]);
+    vi.mocked(authService.getActivity).mockResolvedValue([
+      {
+        id: "activity-1",
+        module: "Tài khoản",
+        action: "Đăng nhập hệ thống",
+        ip: "192.0.2.10",
+        time: "2026-11-20T08:00:00Z",
+      },
+    ]);
+
+    renderWithQueryClient(<ProfileAuditPanel tab="login-history" userId="admin-1" />);
+
+    expect(await screen.findByText("Windows · Chrome")).toBeInTheDocument();
+    expect(screen.getByText("Phiên hiện tại")).toBeInTheDocument();
+    expect(screen.getByText(/Hoạt động gần nhất/)).toBeInTheDocument();
+    expect(screen.getByText("Đăng nhập hệ thống", { exact: false })).toBeInTheDocument();
+    expect(screen.getAllByText(/192\.0\.2\.10/)).toHaveLength(2);
+    expect(systemService.getMyMenu).not.toHaveBeenCalled();
   });
 
   it("keeps the existing password-change flow available in the overview", async () => {

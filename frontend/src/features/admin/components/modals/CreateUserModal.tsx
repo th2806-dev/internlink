@@ -239,7 +239,7 @@ export const CreateUserModal = ({
                 setForm((prev) => ({ ...prev, email: e.target.value }))
               }
               className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-medium text-slate-900 outline-none focus:bg-white focus:border-blue-500"
-              placeholder="user@hcmute.edu.vn"
+              placeholder="user@ten-truong.edu.vn"
             />
           </div>
 

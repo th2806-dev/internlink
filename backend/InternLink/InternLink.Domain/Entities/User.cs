@@ -3,8 +3,9 @@ using InternLink.Domain.Enums;
 
 namespace InternLink.Domain.Entities;
 
-public class User : BaseEntity, IDepartmentScoped
+public class User : BaseEntity, ITenantScoped, IDepartmentScoped
 {
+    public Guid TenantId { get; set; }
     public string Username { get; set; } = null!;
     public string PasswordHash { get; set; } = null!;
     public string? FullName { get; set; }

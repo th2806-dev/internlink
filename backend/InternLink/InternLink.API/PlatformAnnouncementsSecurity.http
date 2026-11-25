@@ -1,0 +1,47 @@
+@baseUrl = https://localhost:7109
+@accessToken = replace-with-authenticated-token
+@announcementId = 00000000-0000-0000-0000-000000000001
+@tokenId = 00000000-0000-0000-0000-000000000002
+@tenantId = 00000000-0000-0000-0000-000000000003
+@startsAt = 2026-11-24T02:00:00Z
+@endsAt = 2026-11-24T03:00:00Z
+
+### List announcements (SuperAdmin)
+GET {{baseUrl}}/api/v1/system/announcements?type=Maintenance
+Authorization: Bearer {{accessToken}}
+
+### Create a scheduled maintenance announcement (SuperAdmin)
+POST {{baseUrl}}/api/v1/system/announcements
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "title": "Bảo trì hệ thống",
+  "content": "Hệ thống sẽ tạm gián đoạn trong thời gian bảo trì đã thông báo.",
+  "type": "Maintenance",
+  "targetAudience": "AllUsers",
+  "targetTenantId": null,
+  "startsAt": "{{startsAt}}",
+  "endsAt": "{{endsAt}}",
+  "showBanner": true
+}
+
+### Get one announcement (SuperAdmin)
+GET {{baseUrl}}/api/v1/system/announcements/{{announcementId}}
+Authorization: Bearer {{accessToken}}
+
+### Toggle announcement broadcast status (SuperAdmin)
+PUT {{baseUrl}}/api/v1/system/announcements/{{announcementId}}/toggle
+Authorization: Bearer {{accessToken}}
+
+### Get active banners (any authenticated user; tenant/audience scoped)
+GET {{baseUrl}}/api/v1/system/announcements/active-banner
+Authorization: Bearer {{accessToken}}
+
+### List active administrator sessions (SuperAdmin)
+GET {{baseUrl}}/api/v1/system/security/active-sessions
+Authorization: Bearer {{accessToken}}
+
+### Revoke an administrator session (SuperAdmin)
+POST {{baseUrl}}/api/v1/system/security/sessions/{{tokenId}}/revoke
+Authorization: Bearer {{accessToken}}

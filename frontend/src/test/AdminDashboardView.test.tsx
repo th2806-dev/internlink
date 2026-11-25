@@ -4,6 +4,8 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { DashboardView } from "../features/admin/pages/DashboardView";
 
+const dashboardMocks = vi.hoisted(() => ({ isSuperAdmin: false }));
+
 vi.mock("../contexts/SemesterContext", () => ({
   toApiDepartmentId: (id?: string) => id,
   toApiSemesterId: (id?: string) => id,
@@ -43,7 +45,7 @@ vi.mock("../contexts/SemesterContext", () => ({
 
 vi.mock("../hooks/useAdminCapabilities", () => ({
   useAdminCapabilities: () => ({
-    isSuperAdmin: false,
+    isSuperAdmin: dashboardMocks.isSuperAdmin,
     roleDisplayLabel: "Quản trị khoa",
   }),
 }));
@@ -113,6 +115,7 @@ vi.mock("../features/admin/components/ActivityTimeline", () => ({
 describe("Admin dashboard chart modes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    dashboardMocks.isSuperAdmin = false;
     vi.stubGlobal(
       "ResizeObserver",
       class {
@@ -121,6 +124,23 @@ describe("Admin dashboard chart modes", () => {
         disconnect = vi.fn();
       },
     );
+  });
+
+  it("uses the platform page header for SuperAdmin only", () => {
+    dashboardMocks.isSuperAdmin = true;
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <DashboardView onShowToast={vi.fn()} onNavigateTab={vi.fn()} />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByRole("heading", { name: "Tổng quan hệ thống" })).toBeInTheDocument();
+    expect(screen.queryByText("CỔNG THÔNG TIN QUẢN TRỊ KHOA")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Làm mới" })).toBeInTheDocument();
   });
 
   it("switches between bar, line, and table using the real semester values", async () => {
@@ -134,6 +154,8 @@ describe("Admin dashboard chart modes", () => {
       </QueryClientProvider>,
     );
 
+    expect(screen.getByRole("heading", { name: "CỔNG THÔNG TIN QUẢN TRỊ KHOA" })).toBeInTheDocument();
+
     const barButton = screen.getByRole("button", { name: "Xem biểu đồ cột" });
     const lineButton = screen.getByRole("button", { name: "Xem biểu đồ đường" });
     const tableButton = screen.getByRole("button", { name: "Xem dữ liệu dạng bảng" });
@@ -141,9 +163,9 @@ describe("Admin dashboard chart modes", () => {
     expect(screen.getByRole("combobox", { name: "Khoa" })).toBeDisabled();
     expect(screen.getByRole("combobox", { name: "Năm học" })).toBeEnabled();
     expect(screen.getByRole("combobox", { name: "Học kỳ" })).toBeEnabled();
-    expect(screen.getByLabelText("Khoa")).toHaveClass("h-9", "rounded-lg", "bg-white");
-    expect(screen.getByLabelText("Năm học")).toHaveClass("h-9", "rounded-lg", "bg-white");
-    expect(screen.getByLabelText("Học kỳ")).toHaveClass("h-9", "rounded-lg", "bg-white");
+    expect(screen.getByLabelText("Khoa")).toHaveClass("h-8", "rounded-[4px]", "bg-white");
+    expect(screen.getByLabelText("Năm học")).toHaveClass("h-8", "rounded-[4px]", "bg-white");
+    expect(screen.getByLabelText("Học kỳ")).toHaveClass("h-8", "rounded-[4px]", "bg-white");
     expect(screen.getByText("67%")).toBeInTheDocument();
     expect(screen.getAllByText("Đã phân công").length).toBeGreaterThan(0);
     expect(screen.queryByText("Đã chấm")).not.toBeInTheDocument();

@@ -1,7 +1,8 @@
 namespace InternLink.Domain.Entities;
 
-public class WeeklyReportVersion : BaseEntity
+public class WeeklyReportVersion : BaseEntity, ITenantScoped
 {
+    public Guid TenantId { get; set; }
     public Guid WeeklyReportId { get; set; }
     public WeeklyReport WeeklyReport { get; set; } = null!;
     public int Version { get; set; }

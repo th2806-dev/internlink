@@ -50,7 +50,8 @@ public class SubmissionServiceTests
             db,
             _mapper,
             notificationService ?? Mock.Of<INotificationService>(),
-            envMock.Object);
+            envMock.Object,
+            Mock.Of<ITenantStorageQuotaService>());
     }
 
     private static async Task<(User StudentUser, User LecturerUser, User StrangerUser, User AdminUser, Internship Internship, Submission Submission)> SeedDataAsync(AppDbContext db)
@@ -252,8 +253,8 @@ public class SubmissionServiceTests
             Id = Guid.NewGuid(),
             Name = "Học kỳ đã đóng",
             Term = "HK1",
-            AcademicYear = "2025-2026",
-            Status = SemesterStatus.Completed,
+            +
+            Status = SemesterStatus.Active,
         };
         internship.SemesterId = semester.Id;
         internship.Semester = semester;

@@ -126,6 +126,14 @@ public class DocumentController : ControllerBase
         {
             return StatusCode(403, ApiResponse<object>.Fail(new ApiError { Title = ex.Message, Status = 403 }));
         }
+            catch (InternLink.Application.Exceptions.TenantStorageQuotaExceededException ex)
+            {
+                return StatusCode(StatusCodes.Status413PayloadTooLarge, ApiResponse<object>.Fail(new ApiError
+                {
+                    Title = ex.Message,
+                    Status = StatusCodes.Status413PayloadTooLarge
+                }));
+            }
             catch (InvalidOperationException ex)
             {
                 return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = ex.Message }));
@@ -259,6 +267,14 @@ public class DocumentController : ControllerBase
             var created = await _documentService.CreateTemplateAsync(form, userId.Value);
             return Ok(ApiResponse<DocumentDetailDto>.Ok(created));
         }
+        catch (InternLink.Application.Exceptions.TenantStorageQuotaExceededException ex)
+        {
+            return StatusCode(StatusCodes.Status413PayloadTooLarge, ApiResponse<object>.Fail(new ApiError
+            {
+                Title = ex.Message,
+                Status = StatusCodes.Status413PayloadTooLarge
+            }));
+        }
         catch (InvalidOperationException ex)
         {
             return BadRequest(ApiResponse<object>.Fail(new ApiError { Title = ex.Message }));
@@ -287,6 +303,14 @@ public class DocumentController : ControllerBase
                 return NotFound(ApiResponse<object>.Fail(new ApiError { Title = "Biểu mẫu không tồn tại" }));
 
             return Ok(ApiResponse<DocumentDetailDto>.Ok(updated));
+        }
+        catch (InternLink.Application.Exceptions.TenantStorageQuotaExceededException ex)
+        {
+            return StatusCode(StatusCodes.Status413PayloadTooLarge, ApiResponse<object>.Fail(new ApiError
+            {
+                Title = ex.Message,
+                Status = StatusCodes.Status413PayloadTooLarge
+            }));
         }
         catch (InvalidOperationException ex)
         {

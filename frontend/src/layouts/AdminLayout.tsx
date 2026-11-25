@@ -9,6 +9,8 @@ import { useAdminNavStats } from "../hooks/useAdminNavStats";
 import { useSemester } from "../contexts/SemesterContext";
 import { SuperAdminImpersonationBanner } from "../features/admin/components/SuperAdminImpersonationBanner";
 import { AdminMenuRouteGuard } from "../features/admin/components/AdminMenuRouteGuard";
+import { ActiveTenantProvider } from "../contexts/ActiveTenantContext";
+import { PlatformAnnouncementBanner } from "../features/admin/components/PlatformAnnouncementBanner";
 
 import type { UserRole } from "../types/common";
 
@@ -43,6 +45,7 @@ export default function AdminLayout({
   }, [isSidebarOpen]);
 
   return (
+    <ActiveTenantProvider>
     <div className="flex h-dvh w-full overflow-hidden bg-[var(--il-surface-bg)] font-sans text-slate-800 antialiased">
       {isSidebarOpen && (
         <button
@@ -63,7 +66,7 @@ export default function AdminLayout({
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
       />
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
+      <div className="flex h-dvh min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <SuperAdminImpersonationBanner />
         <CommandTopBar
           activeTab={activeTab}
@@ -74,12 +77,14 @@ export default function AdminLayout({
           onMenuOpen={() => setIsSidebarOpen((open) => !open)}
           isMenuOpen={isSidebarOpen}
         />
+        <PlatformAnnouncementBanner />
         <RibbonMenu onNavigate={onNavigate} />
         <Toast message={message} type={type} onClose={clearToast} />
-        <main className="w-full flex-1 px-3 py-3 sm:px-5">
+        <main className="admin-main-scroll min-h-0 w-full flex-1 overflow-y-auto px-3 py-3 sm:px-5">
           <AdminMenuRouteGuard>{children}</AdminMenuRouteGuard>
         </main>
       </div>
     </div>
+    </ActiveTenantProvider>
   );
 }

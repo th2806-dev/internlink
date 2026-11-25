@@ -49,7 +49,7 @@ public class AuthService : IAuthService
         _jwtSettings = jwtOptions.Value;
     }
 
-    public async Task<LoginResponse> LoginAsync(LoginRequest request, string? ipAddress = null)
+    public async Task<LoginResponse> LoginAsync(LoginRequest request, string? ipAddress = null, string? userAgent = null)
     {
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Username == request.Username && !u.IsDeleted);
         if (user == null || !user.IsActive)
@@ -69,7 +69,8 @@ public class AuthService : IAuthService
 
         user.LastLoginAt = DateTime.UtcNow;
 
-        var (token, jwtId, expires) = _jwt.CreateTokenWithMetadata(user.Id.ToString(), new[] { user.Role.ToString() }, user.DepartmentId);
+        var (token, jwtId, expires) = _jwt.CreateTokenWithMetadata(
+            user.Id.ToString(), new[] { user.Role.ToString() }, user.DepartmentId, user.TenantId);
         var refreshTokenString = GenerateRefreshTokenString();
         var refreshTokenExpiry = DateTime.UtcNow.AddDays(7);
 
@@ -83,6 +84,7 @@ public class AuthService : IAuthService
             IsRevoked = false,
             ExpiresAt = refreshTokenExpiry,
             CreatedByIp = ipAddress,
+            UserAgent = NormalizeUserAgent(userAgent),
             CreatedAt = DateTime.UtcNow
         };
 
@@ -122,7 +124,7 @@ public class AuthService : IAuthService
         await _db.SaveChangesAsync();
     }
 
-    public async Task<LoginResponse> RefreshTokenAsync(RefreshTokenRequest request, string? ipAddress = null)
+    public async Task<LoginResponse> RefreshTokenAsync(RefreshTokenRequest request, string? ipAddress = null, string? userAgent = null)
     {
         if (string.IsNullOrWhiteSpace(request.AccessToken) || string.IsNullOrWhiteSpace(request.RefreshToken))
         {
@@ -201,7 +203,8 @@ public class AuthService : IAuthService
         storedToken.RevokedByIp = ipAddress;
         storedToken.ReplacedByToken = newRefreshTokenString;
 
-        var (newToken, newJwtId, newExpires) = _jwt.CreateTokenWithMetadata(user.Id.ToString(), new[] { user.Role.ToString() }, user.DepartmentId);
+        var (newToken, newJwtId, newExpires) = _jwt.CreateTokenWithMetadata(
+            user.Id.ToString(), new[] { user.Role.ToString() }, user.DepartmentId, user.TenantId);
         var newRefreshTokenExpiry = DateTime.UtcNow.AddDays(7);
 
         var newRefreshTokenEntity = new RefreshToken
@@ -214,6 +217,7 @@ public class AuthService : IAuthService
             IsRevoked = false,
             ExpiresAt = newRefreshTokenExpiry,
             CreatedByIp = ipAddress,
+            UserAgent = NormalizeUserAgent(userAgent) ?? storedToken.UserAgent,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -286,9 +290,17 @@ public class AuthService : IAuthService
         return Convert.ToBase64String(randomBytes);
     }
 
+    private static string? NormalizeUserAgent(string? userAgent)
+    {
+        if (string.IsNullOrWhiteSpace(userAgent)) return null;
+        var normalized = userAgent.Trim();
+        return normalized.Length <= 512 ? normalized : normalized[..512];
+    }
+
     public async Task<CurrentUserResponse?> GetCurrentUserAsync(Guid userId)
     {
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId && !u.IsDeleted);
+        var user = await _db.Users.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(u => u.Id == userId && !u.IsDeleted && u.IsActive);
         if (user == null) return null;
         var response = _mapper.Map<CurrentUserResponse>(user);
         response.IsArchiveReadOnly = await IsArchiveReadOnlyStudentAsync(userId);

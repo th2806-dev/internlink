@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { BadgeCheck, LoaderCircle, ShieldCheck } from "lucide-react";
 import { apiRequestRaw } from "../../../lib/apiClient";
+import { useAppBranding } from "../../../contexts/AppBrandingContext";
 
 type PublicVerification = {
   referenceCode: string;
@@ -22,6 +23,7 @@ type PublicVerification = {
 };
 
 export default function PublicVerificationView() {
+  const { branding } = useAppBranding();
   const { code = "" } = useParams();
   const [verification, setVerification] = useState<PublicVerification | null>(null);
   const [loading, setLoading] = useState(true);
@@ -79,7 +81,7 @@ export default function PublicVerificationView() {
     <main className="min-h-dvh bg-slate-50 px-4 py-8 sm:py-14">
       <section className="mx-auto max-w-xl overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm">
         <header className="bg-[#026aa7] px-5 py-5 text-white sm:px-7">
-          <p className="text-sm font-semibold tracking-wide text-white/85">Cổng tra cứu công khai · InternLink</p>
+          <p className="text-sm font-semibold tracking-wide text-white/85">Cổng tra cứu công khai · {branding.appName}</p>
           <h1 className="mt-2 text-2xl font-bold">Xác thực hồ sơ thực tập</h1>
         </header>
         <div className="space-y-5 p-5 sm:p-7">

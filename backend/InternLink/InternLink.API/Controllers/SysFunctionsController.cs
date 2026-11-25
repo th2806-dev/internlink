@@ -5,6 +5,7 @@ using InternLink.Application.DTOs;
 using InternLink.Application.Interfaces;
 using InternLink.Domain.Entities.Rbac;
 using InternLink.Infrastructure.Persistence;
+using InternLink.Shared.Authorization;
 using InternLink.Shared.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -17,18 +18,6 @@ namespace InternLink.API.Controllers;
 [Authorize]
 public sealed class SysFunctionsController : ControllerBase
 {
-    private static readonly HashSet<string> SuperAdminModules = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "DASHBOARD", "SYSTEM", "ACCOUNTS", "CONFIG", "AUDIT", "IT_CONFIG", "API_WEBHOOK",
-        "DEPARTMENTS", "GRID_CONFIG", "FIELD_POLICIES"
-    };
-
-    private static readonly HashSet<string> DepartmentAdminModules = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "DASHBOARD", "SEMESTERS", "STUDENTS", "LECTURER", "COMPANIES", "ASSIGNMENTS",
-        "WEEKLY_REPORTS", "ATTENDANCE", "EVALUATIONS", "SUMMARY", "TEMPLATES", "NOTIFICATIONS"
-    };
-
     private readonly AppDbContext _context;
     private readonly ISysFunctionService _functionService;
 
@@ -49,6 +38,7 @@ public sealed class SysFunctionsController : ControllerBase
             return Unauthorized(ApiResponse<object>.Fail(new ApiError { Title = "Không xác định được người dùng." }));
 
         var isActiveUser = await _context.SysUsers
+            .IgnoreQueryFilters()
             .AnyAsync(user => user.PublicId == userId
                 && user.IsActive
                 && user.LegacyUser.IsActive
@@ -56,9 +46,11 @@ public sealed class SysFunctionsController : ControllerBase
         if (!isActiveUser)
             return Forbid();
 
-        var impersonatedRoleCode = User.IsInRole("SuperAdmin")
-            ? Request.Headers["X-Impersonate-Role"].FirstOrDefault()
-            : null;
+        var impersonatedRoleCode = User.HasClaim("is_impersonating", "true")
+            ? "DepartmentAdmin"
+            : User.IsInRole("SuperAdmin")
+                ? Request.Headers["X-Impersonate-Role"].FirstOrDefault()
+                : null;
         var menu = await BuildMenuAsync(userId, impersonatedRoleCode, cancellationToken);
         return Ok(ApiResponse<IReadOnlyList<SystemMenuItemDto>>.Ok(menu ?? []));
     }
@@ -209,9 +201,11 @@ public sealed class SysFunctionsController : ControllerBase
             .ThenBy(function => function.Name)
             .ToListAsync(cancellationToken);
         if (User.IsInRole("SuperAdmin") && impersonatedRoleId == null)
-            functions = functions.Where(function => SuperAdminModules.Contains(function.ModuleCode)).ToList();
+            functions = functions.Where(function =>
+                SystemRoleModulePolicy.IsModuleAllowed("SuperAdmin", function.ModuleCode)).ToList();
         else if (User.IsInRole("DepartmentAdmin") || impersonatingDepartmentAdmin)
-            functions = functions.Where(function => DepartmentAdminModules.Contains(function.ModuleCode)).ToList();
+            functions = functions.Where(function =>
+                SystemRoleModulePolicy.IsModuleAllowed("DepartmentAdmin", function.ModuleCode)).ToList();
 
         var childrenByParent = functions
             .Where(function => function.ParentId.HasValue)

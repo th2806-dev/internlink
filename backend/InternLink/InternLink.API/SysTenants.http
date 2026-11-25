@@ -1,0 +1,73 @@
+@baseUrl = http://localhost:7109/api/v1/system
+@token = replace-with-superadmin-token
+@tenantId = replace-with-tenant-guid
+
+### List tenants
+GET {{baseUrl}}/tenants?page=1&pageSize=25&search=HCMUT&tenantType=1
+Authorization: Bearer {{token}}
+
+### Create a university tenant and its initial license
+POST {{baseUrl}}/tenants
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "tenantCode": "HCMUT",
+  "name": "Đại học Bách Khoa",
+  "legalName": "Trường Đại học Bách Khoa",
+  "subdomain": "hcmut",
+  "tenantType": 1,
+  "contactEmail": "admin@example.edu.vn",
+  "contactPhone": "0281234567",
+  "planCode": "PRO",
+  "validTo": "2027-12-31T23:59:59Z"
+}
+
+### Get tenant details and current usage
+GET {{baseUrl}}/tenants/{{tenantId}}
+Authorization: Bearer {{token}}
+
+### Export tenant academic data and locally managed attachments
+GET {{baseUrl}}/tenants/{{tenantId}}/export
+Authorization: Bearer {{token}}
+
+### Update tenant legal and contact details
+PUT {{baseUrl}}/tenants/{{tenantId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Đại học Bách Khoa",
+  "legalName": "Trường Đại học Bách Khoa",
+  "domain": "portal.example.edu.vn",
+  "contactEmail": "admin@example.edu.vn",
+  "contactPhone": "0281234567"
+}
+
+### Change tenant status (audited)
+PATCH {{baseUrl}}/tenants/{{tenantId}}/status
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "status": 3
+}
+
+### Get license, actual quota usage, and term history
+GET {{baseUrl}}/tenants/{{tenantId}}/license
+Authorization: Bearer {{token}}
+
+### Create a renewed or upgraded license term
+PUT {{baseUrl}}/tenants/{{tenantId}}/license
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "planCode": "ENTERPRISE",
+  "validTo": "2028-12-31T23:59:59Z",
+  "autoRenew": true
+}
+
+### Missing tenant example (expected 404)
+GET {{baseUrl}}/tenants/00000000-0000-0000-0000-000000000000
+Authorization: Bearer {{token}}

@@ -16,6 +16,17 @@ export interface SystemImpersonationContext extends SystemImpersonationTarget {
   isVisualOnly: boolean;
 }
 
+export interface TenantSupportSession {
+  sessionId: string;
+  token: string;
+  expiresAt: string;
+  tenantId: string;
+  tenantName: string;
+  tenantCode: string;
+}
+
+export interface TenantSupportSessionContext extends Omit<TenantSupportSession, "token"> {}
+
 export interface RolePermissionRow {
   moduleCode: string;
   featureCode: string;
@@ -29,6 +40,7 @@ export interface RolePermissionRow {
   canImport: boolean;
   canPrint: boolean;
   canApprove: boolean;
+  canLock: boolean;
 }
 
 export interface GradingRuleSet {

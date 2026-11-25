@@ -39,7 +39,6 @@ import { TemplatesView as AdminTemplatesView } from "../features/admin/pages/Tem
 import { DepartmentsView as AdminDepartmentsView } from "../features/admin/pages/DepartmentsView";
 import { AttendanceView as AdminAttendanceView } from "../features/admin/pages/AttendanceView";
 import { ReportArchiveView as AdminReportArchiveView } from "../features/admin/pages/ReportArchiveView";
-import { BackupsView as AdminBackupsView } from "../features/admin/pages/BackupsView";
 import { GridConfigStudioView as AdminGridConfigStudioView } from "../features/admin/pages/GridConfigStudioView";
 import { PermissionMatrixView as AdminPermissionMatrixView } from "../features/admin/pages/PermissionMatrixView";
 import { GradingRulesConfigView as AdminGradingRulesConfigView } from "../features/admin/pages/GradingRulesConfigView";
@@ -50,6 +49,16 @@ import EmployerQuickEvaluationView from "../features/public/pages/EmployerQuickE
 import CompanyQuickAcceptanceView from "../features/public/pages/CompanyQuickAcceptanceView";
 import PublicVerificationView from "../features/public/pages/PublicVerificationView";
 import SmartExcelImportView from "../features/admin/pages/SmartExcelImportView";
+import { TenantsManagerView } from "../features/admin/pages/TenantsManagerView";
+import { TenantLicenseStudioView } from "../features/admin/pages/TenantLicenseStudioView";
+import { ApiGatewayView } from "../features/admin/pages/ApiGatewayView";
+import { SystemObservabilityView } from "../features/admin/pages/SystemObservabilityView";
+import { TenantSsoHubView } from "../features/admin/pages/TenantSsoHubView";
+import { ComplianceStudioView } from "../features/admin/pages/ComplianceStudioView";
+import { PlatformExecutiveDashboardView } from "../features/admin/pages/PlatformExecutiveDashboardView";
+import { TenantBillingView } from "../features/admin/pages/TenantBillingView";
+import { PlatformAnnouncementView } from "../features/admin/pages/PlatformAnnouncementView";
+import { SecuritySessionsView } from "../features/admin/pages/SecuritySessionsView";
 
 // Lecturer Pages
 import { DashboardView as LecturerDashboardView } from "../features/lecturer/pages/DashboardView";
@@ -85,6 +94,7 @@ import { useRealAppState } from "./useRealAppState";
 export function AppRoutes() {
   const { isLoggedIn, isBootstrapping, role, user, login, logout, switchRole } = useAuth();
   const isSuperAdmin = user?.backendRole === "SuperAdmin";
++
   const { showToast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -193,12 +203,16 @@ export function AppRoutes() {
                 <Route
                   path="dashboard"
                   element={
-                    <AdminDashboardView
-                      onShowToast={showToast}
-                      onNavigateTab={(t) =>
-                        navigate(`/admin/${t.replace("admin-", "")}`)
-                      }
-                    />
+                    isSuperAdmin ? (
+                      <PlatformExecutiveDashboardView />
+                    ) : (
+                      <AdminDashboardView
+                        onShowToast={showToast}
+                        onNavigateTab={(t) =>
+                          navigate(`/admin/${t.replace("admin-", "")}`)
+                        }
+                      />
+                    )
                   }
                 />
                 <Route
@@ -339,7 +353,7 @@ export function AppRoutes() {
                   path="notifications"
                   element={
                     isSuperAdmin ? (
-                      <Navigate to="/admin/dashboard" replace />
+                      <Navigate to="/admin/announcements" replace />
                     ) : (
                       <AdminNotificationsView
                         onShowToast={showToast}
@@ -373,7 +387,97 @@ export function AppRoutes() {
                   path="backups"
                   element={
                     isSuperAdmin ? (
-                      <AdminBackupsView onShowToast={showToast} />
+                      <Navigate to="/admin/observability?tab=backups" replace />
+                    ) : (
+                      <Navigate to="/admin/dashboard" replace />
+                    )
+                  }
+                />
+                <Route
+                  path="announcements"
+                  element={
+                    isSuperAdmin ? (
+                      <PlatformAnnouncementView onShowToast={showToast} />
+                    ) : (
+                      <Navigate to="/admin/dashboard" replace />
+                    )
+                  }
+                />
+                <Route
+                  path="security/sessions"
+                  element={
+                    isSuperAdmin ? (
+                      <SecuritySessionsView onShowToast={showToast} />
+                    ) : (
+                      <Navigate to="/admin/dashboard" replace />
+                    )
+                  }
+                />
+                <Route
+                  path="tenants"
+                  element={
+                    isSuperAdmin ? (
+                      <TenantsManagerView onShowToast={showToast} />
+                    ) : (
+                      <Navigate to="/admin/dashboard" replace />
+                    )
+                  }
+                />
+                <Route
+                  path="licenses"
+                  element={
+                    isSuperAdmin ? (
+                      <TenantLicenseStudioView onShowToast={showToast} />
+                    ) : (
+                      <Navigate to="/admin/dashboard" replace />
+                    )
+                  }
+                />
+                <Route
+                  path="api-gateway"
+                  element={
+                    isSuperAdmin ? (
+                      <ApiGatewayView onShowToast={showToast} />
+                    ) : (
+                      <Navigate to="/admin/dashboard" replace />
+                    )
+                  }
+                />
+                <Route
+                  path="observability"
+                  element={
+                    isSuperAdmin ? (
+                      <SystemObservabilityView onShowToast={showToast} />
+                    ) : (
+                      <Navigate to="/admin/dashboard" replace />
+                    )
+                  }
+                />
+                <Route
+                  path="sso-hub"
+                  element={
+                    isSuperAdmin ? (
+                      <TenantSsoHubView onShowToast={showToast} />
+                    ) : (
+                      <Navigate to="/admin/dashboard" replace />
+                    )
+                  }
+                />
+                <Route
+                  path="compliance"
+                  element={
+                    isSuperAdmin ? (
+                      <ComplianceStudioView onShowToast={showToast} />
+                    ) : (
+                      <Navigate to="/admin/dashboard" replace />
+                    )
+                  }
+                />
+                <Route
+                  path="billing"
+                  element={
+                    isSuperAdmin ? (
+                      <TenantBillingView onShowToast={showToast} />
                     ) : (
                       <Navigate to="/admin/dashboard" replace />
                     )
@@ -382,12 +486,22 @@ export function AppRoutes() {
                 <Route
                   path="config/grid"
                   element={
-                    <AdminGridConfigStudioView onShowToast={showToast} />
+                    isSuperAdmin && import.meta.env.DEV ? (
+                      <AdminGridConfigStudioView onShowToast={showToast} />
+                    ) : (
+                      <Navigate to="/admin/dashboard" replace />
+                    )
                   }
                 />
                 <Route
                   path="system/permissions"
-                  element={<AdminPermissionMatrixView onShowToast={showToast} />}
+                  element={
+                    isSuperAdmin ? (
+                      <AdminPermissionMatrixView onShowToast={showToast} />
+                    ) : (
+                      <Navigate to="/admin/dashboard" replace />
+                    )
+                  }
                 />
                 <Route
                   path="functions"
@@ -400,7 +514,7 @@ export function AppRoutes() {
                 <Route
                   path="config/field-policies"
                   element={
-                    isSuperAdmin
+                    isSuperAdmin && import.meta.env.DEV
                       ? <AdminFieldPoliciesStudioView onShowToast={showToast} />
                       : <Navigate to="/admin/dashboard" replace />
                   }

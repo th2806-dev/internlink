@@ -1,24 +1,23 @@
 import { useEffect, useRef, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   Building2,
   ChevronDown,
   Expand,
-  Eye,
   Menu,
   Minimize,
   User,
+  LogOut,
 } from "lucide-react";
 import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
 import { NotificationDropdown } from "../../../components/common/NotificationDropdown";
+import { useActiveTenant } from "../../../contexts/ActiveTenantContext";
 import { useSemester } from "../../../contexts/SemesterContext";
-import { useImpersonation } from "../../../contexts/ImpersonationContext";
 import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
 import { useSystemMenu } from "../../../hooks/useSystemMenu";
 import { getApiErrorMessage } from "../../../lib/apiClient";
-import { findSystemMenuRoute } from "../../../lib/systemMenu";
-import { systemAdminService } from "../../../services/systemAdmin.service";
+import { findSystemMenuRoute, getSuperAdminMenuGroup } from "../../../lib/systemMenu";
 import type { AuthUser } from "../../../contexts/AuthContext";
+import { resolveAppAssetUrl, useAppBranding } from "../../../contexts/AppBrandingContext";
 
 export function CommandTopBar({
   activeTab,
@@ -37,7 +36,15 @@ export function CommandTopBar({
   onMenuOpen?: () => void;
   isMenuOpen?: boolean;
 }) {
+  const { branding } = useAppBranding();
   const { isSuperAdmin, roleDisplayLabel } = useAdminCapabilities();
+  const {
+    tenants,
+    selectedTenant,
+    selectedTenantId,
+    selectTenant,
+    isLoading: isTenantListLoading,
+  } = useActiveTenant();
   const {
     semesters,
     selectedSemesterId,
@@ -46,28 +53,11 @@ export function CommandTopBar({
     selectedDepartmentId,
     selectDepartment,
   } = useSemester();
-  const { impersonation, startImpersonation } = useImpersonation();
   const { data: menu = [] } = useSystemMenu();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [renderTime, setRenderTime] = useState<number | null>(null);
   const profileMenuRef = useRef<HTMLDivElement>(null);
-
-  const impersonationTargetsQuery = useQuery({
-    queryKey: ["system-admin", "impersonation-targets"],
-    queryFn: systemAdminService.getImpersonationTargets,
-    enabled: isSuperAdmin,
-    retry: false,
-  });
-  const impersonationMutation = useMutation({
-    mutationFn: startImpersonation,
-    onSuccess: () => {
-      setShowProfileMenu(false);
-      onShowToast("Đã bật chế độ xem trước vai trò.");
-    },
-    onError: (error) =>
-      onShowToast(`Không thể bật chế độ mô phỏng. ${getApiErrorMessage(error)}`),
-  });
 
   const displayName = user?.name || user?.username || roleDisplayLabel;
   const displayEmail = user?.email ?? user?.username ?? "—";
@@ -78,6 +68,17 @@ export function CommandTopBar({
   const pageTitle =
     activeRoute?.item.name ??
     (activePath === "/admin/account" ? "Hồ sơ tài khoản" : "Phân hệ quản trị");
+  const topBarTitle = isSuperAdmin && activeRoute
+    ? activePath === "/admin/dashboard"
+      ? "Tổng Quan"
+      : getSuperAdminMenuGroup(activeRoute.item)
+    : pageTitle;
+  const isTenantScopedModule = ["LICENSES", "SSO_HUB", "API_GATEWAY"].includes(
+    activeRoute?.item.moduleCode ?? "",
+  );
+  const isOperationalModule = activeRoute?.groupName
+    ?.toLocaleUpperCase("vi-VN")
+    .startsWith("GIAI ĐOẠN") ?? false;
 
   useEffect(() => {
     const updateFullscreen = () => setIsFullscreen(Boolean(document.fullscreenElement));
@@ -122,7 +123,7 @@ export function CommandTopBar({
   };
 
   return (
-    <header className="sticky top-0 z-40 flex h-[38px] w-full items-center justify-between gap-2 bg-[#0f172a] px-2.5 text-white sm:px-3">
+    <header className="sticky top-0 z-40 flex h-9 w-full items-center justify-between gap-2 bg-[#0f172a] px-2.5 text-white sm:px-3">
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <button
           type="button"
@@ -135,56 +136,98 @@ export function CommandTopBar({
           <Menu aria-hidden="true" className="h-4 w-4" />
         </button>
         <img
-          src="/logo/logo_internlink-02.png"
-          alt="InternLink"
+          src={resolveAppAssetUrl(branding.appFaviconUrl || branding.appLogoUrl)}
+          alt={branding.appName}
           className="h-5 w-5 shrink-0 object-contain"
         />
         <span aria-hidden="true" className="h-5 border-l border-white/25" />
         <div className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate text-xs font-semibold text-white">{pageTitle}</span>
-          {activeRoute && (
-            <span className="hidden shrink-0 rounded-[4px] bg-white/10 px-1.5 py-0.5 font-mono text-[9px] text-slate-300 sm:inline">
-              ({activeRoute.item.code})
-            </span>
-          )}
+          <span className="truncate text-xs font-semibold text-white">{topBarTitle}</span>
         </div>
       </div>
 
-      <div className="hidden shrink-0 items-center gap-1.5 sm:flex">
-        <label className="flex h-7 max-w-48 items-center gap-1.5 rounded-[4px] border border-white/10 bg-white/10 px-2 text-[10px] text-slate-200">
-          <span className="sr-only">Kỳ thực tập</span>
-          <select
-            aria-label="Chọn kỳ thực tập"
-            value={selectedSemesterId || "all"}
-            onChange={(event) => selectSemester(event.target.value)}
-            className="h-full min-w-0 max-w-40 cursor-pointer bg-transparent text-[10px] font-medium text-white outline-none [&>option]:text-slate-900"
-          >
-            <option value="all">Tất cả kỳ</option>
-            {semesters.map((semester) => (
-              <option key={semester.id} value={semester.id}>
-                {semester.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        {isSuperAdmin && departments.length > 0 && (
-          <label className="flex h-7 max-w-40 items-center gap-1 rounded-[4px] border border-white/10 bg-white/10 px-2 text-[10px] text-slate-200">
+      <div className="hidden min-w-0 shrink-0 items-center gap-1.5 sm:flex">
+        {isSuperAdmin && isOperationalModule ? null : isSuperAdmin && isTenantScopedModule ? (
+          <label className="flex h-7 max-w-64 min-w-0 items-center gap-1.5 rounded-[4px] border border-white/10 bg-white/10 px-2 text-[10px] text-slate-200">
             <Building2 aria-hidden="true" className="h-3 w-3 shrink-0 text-[#7bc043]" />
-            <span className="sr-only">Khoa</span>
+            <span className="shrink-0 text-slate-400">Đang cấu hình:</span>
             <select
-              aria-label="Chọn khoa"
-              value={selectedDepartmentId || "all"}
-              onChange={(event) => selectDepartment(event.target.value)}
-              className="h-full min-w-0 flex-1 cursor-pointer bg-transparent text-[10px] font-medium text-white outline-none [&>option]:text-slate-900"
+              aria-label="Đổi đơn vị đang cấu hình"
+              value={selectedTenantId}
+              onChange={(event) => selectTenant(event.target.value)}
+              disabled={isTenantListLoading || tenants.length === 0}
+              className="h-full min-w-0 max-w-40 flex-1 cursor-pointer truncate bg-transparent text-[10px] font-semibold text-white outline-none [&>option]:text-slate-900 disabled:cursor-wait"
+              title={selectedTenant ? `${selectedTenant.name} (${selectedTenant.tenantCode})` : undefined}
             >
-              <option value="all">Tất cả khoa</option>
-              {departments.map((department) => (
-                <option key={department.id} value={department.id}>
-                  {department.name}
+              {!selectedTenant && (
+                <option value="">
+                  {isTenantListLoading ? "Đang tải đơn vị..." : "Chọn đơn vị"}
+                </option>
+              )}
+              {tenants.map((tenant) => (
+                <option key={tenant.id} value={tenant.id}>
+                  {tenant.name} ({tenant.tenantCode})
                 </option>
               ))}
             </select>
           </label>
+        ) : isSuperAdmin ? (
+          <span className="inline-flex h-7 items-center gap-1.5 rounded-[4px] border border-slate-700 bg-slate-800 px-2 text-[10px] font-semibold tracking-wide text-slate-300">
+            <Building2 aria-hidden="true" className="h-3 w-3 text-[#7bc043]" />
+            QUẢN TRỊ NỀN TẢNG TOÀN SÀN
+          </span>
+        ) : (
+          <label className="flex h-7 max-w-48 items-center gap-1.5 rounded-[4px] border border-white/10 bg-white/10 px-2 text-[10px] text-slate-200">
+            <span className="sr-only">Kỳ thực tập</span>
+            <select
+              aria-label="Chọn kỳ thực tập"
+              value={selectedSemesterId || "all"}
+              onChange={(event) => selectSemester(event.target.value)}
+              className="h-full min-w-0 max-w-40 cursor-pointer bg-transparent text-[10px] font-medium text-white outline-none [&>option]:text-slate-900"
+            >
+              <option value="all">Tất cả kỳ</option>
+              {semesters.map((semester) => (
+                <option key={semester.id} value={semester.id}>
+                  {semester.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {isSuperAdmin && isOperationalModule && (
+          <>
+            <label className="flex h-7 max-w-48 items-center gap-1.5 rounded-[4px] border border-white/10 bg-white/10 px-2 text-[10px] text-slate-200">
+              <span className="sr-only">Kỳ thực tập</span>
+              <select
+                aria-label="Chọn kỳ thực tập"
+                value={selectedSemesterId || "all"}
+                onChange={(event) => selectSemester(event.target.value)}
+                className="h-full min-w-0 max-w-40 cursor-pointer bg-transparent text-[10px] font-medium text-white outline-none [&>option]:text-slate-900"
+              >
+                <option value="all">Tất cả kỳ</option>
+                {semesters.map((semester) => (
+                  <option key={semester.id} value={semester.id}>{semester.name}</option>
+                ))}
+              </select>
+            </label>
+            {departments.length > 0 && (
+              <label className="flex h-7 max-w-40 items-center gap-1 rounded-[4px] border border-white/10 bg-white/10 px-2 text-[10px] text-slate-200">
+                <Building2 aria-hidden="true" className="h-3 w-3 shrink-0 text-[#7bc043]" />
+                <span className="sr-only">Khoa</span>
+                <select
+                  aria-label="Chọn khoa"
+                  value={selectedDepartmentId || "all"}
+                  onChange={(event) => selectDepartment(event.target.value)}
+                  className="h-full min-w-0 flex-1 cursor-pointer bg-transparent text-[10px] font-medium text-white outline-none [&>option]:text-slate-900"
+                >
+                  <option value="all">Tất cả khoa</option>
+                  {departments.map((department) => (
+                    <option key={department.id} value={department.id}>{department.name}</option>
+                  ))}
+                </select>
+              </label>
+            )}
+          </>
         )}
       </div>
 
@@ -245,14 +288,20 @@ export function CommandTopBar({
           {showProfileMenu && (
             <div
               id="admin-profile-menu"
-              className="absolute right-0 mt-1.5 w-72 rounded-md border border-slate-200 bg-white p-2.5 text-slate-800 shadow-xl"
+              className="absolute right-0 mt-1.5 w-72 overflow-hidden rounded-md border border-slate-200 bg-white text-slate-800 shadow-lg"
             >
-              <div className="border-b border-slate-100 px-2 pb-2">
-                <p className="truncate text-xs font-bold">{displayName}</p>
-                <p className="mt-0.5 text-[10px] font-semibold text-[#026aa7]">
-                  {roleDisplayLabel}
-                </p>
-                <p className="mt-0.5 truncate text-[10px] text-slate-500">{displayEmail}</p>
+              <div className="flex items-center gap-2 border-b border-[#025a8e] bg-[#026aa7] px-3 py-2.5 text-white">
+                <InitialsAvatar
+                  name={displayName}
+                  seed={user?.id || user?.email || displayName}
+                  size={30}
+                />
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-bold leading-4">{displayName}</p>
+                  <p className="truncate text-[10px] leading-3.5 text-white/85">
+                    {displayEmail}
+                  </p>
+                </div>
               </div>
               <button
                 type="button"
@@ -266,44 +315,6 @@ export function CommandTopBar({
                 <User aria-hidden="true" className="h-3.5 w-3.5 text-slate-400" />
               </button>
 
-              {isSuperAdmin && (
-                <div className="mt-1 border-t border-slate-100 pt-1.5">
-                  <p className="px-2 pb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">
-                    <Eye aria-hidden="true" className="mr-1 inline h-3.5 w-3.5" />
-                    Mô phỏng góc nhìn
-                  </p>
-                  {impersonation && (
-                    <p className="px-2 pb-1 text-[10px] text-[#026aa7]">
-                      Đang xem: {impersonation.roleName}
-                    </p>
-                  )}
-                  {impersonationTargetsQuery.isPending ? (
-                    <p role="status" className="px-2 py-2 text-xs text-slate-500">
-                      Đang tải vai trò...
-                    </p>
-                  ) : impersonationTargetsQuery.isError ? (
-                    <p role="alert" className="px-2 py-2 text-xs text-rose-700">
-                      Không tải được danh sách vai trò.{" "}
-                      {getApiErrorMessage(impersonationTargetsQuery.error)}
-                    </p>
-                  ) : (
-                    <div className="max-h-40 overflow-y-auto">
-                      {impersonationTargetsQuery.data?.map((target) => (
-                        <button
-                          key={target.roleId}
-                          type="button"
-                          disabled={impersonationMutation.isPending}
-                          onClick={() => impersonationMutation.mutate(target.roleCode)}
-                          className="flex min-h-9 w-full items-center rounded-[4px] px-2 text-left text-xs font-medium text-slate-700 transition-colors hover:bg-[#026aa7]/5 hover:text-[#026aa7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#026aa7] disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {target.roleName}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
               {onLogout && (
                 <button
                   type="button"
@@ -311,8 +322,9 @@ export function CommandTopBar({
                     setShowProfileMenu(false);
                     onLogout();
                   }}
-                  className="mt-1 min-h-9 w-full rounded-[4px] border-t border-slate-100 px-2 pt-1.5 text-left text-xs font-bold text-rose-600 hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+                  className="mt-1 flex min-h-9 w-full items-center gap-2 rounded-[4px] border-t border-slate-100 px-3 text-left text-xs font-bold text-rose-600 hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
                 >
+                  <LogOut aria-hidden="true" className="h-3.5 w-3.5" />
                   Đăng xuất
                 </button>
               )}

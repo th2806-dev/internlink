@@ -8,8 +8,9 @@ namespace InternLink.Domain.Entities;
 /// báo cáo của toàn khoa và hệ thống inject vào template Word C22A khi admin xuất.
 /// DepartmentId = null nghĩa là báo cáo toàn hệ thống (SuperAdmin).
 /// </summary>
-public class SemesterFacultySummary : BaseEntity
+public class SemesterFacultySummary : BaseEntity, ITenantScoped
 {
+    public Guid TenantId { get; set; }
     public Guid SemesterId { get; set; }
     public Semester Semester { get; set; } = null!;
 

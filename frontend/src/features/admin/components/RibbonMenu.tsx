@@ -2,8 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useSystemMenu } from "../../../hooks/useSystemMenu";
-import { getSystemMenuItemId, getSystemMenuRoutes } from "../../../lib/systemMenu";
-import { getMenuIcon } from "./Sidebar";
+import {
+  getSuperAdminMenuGroup,
+  getSystemMenuItemId,
+  getSystemMenuRoutes,
+  sortSuperAdminRoutes,
+} from "../../../lib/systemMenu";
+import { getMenuIcon } from "../../../lib/menuIconRegistry";
+import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
 
 export function RibbonMenu({
   onNavigate,
@@ -11,11 +17,15 @@ export function RibbonMenu({
   onNavigate: (tab: string) => void;
 }) {
   const menuQuery = useSystemMenu();
+  const { isSuperAdmin } = useAdminCapabilities();
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const navRef = useRef<HTMLElement>(null);
   const menuItemRefs = useRef<HTMLButtonElement[]>([]);
   const toggleRefs = useRef(new Map<string, HTMLButtonElement>());
-  const routes = getSystemMenuRoutes(menuQuery.data ?? []);
+  const routes = sortSuperAdminRoutes(getSystemMenuRoutes(menuQuery.data ?? []).map((route) => ({
+    ...route,
+    groupName: isSuperAdmin ? getSuperAdminMenuGroup(route.item) : route.groupName,
+  })));
   const dashboardRoutes = routes.filter(
     ({ item }) => item.funcUrl?.replace(/\/+$/, "") === "/admin/dashboard",
   );
@@ -86,9 +96,9 @@ export function RibbonMenu({
     <nav
       ref={navRef}
       aria-label="Ribbon điều hướng quản trị"
-      className="sticky top-[38px] z-30 min-h-10 w-full bg-[#026aa7] text-white shadow-sm"
+      className="sticky top-9 z-30 min-h-8 w-full bg-[#026aa7] text-white shadow-sm"
     >
-      <div className="flex min-h-10 w-full flex-wrap items-center gap-1 px-2 py-1 lg:flex-nowrap lg:overflow-visible">
+      <div className="flex min-h-8 w-full flex-wrap items-center gap-1 px-2 py-0.5 lg:flex-nowrap lg:overflow-visible">
         {menuQuery.isPending && (
           <span role="status" className="px-2 text-xs text-white/80">
             Đang tải phân hệ...
@@ -106,7 +116,7 @@ export function RibbonMenu({
               key={item.code}
               type="button"
               onClick={() => navigateTo(item)}
-              className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[4px] px-2.5 text-xs font-semibold transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+              className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-[4px] px-2.5 text-xs font-semibold transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
             >
               <Icon aria-hidden="true" className="h-3.5 w-3.5" />
               {item.name}
@@ -140,7 +150,7 @@ export function RibbonMenu({
                       setOpenGroup(section.title);
                     }
                   }}
-                  className={`inline-flex h-8 max-w-full items-center gap-1.5 rounded-[4px] px-2.5 text-xs font-semibold transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${
+                  className={`inline-flex h-7 max-w-full items-center gap-1.5 rounded-[4px] px-2.5 text-xs font-semibold transition-colors hover:bg-[#025a8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${
                     isOpen ? "bg-[#025a8e]" : ""
                   }`}
                 >

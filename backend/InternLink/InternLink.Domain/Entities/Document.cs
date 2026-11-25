@@ -3,8 +3,9 @@ namespace InternLink.Domain.Entities;
 /// <summary>
 /// Represents a document (file) related to an internship
 /// </summary>
-public class Document : BaseEntity
+public class Document : BaseEntity, ITenantScoped
 {
+    public Guid TenantId { get; set; }
     /// <summary>
     /// The internship this document belongs to (null for general / official templates)
     /// </summary>

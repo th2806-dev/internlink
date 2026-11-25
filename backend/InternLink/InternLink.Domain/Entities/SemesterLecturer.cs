@@ -4,8 +4,9 @@ namespace InternLink.Domain.Entities;
 /// Links a lecturer to a semester (e.g. imported/registered for that term)
 /// so a semester's lecturer roster is known even before students are assigned.
 /// </summary>
-public class SemesterLecturer : BaseEntity
+public class SemesterLecturer : BaseEntity, ITenantScoped
 {
+    public Guid TenantId { get; set; }
     public Guid SemesterId { get; set; }
     public Semester Semester { get; set; } = null!;
 

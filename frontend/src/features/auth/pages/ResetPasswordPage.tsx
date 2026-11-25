@@ -12,8 +12,10 @@ import {
 } from "lucide-react";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { authService } from "../../../services/auth.service";
+import { resolveAppAssetUrl, useAppBranding } from "../../../contexts/AppBrandingContext";
 
 export function ResetPasswordPage() {
+  const { branding } = useAppBranding();
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token");
   const hasToken = Boolean(token);
@@ -62,8 +64,8 @@ export function ResetPasswordPage() {
       <div className="w-full max-w-md il-panel p-6 sm:p-8">
         <div className="mb-6 flex flex-col items-center text-center">
           <img
-            src="/logo/logo_internlink-02.png"
-            alt="InternLink"
+            src={resolveAppAssetUrl(branding.appLogoUrl)}
+            alt={branding.appName}
             className="h-12 w-auto object-contain mb-4"
             onError={(e) => {
               (e.currentTarget as HTMLImageElement).style.display = "none";
@@ -73,7 +75,7 @@ export function ResetPasswordPage() {
             Đặt lại mật khẩu
           </h1>
           <p className="mt-1.5 text-xs text-[var(--il-text-secondary)] font-medium">
-            Tạo mật khẩu mới cho tài khoản InternLink của bạn.
+            Tạo mật khẩu mới cho tài khoản {branding.appName} của bạn.
           </p>
         </div>
 

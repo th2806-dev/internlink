@@ -1,7 +1,8 @@
 namespace InternLink.Domain.Entities;
 
-public class Feedback : BaseEntity
+public class Feedback : BaseEntity, ITenantScoped
 {
+    public Guid TenantId { get; set; }
     public Guid? SubmissionId { get; set; }
     public Submission? Submission { get; set; }
 

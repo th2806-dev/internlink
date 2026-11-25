@@ -8,6 +8,7 @@ import {
   Save,
 } from "lucide-react";
 import { CompactActionBar } from "../../../components/common/CompactActionBar";
+import { PLATFORM_PAGE_CONTENT_CLASS } from "../components/PlatformPageHeader";
 import { CompactToggleSwitch } from "../../../components/common/CompactToggleSwitch";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { useGridConfig } from "../../../hooks/useSystemMenu";
@@ -195,7 +196,7 @@ export function GridConfigStudioView({
   };
 
   return (
-    <div className="w-full space-y-4 animate-in fade-in duration-200 font-sans pb-12">
+    <div className="w-full animate-in fade-in duration-200 font-sans pb-12">
       <CompactActionBar
         icon={Columns3}
         title="Cấu hình Bảng Dữ liệu (F1002)"
@@ -252,6 +253,7 @@ export function GridConfigStudioView({
         </button>
       </CompactActionBar>
 
+      <main className={PLATFORM_PAGE_CONTENT_CLASS}>
       <p className="text-xs text-slate-500">
         Dùng các nút mũi tên để đổi thứ tự, đặt độ rộng từ 60 đến 400 px. Thay đổi chỉ được áp dụng sau khi lưu.
       </p>
@@ -273,7 +275,7 @@ export function GridConfigStudioView({
           </button>
         </div>
       ) : (
-        <section aria-labelledby="grid-columns-heading" className="overflow-hidden rounded-md border border-slate-200 bg-white">
+        <section aria-labelledby="grid-columns-heading" className="overflow-hidden rounded-md border border-slate-200 bg-white shadow-md">
           <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-3 py-2">
             <div>
               <h2 id="grid-columns-heading" className="text-xs font-semibold text-slate-900">
@@ -439,23 +441,26 @@ export function GridConfigStudioView({
         </section>
       )}
 
-      <section aria-labelledby="grid-preview-heading" className="space-y-3">
+      <section aria-labelledby="grid-preview-heading" className="space-y-2">
         <div>
-          <h2 id="grid-preview-heading" className="text-lg font-semibold text-slate-900">
+          <h2 id="grid-preview-heading" className="text-sm font-bold text-slate-800">
             Xem trước trực tiếp
           </h2>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-0.5 text-xs text-slate-500">
             Thay đổi tiêu đề, độ rộng, màu sắc và vị trí ghim được phản ánh ngay; cấu hình chỉ áp dụng sau khi lưu.
           </p>
         </div>
-        <DynamicDataGrid
-          featureCode={featureCode}
-          rows={[]}
-          configOverride={columns}
-          loadingMessage="Đang dựng bản xem trước..."
-          emptyMessage="Bản xem trước cấu hình không tải dữ liệu nghiệp vụ."
-        />
+        <div className="rounded-md shadow-sm">
+          <DynamicDataGrid
+            featureCode={featureCode}
+            rows={[]}
+            configOverride={columns}
+            loadingMessage="Đang dựng bản xem trước..."
+            emptyMessage="Bản xem trước cấu hình không tải dữ liệu nghiệp vụ."
+          />
+        </div>
       </section>
+      </main>
     </div>
   );
 }

@@ -16,13 +16,13 @@ public static class PasswordResetEmailTemplate
         ArgumentNullException.ThrowIfNull(settings);
 
         var greeting = $"Kính gửi {request.FullName},";
-        var subject = "[InternLink] Mật khẩu tài khoản đã được đặt lại";
+        var subject = $"[{settings.AppName}] Mật khẩu tài khoản đã được đặt lại";
         var portalUrl = settings.PortalUrl.TrimEnd('/');
 
         var plain = $"""
             {greeting}
 
-            Ban Quản lý Thực tập {settings.InstitutionName} thông báo mật khẩu tài khoản InternLink của bạn đã được đặt lại.
+            Ban Quản lý Thực tập {settings.InstitutionName} thông báo mật khẩu tài khoản {settings.AppName} của bạn đã được đặt lại.
 
             Thông tin đăng nhập:
             - Địa chỉ hệ thống: {portalUrl}
@@ -46,7 +46,7 @@ public static class PasswordResetEmailTemplate
               <p>{WebUtility.HtmlEncode(greeting)}</p>
               <p>
                 Ban Quản lý Thực tập <strong>{WebUtility.HtmlEncode(settings.InstitutionName)}</strong>
-                thông báo mật khẩu tài khoản InternLink của bạn đã được đặt lại.
+                thông báo mật khẩu tài khoản {WebUtility.HtmlEncode(settings.AppName)} của bạn đã được đặt lại.
               </p>
               <p><strong>Thông tin đăng nhập:</strong></p>
               <ul>

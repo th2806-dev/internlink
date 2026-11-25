@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Eye, EyeOff, FileSliders, Save, ShieldCheck } from "lucide-react";
 import { CompactActionBar } from "../../../components/common/CompactActionBar";
+import { PLATFORM_PAGE_CONTENT_CLASS } from "../components/PlatformPageHeader";
 import { CompactToggleSwitch } from "../../../components/common/CompactToggleSwitch";
 import { getApiErrorMessage } from "../../../lib/apiClient";
 import { systemService } from "../../../services/system.service";
@@ -97,7 +98,7 @@ export function FieldPoliciesStudioView({
   };
 
   return (
-    <div className="w-full space-y-2 animate-in fade-in duration-200 font-sans pb-12">
+    <div className="w-full animate-in fade-in duration-200 font-sans pb-12">
       <CompactActionBar
         icon={FileSliders}
         title="Chính sách Trường Dữ liệu (F1003)"
@@ -114,7 +115,8 @@ export function FieldPoliciesStudioView({
         </button>
       </CompactActionBar>
 
-      <section className="grid gap-3 rounded-md border border-slate-200 bg-white p-3 sm:grid-cols-2">
+      <main className={PLATFORM_PAGE_CONTENT_CLASS}>
+      <section className="grid gap-3 rounded-md border border-slate-200 bg-white p-3 shadow-md sm:grid-cols-2">
         <div className="space-y-1.5">
           <label htmlFor="policy-form" className="text-xs font-semibold text-slate-800">Biểu mẫu</label>
           <select
@@ -148,7 +150,7 @@ export function FieldPoliciesStudioView({
         </div>
       </section>
 
-      <section className="overflow-hidden rounded-md border border-slate-200 bg-white">
+      <section className="overflow-hidden rounded-md border border-slate-200 bg-white shadow-md">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-100/90 px-2.5 py-1.5">
           <div>
             <h2 className="text-xs font-bold text-slate-800">{selectedForm.label}</h2>
@@ -249,6 +251,7 @@ export function FieldPoliciesStudioView({
           </p>
         )}
       </section>
+      </main>
     </div>
   );
 }

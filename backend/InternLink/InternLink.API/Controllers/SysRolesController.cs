@@ -15,12 +15,6 @@ namespace InternLink.API.Controllers;
 [RequirePermission(SystemPermissionCodes.SystemManage)]
 public sealed class SysRolesController : ControllerBase
 {
-    private static readonly HashSet<string> DepartmentAdminModules = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "DASHBOARD", "SEMESTERS", "STUDENTS", "LECTURER", "COMPANIES", "ASSIGNMENTS",
-        "WEEKLY_REPORTS", "ATTENDANCE", "EVALUATIONS", "SUMMARY", "TEMPLATES", "NOTIFICATIONS"
-    };
-
     private static readonly (string Suffix, string Name)[] Actions =
     [
         ("VIEW", "Xem"),
@@ -30,7 +24,8 @@ public sealed class SysRolesController : ControllerBase
         ("EXPORT", "Xuất Excel"),
         ("IMPORT", "Nhập Excel"),
         ("PRINT", "In phiếu"),
-        ("APPROVE", "Phê duyệt")
+        ("APPROVE", "Phê duyệt"),
+        ("LOCK", "Khóa")
     ];
 
     private readonly AppDbContext _context;
@@ -97,7 +92,8 @@ public sealed class SysRolesController : ControllerBase
                 Granted("EXPORT"),
                 Granted("IMPORT"),
                 Granted("PRINT"),
-                Granted("APPROVE"));
+                Granted("APPROVE"),
+                Granted("LOCK"));
         }).ToArray();
 
         return Ok(ApiResponse<IReadOnlyList<SysRolePermissionMatrixRowDto>>.Ok(matrix));
@@ -137,6 +133,7 @@ public sealed class SysRolesController : ControllerBase
         var permissions = await _context.SysRolePermissions
             .Where(permission => permission.SysRoleId == roleId)
             .ToDictionaryAsync(permission => permission.SysFunctionId, cancellationToken);
+        var isScopedAdminRole = SystemRoleModulePolicy.IsScopedAdminRole(role.Code);
 
         foreach (var row in matrix)
         {
@@ -144,17 +141,15 @@ public sealed class SysRolesController : ControllerBase
             var values = new[]
             {
                 row.CanView, row.CanCreate, row.CanEdit, row.CanDelete,
-                row.CanExport, row.CanImport, row.CanPrint, row.CanApprove
+                row.CanExport, row.CanImport, row.CanPrint, row.CanApprove, row.CanLock
             };
             for (var index = 0; index < Actions.Length; index++)
             {
                 if (!byCode.TryGetValue($"{moduleCode}.{Actions[index].Suffix}", out var function))
                     continue;
 
-                var isGranted = role.Code.Equals("DepartmentAdmin", StringComparison.OrdinalIgnoreCase)
-                    && !DepartmentAdminModules.Contains(moduleCode)
-                    ? false
-                    : values[index];
+                var isGranted = values[index]
+                    && (!isScopedAdminRole || SystemRoleModulePolicy.IsModuleAllowed(role.Code, moduleCode));
                 if (permissions.TryGetValue(function.AutoId, out var permission))
                 {
                     permission.IsGranted = isGranted;
@@ -193,9 +188,7 @@ public sealed class SysRolesController : ControllerBase
             .ToDictionaryAsync(permission => permission.SysFunctionId, cancellationToken);
         foreach (var function in functions)
         {
-            var granted = role.Code.Equals("SuperAdmin", StringComparison.OrdinalIgnoreCase)
-                || role.Code.Equals("DepartmentAdmin", StringComparison.OrdinalIgnoreCase)
-                    && DepartmentAdminModules.Contains(function.ModuleCode);
+            var granted = SystemRoleModulePolicy.IsModuleAllowed(role.Code, function.ModuleCode);
             if (permissions.TryGetValue(function.AutoId, out var permission))
                 permission.IsGranted = granted;
             else
@@ -226,7 +219,8 @@ public sealed record SysRolePermissionMatrixRowDto(
     bool CanExport,
     bool CanImport,
     bool CanPrint,
-    bool CanApprove);
+    bool CanApprove,
+    bool CanLock = false);
 
 public sealed record SaveSysRolePermissionMatrixRowDto(
     string ModuleCode,
@@ -237,4 +231,5 @@ public sealed record SaveSysRolePermissionMatrixRowDto(
     bool CanExport,
     bool CanImport,
     bool CanPrint,
-    bool CanApprove);
+    bool CanApprove,
+    bool CanLock = false);

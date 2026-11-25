@@ -1,0 +1,40 @@
+@baseUrl = http://localhost:7109
+@webhookToken = {{$dotenv BILLING_WEBHOOK_SECRET}}
+@adminToken = {{$dotenv INTERNLINK_ADMIN_TOKEN}}
+
+### Generate a sample VietQR without saving these settings
+POST {{baseUrl}}/api/v1/system/billing/vietqr-settings/preview
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "bankId": "970415",
+  "accountNo": "0123456789",
+  "accountName": "NGUYEN VAN A",
+  "merchantCity": "HO CHI MINH"
+}
+
+### A normalized SePay-style incoming transfer (invoice matching is case-insensitive)
+POST {{baseUrl}}/api/v1/public/billing/webhook/payment
+Content-Type: application/json
+X-Webhook-Token: {{webhookToken}}
+
+{
+  "id": 123456,
+  "referenceCode": "BANK-TXN-2026-001",
+  "transferType": "in",
+  "transferAmount": 125000000,
+  "content": "IL BILLING INV-202611-89ABCDEF"
+}
+
+### An outgoing transfer is acknowledged but never applied to an invoice
+POST {{baseUrl}}/api/v1/public/billing/webhook/payment
+Content-Type: application/json
+X-Webhook-Token: {{webhookToken}}
+
+{
+  "id": "BANK-TXN-2026-002",
+  "direction": "out",
+  "amount": 125000000,
+  "description": "IL BILLING INV-202611-89ABCDEF"
+}

@@ -7,8 +7,9 @@ namespace InternLink.Domain.Entities;
 /// Each semester can have at most one rubric, with a lifecycle:
 /// Admin save → Approved → Locked
 /// </summary>
-public class EvaluationRubric : BaseEntity
+public class EvaluationRubric : BaseEntity, ITenantScoped
 {
+    public Guid TenantId { get; set; }
     /// <summary>
     /// The semester and optional department this rubric belongs to.
     /// </summary>

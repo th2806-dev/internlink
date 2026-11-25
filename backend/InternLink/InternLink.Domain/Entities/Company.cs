@@ -2,8 +2,9 @@ using InternLink.Domain.Common;
 
 namespace InternLink.Domain.Entities;
 
-public class Company : BaseEntity, IDepartmentScoped
+public class Company : BaseEntity, ITenantScoped, IDepartmentScoped
 {
+    public Guid TenantId { get; set; }
     /// <summary>External company code from the official "DANH SÁCH DOANH NGHIỆP LIÊN KẾT" list (like MSSV/MaGV).</summary>
     public string? CompanyCode { get; set; }
     public string? TaxCode { get; set; }

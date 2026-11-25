@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using FluentAssertions;
 using InternLink.API.Controllers;
+using InternLink.Application.DTOs;
 using InternLink.Application.Interfaces;
 using InternLink.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Http;
@@ -83,6 +84,37 @@ public class CommercialFeatureControllerTests
         var result = await controller.Preview(file, null, null, null, null, CancellationToken.None);
 
         result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    [Fact]
+    public async Task ExcelPresets_AllowsSuperAdminWithoutTenantClaim()
+    {
+        var importService = new Mock<ISmartExcelImportService>();
+        importService
+            .Setup(service => service.GetPresetsAsync(null, null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<ExcelMappingPresetDto>());
+        var controller = new ExcelImportController(
+            CreateDb(),
+            Mock.Of<IDepartmentScopeService>(),
+            importService.Object)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    User = new ClaimsPrincipal(new ClaimsIdentity(
+                        [new Claim(ClaimTypes.Role, "SuperAdmin")],
+                        "test"))
+                }
+            }
+        };
+
+        var result = await controller.GetPresets(null, null, CancellationToken.None);
+
+        result.Result.Should().BeOfType<OkObjectResult>();
+        importService.Verify(
+            service => service.GetPresetsAsync(null, null, It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
     [Fact]

@@ -17,11 +17,32 @@ import { InitialsAvatar } from "./InitialsAvatar";
 
 export type ProfileStudioTab = "overview" | "login-history" | "activity";
 
-const tabs: { id: ProfileStudioTab; label: string; icon: typeof UserRound }[] = [
+export interface ProfileTabItem<T extends string = ProfileStudioTab> {
+  id: T;
+  label: string;
+  icon: typeof UserRound;
+}
+
+const DEFAULT_TABS: ProfileTabItem[] = [
   { id: "overview", label: "Tổng quan hồ sơ", icon: UserRound },
   { id: "login-history", label: "Nhật ký đăng nhập", icon: Clock3 },
   { id: "activity", label: "Lịch sử thao tác & quyền truy cập", icon: Activity },
 ];
+
+export interface ProfileStudioHeaderProps<T extends ProfileStudioTab = ProfileStudioTab> {
+  name: string;
+  identifier?: string | null;
+  role: string;
+  department?: string | null;
+  email?: string | null;
+  bannerUrl?: string | null;
+  fullBleed?: boolean;
+  activeTab: T;
+  onTabChange: (tab: T) => void;
+  avatarAction?: ReactNode;
+  bannerAction?: ReactNode;
+  tabs?: readonly ProfileTabItem<T>[];
+}
 
 export function ProfileStudioHeader({
   name,
@@ -29,76 +50,97 @@ export function ProfileStudioHeader({
   role,
   department,
   email,
+  bannerUrl,
+  fullBleed = false,
   activeTab,
   onTabChange,
   avatarAction,
-}: {
-  name: string;
-  identifier?: string | null;
-  role: string;
-  department?: string | null;
-  email?: string | null;
-  activeTab: ProfileStudioTab;
-  onTabChange: (tab: ProfileStudioTab) => void;
-  avatarAction?: ReactNode;
-}) {
+  bannerAction,
+  tabs,
+}: ProfileStudioHeaderProps) {
+  const visibleTabs = tabs ?? DEFAULT_TABS;
+  const sectionClassName = fullBleed
+    ? "relative -mx-3 -mt-3 pb-5 sm:-mx-5"
+    : "relative rounded-md border border-slate-200 bg-white pb-5 shadow-sm";
+  const bannerClassName = fullBleed
+    ? "relative isolate min-h-[220px] overflow-hidden bg-gradient-to-r from-[#026aa7] via-[#0277b5] to-[#025a8e] text-white"
+    : "relative isolate min-h-[220px] overflow-hidden rounded-t-md bg-gradient-to-r from-[#026aa7] via-[#0277b5] to-[#025a8e] text-white";
+
   return (
-    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <div className="bg-gradient-to-r from-[#025a8e] to-[#026aa7] px-5 py-6 text-white sm:px-7">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-          <div className="relative w-fit shrink-0">
-            <InitialsAvatar
-              name={name}
-              seed={identifier || email || name}
-              size={80}
-              className="border-4 border-white shadow-md"
-            />
-            {avatarAction}
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
-                {name || "Tài khoản"}
-              </h1>
-              <span className="inline-flex items-center gap-1 rounded-full bg-[#7bc043] px-2.5 py-1 text-xs font-bold text-slate-950">
-                <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
-                {role}
-              </span>
+    <section className={sectionClassName}>
+      <div className={bannerClassName}>
+        {bannerUrl && (
+          <img
+            key={bannerUrl}
+            src={bannerUrl}
+            alt=""
+            aria-hidden="true"
+            className="absolute inset-0 h-full w-full object-cover"
+            onError={(event) => {
+              event.currentTarget.hidden = true;
+            }}
+          />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-r from-slate-950/65 via-slate-900/40 to-slate-900/20" />
+        <div className="relative z-10 flex min-h-[220px] flex-col justify-between px-4 pb-9 pt-12 sm:px-5">
+          {bannerAction && <div className="absolute right-4 top-3">{bannerAction}</div>}
+          <div className="flex min-w-0 items-center gap-4 pb-5">
+            <div className="relative shrink-0">
+              <InitialsAvatar
+                name={name}
+                seed={identifier || email || name}
+                size={76}
+                className="border-4 border-white shadow-md"
+              />
+              {avatarAction}
             </div>
-            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-white/90">
-              {identifier && <span>Mã tài khoản: {identifier}</span>}
-              {department && <span>{department}</span>}
-              {email && <span>{email}</span>}
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
+                  {name || "Tài khoản"}
+                </h1>
+                <span className="inline-flex items-center gap-1 rounded-[3px] bg-[#7bc043] px-2 py-1 text-xs font-bold text-slate-950">
+                  <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                  {role}
+                </span>
+              </div>
+              <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-white/90">
+                {identifier && <span>Mã tài khoản: {identifier}</span>}
+                {department && <span>{department}</span>}
+                {email && <span>{email}</span>}
+              </div>
             </div>
           </div>
         </div>
       </div>
-      <div
-        role="tablist"
-        aria-label="Điều hướng hồ sơ"
-        className="flex gap-1 overflow-x-auto border-t border-white/10 px-2 pt-2"
-      >
-        {tabs.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            id={`profile-tab-${id}`}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === id}
-            aria-controls={`profile-panel-${id}`}
-            onClick={() => onTabChange(id)}
-            className={`inline-flex min-h-11 shrink-0 items-center gap-2 border-b-2 px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#026aa7] ${
-              activeTab === id
-                ? "border-[#026aa7] text-[#025a8e]"
-                : "border-transparent text-slate-600 hover:border-slate-300 hover:text-slate-900"
-            }`}
-          >
-            <Icon className="h-4 w-4" aria-hidden="true" />
-            {label}
-          </button>
-        ))}
+      <div className={`relative z-20 -mt-7 px-3 sm:px-5 ${fullBleed ? "sm:px-8" : ""}`}>
+        <div
+          role="tablist"
+          aria-label="Điều hướng hồ sơ"
+          className="flex w-fit max-w-full gap-1 overflow-x-auto rounded-t-md border border-b-0 border-slate-200 bg-white px-2 shadow-lg"
+        >
+            {visibleTabs.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                id={`profile-tab-${id}`}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === id}
+                aria-controls={`profile-panel-${id}`}
+                onClick={() => onTabChange(id)}
+                className={`inline-flex min-h-11 shrink-0 items-center gap-2 border-b-2 px-3 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#026aa7] ${
+                  activeTab === id
+                    ? "border-[#026aa7] bg-[#026aa7]/5 text-[#025a8e]"
+                    : "border-transparent text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                }`}
+              >
+                <Icon className="h-4 w-4" aria-hidden="true" />
+                {label}
+              </button>
+            ))}
+        </div>
       </div>
-    </section>
+      </section>
   );
 }
 
@@ -119,15 +161,15 @@ export function ProfileCompletionCard({
       : Math.max(0, Math.min(100, Math.round(percent)));
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    <section className="rounded-md border border-slate-200 bg-white p-3 shadow-md">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="font-bold text-slate-900">{title}</h2>
-          <p className="mt-1 text-sm text-slate-600">
+          <p className="mt-1 text-xs text-slate-600">
             {items.filter((item) => item.complete).length}/{items.length} mốc hoàn thành
           </p>
         </div>
-        <span className="rounded-full bg-[#7bc043]/15 px-3 py-1 text-sm font-bold text-[#385d1b]">
+        <span className="rounded-[3px] bg-[#7bc043]/15 px-2 py-0.5 text-xs font-bold text-[#385d1b]">
           {completion}%
         </span>
       </div>
@@ -137,23 +179,23 @@ export function ProfileCompletionCard({
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={completion}
-        className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"
+        className="mt-3 h-1.5 overflow-hidden rounded-[2px] bg-slate-100"
       >
         <div
-          className="h-full rounded-full bg-[#7bc043] transition-[width] duration-300 motion-reduce:transition-none"
+          className="h-full rounded-[2px] bg-[#7bc043] transition-[width] duration-300 motion-reduce:transition-none"
           style={{ width: `${completion}%` }}
         />
       </div>
-      <ul className="mt-4 grid gap-2 sm:grid-cols-2">
+      <ul className="mt-3 grid gap-2">
         {items.map((item) => (
-          <li key={item.label} className="flex items-center gap-2 text-sm text-slate-700">
+          <li key={item.label} className="flex items-center gap-2 text-xs text-slate-700">
             <span
-              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
+              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-[3px] ${
                 item.complete ? "bg-[#7bc043]/20 text-[#385d1b]" : "bg-slate-100 text-slate-400"
               }`}
               aria-hidden="true"
             >
-              {item.complete ? <Check className="h-3 w-3" /> : <span className="h-1.5 w-1.5 rounded-full bg-current" />}
+              {item.complete ? <Check className="h-3 w-3" /> : <span className="h-1.5 w-1.5 rounded-[2px] bg-current" />}
             </span>
             {item.label}
           </li>
@@ -167,23 +209,36 @@ function QueryNotice({
   loading,
   error,
   empty,
+  emptyMessage = "Chưa có dữ liệu được ghi nhận.",
+  onRetry,
 }: {
   loading: boolean;
   error: boolean;
   empty: boolean;
+  emptyMessage?: string;
+  onRetry?: () => void;
 }) {
   if (loading) {
     return <p className="p-5 text-sm text-slate-600">Đang tải dữ liệu...</p>;
   }
   if (error) {
     return (
-      <p role="alert" className="p-5 text-sm text-rose-700">
-        Không thể tải dữ liệu. Vui lòng thử lại sau.
-      </p>
+      <div role="alert" className="flex flex-wrap items-center justify-between gap-2 p-3 text-xs text-rose-700">
+        <span>Không thể tải dữ liệu. Vui lòng thử lại.</span>
+        {onRetry && (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="rounded-[4px] border border-rose-200 px-2.5 py-1 font-semibold hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+          >
+            Thử lại
+          </button>
+        )}
+      </div>
     );
   }
   if (empty) {
-    return <p className="p-5 text-sm text-slate-600">Chưa có dữ liệu được ghi nhận.</p>;
+    return <p className="p-3 text-xs text-slate-600">{emptyMessage}</p>;
   }
   return null;
 }
@@ -228,7 +283,7 @@ export function ProfileAuditPanel({
   });
   const menuQuery = useQuery({
     queryKey: ["system", "my-menu", userId],
-    enabled: Boolean(userId),
+    enabled: Boolean(userId) && tab === "activity",
     staleTime: 5 * 60_000,
     queryFn: () => systemService.getMyMenu(),
   });
@@ -236,68 +291,97 @@ export function ProfileAuditPanel({
   if (tab === "login-history") {
     const logs = activityQuery.data ?? [];
     const sessions = sessionsQuery.data ?? [];
-    const pending = activityQuery.isPending || sessionsQuery.isPending;
-    const failed = Boolean(activityQuery.error || sessionsQuery.error);
-    const notice = (
-      <QueryNotice loading={pending} error={failed} empty={!logs.length && !sessions.length} />
-    );
 
     return (
       <section
         id="profile-panel-login-history"
         role="tabpanel"
         aria-labelledby="profile-tab-login-history"
-        className="space-y-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
+        className="space-y-4 rounded-md border border-slate-200 bg-white p-3 shadow-md"
       >
         <div>
-          <h2 className="text-lg font-bold text-slate-900">Nhật ký đăng nhập</h2>
-          <p className="mt-1 text-sm text-slate-600">
-            Nhật ký đăng nhập/đăng xuất có thời gian và IP. Thiết bị, trình duyệt chỉ có ở các phiên đang hoạt động.
+          <h2 className="text-sm font-bold text-slate-900">Nhật ký đăng nhập &amp; Thiết bị</h2>
+          <p className="mt-1 text-[11px] text-slate-600">
+            Nhật ký ghi nhận kết quả đăng nhập và IP. Thiết bị/trình duyệt được lưu từ các lần đăng nhập mới; phiên cũ có thể chưa có thông tin này.
           </p>
         </div>
-        {notice}
-        {!pending && !failed && sessions.length > 0 && (
-          <div>
-            <h3 className="mb-2 text-sm font-semibold text-slate-800">Phiên đang hoạt động</h3>
-            <ul className="space-y-2">
-              {sessions.map((session) => (
-                <li key={session.id} className="rounded-lg border border-slate-200 p-3">
-                  <p className="text-sm font-semibold text-slate-900">
-                    {session.device} · {session.browser}
-                    {session.isCurrent && (
-                      <span className="ml-2 rounded-full bg-[#7bc043]/20 px-2 py-0.5 text-xs text-[#385d1b]">
-                        Phiên hiện tại
-                      </span>
-                    )}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-600">
-                    Đăng nhập {formatDateTimeVi(session.createdAt)} · IP {session.ip || "Không xác định"}
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    Hoạt động gần nhất {formatDateTimeVi(session.lastActive)}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {!pending && !failed && logs.length > 0 && (
-          <div>
-            <h3 className="mb-2 text-sm font-semibold text-slate-800">Hoạt động tài khoản gần đây</h3>
-            <ul className="space-y-2">
-              {logs.map((log) => (
-                <li key={log.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 p-3">
-                  <span className="text-sm font-medium text-slate-800">
-                    {log.module}: {log.action}
-                  </span>
-                  <span className="text-xs text-slate-600">
-                    {formatDateTimeVi(log.time)} · IP {log.ip || "Không xác định"}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+        <div className="grid items-start gap-3 md:grid-cols-2">
+          <section aria-labelledby="profile-active-sessions-heading" className="min-w-0 rounded-md border border-slate-200 bg-slate-50/60 p-2.5">
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <h3 id="profile-active-sessions-heading" className="text-xs font-semibold text-slate-800">
+                Phiên đang hoạt động
+              </h3>
+              {sessionsQuery.data && (
+                <span className="rounded-[3px] bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
+                  {sessions.length}
+                </span>
+              )}
+            </div>
+            <QueryNotice
+              loading={sessionsQuery.isPending}
+              error={Boolean(sessionsQuery.error)}
+              empty={!sessionsQuery.data?.length}
+              emptyMessage="Không có phiên đăng nhập đang hoạt động."
+              onRetry={() => void sessionsQuery.refetch()}
+            />
+            {!sessionsQuery.isPending && !sessionsQuery.error && sessions.length > 0 && (
+              <ul className="space-y-2">
+                {sessions.map((session) => (
+                  <li key={session.id} className="rounded-md border border-slate-200 bg-white p-2.5">
+                    <p className="text-xs font-semibold text-slate-900">
+                      {session.device} · {session.browser}
+                      {session.isCurrent && (
+                        <span className="ml-2 rounded-[3px] bg-[#7bc043]/20 px-1.5 py-0.5 text-[10px] text-[#385d1b]">
+                          Phiên hiện tại
+                        </span>
+                      )}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-600">
+                      Đăng nhập {formatDateTimeVi(session.createdAt)} · IP {session.ip || "Không xác định"}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      Hoạt động gần nhất {formatDateTimeVi(session.lastActive)}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <section aria-labelledby="profile-login-history-heading" className="min-w-0 rounded-md border border-slate-200 bg-slate-50/60 p-2.5">
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <h3 id="profile-login-history-heading" className="text-xs font-semibold text-slate-800">
+                Lịch sử đăng nhập gần đây
+              </h3>
+              {activityQuery.data && (
+                <span className="rounded-[3px] bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
+                  {logs.length}
+                </span>
+              )}
+            </div>
+            <QueryNotice
+              loading={activityQuery.isPending}
+              error={Boolean(activityQuery.error)}
+              empty={!activityQuery.data?.length}
+              emptyMessage="Chưa ghi nhận lịch sử đăng nhập."
+              onRetry={() => void activityQuery.refetch()}
+            />
+            {!activityQuery.isPending && !activityQuery.error && logs.length > 0 && (
+              <ul className="space-y-2">
+                {logs.map((log) => (
+                  <li key={log.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-200 bg-white p-2.5">
+                    <span className="text-xs font-medium text-slate-800">
+                      {log.module}: {log.action}
+                    </span>
+                    <span className="text-xs text-slate-600">
+                      {formatDateTimeVi(log.time)} · IP {log.ip || "Không xác định"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
       </section>
     );
   }
@@ -312,11 +396,11 @@ export function ProfileAuditPanel({
       id="profile-panel-activity"
       role="tabpanel"
       aria-labelledby="profile-tab-activity"
-      className="space-y-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
+      className="space-y-4 rounded-md border border-slate-200 bg-white p-3 shadow-md"
     >
       <div>
-        <h2 className="text-lg font-bold text-slate-900">Chức năng được cấp quyền</h2>
-        <p className="mt-1 text-sm text-slate-600">
+        <h2 className="text-sm font-bold text-slate-900">Chức năng được cấp quyền</h2>
+        <p className="mt-1 text-xs text-slate-600">
           Danh sách chức năng được cung cấp cho tài khoản theo vai trò hiện tại.
         </p>
       </div>
@@ -409,24 +493,24 @@ export function ProfileDetailsCard({
       : "bg-slate-400";
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    <section className="rounded-md border border-slate-200 bg-white p-3">
       <h2 className="flex items-center gap-2 font-bold text-slate-900">
         <UserRound className="h-4 w-4 text-[#026aa7]" aria-hidden="true" />
         Thông tin chi tiết
       </h2>
-      <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+      <dl className="mt-3 grid gap-2 sm:grid-cols-2">
         {fields.map(([label, value]) => (
-          <div key={label} className="rounded-lg bg-slate-50 p-3">
+          <div key={label} className="rounded-md bg-slate-50 p-2.5">
             <dt className="text-xs font-semibold text-slate-500">{label}</dt>
-            <dd className="mt-1 break-words text-sm font-medium text-slate-800">
+            <dd className="mt-1 break-words text-xs font-medium text-slate-800">
               {value || "Chưa có dữ liệu"}
             </dd>
           </div>
         ))}
-        <div className="rounded-lg bg-slate-50 p-3">
+        <div className="rounded-md bg-slate-50 p-2.5">
           <dt className="text-xs font-semibold text-slate-500">Trạng thái</dt>
-          <dd className={`mt-1 inline-flex items-center gap-1.5 text-sm font-semibold ${accountStatusClass}`}>
-            <span className={`h-2 w-2 rounded-full ${accountStatusDotClass}`} aria-hidden="true" />
+          <dd className={`mt-1 inline-flex items-center gap-1.5 text-xs font-semibold ${accountStatusClass}`}>
+            <span className={`h-2 w-2 rounded-[2px] ${accountStatusDotClass}`} aria-hidden="true" />
             {accountStatus}
           </dd>
         </div>

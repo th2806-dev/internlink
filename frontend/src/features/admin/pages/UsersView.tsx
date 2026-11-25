@@ -25,6 +25,7 @@ import type { AdminUser } from "../../../types/user";
 import { getApiErrorMessage, ApiClientError } from "../../../lib/apiClient";
 import { useAdminUsersQuery, USERS_PAGE_SIZE_OPTIONS } from "../../../hooks/useAdminUsersQuery";
 import { useAdminCapabilities } from "../../../hooks/useAdminCapabilities";
+import { PLATFORM_PAGE_CONTENT_CLASS, PlatformPageHeader } from "../components/PlatformPageHeader";
 import {
   CreateUserModal,
   type CreateUserFormPayload,
@@ -248,11 +249,22 @@ export const UsersView = ({
     );
 
   return (
-    <div className="w-full space-y-2 pb-12">
+    <div className={`min-h-full w-full bg-slate-50 pb-12 ${isSuperAdmin ? "" : "space-y-3"}`}>
+      <PlatformPageHeader
+        title="Quản lý thành viên"
+        description="Quản lý tài khoản, vai trò và trạng thái truy cập theo quyền được cấp."
+        breadcrumbs={[
+          { label: "Quản trị nền tảng", href: "/admin/dashboard" },
+          { label: "Quản trị & tuân thủ" },
+          { label: "Thành viên" },
+        ]}
+        statistic={`${counts.total.toLocaleString("vi-VN")} tài khoản`}
+      />
       <CompactActionBar
         icon={Users}
-        title="Quản lý Người dùng & Gán Vai trò"
-        total={`(${counts.total.toLocaleString("vi-VN")} tài khoản)`}
+        title="Quản lý thành viên"
+        subtitle="Quản lý tài khoản, vai trò và trạng thái truy cập."
+        hideTitle
         badge={counts.locked > 0 ? `${counts.locked.toLocaleString("vi-VN")} khóa` : undefined}
         search={{
           value: searchInput,
@@ -325,6 +337,7 @@ export const UsersView = ({
         ]}
       />
 
+      <main className={isSuperAdmin ? PLATFORM_PAGE_CONTENT_CLASS : "space-y-3"}>
       {isSuperAdmin && (
         <div className="flex items-start gap-2.5 rounded-md border border-slate-200 bg-white p-3">
           <Shield className="mt-0.5 h-4 w-4 shrink-0 text-[#026aa7]" aria-hidden="true" />
@@ -351,7 +364,7 @@ export const UsersView = ({
         {isPending && !isError && <TableSkeleton rows={6} columns={6} />}
 
         {!isPending && !isError && (
-        <div className="overflow-hidden rounded-md border border-slate-200">
+        <div className="overflow-hidden rounded-md border border-slate-200 shadow-sm">
         <div className={`divide-y divide-slate-100 p-3 md:hidden ${isFetching ? "opacity-60" : ""}`} aria-busy={isFetching}>
           {users.length === 0 ? (
             <div className="p-4">
@@ -531,6 +544,7 @@ export const UsersView = ({
           </div>
         </div>
         )}
+      </main>
       <ConfirmDialog
         open={Boolean(resetTarget)}
         title="Đặt lại mật khẩu"

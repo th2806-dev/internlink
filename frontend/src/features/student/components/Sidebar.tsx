@@ -13,6 +13,7 @@ import {
 import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
 import { useStudentPortal } from "../../../contexts/StudentPortalContext";
 import type { UserRole } from "../../../types/common";
+import { resolveAppAssetUrl, useAppBranding } from "../../../contexts/AppBrandingContext";
 
 type StudentNavItem = {
   id: string;
@@ -43,6 +44,7 @@ export const Sidebar = ({
   onClose?: () => void;
 }) => {
   const { profile, isArchiveReadOnly } = useStudentPortal();
+  const { branding } = useAppBranding();
   const displayName = profile.name || studentName;
   const navSections: StudentNavSection[] = isArchiveReadOnly
     ? [
@@ -149,8 +151,8 @@ export const Sidebar = ({
         <div className="p-4 border-b border-slate-200/90 flex items-center gap-3 bg-gradient-to-b from-blue-50/40 to-white">
           <div className="p-1.5 bg-[#026aa7]/10 border border-[#026aa7]/20 rounded-lg shrink-0">
             <img
-              src="/logo/logo_internlink-02.png"
-              alt="InternLink Mark Logo"
+              src={resolveAppAssetUrl(branding.appLogoUrl)}
+              alt={`${branding.appName} Mark Logo`}
               className="w-7 h-7 object-contain"
             />
           </div>

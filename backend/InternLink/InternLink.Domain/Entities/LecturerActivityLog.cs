@@ -1,7 +1,8 @@
 namespace InternLink.Domain.Entities;
 
-public sealed class LecturerActivityLog : BaseEntity
+public sealed class LecturerActivityLog : BaseEntity, ITenantScoped
 {
+    public Guid TenantId { get; set; }
     public Guid LecturerId { get; set; }
     public Guid SemesterId { get; set; }
     public Guid? InternshipId { get; set; }

@@ -6,6 +6,7 @@ public interface IDatabaseBackupService
 {
     Task<IReadOnlyList<BackupFileDto>> GetBackupsAsync(CancellationToken cancellationToken);
     Task<BackupFileDto> CreateBackupAsync(CancellationToken cancellationToken);
+    Task<BackupFileDto> CreateScheduledBackupAsync(CancellationToken cancellationToken);
     Task<FileStream?> OpenBackupAsync(string fileName, CancellationToken cancellationToken);
     Task<bool> DeleteBackupAsync(string fileName, CancellationToken cancellationToken);
     Task RestoreBackupAsync(string fileName, CancellationToken cancellationToken);

@@ -4,6 +4,7 @@ import { Sidebar as StudentSidebar } from "../features/student/components/Sideba
 import { Header as StudentHeader } from "../features/student/components/Header";
 import { Toast } from "../components/common/Toast";
 import { useToast } from "../hooks/useToast";
+import { PlatformAnnouncementBanner } from "../features/admin/components/PlatformAnnouncementBanner";
 import {
   StudentPortalProvider,
   useStudentPortal,
@@ -101,6 +102,7 @@ export default function StudentLayout({
               onMenuOpen={() => setIsSidebarOpen(true)}
               isMenuOpen={isSidebarOpen}
             />
+            <PlatformAnnouncementBanner />
             <Toast message={message} type={type} onClose={clearToast} />
             <main className="min-w-0 p-3 sm:p-4 lg:p-6 space-y-4 max-w-[1440px] w-full mx-auto">
               {children}

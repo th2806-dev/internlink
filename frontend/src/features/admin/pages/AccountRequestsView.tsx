@@ -37,6 +37,8 @@ import {
   Bell,
 } from "lucide-react";
 import { CompactActionBar } from "../../../components/common/CompactActionBar";
+import { PLATFORM_PAGE_CONTENT_CLASS } from "../components/PlatformPageHeader";
+import { PlatformTabBar } from "../components/PlatformTabBar";
 import { InitialsAvatar } from "../../../components/common/InitialsAvatar";
 import { CompanyAvatar } from "../../../components/common/CompanyAvatar";
 import { KpiCard, KpiGrid } from "../../../components/common/KpiCard";
@@ -442,7 +444,7 @@ export const AccountRequestsView = ({
     void queryClient.invalidateQueries({ queryKey: queryKeys.admin.accountRequests.all });
   };
   return (
-    <div className="space-y-4 w-full min-w-0 overflow-hidden">
+    <div className="w-full min-w-0 overflow-hidden">
       <CompactActionBar
         icon={KeyRound}
         title="Quản lý Yêu cầu & Cấp phát Tài khoản"
@@ -484,6 +486,7 @@ export const AccountRequestsView = ({
         </button>
       </CompactActionBar>
 
+      <main className={PLATFORM_PAGE_CONTENT_CLASS}>
       {requestsQuery.isError && (
         <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
           <span>Không thể tải danh sách yêu cầu tài khoản.</span>
@@ -498,40 +501,46 @@ export const AccountRequestsView = ({
         </div>
       )}
 
-      {/* MAIN VIEW MODE NAV TABS */}
-      <div className="flex items-center gap-1.5 p-1.5 bg-slate-100/90 rounded-lg border border-slate-200 text-xs font-bold overflow-x-auto shrink-0">
-        <button
-          onClick={() => setActiveMainTab("requests")}
-          className={`px-4 py-2.5 rounded-md transition-all flex items-center gap-2 whitespace-nowrap shrink-0 ${activeMainTab === "requests" ? "bg-white text-blue-700 shadow-2xs font-bold" : "text-slate-600 hover:text-slate-900"}`}
-        >
-          <KeyRound className="w-4 h-4 shrink-0" />
-          <span>Hàng đợi yêu cầu</span>
-          {pendingCount > 0 && (
-            <span className="px-2 py-0.5 bg-amber-500 text-white text-[10px] font-bold rounded-full">
-              {pendingCount} chờ
-            </span>
-          )}
-        </button>
-
-        <button
-          onClick={() => setActiveMainTab("directory")}
-          className={`px-4 py-2.5 rounded-md transition-all flex items-center gap-2 whitespace-nowrap shrink-0 ${activeMainTab === "directory" ? "bg-white text-blue-700 shadow-2xs font-bold" : "text-slate-600 hover:text-slate-900"}`}
-        >
-          <UserCheck className="w-4 h-4 shrink-0" />
-          <span>Danh sách &amp; Cấp phát tài khoản</span>
-          <span className="px-2 py-0.5 bg-slate-200 text-slate-800 text-[10px] font-bold rounded-full">
-            {totalAccountsCount}
-          </span>
-        </button>
-
-        <button
-          onClick={() => setActiveMainTab("logs")}
-          className={`px-4 py-2.5 rounded-md transition-all flex items-center gap-2 whitespace-nowrap shrink-0 ${activeMainTab === "logs" ? "bg-white text-blue-700 shadow-2xs font-bold" : "text-slate-600 hover:text-slate-900"}`}
-        >
-          <History className="w-4 h-4 shrink-0" />
-          <span>Nhật ký hệ thống &amp; Kiểm toán</span>
-        </button>
-      </div>
+      <PlatformTabBar
+        ariaLabel="Phân hệ yêu cầu và tài khoản"
+        selectedId={activeMainTab}
+        tabs={[
+          {
+            id: "requests",
+            label: (
+              <span className="inline-flex items-center gap-1.5">
+                Hàng đợi yêu cầu
+                {pendingCount > 0 && (
+                  <span className="rounded-[3px] bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
+                    {pendingCount} chờ
+                  </span>
+                )}
+              </span>
+            ),
+            icon: KeyRound,
+            onSelect: () => setActiveMainTab("requests"),
+          },
+          {
+            id: "directory",
+            label: (
+              <span className="inline-flex items-center gap-1.5">
+                Danh sách &amp; Cấp phát tài khoản
+                <span className="rounded-[3px] bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
+                  {totalAccountsCount}
+                </span>
+              </span>
+            ),
+            icon: UserCheck,
+            onSelect: () => setActiveMainTab("directory"),
+          },
+          {
+            id: "logs",
+            label: "Nhật ký hệ thống & Kiểm toán",
+            icon: History,
+            onSelect: () => setActiveMainTab("logs"),
+          },
+        ]}
+      />
 
       <KpiGrid>
         <KpiCard
@@ -1301,6 +1310,8 @@ export const AccountRequestsView = ({
         </Panel>
       )}
 
+      </main>
+
       {/* REQUEST DETAIL DRAWER */}
       {isDetailOpen && selectedRequest && (
         <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/40 animate-in fade-in duration-200">
@@ -1699,7 +1710,7 @@ export const AccountRequestsView = ({
                     required
                     value={newAccEmail}
                     onChange={(e) => setNewAccEmail(e.target.value)}
-                    placeholder="VD: email@hcmute.edu.vn"
+                    placeholder="VD: email@ten-truong.edu.vn"
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-medium outline-none focus:bg-white focus:border-blue-500"
                   />
                 </div>
@@ -1726,7 +1737,7 @@ export const AccountRequestsView = ({
                   type="text"
                   value={newAccOrg}
                   onChange={(e) => setNewAccOrg(e.target.value)}
-                  placeholder="VD: Lớp 20CNTT1 • Khoa CNTT hoặc FPT Software"
+                  placeholder="VD: Lớp 20CNTT1 • Khoa CNTT hoặc tên doanh nghiệp"
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-medium outline-none focus:bg-white focus:border-blue-500"
                 />
               </div>

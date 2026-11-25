@@ -3,6 +3,7 @@ import { Sidebar as LecturerSidebar } from "../features/lecturer/components/Side
 import { Header as LecturerHeader } from "../features/lecturer/components/Header";
 import { Toast } from "../components/common/Toast";
 import { useToast } from "../hooks/useToast";
+import { PlatformAnnouncementBanner } from "../features/admin/components/PlatformAnnouncementBanner";
 
 interface LecturerLayoutProps {
   children: ReactNode;
@@ -63,6 +64,7 @@ export default function LecturerLayout({
           onMenuOpen={() => setIsSidebarOpen((open) => !open)}
           isMenuOpen={isSidebarOpen}
         />
+        <PlatformAnnouncementBanner />
         <Toast message={message} type={type} onClose={clearToast} />
         <main className="min-w-0 w-full max-w-[1440px] mx-auto p-3 sm:p-4 lg:p-6 space-y-4">
           {children}

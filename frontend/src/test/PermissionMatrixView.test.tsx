@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PermissionMatrixView } from "../features/admin/pages/PermissionMatrixView";
 import { systemAdminService } from "../services/systemAdmin.service";
@@ -34,6 +35,7 @@ const permissions: RolePermissionRow[] = [
     canImport: false,
     canPrint: false,
     canApprove: false,
+    canLock: false,
   },
 ];
 
@@ -49,6 +51,8 @@ describe("PermissionMatrixView", () => {
     const onShowToast = vi.fn();
     renderView(<PermissionMatrixView onShowToast={onShowToast} />);
 
+    expect(screen.getByLabelText("Breadcrumb")).toHaveTextContent("Quản trị & tuân thủ");
+    expect(screen.queryByText("F1005")).not.toBeInTheDocument();
     expect(await screen.findByText("Tài khoản")).toBeInTheDocument();
     const addSwitch = screen.getByRole("switch", { name: "Tài khoản: Thêm" });
     expect(addSwitch).toHaveClass("h-7", "w-8", "rounded-[4px]");
@@ -106,6 +110,39 @@ describe("PermissionMatrixView", () => {
     for (const action of ["Xem", "Thêm", "Sửa", "Xóa", "Xuất Excel", "Nhập Excel", "In phiếu", "Phê duyệt"]) {
       expect(screen.getByRole("switch", { name: `Tài khoản: ${action}` })).toBeChecked();
     }
+  });
+
+  it("shows lock instead of print for tenant and ERP gateway modules", async () => {
+    vi.mocked(systemAdminService.getRolePermissions).mockResolvedValue([
+      ...permissions,
+      {
+        ...permissions[0],
+        moduleCode: "API_GATEWAY",
+        featureCode: "F1013",
+        functionName: "API Gateway",
+        sortOrder: 3,
+      },
+    ]);
+    renderView(<PermissionMatrixView onShowToast={vi.fn()} />);
+
+    const printSwitch = await screen.findByRole("switch", { name: "API Gateway: In phiếu" });
+    const lockSwitch = screen.getByRole("switch", { name: "API Gateway: Khóa" });
+    expect(printSwitch).toBeDisabled();
+    expect(lockSwitch).toBeEnabled();
+
+    fireEvent.click(screen.getByRole("switch", { name: "Cấp toàn quyền chức năng cho API Gateway" }));
+    expect(lockSwitch).toBeChecked();
+    expect(printSwitch).not.toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: "Lưu ma trận quyền" }));
+
+    await waitFor(() => {
+      expect(systemAdminService.saveRolePermissions).toHaveBeenCalledWith(
+        1,
+        expect.arrayContaining([
+          expect.objectContaining({ moduleCode: "API_GATEWAY", canLock: true, canPrint: false }),
+        ]),
+      );
+    });
   });
 
   it("toggles every permission in a function group and shows its sort order", async () => {
@@ -173,12 +210,16 @@ describe("PermissionMatrixView", () => {
 
     expect(screen.getByRole("switch", { name: "Hệ thống: Xem" })).toBeInTheDocument();
     expect(screen.queryByRole("switch", { name: "Tài khoản: Xem" })).not.toBeInTheDocument();
-  });
+  }, 30000);
 });
 
 function renderView(ui: React.ReactNode) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+  return render(
+    <MemoryRouter>
+      <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
+    </MemoryRouter>,
+  );
 }

@@ -2,8 +2,9 @@ using InternLink.Domain.Entities;
 
 namespace InternLink.Domain.Entities.Rbac;
 
-public class SysAuditLog : BaseEntity
+public class SysAuditLog : BaseEntity, ITenantScoped
 {
+    public Guid TenantId { get; set; }
     public string TableName { get; set; } = null!;
     public string ActionType { get; set; } = null!;
     public string RecordId { get; set; } = null!;

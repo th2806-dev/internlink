@@ -1,7 +1,8 @@
 namespace InternLink.Domain.Entities;
 
-public class RefreshToken : BaseEntity
+public class RefreshToken : BaseEntity, ITenantScoped
 {
+    public Guid TenantId { get; set; }
     public Guid UserId { get; set; }
     public string Token { get; set; } = null!;
     public string JwtId { get; set; } = null!;
@@ -9,6 +10,7 @@ public class RefreshToken : BaseEntity
     public bool IsRevoked { get; set; }
     public DateTime ExpiresAt { get; set; }
     public string? CreatedByIp { get; set; }
+    public string? UserAgent { get; set; }
     public DateTime? RevokedAt { get; set; }
     public string? RevokedByIp { get; set; }
     public string? ReplacedByToken { get; set; }

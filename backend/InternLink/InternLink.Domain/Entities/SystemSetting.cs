@@ -4,8 +4,9 @@ namespace InternLink.Domain.Entities;
 /// Key-value system settings persisted in the database.
 /// Used by AdminSettingsController instead of in-memory storage.
 /// </summary>
-public class SystemSetting : BaseEntity
+public class SystemSetting : BaseEntity, ITenantScoped
 {
+    public Guid TenantId { get; set; }
     /// <summary>
     /// Unique key for the setting (e.g., "DepartmentName", "SupportEmail")
     /// </summary>

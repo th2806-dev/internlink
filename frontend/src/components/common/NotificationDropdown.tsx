@@ -18,6 +18,7 @@ import type { NotificationDto } from "../../types/api";
 import { notificationService } from "../../services/notification.service";
 import { adminNotificationsService } from "../../services/adminNotifications.service";
 import { signalRNotificationService } from "../../services/signalr.service";
+import { platformOperationsService } from "../../services/platformOperations.service";
 
 export interface AppNotification {
   id: string;
@@ -103,6 +104,28 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
     try {
       setIsLoading(true);
       if (role === "admin") {
+        if (backendRole === "SuperAdmin") {
+          const banners = await platformOperationsService.getActiveBanners();
+          const superAdminNotifications: AppNotification[] = banners.map((banner) => ({
+            id: banner.id,
+            title: banner.title,
+            message: banner.content,
+            category: "announcement",
+            priority: banner.type === "SecurityAlert" ? "urgent" : "normal",
+            timestamp: `Đến ${new Date(banner.endsAt).toLocaleString("vi-VN", {
+              day: "2-digit",
+              month: "2-digit",
+              hour: "2-digit",
+              minute: "2-digit",
+            })}`,
+            isRead: readIds.has(banner.id),
+            targetTab: "admin-announcements",
+            sender: { name: "Hệ thống nền tảng", role: "Thông báo nền tảng" },
+          }));
+          setNotifications(superAdminNotifications.filter((item) => !deletedIds.has(item.id)));
+          setIsLoading(false);
+          return;
+        }
         // For Admin, fetch personal notifications and broadcast campaigns
         const [mineRows, campaigns] = await Promise.all([
           notificationService.getMine().catch(() => []),
@@ -271,7 +294,9 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
         priority: "urgent",
         timestamp: "Vừa xong",
         isRead: false,
-        targetTab: incoming.link || (role === "admin" ? "admin-notifications" : undefined),
+        targetTab: incoming.link || (role === "admin"
+          ? backendRole === "SuperAdmin" ? "admin-announcements" : "admin-notifications"
+          : undefined),
         sender: { name: "Hệ thống (Live)", role: "Realtime Hub" },
       };
 
@@ -402,7 +427,7 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="p-2 text-slate-600 hover:text-blue-600 hover:bg-slate-100 rounded-lg transition-colors relative cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+        className="relative flex h-8 w-8 cursor-pointer items-center justify-center rounded-[4px] text-slate-200 transition-colors hover:bg-white/10 hover:text-white focus:outline-none focus:ring-2 focus:ring-[#7bc043]"
         title="Trung tâm thông báo"
         aria-expanded={isOpen}
       >
@@ -416,16 +441,18 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
 
       {/* Popover Dropdown Drawer */}
       {isOpen && (
-        <div className="absolute right-0 mt-2.5 w-[340px] sm:w-[420px] bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden z-50 animate-in fade-in-50 zoom-in-95 duration-150">
+        <div className="absolute right-0 mt-2.5 w-[340px] overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg z-50 animate-in fade-in-50 zoom-in-95 duration-150 sm:w-[420px]">
           {/* Header */}
-          <div className="p-3.5 bg-slate-900 text-white flex items-center justify-between">
+          <div className="flex items-center justify-between border-b border-[#026aa7] bg-[#026aa7] p-3 text-white">
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center">
+              <div className="flex h-7 w-7 items-center justify-center rounded-[4px] bg-white/10 text-slate-200">
                 <Bell className="w-3.5 h-3.5" />
               </div>
               <div>
                 <h4 className="font-bold text-xs tracking-tight">
-                  {role === "admin" ? "Thông báo Quản trị & Hệ thống" : "Trung tâm Thông báo"}
+                  {role === "admin"
+                    ? backendRole === "SuperAdmin" ? "Thông báo Nền tảng" : "Thông báo Quản trị"
+                    : "Trung tâm Thông báo"}
                 </h4>
                 <p className="text-[10px] text-slate-300">
                   {unreadCount > 0
@@ -451,13 +478,13 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
           </div>
 
           {/* Filter Pills */}
-          <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 flex items-center gap-1.5 overflow-x-auto text-[11px] font-semibold">
+          <div className="flex items-center gap-1.5 overflow-x-auto border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold">
             <button
               type="button"
               onClick={() => setActiveFilter("all")}
-              className={`px-2.5 py-1 rounded-full transition-all whitespace-nowrap cursor-pointer ${
+              className={`cursor-pointer whitespace-nowrap rounded-[4px] px-2.5 py-1 transition-colors ${
                 activeFilter === "all"
-                  ? "bg-blue-600 text-white shadow-xs"
+                  ? "bg-[#026aa7] text-white"
                   : "bg-white text-slate-600 hover:bg-slate-200 border border-slate-200"
               }`}
             >
@@ -466,9 +493,9 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
             <button
               type="button"
               onClick={() => setActiveFilter("unread")}
-              className={`px-2.5 py-1 rounded-full transition-all whitespace-nowrap cursor-pointer ${
+              className={`cursor-pointer whitespace-nowrap rounded-[4px] px-2.5 py-1 transition-colors ${
                 activeFilter === "unread"
-                  ? "bg-rose-600 text-white shadow-xs"
+                  ? "bg-[#026aa7] text-white"
                   : "bg-white text-slate-600 hover:bg-slate-200 border border-slate-200"
               }`}
             >
@@ -477,29 +504,33 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
             <button
               type="button"
               onClick={() => setActiveFilter("reports")}
-              className={`px-2.5 py-1 rounded-full transition-all whitespace-nowrap cursor-pointer ${
+              className={`cursor-pointer whitespace-nowrap rounded-[4px] px-2.5 py-1 transition-colors ${
                 activeFilter === "reports"
-                  ? "bg-blue-600 text-white shadow-xs"
+                  ? "bg-[#026aa7] text-white"
                   : "bg-white text-slate-600 hover:bg-slate-200 border border-slate-200"
               }`}
             >
-              {role === "admin" ? "Chiến dịch & Đối tác" : "Báo cáo & Điểm"}
+              {role === "admin"
+                ? backendRole === "SuperAdmin" ? "Thông báo phát hành" : "Chiến dịch & Đối tác"
+                : "Báo cáo & Điểm"}
             </button>
             <button
               type="button"
               onClick={() => setActiveFilter("system")}
-              className={`px-2.5 py-1 rounded-full transition-all whitespace-nowrap cursor-pointer ${
+              className={`cursor-pointer whitespace-nowrap rounded-[4px] px-2.5 py-1 transition-colors ${
                 activeFilter === "system"
-                  ? "bg-blue-600 text-white shadow-xs"
+                  ? "bg-[#026aa7] text-white"
                   : "bg-white text-slate-600 hover:bg-slate-200 border border-slate-200"
               }`}
             >
-              {role === "admin" ? "Bảo mật & Cấu hình" : "Hạn chót & Hệ thống"}
+              {role === "admin"
+                ? backendRole === "SuperAdmin" ? "Bảo trì & Bảo mật" : "Bảo mật & Cấu hình"
+                : "Hạn chót & Hệ thống"}
             </button>
           </div>
 
           {/* Notification List */}
-          <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 p-1">
+          <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
             {filteredNotifications.length === 0 ? (
               <div className="py-10 px-4 text-center space-y-2">
                 <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
@@ -509,7 +540,9 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
                   Không có thông báo nào trong mục này
                 </p>
                 <p className="text-[11px] text-slate-400 max-w-xs mx-auto">
-                  Mọi cập nhật và tin tức mới nhất sẽ tự động xuất hiện tại đây.
+                  {backendRole === "SuperAdmin"
+                    ? "Thông báo bảo trì, phát hành và khẩn cấp sẽ xuất hiện tại đây."
+                    : "Mọi cập nhật và tin tức mới nhất sẽ tự động xuất hiện tại đây."}
                 </p>
               </div>
             ) : (
@@ -517,9 +550,9 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
                 <div
                   key={item.id}
                   onClick={() => handleNotificationClick(item)}
-                  className={`group relative p-3 rounded-lg transition-all cursor-pointer flex items-start gap-3 ${
+                  className={`group relative flex cursor-pointer items-start gap-3 px-3 py-2.5 transition-colors ${
                     !item.isRead
-                      ? "bg-blue-50/50 hover:bg-blue-50 border-l-4 border-l-blue-600"
+                      ? "bg-[#026aa7]/5 hover:bg-[#026aa7]/10 border-l-4 border-l-[#026aa7]"
                       : "hover:bg-slate-50"
                   }`}
                 >
@@ -541,7 +574,7 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
                         {item.title}
                       </h5>
                       {!item.isRead && (
-                        <span className="w-2 h-2 rounded-full bg-blue-600 shrink-0 mt-1" />
+                        <span className="w-2 h-2 rounded-full bg-[#026aa7] shrink-0 mt-1" />
                       )}
                     </div>
 
@@ -577,7 +610,7 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
           </div>
 
           {/* Footer Actions */}
-          <div className="p-2.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-2 text-xs">
+          <div className="flex items-center justify-between gap-2 border-t border-slate-200 bg-slate-50 px-3 py-2 text-xs">
             <span className="text-[11px] text-slate-400 font-medium">
               Tự động cập nhật thời gian thực
             </span>
@@ -589,10 +622,10 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
                 if (onNavigate) {
                   if (role === "student") onNavigate("student-notifications");
                   else if (role === "lecturer") onNavigate("notifications");
-                  else onNavigate("admin-notifications");
+                  else onNavigate(backendRole === "SuperAdmin" ? "admin-announcements" : "admin-notifications");
                 }
               }}
-              className="font-bold text-[11px] text-slate-700 hover:text-blue-600 transition-colors flex items-center gap-1 cursor-pointer"
+              className="font-bold text-[11px] text-slate-700 hover:text-[#026aa7] transition-colors flex items-center gap-1 cursor-pointer"
             >
               <span>Xem tất cả</span>
               <ChevronRight className="w-3 h-3" />

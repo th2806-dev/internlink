@@ -1,6 +1,8 @@
 using InternLink.Domain.Entities;
 using InternLink.Domain.Entities.Rbac;
+using InternLink.Domain.Entities.System;
 using InternLink.Domain.Enums;
+using InternLink.Application.Interfaces;
 using InternLink.Shared.Authorization;
 using Microsoft.EntityFrameworkCore;
 
@@ -59,6 +61,8 @@ public static class SystemRbacSeeder
         new(SystemPermissionCodes.ApiWebhookTest, "Kiểm tra", "API_WEBHOOK", 5, true, "API_WEBHOOK"),
         new(SystemPermissionCodes.ApiWebhookRotateSecret, "Đổi khóa bí mật", "API_WEBHOOK", 6, true, "API_WEBHOOK"),
         new("DASHBOARD", "Tổng quan", "DASHBOARD", 0, false, FuncUrl: "/admin/dashboard", IconName: "LayoutDashboard", Description: "TỔNG QUAN"),
+        new("ANNOUNCEMENTS", "Thông báo nền tảng", "ANNOUNCEMENTS", 1, false, Description: "CHỈ HUY NỀN TẢNG"),
+        new("SECURITY_SESSIONS", "Phiên quản trị", "SECURITY_SESSIONS", 2, false, Description: "HẠ TẦNG & AN NINH"),
         new("SEMESTERS", "Kỳ thực tập", "SEMESTERS", 10, false, Description: "GIAI ĐOẠN 1 · CHUẨN BỊ KỲ"),
         new("STUDENTS", "Sinh viên", "STUDENTS", 11, false, Description: "GIAI ĐOẠN 1 · CHUẨN BỊ KỲ"),
         new("COMPANIES", "Doanh nghiệp", "COMPANIES", 12, false, Description: "GIAI ĐOẠN 1 · CHUẨN BỊ KỲ"),
@@ -71,24 +75,139 @@ public static class SystemRbacSeeder
         new("DEPARTMENTS", "Khoa", "DEPARTMENTS", 7, false, Description: "QUẢN TRỊ NỀN TẢNG"),
         new("GRID_CONFIG", "Cấu hình bảng", "GRID_CONFIG", 8, false, Description: "QUẢN TRỊ NỀN TẢNG"),
         new("FIELD_POLICIES", "Chính sách trường", "FIELD_POLICIES", 9, false, Description: "QUẢN TRỊ NỀN TẢNG"),
+        new("TENANTS", "Đơn vị Triển khai", "TENANTS", 10, false, Description: "HỆ THỐNG"),
+        new("LICENSES", "Bản quyền & Quota", "LICENSES", 11, false, Description: "HỆ THỐNG"),
+        new("API_GATEWAY", "API Gateway & Webhook Hub", "API_GATEWAY", 13, false, Description: "HỆ THỐNG"),
+        new("OBSERVABILITY", "Giám sát hệ thống & Jobs", "OBSERVABILITY", 14, false, Description: "HỆ THỐNG"),
+        new("SSO_HUB", "Cổng định danh SSO", "SSO_HUB", 15, false, Description: "HỆ THỐNG"),
+        new("COMPLIANCE", "Tuân thủ & vòng đời dữ liệu", "COMPLIANCE", 16, false, Description: "HỆ THỐNG"),
+        new("BILLING", "Hóa đơn & thanh toán", "BILLING", 17, false, Description: "ĐƠN VỊ & BẢN QUYỀN"),
         new("NOTIFICATIONS", "Thông báo", "NOTIFICATIONS", 22, false, Description: "GIAI ĐOẠN 2 · THEO DÕI VẬN HÀNH"),
     }.Concat(BuildMatrixActionFunctions())
         .Concat(BuildMenuFunctions())
         .DistinctBy(function => function.Code, StringComparer.OrdinalIgnoreCase)
         .ToArray();
 
+    public static async Task SeedTenantAsync(
+        AppDbContext context,
+        IScopedTenantContext tenantContext,
+        CancellationToken cancellationToken = default)
+    {
+        var tenant = await context.SysTenants.IgnoreQueryFilters()
+            .SingleOrDefaultAsync(item => item.PublicId == SysTenant.DefaultTenantId, cancellationToken);
+
+        if (tenant == null)
+        {
+            tenant = new SysTenant
+            {
+                PublicId = SysTenant.DefaultTenantId,
+                TenantCode = "DEFAULT-CAMPUS",
+                Name = "Đại học Mẫu",
+                LegalName = "Đại học Mẫu",
+                Subdomain = "default-campus",
+                TenantType = TenantType.University,
+                ContactEmail = string.Empty,
+                ContactPhone = string.Empty,
+                Status = TenantStatus.Active
+            };
+            await context.SysTenants.AddAsync(tenant, cancellationToken);
+        }
+
+        tenantContext.SetTenantId(tenant.PublicId);
+        if (context.Entry(tenant).State == EntityState.Added)
+            await context.SaveChangesAsync(cancellationToken);
+
+        if (!await context.SysTenantLicenses.AnyAsync(cancellationToken))
+        {
+            await context.SysTenantLicenses.AddAsync(new SysTenantLicense
+            {
+                TenantId = tenant.PublicId,
+                LicenseTier = LicenseTier.Standard,
+                MaxStudentsQuota = 5000,
+                ValidFrom = DateTime.UtcNow,
+                ValidTo = DateTime.UtcNow.AddYears(1),
+                IsActive = true
+            }, cancellationToken);
+            await context.SaveChangesAsync(cancellationToken);
+        }
+    }
+
+    private static async Task EnsureDefaultSystemJobsAsync(
+        AppDbContext context,
+        CancellationToken cancellationToken)
+    {
+        var defaults = new[]
+        {
+            new SysDailyJob
+            {
+                JobCode = "DB_BACKUP",
+                JobName = "Sao lưu cơ sở dữ liệu",
+                CronExpression = "00 02 * * *",
+                Description = "Tự động sao lưu hằng ngày theo giờ Việt Nam; giữ lại 14 bản sao lưu tự động gần nhất.",
+                Status = "Ready"
+            },
+            new SysDailyJob
+            {
+                JobCode = "REPORT_DEADLINE_SCAN",
+                JobName = "Quét hạn báo cáo",
+                CronExpression = "0 0 6 * * *",
+                Description = "Quét lịch nộp báo cáo đang mở đã quá hạn.",
+                Status = "Ready"
+            },
+            new SysDailyJob
+            {
+                JobCode = "ACCOUNT_EXPIRY_SCAN",
+                JobName = "Quét tài khoản hết hạn",
+                CronExpression = "0 0 0 * * *",
+                Description = "Đánh dấu hết hạn các đơn vị có license đã hết hiệu lực.",
+                Status = "Ready"
+            },
+            new SysDailyJob
+            {
+                JobCode = "KPI_WEEKLY_AGGREGATE",
+                JobName = "Tổng hợp KPI tuần",
+                CronExpression = "0 0 6 * * 0",
+                Description = "Tổng hợp số lượng báo cáo được tạo trong 7 ngày gần nhất theo tenant.",
+                Status = "Ready"
+            }
+        };
+
+        var existingJobs = await context.SysDailyJobs.IgnoreQueryFilters()
+            .Where(item => !item.IsDeleted)
+            .ToDictionaryAsync(item => item.JobCode, StringComparer.OrdinalIgnoreCase, cancellationToken);
+        foreach (var job in defaults)
+        {
+            if (existingJobs.ContainsKey(job.JobCode))
+                continue;
+            job.IsEnabled = true;
+            job.CreatedAt = DateTime.UtcNow;
+            context.SysDailyJobs.Add(job);
+        }
+
+        await context.SaveChangesAsync(cancellationToken);
+    }
+
     private static IEnumerable<FunctionDefinition> BuildMenuFunctions()
     {
-        yield return new("SYSTEM.FUNCTIONS", "Chức năng", "SYSTEM", 10, false, "SYSTEM", "/admin/functions", "Settings", IsMenuEntry: true, Description: "QUẢN TRỊ HỆ THỐNG");
+        yield return new("F1010", "Đơn vị Triển khai", "TENANTS", 10, false, "TENANTS", "/admin/tenants", "Building2", IsMenuEntry: true, Description: "HỆ THỐNG");
+        yield return new("F1011", "Bản quyền & Quota", "LICENSES", 11, false, "LICENSES", "/admin/licenses", "Award", IsMenuEntry: true, Description: "HỆ THỐNG");
+        yield return new("F1013", "API Gateway & Webhook Hub", "API_GATEWAY", 13, false, "API_GATEWAY", "/admin/api-gateway", "Webhook", IsMenuEntry: true, Description: "HỆ THỐNG");
+        yield return new("F1014", "Giám sát hệ thống & Jobs", "OBSERVABILITY", 14, false, "OBSERVABILITY", "/admin/observability", "Activity", IsMenuEntry: true, Description: "HỆ THỐNG");
+        yield return new("F1012", "Cổng Định danh SSO", "SSO_HUB", 15, false, "SSO_HUB", "/admin/sso-hub", "KeyRound", IsMenuEntry: true, Description: "HỆ THỐNG");
+        yield return new("F1015", "Tuân thủ & Vòng đời Dữ liệu", "COMPLIANCE", 16, false, "COMPLIANCE", "/admin/compliance", "ShieldCheck", IsMenuEntry: true, Description: "HỆ THỐNG");
+        yield return new("F1016", "Thanh toán & Hóa đơn", "BILLING", 17, false, "BILLING", "/admin/billing", "ReceiptText", IsMenuEntry: true, Description: "ĐƠN VỊ & BẢN QUYỀN");
+        yield return new("SYSTEM.ANNOUNCEMENTS", "Thông báo nền tảng", "ANNOUNCEMENTS", 1, false, "DASHBOARD", "/admin/announcements", "Megaphone", IsMenuEntry: true, Description: "CHỈ HUY NỀN TẢNG");
+        yield return new("SYSTEM.SECURITY_SESSIONS", "Phiên quản trị", "SECURITY_SESSIONS", 2, false, "OBSERVABILITY", "/admin/security/sessions", "ShieldCheck", IsMenuEntry: true, Description: "HẠ TẦNG & AN NINH");
+        yield return new("SYSTEM.FUNCTIONS", "Quản lý chức năng", "SYSTEM", 10, false, "SYSTEM", "/admin/functions", "Settings", IsMenuEntry: true, Description: "QUẢN TRỊ HỆ THỐNG");
         yield return new("SYSTEM.PERMISSIONS", "Phân quyền chức năng", "SYSTEM", 11, false, "SYSTEM", "/admin/system/permissions", "Shield", IsMenuEntry: true, Description: "PHÂN QUYỀN F1005");
-        yield return new("SYSTEM.BACKUPS", "Sao lưu & Khôi phục", "SYSTEM", 12, false, "SYSTEM", "/admin/backups", "DatabaseBackup", IsMenuEntry: true, Description: "QUẢN TRỊ HỆ THỐNG");
+        yield return new("SYSTEM.BACKUPS", "Sao lưu & Khôi phục", "SYSTEM", 12, false, "SYSTEM", IconName: "DatabaseBackup", IsMenuEntry: false, Description: "QUẢN TRỊ HỆ THỐNG");
         yield return new("ACCOUNTS.USERS", "Thành viên", "ACCOUNTS", 10, false, "ACCOUNTS", "/admin/users", "Users", IsMenuEntry: true, Description: "QUẢN TRỊ HỆ THỐNG");
-        yield return new("CONFIG.GRID", "Cấu hình bảng", "GRID_CONFIG", 10, false, "GRID_CONFIG", "/admin/config/grid", "Columns3", IsMenuEntry: true, Description: "CẤU HÌNH MASTER F1002");
-        yield return new("CONFIG.FIELD_POLICIES", "Chính sách trường dữ liệu", "FIELD_POLICIES", 10, false, "FIELD_POLICIES", "/admin/config/field-policies", "FileSliders", IsMenuEntry: true, Description: "CẤU HÌNH MASTER F1002");
+        yield return new("CONFIG.GRID", "Cấu hình bảng", "GRID_CONFIG", 10, false, "GRID_CONFIG", IconName: "Columns3", IsMenuEntry: false, Description: "CẤU HÌNH MASTER F1002");
+        yield return new("CONFIG.FIELD_POLICIES", "Chính sách trường dữ liệu", "FIELD_POLICIES", 10, false, "FIELD_POLICIES", IconName: "FileSliders", IsMenuEntry: false, Description: "CẤU HÌNH MASTER F1002");
         yield return new("CONFIG.GRADING_RULES", "Quy chế điểm & deadline", "CONFIG", 12, false, "CONFIG", "/admin/config/grading-rules", "ClipboardList", IsMenuEntry: true, Description: "CẤU HÌNH MASTER F1002");
         yield return new("AUDIT.LOGS", "Nhật ký kiểm toán", "AUDIT", 10, false, "AUDIT", "/admin/logs/audit", "ScrollText", IsMenuEntry: true, Description: "NHẬT KÝ F1006");
         yield return new(SystemPermissionCodes.ExcelImport, "Nhập sinh viên từ Excel", "IT_CONFIG", 10, false, "IT_CONFIG", "/admin/config/import-excel", "FileSpreadsheet", IsMenuEntry: true, Description: "CẤU HÌNH MASTER F1002");
-        yield return new("API_WEBHOOK.SETTINGS", "Cấu hình kết nối", "API_WEBHOOK", 10, false, "API_WEBHOOK", "/admin/settings", "Settings", IsMenuEntry: true, Description: "CẤU HÌNH MASTER F1002");
+        yield return new("SYSTEM.SETTINGS", "Cài đặt hệ thống & thương hiệu", "SYSTEM", 13, false, "SYSTEM", "/admin/settings", "Settings", IsMenuEntry: true, Description: "CẤU HÌNH HỆ THỐNG");
         yield return new("DEPARTMENTS.LIST", "Quản lý Khoa", "DEPARTMENTS", 10, false, "DEPARTMENTS", "/admin/departments", "Building2", IsMenuEntry: true, Description: "QUẢN LÝ TRƯỜNG/KHOA");
         yield return new("SEMESTERS.LIST", "Kỳ thực tập", "SEMESTERS", 10, false, "SEMESTERS", "/admin/semesters", "Calendar", IsMenuEntry: true);
         yield return new("STUDENTS.LIST", "Sinh viên", "STUDENTS", 10, false, "STUDENTS", "/admin/students", "Users", IsMenuEntry: true);
@@ -125,8 +244,17 @@ public static class SystemRbacSeeder
             ("DEPARTMENTS", "Khoa"),
             ("GRID_CONFIG", "Cấu hình bảng"),
             ("FIELD_POLICIES", "Chính sách trường"),
+            ("TENANTS", "Đơn vị triển khai"),
+            ("LICENSES", "Bản quyền & Quota"),
+            ("API_GATEWAY", "API Gateway & Webhook Hub"),
+            ("OBSERVABILITY", "Giám sát hệ thống"),
+            ("SSO_HUB", "Cổng định danh SSO"),
+            ("COMPLIANCE", "Tuân thủ & vòng đời dữ liệu"),
+            ("BILLING", "Hóa đơn & thanh toán"),
             ("DASHBOARD", "Tổng quan"),
-            ("NOTIFICATIONS", "Thông báo")
+            ("NOTIFICATIONS", "Thông báo"),
+            ("ANNOUNCEMENTS", "Thông báo nền tảng"),
+            ("SECURITY_SESSIONS", "Phiên quản trị")
         };
         var actions = new[]
         {
@@ -140,14 +268,21 @@ public static class SystemRbacSeeder
             ("APPROVE", "Phê duyệt")
         };
 
-        return modules.SelectMany(module => actions.Select((action, index) =>
-            new FunctionDefinition(
-                $"{module.Item1}.{action.Item1}",
-                action.Item2,
-                module.Item1,
-                index + 1,
-                true,
-                module.Item1)));
+        return modules.SelectMany(module =>
+        {
+            var moduleActions = module.Item1 is "TENANTS" or "LICENSES" or "API_GATEWAY" or "OBSERVABILITY" or "BILLING" or "ANNOUNCEMENTS" or "SECURITY_SESSIONS"
+                ? actions.Where(action => action.Item1 != "PRINT")
+                    .Append(("LOCK", "Khóa"))
+                : actions;
+            return moduleActions.Select((action, index) =>
+                new FunctionDefinition(
+                    $"{module.Item1}.{action.Item1}",
+                    action.Item2,
+                    module.Item1,
+                    index + 1,
+                    true,
+                    module.Item1));
+        });
     }
 
     public static async Task SeedAsync(AppDbContext context, CancellationToken cancellationToken = default)
@@ -157,6 +292,8 @@ public static class SystemRbacSeeder
         await EnsureDefaultFieldPoliciesAsync(context, cancellationToken);
         await EnsureDefaultLecturerGridConfigsAsync(context, cancellationToken);
         await EnsureDefaultPermissionsAsync(context, cancellationToken);
+        await EnsureDefaultSystemJobsAsync(context, cancellationToken);
+        await EnsureDefaultRetentionPoliciesAsync(context, cancellationToken);
 
         var users = await context.Users
             .IgnoreQueryFilters()
@@ -176,6 +313,45 @@ public static class SystemRbacSeeder
         foreach (var user in users.Where(user => !user.IsDeleted))
             EnsureUserMapping(context, user, sysUsers, roles);
 
+        await context.SaveChangesAsync(cancellationToken);
+    }
+
+    private static async Task EnsureDefaultRetentionPoliciesAsync(
+        AppDbContext context,
+        CancellationToken cancellationToken)
+    {
+        var defaults = new[]
+        {
+            new SysDataRetentionPolicy
+            {
+                Code = "WEEKLY_REPORT",
+                Name = "Báo cáo tuần",
+                Description = "Thời hạn lưu trữ hồ sơ báo cáo tuần và tệp đính kèm.",
+                RetentionYears = 3,
+                IsEnabled = true
+            },
+            new SysDataRetentionPolicy
+            {
+                Code = "INTERNSHIP_EVALUATION",
+                Name = "Phiếu đánh giá thực tập",
+                Description = "Thời hạn lưu trữ kết quả và phiếu đánh giá thực tập.",
+                RetentionYears = 5,
+                IsEnabled = true
+            },
+            new SysDataRetentionPolicy
+            {
+                Code = "STUDENT_PII",
+                Name = "Định danh hồ sơ sinh viên",
+                Description = "Thời gian chờ trước khi ẩn danh hồ sơ sinh viên đã hoàn tất thực tập.",
+                RetentionYears = 3,
+                IsEnabled = true
+            }
+        };
+        var existingCodes = await context.SysDataRetentionPolicies
+            .Select(item => item.Code)
+            .ToHashSetAsync(cancellationToken);
+        foreach (var policy in defaults.Where(item => !existingCodes.Contains(item.Code)))
+            context.SysDataRetentionPolicies.Add(policy);
         await context.SaveChangesAsync(cancellationToken);
     }
 
@@ -291,14 +467,16 @@ public static class SystemRbacSeeder
             {
                 if (definition.IsMenuEntry)
                 {
+                    existingFunction.Name = definition.Name;
                     existingFunction.ModuleCode = definition.ModuleCode;
                     existingFunction.ParentId = functionsByCode[definition.ParentCode!].AutoId;
                     existingFunction.SortOrder = definition.SortOrder;
                     existingFunction.IsAction = false;
+                    existingFunction.IsVisibleInMenu = true;
                     existingFunction.IsActive = true;
                     existingFunction.IsDeleted = false;
                     existingFunction.Description ??= definition.Description;
-                    existingFunction.FuncUrl ??= definition.FuncUrl;
+                    existingFunction.FuncUrl = definition.FuncUrl;
                     if ((existingFunction.IconName is null or "Folder") && definition.IconName != null)
                         existingFunction.IconName = definition.IconName;
                     existingFunction.BadgeText ??= definition.BadgeText;
@@ -344,14 +522,16 @@ public static class SystemRbacSeeder
             {
                 if (definition.IsMenuEntry)
                 {
+                    existingFunction.Name = definition.Name;
                     existingFunction.ModuleCode = definition.ModuleCode;
                     existingFunction.ParentId = functionsByCode[definition.ParentCode!].AutoId;
                     existingFunction.SortOrder = definition.SortOrder;
                     existingFunction.IsAction = false;
+                    existingFunction.IsVisibleInMenu = true;
                     existingFunction.IsActive = true;
                     existingFunction.IsDeleted = false;
                     existingFunction.Description ??= definition.Description;
-                    existingFunction.FuncUrl ??= definition.FuncUrl;
+                    existingFunction.FuncUrl = definition.FuncUrl;
                     if ((existingFunction.IconName is null or "Folder") && definition.IconName != null)
                         existingFunction.IconName = definition.IconName;
                     existingFunction.BadgeText ??= definition.BadgeText;
@@ -395,6 +575,23 @@ public static class SystemRbacSeeder
         }
 
         await context.SaveChangesAsync(cancellationToken);
+
+        foreach (var functionCode in new[]
+                 {
+                     "SYSTEM.BACKUPS",
+                     "CONFIG.GRID",
+                     "CONFIG.FIELD_POLICIES",
+                     "API_WEBHOOK.SETTINGS"
+                 })
+        {
+            if (functionsByCode.TryGetValue(functionCode, out var function))
+            {
+                function.FuncUrl = null;
+                function.IsVisibleInMenu = false;
+            }
+        }
+
+        await context.SaveChangesAsync(cancellationToken);
     }
 
     private static async Task EnsureDefaultPermissionsAsync(
@@ -405,16 +602,6 @@ public static class SystemRbacSeeder
         var functions = await context.SysFunctions
             .Where(function => function.IsActive)
             .ToListAsync(cancellationToken);
-        var operationalModules = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "DASHBOARD", "SEMESTERS", "STUDENTS", "LECTURER", "COMPANIES", "ASSIGNMENTS",
-            "WEEKLY_REPORTS", "ATTENDANCE", "EVALUATIONS", "SUMMARY", "TEMPLATES", "NOTIFICATIONS"
-        };
-        var platformModules = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "SYSTEM", "ACCOUNTS", "CONFIG", "AUDIT", "IT_CONFIG", "API_WEBHOOK",
-            "DEPARTMENTS", "GRID_CONFIG", "FIELD_POLICIES"
-        };
         var permissionsByRoleAndFunction = await context.SysRolePermissions
             .IgnoreQueryFilters()
             .ToDictionaryAsync(
@@ -446,9 +633,10 @@ public static class SystemRbacSeeder
         {
             var grantedFunctions = role.Code switch
             {
-                nameof(Role.SuperAdmin) => functions,
+                nameof(Role.SuperAdmin) => functions.Where(function =>
+                    SystemRoleModulePolicy.IsModuleAllowed(role.Code, function.ModuleCode)),
                 nameof(Role.DepartmentAdmin) => functions.Where(function =>
-                    operationalModules.Contains(function.ModuleCode)
+                    SystemRoleModulePolicy.IsModuleAllowed(role.Code, function.ModuleCode)
                     && (function.IsAction || function.Code == "DASHBOARD")),
                 _ => []
             };
@@ -465,8 +653,11 @@ public static class SystemRbacSeeder
         {
             foreach (var function in functions)
             {
-                EnsurePermission(superAdmin, function);
-                permissionsByRoleAndFunction[(superAdmin.AutoId, function.AutoId)].IsGranted = true;
+                var isGranted = SystemRoleModulePolicy.IsModuleAllowed(
+                    nameof(Role.SuperAdmin),
+                    function.ModuleCode);
+                EnsurePermission(superAdmin, function, isGranted);
+                permissionsByRoleAndFunction[(superAdmin.AutoId, function.AutoId)].IsGranted = isGranted;
             }
         }
 
@@ -475,10 +666,16 @@ public static class SystemRbacSeeder
         if (departmentAdmin != null)
         {
             foreach (var function in functions.Where(function =>
-                         operationalModules.Contains(function.ModuleCode) && function.IsAction))
+                         SystemRoleModulePolicy.IsModuleAllowed(
+                             nameof(Role.DepartmentAdmin),
+                             function.ModuleCode)
+                         && function.IsAction))
                 EnsurePermission(departmentAdmin, function);
 
-            foreach (var function in functions.Where(function => platformModules.Contains(function.ModuleCode)))
+            foreach (var function in functions.Where(function =>
+                         !SystemRoleModulePolicy.IsModuleAllowed(
+                             nameof(Role.DepartmentAdmin),
+                             function.ModuleCode)))
             {
                 EnsurePermission(departmentAdmin, function, isGranted: false);
                 var permission = permissionsByRoleAndFunction[(departmentAdmin.AutoId, function.AutoId)];

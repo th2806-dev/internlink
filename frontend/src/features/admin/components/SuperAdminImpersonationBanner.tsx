@@ -1,9 +1,42 @@
-import { Eye, X } from "lucide-react";
+import { Eye, ShieldAlert, X } from "lucide-react";
 import { useImpersonation } from "../../../contexts/ImpersonationContext";
+import { useToast } from "../../../hooks/useToast";
 
 export function SuperAdminImpersonationBanner() {
-  const { impersonation, stopImpersonation } = useImpersonation();
-  if (!impersonation) return null;
+  const { impersonation, tenantSupportSession, stopImpersonation, stopTenantSupport } = useImpersonation();
+  const { showToast } = useToast();
+  if (!impersonation && !tenantSupportSession) return null;
+
+  if (tenantSupportSession) {
+    return (
+      <aside
+        role="alert"
+        aria-label="Phiên hỗ trợ kỹ thuật đang hoạt động"
+        className="sticky top-0 z-50 flex min-h-12 flex-wrap items-center justify-between gap-3 border-b border-rose-900 bg-rose-700 px-4 py-2 text-white shadow-sm"
+      >
+        <div className="flex min-w-0 items-center gap-2 text-xs font-bold">
+          <ShieldAlert aria-hidden="true" className="h-4 w-4 shrink-0" />
+          <span className="min-w-0">
+            ĐANG TRONG PHIÊN HỖ TRỢ KỸ THUẬT: {tenantSupportSession.tenantName}
+            {" "}({tenantSupportSession.tenantCode}) - Mọi thao tác đều được kiểm toán.
+          </span>
+          <time className="hidden shrink-0 text-[10px] font-medium sm:inline" dateTime={tenantSupportSession.expiresAt}>
+            Hết hạn {new Date(tenantSupportSession.expiresAt).toLocaleTimeString("vi-VN")}
+          </time>
+        </div>
+        <button
+          type="button"
+          onClick={() => void stopTenantSupport().catch((error: unknown) =>
+            showToast(error instanceof Error ? error.message : "Không thể kết thúc phiên hỗ trợ.", "danger"),
+          )}
+          className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-[4px] border border-white/80 bg-white px-3 text-xs font-bold text-rose-800 transition-colors hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-rose-700"
+        >
+          <X aria-hidden="true" className="h-4 w-4" />
+          Rời khỏi phiên hỗ trợ
+        </button>
+      </aside>
+    );
+  }
 
   return (
     <aside

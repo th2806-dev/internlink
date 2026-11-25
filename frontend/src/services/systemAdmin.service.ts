@@ -8,6 +8,7 @@ import type {
   SystemImpersonationContext,
   SystemImpersonationTarget,
   SysRole,
+  TenantSupportSession,
 } from "../types/systemAdmin";
 
 export const systemAdminService = {
@@ -24,6 +25,18 @@ export const systemAdminService = {
     apiRequest<SystemImpersonationContext>(
       "/api/v1/system/impersonation/token",
       { method: "POST", body: { roleCode } },
+    ),
+
+  startTenantSupport: (tenantId: string, reason: string) =>
+    apiRequest<TenantSupportSession>(
+      `/api/v1/system/tenants/${tenantId}/impersonate`,
+      { method: "POST", body: { reason } },
+    ),
+
+  endTenantSupport: () =>
+    apiRequest<{ sessionId: string; endedAt: string }>(
+      "/api/v1/system/impersonate/exit",
+      { method: "POST" },
     ),
 
   getRolePermissions: (roleId: number) =>
@@ -47,6 +60,7 @@ export const systemAdminService = {
           canImport: row.canImport,
           canPrint: row.canPrint,
           canApprove: row.canApprove,
+          canLock: row.canLock,
         })),
       },
     ),

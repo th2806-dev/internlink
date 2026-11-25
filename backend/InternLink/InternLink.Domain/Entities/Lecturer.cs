@@ -2,8 +2,9 @@ using InternLink.Domain.Common;
 
 namespace InternLink.Domain.Entities;
 
-public class Lecturer : BaseEntity, IDepartmentScoped
+public class Lecturer : BaseEntity, ITenantScoped, IDepartmentScoped
 {
+    public Guid TenantId { get; set; }
     public Guid? UserId { get; set; }
     public User? User { get; set; }
 

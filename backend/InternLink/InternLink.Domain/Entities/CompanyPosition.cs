@@ -4,8 +4,9 @@ namespace InternLink.Domain.Entities;
 /// A recruitment position offered by a company, optionally scoped to a semester.
 /// One company can have many positions; each position tracks slots and hiring status.
 /// </summary>
-public class CompanyPosition : BaseEntity
+public class CompanyPosition : BaseEntity, ITenantScoped
 {
+    public Guid TenantId { get; set; }
     public Guid CompanyId { get; set; }
     public Company Company { get; set; } = null!;
 

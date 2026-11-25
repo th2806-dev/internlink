@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AuditLogsView } from "../features/admin/pages/AuditLogsView";
 import { systemAdminService } from "../services/systemAdmin.service";
@@ -15,6 +16,10 @@ vi.mock("../services/systemAdmin.service", () => ({
     saveGradingRuleSet: vi.fn(),
     getAuditLogs: vi.fn(),
   },
+}));
+
+vi.mock("../hooks/useAdminCapabilities", () => ({
+  useAdminCapabilities: () => ({ isSuperAdmin: true }),
 }));
 
 const result: AuditLogPage = {
@@ -44,6 +49,9 @@ describe("AuditLogsView", () => {
   it("filters and opens a side-by-side JSON diff", async () => {
     renderView(<AuditLogsView />);
 
+    expect(screen.getByRole("heading", { name: "Nhật ký kiểm toán" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Breadcrumb")).toHaveTextContent("Quản trị & tuân thủ");
+    expect(await screen.findByRole("cell", { name: "Cập nhật" })).toBeInTheDocument();
     expect(await screen.findByText("Sys_GradingRuleSets")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Loại thao tác"), {
       target: { value: "UPDATE" },
@@ -54,7 +62,7 @@ describe("AuditLogsView", () => {
       );
     });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Xem Diff chi tiết" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Xem thay đổi" }));
     expect(screen.getByRole("dialog", { name: "Chi tiết thay đổi" })).toBeInTheDocument();
     expect(screen.getByText(/"ProcessScoreWeight": 0.4/)).toBeInTheDocument();
     expect(screen.getByText(/"ProcessScoreWeight": 0.5/)).toBeInTheDocument();
@@ -70,5 +78,9 @@ function renderView(ui: React.ReactNode) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+  return render(
+    <MemoryRouter>
+      <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
+    </MemoryRouter>,
+  );
 }
